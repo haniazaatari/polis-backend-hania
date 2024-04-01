@@ -373,7 +373,7 @@ function initializePolisHelpers() {
       });
     });
   }
-  function votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
+  async function votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
     return pgQueryP_readOnly('select * from conversations where zid = ($1);', [zid])
       .then(function (rows) {
         if (!rows || !rows.length) {
@@ -729,7 +729,7 @@ If you need to create a new account, you can do that here ${server}/home
 Feel free to reply to this email if you need help.`;
     return sendTextEmail(polisFromAddress, email, 'Password Reset Failed', body);
   }
-  function getUidByEmail(email) {
+  async function getUidByEmail(email) {
     email = email.toLowerCase();
     return pgQueryP_readOnly('SELECT uid FROM users where LOWER(email) = ($1);', [email]).then(function (rows) {
       if (!rows || !rows.length) {
@@ -1038,7 +1038,7 @@ Feel free to reply to this email if you need help.`;
       ]);
     } catch (err) {
       logger.error("polis_err_removing_suzinvite", err);
-    }
+        }
   };
   function xidExists(xid, owner, uid) {
     return pgQueryP('select * from xids where xid = ($1) and owner = ($2) and uid = ($3);', [xid, owner, uid]).then(
@@ -1131,7 +1131,7 @@ Feel free to reply to this email if you need help.`;
     IP: 100,
     manual_entry: 1
   };
-  function getUsersLocationName(uid) {
+  async function getUsersLocationName(uid) {
     return Promise.all([
       pgQueryP_readOnly('select * from facebook_users where uid = ($1);', [uid]),
       pgQueryP_readOnly('select * from twitter_users where uid = ($1);', [uid])
@@ -1197,7 +1197,7 @@ Feel free to reply to this email if you need help.`;
     qString = qString.replace('9876543212345', 'now_as_millis()');
     return pgQueryP(qString, []);
   }
-  function tryToJoinConversation(zid, uid, info, pmaid_answers) {
+  async function tryToJoinConversation(zid, uid, info, pmaid_answers) {
     function doAddExtendedParticipantInfo() {
       if (info && _.keys(info).length > 0) {
         addExtendedParticipantInfo(zid, uid, info);
@@ -1219,7 +1219,7 @@ Feel free to reply to this email if you need help.`;
       return ptpt;
     });
   }
-  function addParticipantAndMetadata(zid, uid, req, permanent_cookie) {
+  async function addParticipantAndMetadata(zid, uid, req, permanent_cookie) {
     let info = {};
     let parent_url = req?.cookies?.[COOKIES.PARENT_URL] || req?.p?.parent_url;
     let referer = req?.cookies[COOKIES.PARENT_REFERRER] || req?.headers?.['referer'] || req?.headers?.['referrer'];
@@ -1307,7 +1307,7 @@ Feel free to reply to this email if you need help.`;
       return info.owner === uid;
     });
   }
-  function isModerator(zid, uid) {
+  async function isModerator(zid, uid) {
     if (isPolisDev(uid)) {
       return Promise.resolve(true);
     }
@@ -1369,7 +1369,7 @@ Feel free to reply to this email if you need help.`;
   }
   const getUserInfoForUid = User.getUserInfoForUid;
   const getUserInfoForUid2 = User.getUserInfoForUid2;
-  function emailFeatureRequest(message) {
+  async function emailFeatureRequest(message) {
     const body = `Somebody clicked a dummy button!
 
 ${message}`;
@@ -1380,7 +1380,7 @@ ${message}`;
       });
     });
   }
-  function emailTeam(subject, body) {
+  async function emailTeam(subject, body) {
     return sendMultipleTextEmails(polisFromAddress, adminEmails, subject, body).catch(function (err) {
       logger.error('polis_err_failed_to_email_team', err);
     });
@@ -1456,7 +1456,7 @@ ${serverName}/welcome/${einvite}
 Thank you for using Polis`;
     return sendTextEmail(polisFromAddress, email, 'Get Started with Polis', body);
   }
-  function isEmailVerified(email) {
+  async function isEmailVerified(email) {
     return dbPgQuery.queryP('select * from email_validations where email = ($1);', [email]).then(function (rows) {
       return rows.length > 0;
     });
@@ -1464,7 +1464,7 @@ Thank you for using Polis`;
   function handle_GET_verification(req, res) {
     let einvite = req.p.e;
     pgQueryP('select * from einvites where einvite = ($1);', [einvite])
-      .then(function (rows) {
+      .then(async function (rows) {
         if (!rows.length) {
           fail(res, 500, 'polis_err_verification_missing');
         }
@@ -1666,7 +1666,7 @@ Email verified! You can close this tab or hit the back button.
         fail(res, 500, 'polis_err_post_participants_misc', err);
       });
   }
-  function subscribeToNotifications(zid, uid, email) {
+  async function subscribeToNotifications(zid, uid, email) {
     let type = 1;
     logger.info('subscribeToNotifications', { zid, uid });
     return pgQueryP('update participants_extended set subscribe_email = ($3) where zid = ($1) and uid = ($2);', [
@@ -1683,7 +1683,7 @@ Email verified! You can close this tab or hit the back button.
       });
     });
   }
-  function unsubscribeFromNotifications(zid, uid) {
+  async function unsubscribeFromNotifications(zid, uid) {
     let type = 0;
     return pgQueryP('update participants set subscribed = ($3) where zid = ($1) and uid = ($2);', [
       zid,
@@ -1705,7 +1705,7 @@ Email verified! You can close this tab or hit the back button.
       timeInMillis
     ]);
   }
-  function claimNextNotificationTask() {
+  async function claimNextNotificationTask() {
     return pgQueryP(
       'delete from notification_tasks where zid = (select zid from notification_tasks order by random() for update skip locked limit 1) returning *;'
     ).then((rows) => {
@@ -1715,12 +1715,12 @@ Email verified! You can close this tab or hit the back button.
       return rows[0];
     });
   }
-  function getDbTime() {
+  async function getDbTime() {
     return pgQueryP('select now_as_millis();', []).then((rows) => {
       return rows[0].now_as_millis;
     });
   }
-  function doNotificationsForZid(zid, timeOfLastEvent) {
+  async function doNotificationsForZid(zid, timeOfLastEvent) {
     let shouldTryAgain = false;
     return pgQueryP('select * from participants where zid = ($1) and last_notified < ($2) and subscribed > 0;', [
       zid,
@@ -1744,7 +1744,7 @@ Email verified! You can close this tab or hit the back button.
           candidates.forEach((c) => {
             pid_to_ptpt[c.pid] = c;
           });
-          return Promise.mapSeries(candidates, (item, index, length) => {
+          return Promise.mapSeries(candidates, async (item, index, length) => {
             return getNumberOfCommentsRemaining(item.zid, item.pid).then((rows) => {
               return rows[0];
             });
@@ -1809,7 +1809,7 @@ Email verified! You can close this tab or hit the back button.
         return shouldTryAgain;
       });
   }
-  function doNotificationBatch() {
+  async function doNotificationBatch() {
     return claimNextNotificationTask().then((task) => {
       if (!task) {
         return Promise.resolve();
@@ -1877,7 +1877,7 @@ Email verified! You can close this tab or hit the back button.
     params[HMAC_SIGNATURE_PARAM_NAME] = req.p[HMAC_SIGNATURE_PARAM_NAME];
     verifyHmacForQueryParams('api/v3/notifications/subscribe', params)
       .then(
-        function () {
+        async function () {
           return pgQueryP(
             'update participants set subscribed = 1 where uid = (select uid from users where email = ($2)) and zid = ($1);',
             [zid, email]
@@ -1907,7 +1907,7 @@ Email verified! You can close this tab or hit the back button.
     params[HMAC_SIGNATURE_PARAM_NAME] = req.p[HMAC_SIGNATURE_PARAM_NAME];
     verifyHmacForQueryParams('api/v3/notifications/unsubscribe', params)
       .then(
-        function () {
+        async function () {
           return pgQueryP(
             'update participants set subscribed = 0 where uid = (select uid from users where email = ($2)) and zid = ($1);',
             [zid, email]
@@ -2007,7 +2007,7 @@ Email verified! You can close this tab or hit the back button.
       });
     });
   }
-  function handle_POST_joinWithInvite(req, res) {
+  async function handle_POST_joinWithInvite(req, res) {
     return joinWithZidOrSuzinvite({
       answers: req.p.answers,
       existingAuth: !!req.p.uid,
@@ -2062,7 +2062,7 @@ Email verified! You can close this tab or hit the back button.
         }
       });
   }
-  function joinWithZidOrSuzinvite(o) {
+  async function joinWithZidOrSuzinvite(o) {
     return Promise.resolve(o)
       .then(function (o) {
         if (o.suzinvite) {
@@ -2135,7 +2135,7 @@ Email verified! You can close this tab or hit the back button.
             var shouldCreateXidEntryPromise = o.conv.use_xid_whitelist
               ? isXidWhitelisted(o.conv.owner, o.xid)
               : Promise.resolve(true);
-            shouldCreateXidEntryPromise.then((should) => {
+            shouldCreateXidEntryPromise.then(async (should) => {
               if (should) {
                 return createXidEntry(o.xid, o.conv.org_id, o.uid).then(function () {
                   return o;
@@ -2259,7 +2259,7 @@ Email verified! You can close this tab or hit the back button.
     }
     return firstVotes;
   }
-  function isParentDomainWhitelisted(domain, zid, isWithinIframe, domain_whitelist_override_key) {
+  async function isParentDomainWhitelisted(domain, zid, isWithinIframe, domain_whitelist_override_key) {
     return pgQueryP_readOnly(
       'select * from site_domain_whitelist where site_id = ' +
       '(select site_id from users where uid = ' +
@@ -2348,7 +2348,7 @@ Email verified! You can close this tab or hit the back button.
         next('polis_err_domain_misc');
       });
   }
-  function setDomainWhitelist(uid, newWhitelist) {
+  async function setDomainWhitelist(uid, newWhitelist) {
     return pgQueryP(
       'select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));',
       [uid]
@@ -2366,7 +2366,7 @@ Email verified! You can close this tab or hit the back button.
       }
     });
   }
-  function getDomainWhitelist(uid) {
+  async function getDomainWhitelist(uid) {
     return pgQueryP(
       'select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));',
       [uid]
@@ -2717,7 +2717,7 @@ Email verified! You can close this tab or hit the back button.
                       : Promise.resolve();
                     return friendsAddedPromise
                       .then(
-                        function () {
+                        async function () {
                           return startSessionAndAddCookies(req, res, user.uid).then(function () {
                             return user;
                           });
@@ -2775,7 +2775,7 @@ Email verified! You can close this tab or hit the back button.
         });
       }
       promise
-        .then(function (user) {
+        .then(async function (user) {
           return createFacebookUserRecord(Object.assign({}, user, fbUserRecord)).then(function () {
             return user;
           });
@@ -3021,7 +3021,7 @@ Email verified! You can close this tab or hit the back button.
     }
     return gender;
   }
-  function getDemographicsForVotersOnComments(zid, comments) {
+  async function getDemographicsForVotersOnComments(zid, comments) {
     function isAgree(v) {
       return v.vote === polisTypes.reactions.pull;
     }
@@ -3108,7 +3108,7 @@ Email verified! You can close this tab or hit the back button.
     const tid = req.p.tid;
     const firstTwoCharsOfLang = req.p.lang.substr(0, 2);
     getComment(zid, tid)
-      .then((comment) => {
+      .then(async (comment) => {
         return dbPgQuery
           .queryP("select * from comment_translations where zid = ($1) and tid = ($2) and lang LIKE '$3%';", [
             zid,
@@ -3300,7 +3300,7 @@ Email verified! You can close this tab or hit the back button.
     }
     return false;
   }
-  function commentExists(zid, txt) {
+  async function commentExists(zid, txt) {
     return pgQueryP('select zid from comments where zid = ($1) and txt = ($2);', [zid, txt]).then(function (rows) {
       return rows && rows.length;
     });
@@ -3600,7 +3600,7 @@ Email verified! You can close this tab or hit the back button.
     c.randomN = randomN;
     return c;
   }
-  function getNextPrioritizedComment(zid, pid, withoutTids, include_social) {
+  async function getNextPrioritizedComment(zid, pid, withoutTids, include_social) {
     let params = {
       zid: zid,
       not_voted_by_pid: pid,
@@ -3633,7 +3633,7 @@ Email verified! You can close this tab or hit the back button.
   function getCommentTranslations(zid, tid) {
     return dbPgQuery.queryP('select * from comment_translations where zid = ($1) and tid = ($2);', [zid, tid]);
   }
-  function getNextComment(zid, pid, withoutTids, include_social, lang) {
+  async function getNextComment(zid, pid, withoutTids, include_social, lang) {
     return getNextPrioritizedComment(zid, pid, withoutTids, include_social).then((c) => {
       if (lang && c) {
         const firstTwoCharsOfLang = lang.substr(0, 2);
@@ -3822,7 +3822,7 @@ Email verified! You can close this tab or hit the back button.
       })
       : Promise.resolve();
     pidReadyPromise
-      .then(function () {
+      .then(async function () {
         let vote;
         let pidReadyPromise = _.isUndefined(pid)
           ? addParticipant(zid, uid).then(function (rows) {
@@ -3894,7 +3894,7 @@ Email verified! You can close this tab or hit the back button.
         }
       });
   }
-  function handle_POST_ptptCommentMod(req, res) {
+  async function handle_POST_ptptCommentMod(req, res) {
     let zid = req.p.zid;
     let pid = req.p.pid;
     let uid = req.p.uid;
@@ -4694,7 +4694,7 @@ Email verified! You can close this tab or hit the back button.
       firstTwoCharsOfLang
     ]);
   }
-  function getConversationTranslationsMinimal(zid, lang) {
+  async function getConversationTranslationsMinimal(zid, lang) {
     if (!lang) {
       return Promise.resolve([]);
     }
@@ -4708,7 +4708,7 @@ Email verified! You can close this tab or hit the back button.
       return rows;
     });
   }
-  function getOneConversation(zid, uid, lang) {
+  async function getOneConversation(zid, uid, lang) {
     return Promise.all([
       pgQueryP_readOnly(
         'select * from conversations left join  (select uid, site_id from users) as u on conversations.owner = u.uid where conversations.zid = ($1);',
@@ -4907,13 +4907,13 @@ Email verified! You can close this tab or hit the back button.
       });
     });
   }
-  function createReport(zid) {
+  async function createReport(zid) {
     return generateTokenP(20, false).then(function (report_id) {
       report_id = 'r' + report_id;
       return pgQueryP('insert into reports (zid, report_id) values ($1, $2);', [zid, report_id]);
     });
   }
-  function handle_POST_reports(req, res) {
+  async function handle_POST_reports(req, res) {
     let zid = req.p.zid;
     let uid = req.p.uid;
     return isModerator(zid, uid)
@@ -4929,7 +4929,7 @@ Email verified! You can close this tab or hit the back button.
         fail(res, 500, 'polis_err_post_reports_misc', err);
       });
   }
-  function handle_PUT_reports(req, res) {
+  async function handle_PUT_reports(req, res) {
     let rid = req.p.rid;
     let uid = req.p.uid;
     let zid = req.p.zid;
@@ -5537,7 +5537,7 @@ Thanks for using Polis!
       );
     });
   }
-  function updateSomeTwitterUsers() {
+  async function updateSomeTwitterUsers() {
     return pgQueryP_readOnly(
       'select uid, twitter_user_id from twitter_users where modified < (now_as_millis() - 30*60*1000) order by modified desc limit 100;'
     ).then(function (results) {
@@ -5623,7 +5623,7 @@ Thanks for using Polis!
     });
   }
   function addParticipantByTwitterUserId(query, o, zid, tweet) {
-    function addParticipantAndFinish(uid, twitterUser, tweet) {
+    async function addParticipantAndFinish(uid, twitterUser, tweet) {
       return addParticipant(zid, uid).then(function (rows) {
         let ptpt = rows[0];
         return {
@@ -5652,7 +5652,7 @@ Thanks for using Polis!
             return addParticipantAndFinish(uid, twitterUser, tweet);
           });
       } else {
-        return createUserFromTwitterInfo(o).then(function (twitterUser) {
+        return createUserFromTwitterInfo(o).then(async function (twitterUser) {
           let uid = twitterUser.uid;
           return addParticipant(zid, uid).then(function (rows) {
             let ptpt = rows[0];
@@ -5989,7 +5989,7 @@ Thanks for using Polis!
     let val = math_tick + ':' + votes;
     votesForZidPidCache.set(key, val);
   }
-  function getVotesForZidPidsWithTimestampCheck(zid, pids, math_tick) {
+  async function getVotesForZidPidsWithTimestampCheck(zid, pids, math_tick) {
     let cachedVotes = pids.map(function (pid) {
       return {
         pid: pid,
@@ -6025,7 +6025,7 @@ Thanks for using Polis!
       return Object.assign(newPidToVotes, cachedPidToVotes);
     });
   }
-  function getVotesForPids(zid, pids) {
+  async function getVotesForPids(zid, pids) {
     if (pids.length === 0) {
       return Promise.resolve([]);
     }
@@ -6102,21 +6102,21 @@ Thanks for using Polis!
     });
   }
   function geoCode(locationString) {
-    return geoCodeWithGoogleApi(locationString).then(function (result) {
-      let lat = result.geometry.location.lat;
-      let lng = result.geometry.location.lng;
-      let o = {
-        lat: lat,
-        lng: lng,
-      };
-      return o;
+        return geoCodeWithGoogleApi(locationString).then(function (result) {
+          let lat = result.geometry.location.lat;
+          let lng = result.geometry.location.lng;
+          let o = {
+            lat: lat,
+            lng: lng,
+          };
+          return o;
     });
   }
   let twitterShareCountCache = LruCache({
     maxAge: 1000 * 60 * 30,
     max: 999
   });
-  function getTwitterShareCountForConversation(conversation_id) {
+  async function getTwitterShareCountForConversation(conversation_id) {
     let cached = twitterShareCountCache.get(conversation_id);
     if (cached) {
       return Promise.resolve(cached);
@@ -6142,7 +6142,7 @@ Thanks for using Polis!
     maxAge: 1000 * 60 * 30,
     max: 999
   });
-  function getFacebookShareCountForConversation(conversation_id) {
+  async function getFacebookShareCountForConversation(conversation_id) {
     let cached = fbShareCountCache.get(conversation_id);
     if (cached) {
       return Promise.resolve(cached);
@@ -6422,8 +6422,8 @@ Thanks for using Polis!
         pcaResult === null ||
         !("asPOJO" in pcaResult)
       ) {
-        return [];
-      }
+          return [];
+        }
       const pcaData = (pcaResult).asPOJO;
         pcaData.consensus = pcaData.consensus || {};
         pcaData.consensus.agree = pcaData.consensus.agree || [];
@@ -6535,7 +6535,7 @@ Thanks for using Polis!
       fail(res, 500, 'polis_err_twitter_user_info_get', err);
     });
   }
-  function doSendEinvite(req, email) {
+  async function doSendEinvite(req, email) {
     return generateTokenP(30, false).then(function (einvite) {
       return pgQueryP('insert into einvites (email, einvite) values ($1, $2);', [email, einvite]).then(function (rows) {
         return sendEinviteEmail(req, email, einvite);
@@ -6609,7 +6609,7 @@ Thanks for using Polis!
       return buildConversationUrl(req, zinvite);
     });
   }
-  function createOneSuzinvite(xid, zid, owner, generateSingleUseUrl) {
+  async function createOneSuzinvite(xid, zid, owner, generateSingleUseUrl) {
     return generateSUZinvites(1).then(function (suzinviteArray) {
       let suzinvite = suzinviteArray[0];
       return pgQueryP('INSERT INTO suzinvites (suzinvite, xid, zid, owner) VALUES ($1, $2, $3, $4);', [
@@ -6730,7 +6730,7 @@ Thanks for using Polis!
         fail(res, 500, 'polis_err_getting_conversation_info', err);
       });
   }
-  function initializeImplicitConversation(site_id, page_id, o) {
+  async function initializeImplicitConversation(site_id, page_id, o) {
     return pgQueryP_readOnly('select uid from users where site_id = ($1) and site_owner = TRUE;', [site_id]).then(
       function (rows) {
         if (!rows || !rows.length) {
@@ -6789,7 +6789,7 @@ Thanks for using Polis!
       }
     );
   }
-  function sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, seedUrl) {
+  async function sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, seedUrl) {
     let body =
       '' +
       'Conversation created!' +
