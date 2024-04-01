@@ -5,9 +5,7 @@ const DEFAULTS = {
   auth_opt_fb: false,
   auth_opt_tw: false,
 };
-
 export { DEFAULTS };
-
 export default {
-  DEFAULTS,
+  DEFAULTS
 };
