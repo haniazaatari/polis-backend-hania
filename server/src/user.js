@@ -175,8 +175,8 @@ function getXidRecordByXidOwnerId(xid, owner, zid_optional, x_profile_image_url,
       var shouldCreateXidEntryPromise = !zid_optional
         ? Promise.resolve(true)
         : Conversation.getConversationInfo(zid_optional).then((conv) => {
-          return conv.use_xid_whitelist ? Conversation.isXidWhitelisted(owner, xid) : Promise.resolve(true);
-        });
+            return conv.use_xid_whitelist ? Conversation.isXidWhitelisted(owner, xid) : Promise.resolve(true);
+          });
       return shouldCreateXidEntryPromise.then((should) => {
         if (!should) {
           return null;
