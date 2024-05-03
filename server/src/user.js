@@ -172,11 +172,18 @@ function getXidRecordByXidOwnerId(xid, owner, zid_optional, x_profile_image_url,
       if (!createIfMissing) {
         return null;
       }
-      var shouldCreateXidEntryPromise = !zid_optional
-        ? Promise.resolve(true)
-        : Conversation.getConversationInfo(zid_optional).then((conv) => {
-            return conv.use_xid_whitelist ? Conversation.isXidWhitelisted(owner, xid) : Promise.resolve(true);
-          });
+      let shouldCreateXidEntryPromise;
+      if (!zid_optional) {
+        shouldCreateXidEntryPromise = Promise.resolve(true);
+      } else {
+        shouldCreateXidEntryPromise = Conversation.getConversationInfo(zid_optional).then((conv) => {
+          if (conv.use_xid_whitelist) {
+            return Conversation.isXidWhitelisted(owner, xid);
+          } else {
+            return Promise.resolve(true);
+          }
+        });
+      }
       return shouldCreateXidEntryPromise.then((should) => {
         if (!should) {
           return null;
