@@ -1,13 +1,13 @@
 import _ from 'underscore';
 import { isUri } from 'valid-url';
 import LruCache from 'lru-cache';
-import pg from '../db/pg-query.js';
-import fail from './fail.js';
-import logger from './logger.js';
-import Conversation from '../conversation.js';
-import User from '../user.js';
-import { MPromise } from './metered.js';
-function moveToBody(req, res, next) {
+import pg from '../db/pg-query';
+import fail from './fail';
+import logger from './logger';
+import Conversation from '../conversation';
+import User from '../user';
+import { MPromise } from './metered';
+function moveToBody(req, _res, next) {
   if (req.query) {
     req.body = req.body || {};
     Object.assign(req.body, req.query);
@@ -79,19 +79,19 @@ function wantHeader(name, parserWhichReturnsPromise, assigner, defaultVal) {
 }
 function extractFromBody(req, name) {
   if (!req.body) {
-    return;
+    return void 0;
   }
   return req.body[name];
 }
 function extractFromCookie(req, name) {
   if (!req.cookies) {
-    return;
+    return void 0;
   }
   return req.cookies[name];
 }
 function extractFromHeader(req, name) {
   if (!req.headers) {
-    return;
+    return void 0;
   }
   return req.headers[name.toLowerCase()];
 }
@@ -270,10 +270,7 @@ function getRidFromReportId(report_id) {
     }
     pg.query_readOnly('select rid from reports where report_id = ($1);', [report_id], function (err, results) {
       if (err) {
-        logger.error(
-          "polis_err_fetching_rid_for_report_id " + report_id,
-          err
-        );
+        logger.error('polis_err_fetching_rid_for_report_id ' + report_id, err);
         return reject(err);
       } else if (!results || !results.rows || !results.rows.length) {
         return reject('polis_err_fetching_rid_for_report_id');
@@ -323,7 +320,7 @@ function getNumberInRange(min, max) {
     });
   };
 }
-function getArrayOfString(a, maxStrings, maxLength) {
+function getArrayOfString(a, _maxStrings, _maxLength) {
   return new Promise(function (resolve, reject) {
     let result;
     if (_.isString(a)) {
@@ -335,16 +332,11 @@ function getArrayOfString(a, maxStrings, maxLength) {
     resolve(result);
   });
 }
-function getArrayOfStringNonEmpty(a, maxStrings, maxLength) {
+function getArrayOfStringNonEmpty(a, _maxStrings, _maxLength) {
   if (!a || !a.length) {
     return Promise.reject('polis_fail_parse_string_array_empty');
   }
   return getArrayOfString(a);
-}
-function getArrayOfStringLimitLength(maxStrings, maxLength) {
-  return function (a) {
-    return getArrayOfString(a, maxStrings || 999999999, maxLength);
-  };
 }
 function getArrayOfStringNonEmptyLimitLength(maxStrings, maxLength) {
   return function (a) {
@@ -371,7 +363,7 @@ function assignToP(req, name, x) {
   req.p[name] = x;
 }
 function assignToPCustom(name) {
-  return function (req, ignoredName, x) {
+  return function (req, _ignoredName, x) {
     assignToP(req, name, x);
   };
 }

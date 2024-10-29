@@ -4,10 +4,8 @@ import pg from './db/pg-query.js';
 import SQL from './db/sql.js';
 import { MPromise } from './utils/metered.js';
 import Utils from './utils/common.js';
-import logger from './utils/logger.js';
 import Config from './config.js';
 import Conversation from './conversation.js';
-import User from './user.js';
 const { Translate } = v2;
 const useTranslateApi = Config.shouldUseTranslationAPI;
 const translateClient = useTranslateApi ? new Translate() : null;
@@ -19,7 +17,6 @@ function getComment(zid, tid) {
 function getComments(o) {
   let commentListPromise = o.moderation ? _getCommentsForModerationList(o) : _getCommentsList(o);
   let convPromise = Conversation.getConversationInfo(o.zid);
-  let conv = null;
   return Promise.all([convPromise, commentListPromise])
     .then(function (a) {
       let rows = a[1];
@@ -67,7 +64,7 @@ function _getCommentsForModerationList(o) {
   var strictCheck = Promise.resolve(null);
   var include_voting_patterns = o.include_voting_patterns;
   if (o.modIn) {
-    strictCheck = pg.queryP('select strict_moderation from conversations where zid = ($1);', [o.zid]).then((c) => {
+    strictCheck = pg.queryP('select strict_moderation from conversations where zid = ($1);', [o.zid]).then(() => {
       return o.strict_moderation;
     });
   }
@@ -106,7 +103,7 @@ function _getCommentsForModerationList(o) {
       .queryP_metered_readOnly(
         '_getCommentsForModerationList',
         'select * from (select tid, vote, count(*) from votes_latest_unique where zid = ($1) group by tid, vote) as foo full outer join comments on foo.tid = comments.tid where comments.zid = ($1)' +
-          modClause,
+        modClause,
         params
       )
       .then((rows) => {
@@ -205,11 +202,11 @@ function _getCommentsList(o) {
 function getNumberOfCommentsRemaining(zid, pid) {
   return pg.queryP(
     'with ' +
-      'v as (select * from votes_latest_unique where zid = ($1) and pid = ($2)), ' +
-      'c as (select * from get_visible_comments($1)), ' +
-      'remaining as (select count(*) as remaining from c left join v on c.tid = v.tid where v.vote is null), ' +
-      'total as (select count(*) as total from c) ' +
-      'select cast(remaining.remaining as integer), cast(total.total as integer), cast(($2) as integer) as pid from remaining, total;',
+    'v as (select * from votes_latest_unique where zid = ($1) and pid = ($2)), ' +
+    'c as (select * from get_visible_comments($1)), ' +
+    'remaining as (select count(*) as remaining from c left join v on c.tid = v.tid where v.vote is null), ' +
+    'total as (select count(*) as total from c) ' +
+    'select cast(remaining.remaining as integer), cast(total.total as integer), cast(($2) as integer) as pid from remaining, total;',
     [zid, pid]
   );
 }

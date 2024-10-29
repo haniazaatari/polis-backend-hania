@@ -1,43 +1,38 @@
 import _ from 'underscore';
-import pg from "pg";
-import dbPgQuery, {
-  query as pgQuery,
+import pg from 'pg';
+import {
   query_readOnly as pgQuery_readOnly,
   queryP as pgQueryP,
-  queryP_metered_readOnly as pgQueryP_metered_readOnly,
-  queryP_readOnly as pgQueryP_readOnly,
-  queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty,
-} from "../db/pg-query";
-import akismetLib from "akismet";
-import logger from "../utils/logger";
-import Conversation from "../conversation";
-import Config from "../config";
+  queryP_readOnly as pgQueryP_readOnly
+} from '../db/pg-query';
+import { MPromise } from '../utils/metered';
+import akismetLib from 'akismet';
+import logger from '../utils/logger';
+import Conversation from '../conversation';
+import Config from '../config';
 const serverUrl = Config.getServerUrl();
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
 let akismet = akismetLib.client({
   blog: serverUrl,
-  apiKey: Config.akismetAntispamApiKey,
+  apiKey: Config.akismetAntispamApiKey
 });
 akismet.verifyKey(function (err, verified) {
   if (verified) {
-    logger.debug("Akismet: API key successfully verified.");
+    logger.debug('Akismet: API key successfully verified.');
   } else {
-    logger.debug("Akismet: Unable to verify API key.");
+    logger.debug('Akismet: Unable to verify API key.');
   }
 });
 function isSpam(o) {
-  return new MPromise(
-    "isSpam",
-    function (resolve, reject) {
-      akismet.checkSpam(o, function (err, spam) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(spam);
-        }
-      });
-    }
-  );
+  return new MPromise('isSpam', function (resolve, reject) {
+    akismet.checkSpam(o, function (err, spam) {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(spam);
+      }
+    });
+  });
 }
 function isPolisDev(uid) {
   return polisDevs.indexOf(uid) >= 0;
@@ -80,23 +75,19 @@ let polisTypes = {
 polisTypes.reactionValues = _.values(polisTypes.reactions);
 polisTypes.starValues = _.values(polisTypes.staractions);
 function isConversationOwner(zid, uid, callback) {
-  pgQuery_readOnly(
-    "SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);",
-    [zid, uid],
-    function (err, docs) {
-      if (!docs || !docs.rows || docs.rows.length === 0) {
-        err = err || 1;
-      }
-      callback?.(err);
+  pgQuery_readOnly('SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);', [zid, uid], function (err, docs) {
+    if (!docs || !docs.rows || docs.rows.length === 0) {
+      err = err || 1;
     }
-  );
+    callback?.(err);
+  });
 }
 function isModerator(zid, uid) {
   if (isPolisDev(uid)) {
     return Promise.resolve(true);
   }
   return pgQueryP_readOnly(
-    "select count(*) from conversations where owner in (select uid from users where site_id = (select site_id from users where uid = ($2))) and zid = ($1);",
+    'select count(*) from conversations where owner in (select uid from users where site_id = (select site_id from users where uid = ($2))) and zid = ($1);',
     [zid, uid]
   ).then(function (rows) {
     return rows[0].count >= 1;
@@ -110,10 +101,10 @@ function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) 
       {
         email: email,
         zid: zid,
-        "at-date": atDate,
-        format: format,
+        'at-date': atDate,
+        format: format
       },
-      task_bucket, // TODO hash the params to get a consistent number?
+      task_bucket // TODO hash the params to get a consistent number?
     ]
   );
 }
@@ -126,10 +117,10 @@ const escapeLiteral = pg.Client.prototype.escapeLiteral;
 function isDuplicateKey(err) {
   let isdup =
     err.code === 23505 ||
-    err.code === "23505" ||
+    err.code === '23505' ||
     err.sqlState === 23505 ||
-    err.sqlState === "23505" ||
-    (err.messagePrimary && err.messagePrimary.includes("duplicate key value"));
+    err.sqlState === '23505' ||
+    (err.messagePrimary && err.messagePrimary.includes('duplicate key value'));
   return isdup;
 }
 export {
@@ -143,7 +134,7 @@ export {
   doAddDataExportTask,
   isOwner,
   escapeLiteral,
-  isDuplicateKey,
+  isDuplicateKey
 };
 export default {
   strToHex,
@@ -156,5 +147,5 @@ export default {
   doAddDataExportTask,
   isOwner,
   escapeLiteral,
-  isDuplicateKey,
+  isDuplicateKey
 };

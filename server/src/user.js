@@ -1,9 +1,9 @@
 import _ from 'underscore';
 import LruCache from 'lru-cache';
-import pg from './db/pg-query.js';
-import { MPromise } from './utils/metered.js';
-import Conversation from './conversation.js';
-import logger from './utils/logger.js';
+import pg from './db/pg-query';
+import { MPromise } from './utils/metered';
+import Conversation from './conversation';
+import logger from './utils/logger';
 function getUserInfoForUid(uid, callback) {
   pg.query_readOnly('SELECT email, hname from users where uid = $1', [uid], function (err, results) {
     if (err) {
@@ -137,7 +137,7 @@ function getPidPromise(zid, uid, usePrimary) {
     });
   });
 }
-function getPidForParticipant(assigner, cache) {
+function getPidForParticipant(assigner) {
   return function (req, res, next) {
     let zid = req.p.zid;
     let uid = req.p.uid;
@@ -172,18 +172,11 @@ function getXidRecordByXidOwnerId(xid, owner, zid_optional, x_profile_image_url,
       if (!createIfMissing) {
         return null;
       }
-      let shouldCreateXidEntryPromise;
-      if (!zid_optional) {
-        shouldCreateXidEntryPromise = Promise.resolve(true);
-      } else {
-        shouldCreateXidEntryPromise = Conversation.getConversationInfo(zid_optional).then((conv) => {
-          if (conv.use_xid_whitelist) {
-            return Conversation.isXidWhitelisted(owner, xid);
-          } else {
-            return Promise.resolve(true);
-          }
-        });
-      }
+      var shouldCreateXidEntryPromise = !zid_optional
+        ? Promise.resolve(true)
+        : Conversation.getConversationInfo(zid_optional).then((conv) => {
+            return conv.use_xid_whitelist ? Conversation.isXidWhitelisted(owner, xid) : Promise.resolve(true);
+          });
       return shouldCreateXidEntryPromise.then((should) => {
         if (!should) {
           return null;

@@ -1,9 +1,9 @@
 import _ from 'underscore';
 import url from 'url';
-import Config from '../config.js';
-import User from '../user.js';
-import Session from '../session.js';
-import logger from "../utils/logger";
+import Config from '../config';
+import User from '../user';
+import Session from '../session';
+import logger from './logger';
 const COOKIES = {
   COOKIE_TEST: 'ct',
   HAS_EMAIL: 'e',
@@ -109,20 +109,17 @@ function clearCookies(req, res) {
   for (cookieName in req.cookies) {
     if (COOKIES_TO_CLEAR[cookieName]) {
       res?.clearCookie?.(cookieName, {
-        path: "/",
-        domain: cookieDomain(req),
+        path: '/',
+        domain: cookieDomain(req)
       });
     }
   }
-  logger.info(
-    "after clear res set-cookie: " +
-      JSON.stringify(res?._headers?.["set-cookie"])
-  );
+  logger.info('after clear res set-cookie: ' + JSON.stringify(res?._headers?.['set-cookie']));
 }
 function clearCookie(req, res, cookieName) {
   res?.clearCookie?.(cookieName, {
-    path: "/",
-    domain: cookieDomain(req),
+    path: '/',
+    domain: cookieDomain(req)
   });
 }
 function doCookieAuth(assigner, isOptional, req, res, next) {
@@ -134,16 +131,16 @@ function doCookieAuth(assigner, isOptional, req, res, next) {
         next();
       } else {
         res.status(403);
-        next("polis_err_auth_no_such_token");
+        next('polis_err_auth_no_such_token');
       }
       return;
     }
     if (req.body.uid && req.body.uid !== uid) {
       res.status(401);
-      next("polis_err_auth_mismatch_uid");
+      next('polis_err_auth_mismatch_uid');
       return;
     }
-    assigner(req, "uid", Number(uid));
+    assigner(req, 'uid', Number(uid));
     next();
   });
 }

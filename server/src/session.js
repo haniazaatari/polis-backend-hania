@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import LruCache from 'lru-cache';
-import Config from './config.js';
-import pg from './db/pg-query.js';
-import logger from './utils/logger.js';
+import Config from './config';
+import pg from './db/pg-query';
+import logger from './utils/logger';
 function encrypt(text) {
   const algorithm = 'aes-256-ctr';
   const password = Config.encryptionPassword;
@@ -55,21 +55,17 @@ function getUserInfoForSessionToken(sessionToken, res, cb) {
 function startSession(uid, cb) {
   let token = makeSessionToken();
   logger.info('startSession');
-  pg.query(
-    'insert into auth_tokens (uid, token, created) values ($1, $2, default);',
-    [uid, token],
-    function (err, repliesSetToken) {
-      if (err) {
-        cb(err);
-        return;
-      }
-      logger.info('startSession: token set.');
-      cb(null, token);
+  pg.query('insert into auth_tokens (uid, token, created) values ($1, $2, default);', [uid, token], function (err) {
+    if (err) {
+      cb(err);
+      return;
     }
-  );
+    logger.info('startSession: token set.');
+    cb(null, token);
+  });
 }
 function endSession(sessionToken, cb) {
-  pg.query('delete from auth_tokens where token = ($1);', [sessionToken], function (err, results) {
+  pg.query('delete from auth_tokens where token = ($1);', [sessionToken], function (err) {
     if (err) {
       cb(err);
       return;
@@ -89,7 +85,7 @@ function setupPwReset(uid, cb) {
   pg.query(
     'insert into pwreset_tokens (uid, token, created) values ($1, $2, default);',
     [uid, token],
-    function (errSetToken, repliesSetToken) {
+    function (errSetToken) {
       if (errSetToken) {
         cb(errSetToken);
         return;
@@ -116,7 +112,7 @@ function getUidForPwResetToken(pwresettoken, cb) {
   });
 }
 function clearPwResetToken(pwresettoken, cb) {
-  pg.query('delete from pwreset_tokens where token = ($1);', [pwresettoken], function (errDelToken, repliesSetToken) {
+  pg.query('delete from pwreset_tokens where token = ($1);', [pwresettoken], function (errDelToken) {
     if (errDelToken) {
       cb(errDelToken);
       return;

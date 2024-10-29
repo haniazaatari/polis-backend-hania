@@ -1,11 +1,9 @@
-import { Response } from "express";
 import fail from "../utils/fail";
 import { getZidForRid } from "../utils/zinvite";
 
 import Anthropic from "@anthropic-ai/sdk";
 import { countTokens } from "@anthropic-ai/tokenizer";
 import {
-  GenerateContentRequest,
   GoogleGenerativeAI,
 } from "@google/generative-ai";
 import OpenAI from "openai";
@@ -16,35 +14,25 @@ import { create } from "xmlbuilder2";
 import { sendCommentGroupsSummary } from "./export";
 import { getTopicsFromRID } from "../report_experimental/topics-example";
 import DynamoStorageService from "../utils/storage";
-import { PathLike } from "fs";
 import config from "../config";
 import logger from "../utils/logger";
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const js2xmlparser = require("js2xmlparser");
 
-interface PolisRecord {
-  [key: string]: string; // Allow any string keys
-}
-
 export class PolisConverter {
-  static convertToXml(csvContent: string): string {
-    // Parse CSV content
+  static convertToXml(csvContent) {
     const records = parse(csvContent, {
       columns: true,
       skip_empty_lines: true,
-    }) as PolisRecord[];
+    })
 
     if (records.length === 0) return "";
 
-    // Create XML document
     const doc = create({ version: "1.0", encoding: "UTF-8" }).ele(
       "polis-comments"
     );
 
-    // Process each record
     records.forEach((record) => {
-      // Extract base comment data
       const comment = doc.ele("comment", {
         id: record["comment-id"],
         votes: record["total-votes"],
@@ -53,19 +41,16 @@ export class PolisConverter {
         passes: record["total-passes"],
       });
 
-      // Add comment text
       comment.ele("text").txt(record["comment"]);
 
-      // Find and process all group data
       const groupKeys = Object.keys(record)
         .filter((key) => key.match(/^group-[a-z]-/))
         .reduce((groups, key) => {
-          const groupId = key.split("-")[1]; // Extract "a" from "group-a-votes"
+          const groupId = key.split("-")[1];
           if (!groups.includes(groupId)) groups.push(groupId);
           return groups;
-        }, [] as string[]);
+        }, []);
 
-      // Add data for each group
       groupKeys.forEach((groupId) => {
         comment.ele(`group-${groupId}`, {
           votes: record[`group-${groupId}-votes`],
@@ -76,18 +61,16 @@ export class PolisConverter {
       });
     });
 
-    // Return formatted XML string
     return doc.end({ prettyPrint: true });
   }
 
-  static async convertFromFile(filePath: string): Promise<string> {
+  static async convertFromFile(filePath) {
     const fs = await import("fs/promises");
     const csvContent = await fs.readFile(filePath, "utf-8");
     return PolisConverter.convertToXml(csvContent);
   }
 
-  // Helper method to validate CSV structure
-  static validateCsvStructure(headers: string[]): boolean {
+  static validateCsvStructure(headers) {
     const requiredBaseFields = [
       "comment-id",
       "comment",
@@ -101,7 +84,6 @@ export class PolisConverter {
       headers.includes(field)
     );
 
-    // Check if group fields follow the expected pattern
     const groupFields = headers.filter((h) => h.startsWith("group-"));
     const validGroupPattern = groupFields.every((field) =>
       field.match(/^group-[a-z]-(?:votes|agrees|disagrees|passes)$/)
@@ -118,34 +100,22 @@ const anthropic = config.anthropicApiKey ? new Anthropic({
 const genAI = config.geminiApiKey ? new GoogleGenerativeAI(config.geminiApiKey) : null;
 
 const getCommentsAsXML = async (
-  id: number,
-  filter?: (v: {
-    votes: number;
-    agrees: number;
-    disagrees: number;
-    passes: number;
-    group_aware_consensus?: number;
-    comment_extremity?: number;
-    comment_id: number;
-  }) => boolean
+  id,
+  filter
 ) => {
   try {
     const resp = await sendCommentGroupsSummary(id, undefined, false, filter);
-    const xml = PolisConverter.convertToXml(resp as string);
+    const xml = PolisConverter.convertToXml(resp);
     if (xml.trim().length === 0)
       logger.error("No data has been returned by sendCommentGroupsSummary");
     return xml;
   } catch (e) {
     logger.error("Error in getCommentsAsXML:", e);
-    throw e; // Re-throw instead of returning empty string
+    throw e;
   }
 };
 
-type QueryParams = {
-  [key: string]: string | string[] | undefined;
-};
-
-const isFreshData = (timestamp: string) => {
+const isFreshData = (timestamp) => {
   const now = new Date().getTime();
   const then = new Date(timestamp).getTime();
   const elapsed = Math.abs(now - then);
@@ -153,11 +123,11 @@ const isFreshData = (timestamp: string) => {
 };
 
 const getModelResponse = async (
-  model: string,
-  system_lore: string,
-  prompt_xml: string,
-  modelVersion?: string,
-  isTopic?: boolean
+  model,
+  system_lore,
+  prompt_xml,
+  modelVersion,
+  isTopic
 ) => {
   try {
     if (isTopic && countTokens(prompt_xml) > 30000) {
@@ -183,15 +153,13 @@ const getModelResponse = async (
       }`;
     }
     const gemeniModel = genAI?.getGenerativeModel({
-      // model: "gemini-1.5-pro-002",
       model: modelVersion || "gemini-2.0-pro-exp-02-05",
       generationConfig: {
-        // https://cloud.google.com/vertex-ai/docs/reference/rest/v1/GenerationConfig
         responseMimeType: "application/json",
-        maxOutputTokens: 50000, // high for reliability for now.
+        maxOutputTokens: 50000,
       },
     });
-    const gemeniModelprompt: GenerateContentRequest = {
+    const gemeniModelprompt = {
       contents: [
         {
           parts: [
@@ -263,7 +231,6 @@ const getModelResponse = async (
             },
           ],
         });
-        // @ts-expect-error claude api
         return `{${responseClaude?.content[0]?.text}`;
       }
       case "openai": {
@@ -307,8 +274,8 @@ const getModelResponse = async (
   }
 };
 
-const getGacThresholdByGroupCount = (numGroups: number): number => {
-  const thresholds: Record<number, number> = {
+const getGacThresholdByGroupCount = (numGroups) => {
+  const thresholds = {
     2: 0.7,
     3: 0.47,
     4: 0.32,
@@ -318,19 +285,19 @@ const getGacThresholdByGroupCount = (numGroups: number): number => {
 };
 
 export async function handle_GET_groupInformedConsensus(
-  rid: string,
-  storage: DynamoStorageService | undefined,
-  res: Response<any, Record<string, any>>,
-  model: string,
-  system_lore: string,
-  zid: number | undefined,
-  modelVersion?: string
+  rid,
+  storage,
+  res,
+  model,
+  system_lore,
+  zid,
+  modelVersion
 ) {
   const section = {
     name: "group_informed_consensus",
     templatePath:
       "src/report_experimental/subtaskPrompts/group_informed_consensus.xml",
-    filter: (v: { group_aware_consensus: number; num_groups: number }) =>
+    filter: (v) =>
       (v.group_aware_consensus ?? 0) >
       getGacThresholdByGroupCount(v.num_groups),
   };
@@ -338,9 +305,7 @@ export async function handle_GET_groupInformedConsensus(
   const cachedResponse = await storage?.queryItemsByRidSectionModel(
     `${rid}#${section.name}#${model}`
   );
-  // @ts-expect-error function args ignore temp
   const structured_comments = await getCommentsAsXML(zid, section.filter);
-  // send cached response first if avalable
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
       JSON.stringify({
@@ -399,32 +364,28 @@ export async function handle_GET_groupInformedConsensus(
       }) + `|||`
     );
   }
-  // @ts-expect-error flush - calling due to use of compression
   res.flush();
 }
 
 export async function handle_GET_uncertainty(
-  rid: string,
-  storage: DynamoStorageService | undefined,
-  res: Response<any, Record<string, any>>,
-  model: string,
-  system_lore: string,
-  zid: number | undefined,
-  modelVersion?: string
+  rid,
+  storage,
+  res,
+  model,
+  system_lore,
+  zid,
+  modelVersion
 ) {
   const section = {
     name: "uncertainty",
     templatePath: "src/report_experimental/subtaskPrompts/uncertainty.xml",
-    // Revert to original simple pass ratio check
-    filter: (v: { passes: number; votes: number }) => v.passes / v.votes >= 0.2,
+    filter: (v) => v.passes / v.votes >= 0.2,
   };
 
   const cachedResponse = await storage?.queryItemsByRidSectionModel(
     `${rid}#${section.name}#${model}`
   );
-  // @ts-expect-error function args ignore temp
   const structured_comments = await getCommentsAsXML(zid, section.filter);
-  // send cached response first if avalable
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
       JSON.stringify({
@@ -483,23 +444,22 @@ export async function handle_GET_uncertainty(
       }) + `|||`
     );
   }
-  // @ts-expect-error flush - calling due to use of compression
   res.flush();
 }
 
 export async function handle_GET_groups(
-  rid: string,
-  storage: DynamoStorageService | undefined,
-  res: Response<any, Record<string, any>>,
-  model: string,
-  system_lore: string,
-  zid: number | undefined,
-  modelVersion?: string
+  rid,
+  storage,
+  res,
+  model,
+  system_lore,
+  zid,
+  modelVersion
 ) {
   const section = {
     name: "groups",
     templatePath: "src/report_experimental/subtaskPrompts/groups.xml",
-    filter: (v: { comment_extremity: number }) => {
+    filter: (v) => {
       return (v.comment_extremity ?? 0) > 1;
     },
   };
@@ -507,9 +467,7 @@ export async function handle_GET_groups(
   const cachedResponse = await storage?.queryItemsByRidSectionModel(
     `${rid}#${section.name}#${model}`
   );
-  // @ts-expect-error function args ignore temp
   const structured_comments = await getCommentsAsXML(zid, section.filter);
-  // send cached response first if avalable
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
       JSON.stringify({
@@ -568,18 +526,17 @@ export async function handle_GET_groups(
       }) + `|||`
     );
   }
-  // @ts-expect-error flush - calling due to use of compression
   res.flush();
 }
 
 export async function handle_GET_topics(
-  rid: string,
-  storage: DynamoStorageService | undefined,
-  res: Response<any, Record<string, any>>,
-  model: string,
-  system_lore: string,
-  zid: number,
-  modelVersion?: string
+  rid,
+  storage,
+  res,
+  model,
+  system_lore,
+  zid,
+  modelVersion
 ) {
   let topics;
   const cachedTopics = await storage?.queryItemsByRidSectionModel(
@@ -600,11 +557,10 @@ export async function handle_GET_topics(
     storage?.putItem(reportItemTopics);
   }
   const sections = topics.map(
-    (topic: { name: string; citations: number[] }) => ({
+    (topic) => ({
       name: `topic_${topic.name.toLowerCase().replace(/\s+/g, "_")}`,
       templatePath: "src/report_experimental/subtaskPrompts/topics.xml",
-      filter: (v: { comment_id: number }) => {
-        // Check if the comment_id is in the citations array for this topic
+      filter: (v) => {
         return topic.citations.includes(v.comment_id);
       },
     })
@@ -613,17 +569,15 @@ export async function handle_GET_topics(
   await Promise.all(
     sections.map(
       async (
-        section: { name: any; templatePath: PathLike | fs.FileHandle },
-        i: number
+        section,
+        i
       ) => {
         const cachedResponse = await storage?.queryItemsByRidSectionModel(
           `${rid}#${section.name}#${model}`
         );
-        // @ts-expect-error function args ignore temp
         const structured_comments = await getCommentsAsXML(zid, section.filter);
-        // send cached response first if avalable
         if (Array.isArray(cachedResponse) && cachedResponse?.length) {
-          await new Promise<void>((resolve) => {
+          await new Promise((resolve) => {
             res.write(
               JSON.stringify({
                 [section.name]: {
@@ -639,7 +593,7 @@ export async function handle_GET_topics(
             resolve();
           });
         } else {
-          await new Promise<void>((resolve) => {
+          await new Promise((resolve) => {
             setTimeout(async () => {
               const fileContents = await fs.readFile(
                 section.templatePath,
@@ -688,7 +642,6 @@ export async function handle_GET_topics(
                   },
                 }) + `|||`
               );
-              // @ts-expect-error flush - calling due to use of compression
               res.flush();
               resolve();
             }, (model === "gemini" ? 500 : 250) * i);
@@ -703,8 +656,8 @@ export async function handle_GET_topics(
 }
 
 export async function handle_GET_reportNarrative(
-  req: { p: { rid: string }; query: QueryParams },
-  res: Response
+  req,
+  res
 ) {
   const storage = new DynamoStorageService(
     "report_narrative_store",
@@ -723,7 +676,6 @@ export async function handle_GET_reportNarrative(
 
   res.write(`POLIS-PING: AI bootstrap`);
 
-  // @ts-expect-error flush - calling due to use of compression
   res.flush();
 
   const zid = await getZidForRid(rid);
@@ -734,7 +686,6 @@ export async function handle_GET_reportNarrative(
 
   res.write(`POLIS-PING: retrieving system lore`);
 
-  // @ts-expect-error flush - calling due to use of compression
   res.flush();
 
   const system_lore = await fs.readFile(
@@ -744,7 +695,6 @@ export async function handle_GET_reportNarrative(
 
   res.write(`POLIS-PING: retrieving stream`);
 
-  // @ts-expect-error flush - calling due to use of compression
   res.flush();
   try {
     const cachedResponse = await storage?.getAllByReportID(rid);
@@ -762,42 +712,41 @@ export async function handle_GET_reportNarrative(
         rid,
         storage,
         res,
-        modelParam as string,
+        modelParam,
         system_lore,
         zid,
-        modelVersionParam as string
+        modelVersionParam
       ),
       handle_GET_uncertainty(
         rid,
         storage,
         res,
-        modelParam as string,
+        modelParam,
         system_lore,
         zid,
-        modelVersionParam as string
+        modelVersionParam
       ),
       handle_GET_groups(
         rid,
         storage,
         res,
-        modelParam as string,
+        modelParam,
         system_lore,
         zid,
-        modelVersionParam as string
+        modelVersionParam
       ),
       handle_GET_topics(
         rid,
         storage,
         res,
-        modelParam as string,
+        modelParam,
         system_lore,
         zid,
-        modelVersionParam as string
+        modelVersionParam
       ),
     ];
     await Promise.all(promises);
   } catch (err) {
-    // @ts-expect-error flush - calling due to use of compression
     res.flush();
     logger.error(err);
     const msg =

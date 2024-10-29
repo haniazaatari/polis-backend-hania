@@ -3,7 +3,7 @@ const DEFAULTS = {
   auth_needed_to_write: false,
   auth_opt_allow_3rdparty: true,
   auth_opt_fb: false,
-  auth_opt_tw: false,
+  auth_opt_tw: false
 };
 export { DEFAULTS };
 export default {

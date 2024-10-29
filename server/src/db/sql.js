@@ -1,4 +1,4 @@
-import Config from "../config";
+import Config from '../config';
 import sql from 'sql';
 const sql_conversations = sql.define({
   name: 'conversations',
@@ -27,7 +27,7 @@ const sql_conversations = sql.define({
     'parent_url',
     'vis_type',
     'write_type',
-    "importance_enabled",
+    'importance_enabled',
     'help_type',
     'socialbtn_type',
     'subscribe_type',
@@ -67,16 +67,12 @@ const baseParticipantsExtendedColumns = [
   'encrypted_ip_address',
   'encrypted_x_forwarded_for'
 ];
-const sql_participants_extended= sql.define({
-  name: "participants_extended",
+const sql_participants_extended = sql.define({
+  name: 'participants_extended',
   columns:
-    Config.applicationName === "PolisWebServer"
-      ? [
-          ...baseParticipantsExtendedColumns,
-          "encrypted_ip_address",
-          "encrypted_x_forwarded_for",
-        ]
-      : baseParticipantsExtendedColumns,
+    Config.applicationName === 'PolisWebServer'
+      ? [...baseParticipantsExtendedColumns, 'encrypted_ip_address', 'encrypted_x_forwarded_for']
+      : baseParticipantsExtendedColumns
 });
 const sql_users = sql.define({
   name: 'users',

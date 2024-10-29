@@ -1,13 +1,12 @@
 import _ from 'underscore';
-import pg from '../db/pg-query.js';
-import fail from '../utils/fail.js';
-import Config from '../config.js';
-import cookies from '../utils/cookies.js';
-import Session from '../session.js';
-import Utils from '../utils/common.js';
-import Password from './password.js';
-import emailSenders from '../email/senders.js';
-const COOKIES = cookies.COOKIES;
+import pg from '../db/pg-query';
+import fail from '../utils/fail';
+import Config from '../config';
+import cookies from '../utils/cookies';
+import Session from '../session';
+import Utils from '../utils/common';
+import Password from './password';
+import emailSenders from '../email/senders';
 const sendTextEmail = emailSenders.sendTextEmail;
 function createUser(req, res) {
   let hname = req.p.hname;
@@ -16,9 +15,8 @@ function createUser(req, res) {
   let email = req.p.email;
   let oinvite = req.p.oinvite;
   let zinvite = req.p.zinvite;
-  let organization = req.p.organization;
   let gatekeeperTosPrivacy = req.p.gatekeeperTosPrivacy;
-  let site_id;
+  let site_id = void 0;
   if (req.p.encodedParams) {
     let decodedParams = decodeParams(req.p.encodedParams);
     if (decodedParams.site_id) {
@@ -83,34 +81,30 @@ function createUser(req, res) {
             return;
           }
           let uid = result && result.rows && result.rows[0] && result.rows[0].uid;
-          pg.query(
-            'insert into jianiuevyew (uid, pwhash) values ($1, $2);',
-            [uid, hashedPassword],
-            function (err, results) {
+          pg.query('insert into jianiuevyew (uid, pwhash) values ($1, $2);', [uid, hashedPassword], function (err) {
+            if (err) {
+              fail(res, 500, 'polis_err_reg_failed_to_add_user_record', err);
+              return;
+            }
+            Session.startSession(uid, function (err, token) {
               if (err) {
-                fail(res, 500, 'polis_err_reg_failed_to_add_user_record', err);
+                fail(res, 500, 'polis_err_reg_failed_to_start_session', err);
                 return;
               }
-              Session.startSession(uid, function (err, token) {
-                if (err) {
-                  fail(res, 500, 'polis_err_reg_failed_to_start_session', err);
-                  return;
-                }
-                cookies
-                  .addCookies(req, res, token, uid)
-                  .then(function () {
-                    res.json({
-                      uid: uid,
-                      hname: hname,
-                      email: email
-                    });
-                  })
-                  .catch(function (err) {
-                    fail(res, 500, 'polis_err_adding_user', err);
+              cookies
+                .addCookies(req, res, token, uid)
+                .then(function () {
+                  res.json({
+                    uid: uid,
+                    hname: hname,
+                    email: email
                   });
-              });
-            }
-          );
+                })
+                .catch(function (err) {
+                  fail(res, 500, 'polis_err_adding_user', err);
+                });
+            });
+          });
         });
       });
     },
@@ -121,7 +115,7 @@ function createUser(req, res) {
 }
 function doSendVerification(req, email) {
   return Password.generateTokenP(30, false).then(function (einvite) {
-    return pg.queryP('insert into einvites (email, einvite) values ($1, $2);', [email, einvite]).then(function (rows) {
+    return pg.queryP('insert into einvites (email, einvite) values ($1, $2);', [email, einvite]).then(function () {
       return sendVerificationEmail(req, email, einvite);
     });
   });
@@ -156,7 +150,7 @@ function generateAndRegisterZinvite(zid, generateShort) {
   return Password.generateTokenP(len, false).then(function (zinvite) {
     return pg
       .queryP('INSERT INTO zinvites (zid, zinvite, created) VALUES ($1, $2, default);', [zid, zinvite])
-      .then(function (rows) {
+      .then(function () {
         return zinvite;
       });
   });

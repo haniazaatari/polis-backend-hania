@@ -30,8 +30,6 @@ import {
   getUrlLimitLength,
   moveToBody,
   need,
-  needCookie,
-  needHeader,
   resolve_pidThing,
   want,
   wantCookie,
@@ -41,7 +39,7 @@ import {
 const app = express();
 app.use(morgan('dev'));
 app.set('trust proxy', 1);
-var helpersInitialized = new Promise(function (resolve, reject) {
+var helpersInitialized = new Promise(function (resolve) {
   resolve(server.initializePolisHelpers());
 });
 
@@ -1185,13 +1183,13 @@ helpersInitialized.then(
     var missingFilesGet404 = false;
     if (missingFilesGet404) {
       app.get(
-        /^\/[^(api\/)]?.*/,
+        /^\/[^(api/)]?.*/,
         makeFileFetcher(hostname, staticFilesAdminPort, '/404.html', {
           'Content-Type': 'text/html'
         })
       );
     } else {
-      app.get(/^\/[^(api\/)]?.*/, proxy);
+      app.get(/^\/[^(api/)]?.*/, proxy);
     }
     app.listen(Config.serverPort);
     logger.info('started on port ' + Config.serverPort);

@@ -1,5 +1,3 @@
-import * as dotenv from 'dotenv';
-dotenv.config();
 import fs from 'fs';
 import isTrue from 'boolean';
 const devHostname = process.env.API_DEV_HOSTNAME || 'localhost:5000';
@@ -8,6 +6,7 @@ const domainOverride = process.env.DOMAIN_OVERRIDE || null;
 const prodHostname = process.env.API_PROD_HOSTNAME || 'pol.is';
 const serverPort = parseInt(process.env.API_SERVER_PORT || process.env.PORT || '5000', 10);
 const shouldUseTranslationAPI = isTrue(process.env.SHOULD_USE_TRANSLATION_API);
+// eslint-disable-next-line node/no-unsupported-features/es-syntax
 import('source-map-support').then((sourceMapSupport) => {
   sourceMapSupport.install();
 });

@@ -1,11 +1,10 @@
-import { isFunction, isString, isUndefined } from "underscore";
-import { Pool, PoolConfig, QueryResult } from "pg";
-import { parse as parsePgConnectionString } from "pg-connection-string";
-import QueryStream from "pg-query-stream";
-import Config from "../config";
-import logger from "../utils/logger";
-import { MPromise } from "../utils/metered";
-
+import { isFunction, isString, isUndefined } from 'underscore';
+import { Pool } from 'pg';
+import { parse as parsePgConnectionString } from 'pg-connection-string';
+import QueryStream from 'pg-query-stream';
+import Config from '../config';
+import logger from '../utils/logger';
+import { MPromise } from '../utils/metered';
 const usingReplica = Config.databaseURL !== Config.readOnlyDatabaseURL;
 const poolSize = Config.isDevMode ? 2 : usingReplica ? 3 : 12;
 const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), {
@@ -13,7 +12,7 @@ const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), 
   isReadOnly: false,
   ssl: Config.databaseSSL
     ? {
-        rejectUnauthorized: false,
+        rejectUnauthorized: false
       }
     : undefined,
   poolLog: function (str, level) {
@@ -27,7 +26,7 @@ const readsPgConnection = Object.assign(parsePgConnectionString(Config.readOnlyD
   isReadOnly: true,
   ssl: Config.databaseSSL
     ? {
-        rejectUnauthorized: false,
+        rejectUnauthorized: false
       }
     : undefined,
   poolLog: function (str, level) {
@@ -41,10 +40,10 @@ const readPool = new Pool(readsPgConnection);
 function queryImpl(pool, queryString, ...args) {
   let params;
   let callback;
-  if (_.isFunction(args[1])) {
+  if (isFunction(args[1])) {
     params = args[0];
     callback = args[1];
-  } else if (_.isFunction(args[0])) {
+  } else if (isFunction(args[0])) {
     params = [];
     callback = args[0];
   } else {
@@ -55,7 +54,7 @@ function queryImpl(pool, queryString, ...args) {
       if (err) {
         if (callback) callback(err);
         release(err);
-        logger.error("pg_connect_pool_fail", err);
+        logger.error('pg_connect_pool_fail', err);
         return reject(err);
       }
       client.query(queryString, params, function (err, results) {
@@ -81,7 +80,7 @@ function query_readOnly(queryString, ...args) {
   return queryImpl(readPool, queryString, ...args);
 }
 function queryP_impl(pool, queryString, params) {
-  if (!_.isString(queryString)) {
+  if (!isString(queryString)) {
     return Promise.reject('query_was_not_string');
   }
   return new Promise(function (resolve, reject) {
@@ -126,13 +125,7 @@ function queryP_metered(name, queryString, params) {
 function queryP_metered_readOnly(name, queryString, params) {
   return queryP_metered_impl(true, name, queryString, params);
 }
-function stream_queryP_readOnly(
-  queryString,
-  params,
-  onRow,
-  onEnd,
-  onError
-) {
+function stream_queryP_readOnly(queryString, params, onRow, onEnd, onError) {
   const query = new QueryStream(queryString, params);
   readPool.connect((err, client, done) => {
     if (err) {
@@ -140,14 +133,14 @@ function stream_queryP_readOnly(
       return;
     }
     const stream = client.query(query);
-    stream.on("data", (row) => {
+    stream.on('data', (row) => {
       onRow(row);
     });
-    stream.on("end", () => {
+    stream.on('end', () => {
       done();
       onEnd();
     });
-    stream.on("error", (error) => {
+    stream.on('error', (error) => {
       done(error);
       onError(error);
     });

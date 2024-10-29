@@ -4,6 +4,9 @@
   "description": "polis =====",
   "main": "app.js",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "debug": "SERVER_LOG_LEVEL=debug nodemon --inspect=0.0.0.0:9229 app.js",
     "serve": "node app.js",
