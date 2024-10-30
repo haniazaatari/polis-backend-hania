@@ -4,11 +4,10 @@ import {
   queryP as pgQueryP,
   query_readOnly as pgQuery_readOnly,
   queryP_metered as pgQueryP_metered,
-  queryP_readOnly as pgQueryP_readOnly,
-} from '../db/pg-query';
-import { MPromise } from './metered';
-import logger from "./logger";
-
+  queryP_readOnly as pgQueryP_readOnly
+} from '../db/pg-query.js';
+import { MPromise } from './metered.js';
+import logger from "./logger.js";
 let zidToConversationIdCache = new LruCache({
   max: 1000
 });

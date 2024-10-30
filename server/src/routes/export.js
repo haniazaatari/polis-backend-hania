@@ -1,13 +1,12 @@
 import {
   queryP_readOnly as pgQueryP_readOnly,
-  stream_queryP_readOnly as stream_pgQueryP_readOnly,
-} from "../db/pg-query";
-import { getZinvite, getZidForRid, getZidForUuid } from "../utils/zinvite";
-import { getXids } from "./math";
-import { getPca } from "../utils/pca";
-import fail from "../utils/fail";
-import logger from "../utils/logger";
-
+  stream_queryP_readOnly as stream_pgQueryP_readOnly
+} from '../db/pg-query.js';
+import { getZinvite, getZidForRid, getZidForUuid } from '../utils/zinvite.js';
+import { getXids } from './math.js';
+import { getPca } from '../utils/pca.js';
+import fail from '../utils/fail.js';
+import logger from '../utils/logger.js';
 const sep = '\n';
 
 export const formatEscapedText = (s) => `"${s.replace(/"/g, '""')}"`;

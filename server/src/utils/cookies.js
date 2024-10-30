@@ -1,9 +1,9 @@
 import _ from 'underscore';
 import url from 'url';
-import Config from '../config';
-import User from '../user';
-import Session from '../session';
-import logger from './logger';
+import Config from '../config.js';
+import User from '../user.js';
+import Session from '../session.js';
+import logger from './logger.js';
 const COOKIES = {
   COOKIE_TEST: 'ct',
   HAS_EMAIL: 'e',
