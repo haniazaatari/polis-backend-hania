@@ -12,10 +12,6 @@
     "serve": "node app.js",
     "start": "npm run serve",
     "start:watch": "nodemon app.js",
-    "format": "prettier 'src/**/*.{js,ts}' --write",
-    "format:check": "prettier 'src/**/*.{js,ts}' --check",
-    "lint": "eslint --quiet .",
-    "lint:verbose": "eslint .",
     "fix-imports": "node bin/add-extensions.js",
     "clean": "rm -rf dist",
     "build": "npm run fix-imports && npm run clean && tsc"
@@ -65,19 +61,19 @@
     "mimelib": "^0.3.1",
     "morgan": "^1.10.0",
     "nan": "^2.22.0",
-    "nodemailer-mailgun-transport": "^2.1.5",
     "nodemailer": "^6.9.16",
+    "nodemailer-mailgun-transport": "^2.1.5",
     "oauth": "^0.10.0",
     "openai": "^4.83.0",
     "optimist": "^0.6.1",
     "p3p": "~0.0.2",
+    "pg": "^8.13.1",
     "pg-connection-string": "^2.7.0",
     "pg-native": "^3.2.0",
     "pg-query-stream": "^4.7.1",
-    "pg": "^8.13.1",
     "replacestream": "^4.0.3",
-    "request-promise": "~4.2.6",
     "request": "~2.88.2",
+    "request-promise": "~4.2.6",
     "response-time": "^2.3.3",
     "simple-oauth2": "~0.2.1",
     "simple-xml-to-json": "^1.2.3",
@@ -90,10 +86,8 @@
     "xmlbuilder2": "^3.1.1"
   },
   "devDependencies": {
-    "eslint": "^8.57.0",
-    "eslint-plugin-node": "^11.1.0",
+    "@biomejs/biome": "^1.9.4",
     "nodemon": "^3.1.7",
-    "prettier": "^3.3.3",
     "typescript": "^5.6.3"
   }
 }
