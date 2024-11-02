@@ -182,14 +182,14 @@ function processMathObject(o) {
       'subgroup-clusters'
     ];
 
-    subgroupProperties.forEach((prop) => {
+    for (const prop of subgroupProperties) {
       if (o[prop]) {
         o[prop] = safeMap(o[prop], (val, i) => ({
           id: Number(i),
           val: val
         }));
       }
-    });
+    }
 
     return o;
   }
@@ -202,7 +202,7 @@ function processMathObject(o) {
 
   const propsToConvert = ['repness', 'group-votes', 'subgroup-repness', 'subgroup-votes', 'subgroup-clusters'];
 
-  propsToConvert.forEach((prop) => {
+  for (const prop of propsToConvert) {
     if (!_.isArray(o[prop])) {
       o[prop] = _.keys(o[prop]).map((gid) => ({
         id: Number(gid),
@@ -213,7 +213,7 @@ function processMathObject(o) {
         o[prop].map(remapSubgroupStuff);
       }
     }
-  });
+  }
 
   function toObj(a) {
     const obj = {};
@@ -232,15 +232,14 @@ function processMathObject(o) {
     }
     return a.map((g) => {
       const id = g.id;
-      g = g.val;
-      g.id = id;
-      return g;
+      const group = g.val;
+      group.id = id;
+      return group;
     });
   }
   o.repness = toObj(o.repness);
   o['group-votes'] = toObj(o['group-votes']);
   o['group-clusters'] = toArray(o['group-clusters']);
-
   o['subgroup-repness'] = undefined;
   o['subgroup-votes'] = undefined;
   o['subgroup-clusters'] = undefined;
