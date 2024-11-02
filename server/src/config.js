@@ -4,7 +4,7 @@ const devHostname = process.env.API_DEV_HOSTNAME || 'localhost:5000';
 const devMode = isTrue(process.env.DEV_MODE);
 const domainOverride = process.env.DOMAIN_OVERRIDE || null;
 const prodHostname = process.env.API_PROD_HOSTNAME || 'pol.is';
-const serverPort = parseInt(process.env.API_SERVER_PORT || process.env.PORT || '5000', 10);
+const serverPort = Number.parseInt(process.env.API_SERVER_PORT || process.env.PORT || '5000', 10);
 const shouldUseTranslationAPI = isTrue(process.env.SHOULD_USE_TRANSLATION_API);
 // eslint-disable-next-line node/no-unsupported-features/es-syntax
 import('source-map-support').then((sourceMapSupport) => {
@@ -44,9 +44,8 @@ export default {
   getServerUrl: () => {
     if (devMode) {
       return `http://${devHostname}`;
-    } else {
-      return `https://${prodHostname}`;
     }
+    return `https://${prodHostname}`;
   },
   adminEmailDataExport: process.env.ADMIN_EMAIL_DATA_EXPORT,
   adminEmailDataExportTest: process.env.ADMIN_EMAIL_DATA_EXPORT_TEST,
@@ -75,15 +74,18 @@ export default {
   mailgunApiKey: process.env.MAILGUN_API_KEY || null,
   mailgunDomain: process.env.MAILGUN_DOMAIN || null,
   mathEnv: process.env.MATH_ENV,
-  maxReportCacheDuration: parseInt(process.env.MAX_REPORT_CACHE_DURATION || "3600000", 10),
+  maxReportCacheDuration: Number.parseInt(process.env.MAX_REPORT_CACHE_DURATION || '3600000', 10),
   nodeEnv: process.env.NODE_ENV,
   openaiApiKey: process.env.OPENAI_API_KEY || null,
   polisFromAddress: process.env.POLIS_FROM_ADDRESS,
   readOnlyDatabaseURL: process.env.READ_ONLY_DATABASE_URL || process.env.DATABASE_URL,
   runPeriodicExportTests: isTrue(process.env.RUN_PERIODIC_EXPORT_TESTS),
   shouldUseTranslationAPI: setGoogleApplicationCredentials(),
-  staticFilesAdminPort: parseInt(process.env.STATIC_FILES_ADMIN_PORT || process.env.STATIC_FILES_PORT || '8080', 10),
-  staticFilesParticipationPort: parseInt(
+  staticFilesAdminPort: Number.parseInt(
+    process.env.STATIC_FILES_ADMIN_PORT || process.env.STATIC_FILES_PORT || '8080',
+    10
+  ),
+  staticFilesParticipationPort: Number.parseInt(
     process.env.STATIC_FILES_PARTICIPATION_PORT || process.env.STATIC_FILES_PORT || '8080',
     10
   ),

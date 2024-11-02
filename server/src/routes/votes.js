@@ -1,27 +1,27 @@
 import _ from 'underscore';
+import Conversation from '../conversation';
 import {
   query as pgQuery,
-  query_readOnly as pgQuery_readOnly,
-  queryP_readOnly as pgQueryP_readOnly
+  queryP_readOnly as pgQueryP_readOnly,
+  query_readOnly as pgQuery_readOnly
 } from '../db/pg-query';
+import SQL from '../db/sql';
 import { isDuplicateKey } from '../utils/common';
 import logger from '../utils/logger';
-import Conversation from '../conversation';
-import SQL from '../db/sql';
 import { MPromise } from '../utils/metered';
 
 const isXidWhitelisted = Conversation.isXidWhitelisted;
 const sql_votes_latest_unique = SQL.sql_votes_latest_unique;
 
-function doVotesPost(uid, pid, conv, tid, voteType, weight, high_priority) {
-  let zid = conv?.zid;
+function doVotesPost(_uid, pid, conv, tid, voteType, weight, high_priority) {
+  const zid = conv?.zid;
   weight = weight || 0;
-  let weight_x_32767 = Math.trunc(weight * 32767);
-  return new Promise(function (resolve, reject) {
-    let query =
+  const weight_x_32767 = Math.trunc(weight * 32767);
+  return new Promise((resolve, reject) => {
+    const query =
       'INSERT INTO votes (pid, zid, tid, vote, weight_x_32767, high_priority, created) VALUES ($1, $2, $3, $4, $5, $6, default) RETURNING *;';
-    let params = [pid, zid, tid, voteType, weight_x_32767, high_priority];
-    pgQuery(query, params, function (err, result) {
+    const params = [pid, zid, tid, voteType, weight_x_32767, high_priority];
+    pgQuery(query, params, (err, result) => {
       if (err) {
         if (isDuplicateKey(err)) {
           reject('polis_err_vote_duplicate');
@@ -44,7 +44,7 @@ function doVotesPost(uid, pid, conv, tid, voteType, weight, high_priority) {
 
 function votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
   return pgQueryP_readOnly('select * from conversations where zid = ($1);', [zid])
-    .then(function (rows) {
+    .then((rows) => {
       if (!rows || !rows.length) {
         throw 'polis_err_unknown_conversation';
       }
@@ -56,16 +56,13 @@ function votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
         return isXidWhitelisted(conv.owner, xid).then((is_whitelisted) => {
           if (is_whitelisted) {
             return conv;
-          } else {
-            throw 'polis_err_xid_not_whitelisted';
           }
+          throw 'polis_err_xid_not_whitelisted';
         });
       }
       return conv;
     })
-    .then(function (conv) {
-      return doVotesPost(uid, pid, conv, tid, voteType, weight, high_priority);
-    });
+    .then((conv) => doVotesPost(uid, pid, conv, tid, voteType, weight, high_priority));
 }
 function getVotesForSingleParticipant(p) {
   if (_.isUndefined(p.pid)) {
@@ -75,7 +72,7 @@ function getVotesForSingleParticipant(p) {
 }
 
 function votesGet(p) {
-  return new MPromise('votesGet', function (resolve, reject) {
+  return new MPromise('votesGet', (resolve, reject) => {
     let q = sql_votes_latest_unique
       .select(sql_votes_latest_unique.star())
       .where(sql_votes_latest_unique.zid.equals(p.zid));
@@ -86,7 +83,7 @@ function votesGet(p) {
     if (!_.isUndefined(p.tid)) {
       q = q.where(sql_votes_latest_unique.tid.equals(p.tid));
     }
-    pgQuery_readOnly(q.toString(), function (err, results) {
+    pgQuery_readOnly(q.toString(), (err, results) => {
       if (err) {
         reject(err);
       } else {

@@ -1,12 +1,12 @@
-import zlib from 'zlib';
-import _ from 'underscore';
+import zlib from 'node:zlib';
 import LruCache from 'lru-cache';
-import { queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query.js';
+import _ from 'underscore';
 import Config from '../config.js';
+import { queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query.js';
 import logger from './logger.js';
 import { addInRamMetric } from './metered.js';
-let pcaCacheSize = Config.cacheMathResults ? 300 : 1;
-let pcaCache = new LruCache({
+const pcaCacheSize = Config.cacheMathResults ? 300 : 1;
+const pcaCache = new LruCache({
   max: pcaCacheSize
 });
 
@@ -14,7 +14,6 @@ let lastPrefetchedMathTick = -1;
 
 export function fetchAndCacheLatestPcaData() {
   let lastPrefetchPollStartTime = Date.now();
-
   function waitTime() {
     const timePassed = Date.now() - lastPrefetchPollStartTime;
     return Math.max(0, 2500 - timePassed);
@@ -25,48 +24,52 @@ export function fetchAndCacheLatestPcaData() {
 
     pgQueryP_readOnly('select * from math_main where caching_tick > ($1) order by caching_tick limit 10;', [
       lastPrefetchedMathTick
-    ])
-      .then((rows) => {
-        const rowsArray = rows;
-
-        if (!rowsArray || !rowsArray.length) {
-          logger.info('mathpoll done');
-          setTimeout(pollForLatestPcaData, waitTime());
-          return;
-        }
-
-        const results = rowsArray.map((row) => {
+    ]).then((rows) => {
+      if (!rows || !rows.length) {
+        logger.info('mathpoll done');
+        setTimeout(fetchAndCacheLatestPcaData, waitTime());
+        return;
+      }
+      const _results = rows
+        .map((row) => {
           const item = row.data;
-
           if (row.math_tick) {
             item.math_tick = Number(row.math_tick);
           }
-          if (row.caching_tick) {
-            item.caching_tick = Number(row.caching_tick);
-          }
 
-          logger.info('mathpoll updating', {
-            caching_tick: item.caching_tick,
-            zid: row.zid
+          const results = rows.map((row) => {
+            const item = row.data;
+
+            if (row.math_tick) {
+              item.math_tick = Number(row.math_tick);
+            }
+            if (row.caching_tick) {
+              item.caching_tick = Number(row.caching_tick);
+            }
+
+            logger.info('mathpoll updating', {
+              caching_tick: item.caching_tick,
+              zid: row.zid
+            });
+
+            if (item.caching_tick > lastPrefetchedMathTick) {
+              lastPrefetchedMathTick = item.caching_tick;
+            }
+
+            processMathObject(item);
+
+            return updatePcaCache(row.zid, item);
           });
 
-          if (item.caching_tick > lastPrefetchedMathTick) {
-            lastPrefetchedMathTick = item.caching_tick;
-          }
-
-          processMathObject(item);
-
-          return updatePcaCache(row.zid, item);
-        });
-
-        Promise.all(results).then(() => {
+          Promise.all(results).then(() => {
+            setTimeout(pollForLatestPcaData, waitTime());
+          });
+        })
+        .catch((err) => {
+          logger.error('mathpoll error', err);
           setTimeout(pollForLatestPcaData, waitTime());
         });
-      })
-      .catch((err) => {
-        logger.error('mathpoll error', err);
-        setTimeout(pollForLatestPcaData, waitTime());
-      });
+    });
   }
 
   pollForLatestPcaData();
@@ -77,7 +80,7 @@ export function getPca(zid, math_tick) {
   if (cached && cached.expiration < Date.now()) {
     cached = undefined;
   }
-  const cachedPOJO = cached && cached.asPOJO;
+  const cachedPOJO = cached?.asPOJO;
   if (cachedPOJO) {
     if (cachedPOJO.math_tick <= (math_tick || 0)) {
       logger.info('math was cached but not new', {
@@ -86,25 +89,20 @@ export function getPca(zid, math_tick) {
         query_math_tick: math_tick
       });
       return Promise.resolve(undefined);
-    } else {
-      logger.info('math from cache', { zid, math_tick });
-      return Promise.resolve(cached);
     }
+    logger.info('math from cache', { zid, math_tick });
+    return Promise.resolve(cached);
   }
 
   logger.info('mathpoll cache miss', { zid, math_tick });
-
   const queryStart = Date.now();
-
   return pgQueryP_readOnly('select * from math_main where zid = ($1) and math_env = ($2);', [zid, Config.mathEnv]).then(
     (rows) => {
       const queryEnd = Date.now();
       const queryDuration = queryEnd - queryStart;
       addInRamMetric('pcaGetQuery', queryDuration);
 
-      const rowsArray = rows;
-
-      if (!rowsArray || !rowsArray.length) {
+      if (!rows || !rows.length) {
         logger.info('mathpoll related; after cache miss, unable to find data for', {
           zid,
           math_tick,
@@ -112,10 +110,9 @@ export function getPca(zid, math_tick) {
         });
         return undefined;
       }
-      const item = rowsArray[0].data;
-
-      if (rowsArray[0].math_tick) {
-        item.math_tick = Number(rowsArray[0].math_tick);
+      const item = rows[0].data;
+      if (rows[0].math_tick) {
+        item.math_tick = Number(rows[0].math_tick);
       }
 
       if (item.math_tick <= (math_tick || 0)) {
@@ -138,15 +135,14 @@ export function getPca(zid, math_tick) {
 }
 
 function updatePcaCache(zid, item) {
-  return new Promise(function (resolve, reject) {
-    delete item.zid; // don't leak zid
+  return new Promise((resolve, reject) => {
+    item.zid = undefined;
     const asJSON = JSON.stringify(item);
     const buf = Buffer.from(asJSON, 'utf-8');
-    zlib.gzip(buf, function (err, jsondGzipdPcaBuffer) {
+    zlib.gzip(buf, (err, jsondGzipdPcaBuffer) => {
       if (err) {
         return reject(err);
       }
-
       const o = {
         asPOJO: item,
         asJSON: asJSON,
@@ -170,7 +166,8 @@ function processMathObject(o) {
     function safeMap(input, mapFn) {
       if (Array.isArray(input)) {
         return input.map(mapFn);
-      } else if (input && typeof input === 'object') {
+      }
+      if (input && typeof input === 'object') {
         return Object.keys(input).map((key) => mapFn(input[key], Number(key)));
       }
       return [];
@@ -240,12 +237,12 @@ function processMathObject(o) {
       return g;
     });
   }
-  o['repness'] = toObj(o['repness']);
+  o.repness = toObj(o.repness);
   o['group-votes'] = toObj(o['group-votes']);
   o['group-clusters'] = toArray(o['group-clusters']);
 
-  delete o['subgroup-repness'];
-  delete o['subgroup-votes'];
-  delete o['subgroup-clusters'];
+  o['subgroup-repness'] = undefined;
+  o['subgroup-votes'] = undefined;
+  o['subgroup-clusters'] = undefined;
   return o;
 }

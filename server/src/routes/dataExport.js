@@ -1,8 +1,8 @@
+import AWS from 'aws-sdk';
+import Config from '../config';
 import User from '../user';
 import { doAddDataExportTask } from '../utils/common';
-import Config from '../config';
 import fail from '../utils/fail';
-import AWS from 'aws-sdk';
 
 AWS.config.update({ region: Config.awsRegion });
 const s3Client = new AWS.S3({ apiVersion: '2006-03-01' });
@@ -32,9 +32,9 @@ function handle_GET_dataExport(req, res) {
 }
 
 function handle_GET_dataExport_results(req, res) {
-  var url = s3Client.getSignedUrl('getObject', {
+  const url = s3Client.getSignedUrl('getObject', {
     Bucket: 'polis-datadump',
-    Key: Config.mathEnv + '/' + req.p.filename,
+    Key: `${Config.mathEnv}/${req.p.filename}`,
     Expires: 60 * 60 * 24 * 7
   });
   res.redirect(url);

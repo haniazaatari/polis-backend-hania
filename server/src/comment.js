@@ -1,26 +1,26 @@
-import _ from 'underscore';
 import { v2 } from '@google-cloud/translate';
-import pg from './db/pg-query.js';
-import SQL from './db/sql.js';
-import { MPromise } from './utils/metered.js';
-import Utils from './utils/common.js';
+import _ from 'underscore';
 import Config from './config.js';
 import Conversation from './conversation.js';
+import pg from './db/pg-query.js';
+import SQL from './db/sql.js';
+import Utils from './utils/common.js';
+import { MPromise } from './utils/metered.js';
 const { Translate } = v2;
 const useTranslateApi = Config.shouldUseTranslationAPI;
 const translateClient = useTranslateApi ? new Translate() : null;
 function getComment(zid, tid) {
   return pg.queryP('select * from comments where zid = ($1) and tid = ($2);', [zid, tid]).then((rows) => {
-    return (rows && rows[0]) || null;
+    return rows?.[0] || null;
   });
 }
 function getComments(o) {
-  let commentListPromise = o.moderation ? _getCommentsForModerationList(o) : _getCommentsList(o);
-  let convPromise = Conversation.getConversationInfo(o.zid);
+  const commentListPromise = o.moderation ? _getCommentsForModerationList(o) : _getCommentsList(o);
+  const convPromise = Conversation.getConversationInfo(o.zid);
   return Promise.all([convPromise, commentListPromise])
-    .then(function (a) {
+    .then((a) => {
       let rows = a[1];
-      let cols = [
+      const cols = [
         'txt',
         'tid',
         'created',
@@ -43,8 +43,8 @@ function getComments(o) {
         cols.push('pass_count');
         cols.push('count');
       }
-      rows = rows.map(function (row) {
-        let x = _.pick(row, cols);
+      rows = rows.map((row) => {
+        const x = _.pick(row, cols);
         if (!_.isUndefined(x.count)) {
           x.count = Number(x.count);
         }
@@ -52,17 +52,17 @@ function getComments(o) {
       });
       return rows;
     })
-    .then(function (comments) {
-      comments.forEach(function (c) {
-        delete c.uid;
-        delete c.anon;
-      });
+    .then((comments) => {
+      for (const c of comments) {
+        c.uid = undefined;
+        c.anon = undefined;
+      }
       return comments;
     });
 }
 function _getCommentsForModerationList(o) {
-  var strictCheck = Promise.resolve(null);
-  var include_voting_patterns = o.include_voting_patterns;
+  let strictCheck = Promise.resolve(null);
+  const include_voting_patterns = o.include_voting_patterns;
   if (o.modIn) {
     strictCheck = pg.queryP('select strict_moderation from conversations where zid = ($1);', [o.zid]).then(() => {
       return o.strict_moderation;
@@ -70,7 +70,7 @@ function _getCommentsForModerationList(o) {
   }
   return strictCheck.then((strict_moderation) => {
     let modClause = '';
-    let params = [o.zid];
+    const params = [o.zid];
     if (!_.isUndefined(o.mod)) {
       modClause = ' and comments.mod = ($2)';
       params.push(o.mod);
@@ -95,26 +95,28 @@ function _getCommentsForModerationList(o) {
     if (!include_voting_patterns) {
       return pg.queryP_metered_readOnly(
         '_getCommentsForModerationList',
-        'select * from comments where comments.zid = ($1)' + modClause,
+        `select * from comments where comments.zid = ($1)${modClause}`,
         params
       );
     }
     return pg
       .queryP_metered_readOnly(
         '_getCommentsForModerationList',
-        'select * from (select tid, vote, count(*) from votes_latest_unique where zid = ($1) group by tid, vote) as foo full outer join comments on foo.tid = comments.tid where comments.zid = ($1)' +
-        modClause,
+        `select * from (select tid, vote, count(*) from votes_latest_unique where zid = ($1) group by tid, vote) as foo full outer join comments on foo.tid = comments.tid where comments.zid = ($1)${modClause}`,
         params
       )
       .then((rows) => {
-        let adp = {};
+        const adp = {};
         for (let i = 0; i < rows.length; i++) {
-          let row = rows[i];
-          let o = (adp[row.tid] = adp[row.tid] || {
-            agree_count: 0,
-            disagree_count: 0,
-            pass_count: 0
-          });
+          const row = rows[i];
+          if (!adp[row.tid]) {
+            adp[row.tid] = {
+              agree_count: 0,
+              disagree_count: 0,
+              pass_count: 0
+            };
+          }
+          const o = adp[row.tid];
           if (row.vote === Utils.polisTypes.reactions.pull) {
             o.agree_count = Number(row.count);
           } else if (row.vote === Utils.polisTypes.reactions.push) {
@@ -123,23 +125,23 @@ function _getCommentsForModerationList(o) {
             o.pass_count = Number(row.count);
           }
         }
-        rows = _.uniq(rows, false, (row) => {
+        const uniqueRows = _.uniq(rows, false, (row) => {
           return row.tid;
         });
-        for (let i = 0; i < rows.length; i++) {
-          let row = rows[i];
+        for (let i = 0; i < uniqueRows.length; i++) {
+          const row = uniqueRows[i];
           row.agree_count = adp[row.tid].agree_count;
           row.disagree_count = adp[row.tid].disagree_count;
           row.pass_count = adp[row.tid].pass_count;
           row.count = row.agree_count + row.disagree_count + row.pass_count;
         }
-        return rows;
+        return uniqueRows;
       });
   });
 }
 function _getCommentsList(o) {
-  return new MPromise('_getCommentsList', function (resolve, reject) {
-    Conversation.getConversationInfo(o.zid).then(function (conv) {
+  return new MPromise('_getCommentsList', (resolve, reject) => {
+    Conversation.getConversationInfo(o.zid).then((conv) => {
       let q = SQL.sql_comments.select(SQL.sql_comments.star()).where(SQL.sql_comments.zid.equals(o.zid));
       if (!_.isUndefined(o.pid)) {
         q = q.and(SQL.sql_comments.pid.equals(o.pid));
@@ -185,12 +187,12 @@ function _getCommentsList(o) {
       } else {
         q = q.limit(999);
       }
-      return pg.query(q.toString(), [], function (err, docs) {
+      return pg.query(q.toString(), [], (err, docs) => {
         if (err) {
           reject(err);
           return;
         }
-        if (docs.rows && docs.rows.length) {
+        if (docs.rows?.length) {
           resolve(docs.rows);
         } else {
           resolve([]);
@@ -202,11 +204,11 @@ function _getCommentsList(o) {
 function getNumberOfCommentsRemaining(zid, pid) {
   return pg.queryP(
     'with ' +
-    'v as (select * from votes_latest_unique where zid = ($1) and pid = ($2)), ' +
-    'c as (select * from get_visible_comments($1)), ' +
-    'remaining as (select count(*) as remaining from c left join v on c.tid = v.tid where v.vote is null), ' +
-    'total as (select count(*) as total from c) ' +
-    'select cast(remaining.remaining as integer), cast(total.total as integer), cast(($2) as integer) as pid from remaining, total;',
+      'v as (select * from votes_latest_unique where zid = ($1) and pid = ($2)), ' +
+      'c as (select * from get_visible_comments($1)), ' +
+      'remaining as (select count(*) as remaining from c left join v on c.tid = v.tid where v.vote is null), ' +
+      'total as (select count(*) as total from c) ' +
+      'select cast(remaining.remaining as integer), cast(total.total as integer), cast(($2) as integer) as pid from remaining, total;',
     [zid, pid]
   );
 }

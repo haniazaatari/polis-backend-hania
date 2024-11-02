@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import logger from "../../../utils/logger";
+import logger from '../../../utils/logger';
 
 const genAI = new GoogleGenerativeAI('my_api_key');
 

@@ -3,45 +3,17 @@ import bluebird from 'bluebird';
 import express from 'express';
 import morgan from 'morgan';
 import Config from './src/config.js';
+import { handle_GET_conversationUuid } from './src/routes/conversationUuid.js';
+import { handle_GET_xidReport } from './src/routes/export.js';
 import server from './src/server.js';
 import logger from './src/utils/logger.js';
-import { handle_GET_conversationUuid } from "./src/routes/conversationUuid";
-import { handle_GET_xidReport } from "./src/routes/export";
-
-import {
-  assignToP,
-  assignToPCustom,
-  getArrayOfInt,
-  getArrayOfStringNonEmpty,
-  getArrayOfStringNonEmptyLimitLength,
-  getBool,
-  getConversationIdFetchZid,
-  getEmail,
-  getInt,
-  getIntInRange,
-  getNumberInRange,
-  getOptionalStringLimitLength,
-  getPassword,
-  getPasswordWithCreatePasswordRules,
-  getReportIdFetchRid,
-  getStringLimitLength,
-  getUrlLimitLength,
-  moveToBody,
-  need,
-  resolve_pidThing,
-  want,
-  wantCookie,
-  wantHeader
-} from './src/utils/parameter.js';
-
 const app = express();
 app.use(morgan('dev'));
 app.set('trust proxy', 1);
 
-const helpersInitialized = new bluebird.Promise(function (resolve) {
+const helpersInitialized = new bluebird.Promise((resolve) => {
   resolve(server.initializePolisHelpers());
 });
-
 helpersInitialized.then(
   (o) => {
     const {
@@ -178,6 +150,33 @@ helpersInitialized.then(
       handle_PUT_reports,
       handle_PUT_users
     } = o;
+    const {
+      assignToP,
+      assignToPCustom,
+      getArrayOfInt,
+      getArrayOfStringNonEmpty,
+      getArrayOfStringNonEmptyLimitLength,
+      getBool,
+      getConversationIdFetchZid,
+      getEmail,
+      getInt,
+      getIntInRange,
+      getNumberInRange,
+      getOptionalStringLimitLength,
+      getPassword,
+      getPasswordWithCreatePasswordRules,
+      getReportIdFetchRid,
+      getStringLimitLength,
+      getUrlLimitLength,
+      moveToBody,
+      need,
+      needCookie,
+      needHeader,
+      resolve_pidThing,
+      want,
+      wantCookie,
+      wantHeader
+    } = require('./src/utils/parameter');
     app.disable('x-powered-by');
     app.use(middleware_responseTime_start);
     app.use(redirectIfNotHttps);
@@ -247,9 +246,9 @@ helpersInitialized.then(
       handle_GET_bidToPid
     );
     app.get(
-      "/api/v3/xid/:xid_report",
+      '/api/v3/xid/:xid_report',
       moveToBody,
-      need("xid_report", getStringLimitLength(1, 99), assignToP),
+      need('xid_report', getStringLimitLength(1, 99), assignToP),
       handle_GET_xidReport
     );
     app.get(
@@ -421,14 +420,10 @@ helpersInitialized.then(
       handle_GET_conversationStats
     );
     app.get(
-      "/api/v3/conversationUuid",
+      '/api/v3/conversationUuid',
       moveToBody,
       auth(assignToP),
-      need(
-        "conversation_id",
-        getConversationIdFetchZid,
-        assignToPCustom("zid")
-      ),
+      need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
       handle_GET_conversationUuid
     );
     app.get(
@@ -567,7 +562,7 @@ helpersInitialized.then(
     );
     app.get('/api/v3/testConnection', moveToBody, handle_GET_testConnection);
     app.get('/api/v3/testDatabase', moveToBody, handle_GET_testDatabase);
-    app.get('/robots.txt', (req, res) => {
+    app.get('/robots.txt', (_req, res) => {
       res.send('User-agent: *\n' + 'Disallow: /api/');
     });
     app.get(
@@ -1108,10 +1103,7 @@ helpersInitialized.then(
     app.get(/^\/pwreset.*/, fetchIndexForAdminPage);
     app.get(/^\/company$/, fetchIndexForAdminPage);
     app.get(/^\/report\/r?[0-9][0-9A-Za-z]+(\/.*)?/, fetchIndexForReportPage);
-    app.get(
-      /^\/narrativeReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
-      fetchIndexForReportPage
-    );
+    app.get(/^\/narrativeReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/, fetchIndexForReportPage);
     app.get(/^\/thirdPartyCookieTestPt1\.html$/, fetchThirdPartyCookieTestPt1);
     app.get(/^\/thirdPartyCookieTestPt2\.html$/, fetchThirdPartyCookieTestPt2);
     app.get(
@@ -1170,14 +1162,14 @@ helpersInitialized.then(
       if (pathAndQuery.indexOf('?') >= 1) {
         pathAndQuery = pathAndQuery.replace('/?', '?');
       }
-      const fullUrl = req.protocol + '://' + req.get('host') + pathAndQuery;
+      const fullUrl = `${req.protocol}://${req.get('host')}${pathAndQuery}`;
       if (pathAndQuery !== req.originalUrl) {
         res.redirect(fullUrl);
       } else {
         proxy(req, res);
       }
     });
-    var missingFilesGet404 = false;
+    const missingFilesGet404 = false;
     if (missingFilesGet404) {
       app.get(
         /^\/[^(api/)]?.*/,
@@ -1189,7 +1181,7 @@ helpersInitialized.then(
       app.get(/^\/[^(api/)]?.*/, proxy);
     }
     app.listen(Config.serverPort);
-    logger.info('started on port ' + Config.serverPort);
+    logger.info(`started on port ${Config.serverPort}`);
   },
   (err) => {
     logger.error('failed to init server', err);

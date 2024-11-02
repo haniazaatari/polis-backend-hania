@@ -2,11 +2,11 @@ import {
   queryP_readOnly as pgQueryP_readOnly,
   stream_queryP_readOnly as stream_pgQueryP_readOnly
 } from '../db/pg-query.js';
-import { getZinvite, getZidForRid, getZidForUuid } from '../utils/zinvite.js';
-import { getXids } from './math.js';
-import { getPca } from '../utils/pca.js';
 import fail from '../utils/fail.js';
 import logger from '../utils/logger.js';
+import { getPca } from '../utils/pca.js';
+import { getZidForRid, getZidForUuid, getZinvite } from '../utils/zinvite.js';
+import { getXids } from './math.js';
 const sep = '\n';
 
 export const formatEscapedText = (s) => `"${s.replace(/"/g, '""')}"`;
@@ -39,8 +39,8 @@ export function formatCSV(colFns, rows) {
 export async function loadConversationSummary(zid, siteUrl) {
   const [zinvite, convoRows, commentersRow, pca] = await Promise.all([
     getZinvite(zid),
-    pgQueryP_readOnly(`SELECT topic, description FROM conversations WHERE zid = $1`, [zid]),
-    pgQueryP_readOnly(`SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1`, [zid]),
+    pgQueryP_readOnly('SELECT topic, description FROM conversations WHERE zid = $1', [zid]),
+    pgQueryP_readOnly('SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1', [zid]),
     getPca(zid)
   ]);
   if (!zinvite || !convoRows || !commentersRow || !pca) {
@@ -63,10 +63,8 @@ export async function loadConversationSummary(zid, siteUrl) {
     ['conversation-description', formatEscapedText(convo.description)]
   ].map((row) => row.join(','));
 }
-
-export const formatDatetime = (timestamp) => new Date(parseInt(timestamp)).toString();
-
-export async function sendConversationSummary(zid, siteUrl, res) {
+const formatDatetime = (timestamp) => new Date(Number.parseInt(timestamp)).toString();
+async function sendConversationSummary(zid, siteUrl, res) {
   const rows = await loadConversationSummary(zid, siteUrl);
   res.setHeader('content-type', 'text/csv');
   res.send(rows.join(sep));
@@ -112,7 +110,7 @@ export async function sendCommentSummary(zid, res) {
         res.send(
           formatCSV(
             {
-              timestamp: (row) => String(Math.floor(parseInt(row.created) / 1000)),
+              timestamp: (row) => String(Math.floor(Number.parseInt(row.created) / 1000)),
               datetime: (row) => formatDatetime(row.created),
               'comment-id': (row) => String(row.tid),
               'author-id': (row) => String(row.pid),
@@ -194,12 +192,12 @@ export async function sendParticipantVotesSummary(zid, res) {
     const groupClusters = pcaData['group-clusters'];
 
     if (!baseClusters || !baseClusters.members || !Array.isArray(baseClusters.members)) {
-      logger.info(`No base clusters found in PCA data`);
+      logger.info('No base clusters found in PCA data');
       return undefined;
     }
 
     if (!groupClusters || !Array.isArray(groupClusters) || groupClusters.length === 0) {
-      logger.info(`No group clusters found in PCA data`);
+      logger.info('No group clusters found in PCA data');
       return undefined;
     }
 
@@ -264,8 +262,8 @@ export async function sendParticipantVotesSummary(zid, res) {
     [zid],
     (row) => {
       const pid = row.pid;
-      if (pid != currentParticipantId) {
-        if (currentParticipantId != -1) {
+      if (pid !== currentParticipantId) {
+        if (currentParticipantId !== -1) {
           sendCurrentParticipantRow();
         }
         currentParticipantId = pid;
@@ -275,7 +273,7 @@ export async function sendParticipantVotesSummary(zid, res) {
       currentParticipantVotes.set(row.tid, -row.vote);
     },
     () => {
-      if (currentParticipantId != -1) {
+      if (currentParticipantId !== -1) {
         sendCurrentParticipantRow();
       }
       res.end();
@@ -287,7 +285,7 @@ export async function sendParticipantVotesSummary(zid, res) {
   );
 }
 
-export async function sendCommentGroupsSummary(zid, res, http = true, filterFN) {
+export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
   const csvText = [];
   // Get PCA data to identify groups and get groupVotes
   const pca = await getPca(zid);
@@ -303,7 +301,7 @@ export async function sendCommentGroupsSummary(zid, res, http = true, filterFN) 
   const groupVotes = pca.asPOJO['group-votes'];
   const groupAwareConsensus = pca.asPOJO['group-aware-consensus'];
 
-  const commentExtremity = pca.asPOJO['pca']?.['comment-extremity'] || [];
+  const commentExtremity = pca.asPOJO.pca?.['comment-extremity'] || [];
 
   // Load comment texts
   const commentRows = await pgQueryP_readOnly('SELECT tid, txt FROM comments WHERE zid = ($1)', [zid]);
@@ -315,7 +313,7 @@ export async function sendCommentGroupsSummary(zid, res, http = true, filterFN) 
   // Create a mapping of tid to extremity index using math tids array
   const tidToExtremityIndex = new Map();
   const mathTids = pca.asPOJO.tids || []; // Array of tids in same order as extremity values
-  commentExtremity.forEach((extremity, index) => {
+  commentExtremity.forEach((_extremity, index) => {
     const tid = mathTids[index];
     if (tid !== undefined) {
       tidToExtremityIndex.set(tid, index);
@@ -329,7 +327,7 @@ export async function sendCommentGroupsSummary(zid, res, http = true, filterFN) 
 
     // Process each comment's votes for this group
     for (const [tidStr, votes] of Object.entries(groupVoteStats.votes)) {
-      const tid = parseInt(tidStr);
+      const tid = Number.parseInt(tidStr);
 
       // Initialize stats for this comment if we haven't seen it before
       if (!commentStats.has(tid)) {
@@ -445,12 +443,12 @@ export async function sendParticipantXidsSummary(zid, res) {
   try {
     const pca = await getPca(zid);
     if (!pca?.asPOJO) {
-      throw new Error("polis_error_no_pca_data");
+      throw new Error('polis_error_no_pca_data');
     }
 
     const xids = await getXids(zid);
     if (!xids) {
-      throw new Error("polis_error_no_xid_response");
+      throw new Error('polis_error_no_xid_response');
     }
 
     // Sort xids by pid
@@ -459,22 +457,19 @@ export async function sendParticipantXidsSummary(zid, res) {
     // Define formatters for the CSV columns
     const formatters = {
       participant: (row) => String(row.pid),
-      xid: (row) => formatEscapedText(row.xid),
+      xid: (row) => formatEscapedText(row.xid)
     };
 
     // Generate and send the CSV
-    res.setHeader("content-type", "text/csv");
+    res.setHeader('content-type', 'text/csv');
     res.send(formatCSV(formatters, xids));
   } catch (err) {
-    logger.error("polis_err_report_participant_xids", err);
-    fail(res, 500, "polis_err_data_export", err);
+    logger.error('polis_err_report_participant_xids', err);
+    fail(res, 500, 'polis_err_data_export', err);
   }
 }
 
-export async function handle_GET_reportExport(
-  req,
-  res
-) {
+export async function handle_GET_reportExport(req, res) {
   const { rid, report_type } = req.p;
   try {
     const zid = await getZidForRid(rid);
@@ -520,15 +515,15 @@ export async function handle_GET_reportExport(
 export async function handle_GET_xidReport(req, res) {
   const { xid_report } = req.p;
   try {
-    const uuid = xid_report.split("-xid.csv")[0];
+    const uuid = xid_report.split('-xid.csv')[0];
     const zid = await getZidForUuid(uuid);
     if (zid != null) {
       await sendParticipantXidsSummary(zid, res);
     } else {
-      fail(res, 404, "polis_error_data_unknown_report");
+      fail(res, 404, 'polis_error_data_unknown_report');
     }
   } catch (err) {
-    logger.error("polis_err_report_xid", err);
-    fail(res, 500, "polis_err_data_export", err);
+    logger.error('polis_err_report_xid', err);
+    fail(res, 500, 'polis_err_data_export', err);
   }
 }

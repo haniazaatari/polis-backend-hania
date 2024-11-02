@@ -1,8 +1,8 @@
-import _ from 'underscore';
 import url from 'url';
+import _ from 'underscore';
 import Config from '../config.js';
-import User from '../user.js';
 import Session from '../session.js';
+import User from '../user.js';
 import logger from './logger.js';
 const COOKIES = {
   COOKIE_TEST: 'ct',
@@ -25,7 +25,7 @@ const COOKIES_TO_CLEAR = {
   referrer: true,
   parent_url: true
 };
-let oneYear = 1000 * 60 * 60 * 24 * 365;
+const oneYear = 1000 * 60 * 60 * 24 * 365;
 function cookieDomain(req) {
   const origin = req?.headers?.origin || '';
   const parsedOrigin = url.parse(origin);
@@ -82,9 +82,9 @@ function setCookieTestCookie(req, res) {
   setCookie(req, res, COOKIES.COOKIE_TEST, 1, {});
 }
 function addCookies(req, res, token, uid) {
-  return User.getUserInfoForUid2(uid).then(function (opts) {
-    let email = opts.email;
-    let created = opts.created;
+  return User.getUserInfoForUid2(uid).then((opts) => {
+    const email = opts.email;
+    const created = opts.created;
     setTokenCookie(req, res, token);
     setUidCookie(req, res, uid);
     setHasEmailCookie(req, res, email);
@@ -97,12 +97,11 @@ function addCookies(req, res, token, uid) {
 }
 function getPermanentCookieAndEnsureItIsSet(req, res) {
   if (!req.cookies[COOKIES.PERMANENT_COOKIE]) {
-    let token = Session.makeSessionToken();
+    const token = Session.makeSessionToken();
     setPermanentCookie(req, res, token);
     return token;
-  } else {
-    return req.cookies[COOKIES.PERMANENT_COOKIE];
   }
+  return req.cookies[COOKIES.PERMANENT_COOKIE];
 }
 function clearCookies(req, res) {
   let cookieName;
@@ -114,7 +113,7 @@ function clearCookies(req, res) {
       });
     }
   }
-  logger.info('after clear res set-cookie: ' + JSON.stringify(res?._headers?.['set-cookie']));
+  logger.info(`after clear res set-cookie: ${JSON.stringify(res?._headers?.['set-cookie'])}`);
 }
 function clearCookie(req, res, cookieName) {
   res?.clearCookie?.(cookieName, {
@@ -123,8 +122,8 @@ function clearCookie(req, res, cookieName) {
   });
 }
 function doCookieAuth(assigner, isOptional, req, res, next) {
-  let token = req.cookies[COOKIES.TOKEN];
-  getUserInfoForSessionToken(token, res, function (err, uid) {
+  const token = req.cookies[COOKIES.TOKEN];
+  getUserInfoForSessionToken(token, res, (err, uid) => {
     if (err) {
       clearCookies(req, res);
       if (isOptional) {

@@ -1,22 +1,22 @@
-import _ from 'underscore';
-import pg from 'pg';
-import {
-  query_readOnly as pgQuery_readOnly,
-  queryP as pgQueryP,
-  queryP_readOnly as pgQueryP_readOnly
-} from '../db/pg-query';
-import { MPromise } from '../utils/metered';
 import akismetLib from 'akismet';
-import logger from '../utils/logger';
-import Conversation from '../conversation';
+import pg from 'pg';
+import _ from 'underscore';
 import Config from '../config';
+import Conversation from '../conversation';
+import {
+  queryP as pgQueryP,
+  queryP_readOnly as pgQueryP_readOnly,
+  query_readOnly as pgQuery_readOnly
+} from '../db/pg-query';
+import logger from '../utils/logger';
+import { MPromise } from '../utils/metered';
 const serverUrl = Config.getServerUrl();
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
-let akismet = akismetLib.client({
+const akismet = akismetLib.client({
   blog: serverUrl,
   apiKey: Config.akismetAntispamApiKey
 });
-akismet.verifyKey(function (err, verified) {
+akismet.verifyKey((_err, verified) => {
   if (verified) {
     logger.debug('Akismet: API key successfully verified.');
   } else {
@@ -24,8 +24,8 @@ akismet.verifyKey(function (err, verified) {
   }
 });
 function isSpam(o) {
-  return new MPromise('isSpam', function (resolve, reject) {
-    akismet.checkSpam(o, function (err, spam) {
+  return new MPromise('isSpam', (resolve, reject) => {
+    akismet.checkSpam(o, (err, spam) => {
       if (err) {
         reject(err);
       } else {
@@ -38,24 +38,25 @@ function isPolisDev(uid) {
   return polisDevs.indexOf(uid) >= 0;
 }
 function strToHex(str) {
-  let hex, i;
+  let hex;
+  let i;
   let result = '';
   for (i = 0; i < str.length; i++) {
     hex = str.charCodeAt(i).toString(16);
-    result += ('000' + hex).slice(-4);
+    result += `000${hex}`.slice(-4);
   }
   return result;
 }
 function hexToStr(hexString) {
   let j;
-  let hexes = hexString.match(/.{1,4}/g) || [];
+  const hexes = hexString.match(/.{1,4}/g) || [];
   let str = '';
   for (j = 0; j < hexes.length; j++) {
-    str += String.fromCharCode(parseInt(hexes[j], 16));
+    str += String.fromCharCode(Number.parseInt(hexes[j], 16));
   }
   return str;
 }
-let polisTypes = {
+const polisTypes = {
   reactions: {
     push: 1,
     pull: -1,
@@ -75,7 +76,7 @@ let polisTypes = {
 polisTypes.reactionValues = _.values(polisTypes.reactions);
 polisTypes.starValues = _.values(polisTypes.staractions);
 function isConversationOwner(zid, uid, callback) {
-  pgQuery_readOnly('SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);', [zid, uid], function (err, docs) {
+  pgQuery_readOnly('SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);', [zid, uid], (err, docs) => {
     if (!docs || !docs.rows || docs.rows.length === 0) {
       err = err || 1;
     }
@@ -89,9 +90,7 @@ function isModerator(zid, uid) {
   return pgQueryP_readOnly(
     'select count(*) from conversations where owner in (select uid from users where site_id = (select site_id from users where uid = ($2))) and zid = ($1);',
     [zid, uid]
-  ).then(function (rows) {
-    return rows[0].count >= 1;
-  });
+  ).then((rows) => rows[0].count >= 1);
 }
 function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) {
   return pgQueryP(
@@ -109,18 +108,16 @@ function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) 
   );
 }
 function isOwner(zid, uid) {
-  return Conversation.getConversationInfo(zid).then(function (info) {
-    return info.owner === uid;
-  });
+  return Conversation.getConversationInfo(zid).then((info) => info.owner === uid);
 }
 const escapeLiteral = pg.Client.prototype.escapeLiteral;
 function isDuplicateKey(err) {
-  let isdup =
+  const isdup =
     err.code === 23505 ||
     err.code === '23505' ||
     err.sqlState === 23505 ||
     err.sqlState === '23505' ||
-    (err.messagePrimary && err.messagePrimary.includes('duplicate key value'));
+    err.messagePrimary?.includes('duplicate key value');
   return isdup;
 }
 export {

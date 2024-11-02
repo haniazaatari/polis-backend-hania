@@ -7,7 +7,7 @@ function encrypt(text) {
   const algorithm = 'aes-256-ctr';
   const password = Config.encryptionPassword;
   const cipher = crypto.createCipher(algorithm, password);
-  var crypted = cipher.update(text, 'utf8', 'hex');
+  let crypted = cipher.update(text, 'utf8', 'hex');
   crypted += cipher.final('hex');
   return crypted;
 }
@@ -15,7 +15,7 @@ function decrypt(text) {
   const algorithm = 'aes-256-ctr';
   const password = Config.encryptionPassword;
   const decipher = crypto.createDecipher(algorithm, password);
-  var dec = decipher.update(text, 'hex', 'utf8');
+  let dec = decipher.update(text, 'hex', 'utf8');
   dec += decipher.final('utf8');
   return dec;
 }
@@ -30,13 +30,13 @@ function makeSessionToken() {
 const userTokenCache = new LruCache({
   max: 9000
 });
-function getUserInfoForSessionToken(sessionToken, res, cb) {
-  let cachedUid = userTokenCache.get(sessionToken);
+function getUserInfoForSessionToken(sessionToken, _res, cb) {
+  const cachedUid = userTokenCache.get(sessionToken);
   if (cachedUid) {
     cb(null, cachedUid);
     return;
   }
-  pg.query('select uid from auth_tokens where token = ($1);', [sessionToken], function (err, results) {
+  pg.query('select uid from auth_tokens where token = ($1);', [sessionToken], (err, results) => {
     if (err) {
       logger.error('token_fetch_error', err);
       cb(500);
@@ -47,15 +47,15 @@ function getUserInfoForSessionToken(sessionToken, res, cb) {
       cb(403);
       return;
     }
-    let uid = results.rows[0].uid;
+    const uid = results.rows[0].uid;
     userTokenCache.set(sessionToken, uid);
     cb(null, uid);
   });
 }
 function startSession(uid, cb) {
-  let token = makeSessionToken();
+  const token = makeSessionToken();
   logger.info('startSession');
-  pg.query('insert into auth_tokens (uid, token, created) values ($1, $2, default);', [uid, token], function (err) {
+  pg.query('insert into auth_tokens (uid, token, created) values ($1, $2, default);', [uid, token], (err) => {
     if (err) {
       cb(err);
       return;
@@ -65,7 +65,7 @@ function startSession(uid, cb) {
   });
 }
 function endSession(sessionToken, cb) {
-  pg.query('delete from auth_tokens where token = ($1);', [sessionToken], function (err) {
+  pg.query('delete from auth_tokens where token = ($1);', [sessionToken], (err) => {
     if (err) {
       cb(err);
       return;
@@ -81,11 +81,11 @@ function setupPwReset(uid, cb) {
       .replace(/[^A-Za-z0-9]/g, '')
       .substr(0, 100);
   }
-  let token = makePwResetToken();
+  const token = makePwResetToken();
   pg.query(
     'insert into pwreset_tokens (uid, token, created) values ($1, $2, default);',
     [uid, token],
-    function (errSetToken) {
+    (errSetToken) => {
       if (errSetToken) {
         cb(errSetToken);
         return;
@@ -95,7 +95,7 @@ function setupPwReset(uid, cb) {
   );
 }
 function getUidForPwResetToken(pwresettoken, cb) {
-  pg.query('select uid from pwreset_tokens where token = ($1);', [pwresettoken], function (errGetToken, results) {
+  pg.query('select uid from pwreset_tokens where token = ($1);', [pwresettoken], (errGetToken, results) => {
     if (errGetToken) {
       logger.error('pwresettoken_fetch_error', errGetToken);
       cb(500);
@@ -112,7 +112,7 @@ function getUidForPwResetToken(pwresettoken, cb) {
   });
 }
 function clearPwResetToken(pwresettoken, cb) {
-  pg.query('delete from pwreset_tokens where token = ($1);', [pwresettoken], function (errDelToken) {
+  pg.query('delete from pwreset_tokens where token = ($1);', [pwresettoken], (errDelToken) => {
     if (errDelToken) {
       cb(errDelToken);
       return;

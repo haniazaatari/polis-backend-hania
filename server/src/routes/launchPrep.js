@@ -1,6 +1,6 @@
+import Session from '../session';
 import Utils from '../utils/common';
 import cookies from '../utils/cookies';
-import Session from '../session';
 const COOKIES = cookies.COOKIES;
 
 const setPermanentCookie = cookies.setPermanentCookie;

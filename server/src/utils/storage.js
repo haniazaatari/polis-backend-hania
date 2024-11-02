@@ -1,18 +1,7 @@
-/* eslint-disable no-console */
-import {
-  CreateTableCommand,
-  DeleteItemCommand,
-  DescribeTableCommand,
-  DynamoDBClient,
-} from "@aws-sdk/client-dynamodb";
-import {
-  PutCommand,
-  QueryCommand,
-  DeleteCommand,
-  ScanCommand,
-} from "@aws-sdk/lib-dynamodb";
-import config from "../config";
-import logger from "./logger";
+import { CreateTableCommand, DeleteItemCommand, DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DeleteCommand, PutCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import config from '../config';
+import logger from './logger';
 
 export default class DynamoStorageService {
   // client;
@@ -22,8 +11,8 @@ export default class DynamoStorageService {
   constructor(tableName, disableCache) {
     const credentials = {
       accessKeyId: config.awsAccessKeyId,
-      secretAccessKey: config.awsSecretAccessKey,
-    }
+      secretAccessKey: config.awsSecretAccessKey
+    };
     const clientConfig = { region: config.awsRegion, credentials };
 
     if (config.dynamoDbEndpoint) {
@@ -35,33 +24,30 @@ export default class DynamoStorageService {
     this.cacheDisabled = disableCache || false;
   }
 
-  /**
-   * Checks if the table exists, and if not, creates it.
-   */
   async initTable() {
     try {
       const describeCmd = new DescribeTableCommand({
-        TableName: this.tableName,
+        TableName: this.tableName
       });
       await this.client.send(describeCmd);
       logger.info(`Table "${this.tableName}" already exists.`);
     } catch (error) {
-      if (error.name === "ResourceNotFoundException") {
+      if (error.name === 'ResourceNotFoundException') {
         logger.info(`Table "${this.tableName}" not found. Creating now...`);
         const createCmd = new CreateTableCommand({
           TableName: this.tableName,
           AttributeDefinitions: [
-            { AttributeName: "rid_section_model", AttributeType: "S" },
-            { AttributeName: "timestamp", AttributeType: "S" },
+            { AttributeName: 'rid_section_model', AttributeType: 'S' },
+            { AttributeName: 'timestamp', AttributeType: 'S' }
           ],
           KeySchema: [
-            { AttributeName: "rid_section_model", KeyType: "HASH" },
-            { AttributeName: "timestamp", KeyType: "RANGE" },
+            { AttributeName: 'rid_section_model', KeyType: 'HASH' },
+            { AttributeName: 'timestamp', KeyType: 'RANGE' }
           ],
           ProvisionedThroughput: {
             ReadCapacityUnits: 5,
-            WriteCapacityUnits: 5,
-          },
+            WriteCapacityUnits: 5
+          }
         });
         await this.client.send(createCmd);
         logger.info(`Table "${this.tableName}" created successfully.`);
@@ -84,7 +70,7 @@ export default class DynamoStorageService {
       console.log(`item stored successfully: ${response}`);
       return response;
     } catch (error) {
-      logger.error(error)
+      logger.error(error);
     }
   }
 
@@ -107,7 +93,7 @@ export default class DynamoStorageService {
       const data = await this.client.send(command);
       return data.Items;
     } catch (error) {
-      logger.error("Error querying items:", error);
+      logger.error('Error querying items:', error);
     }
   }
 
@@ -124,16 +110,16 @@ export default class DynamoStorageService {
 
     try {
       const response = await this.client.send(command);
-      logger.info("Item deleted successfully:", response);
+      logger.info('Item deleted successfully:', response);
       return response;
     } catch (error) {
-      logger.error("Error deleting item:", error);
+      logger.error('Error deleting item:', error);
     }
   }
 
   async deleteAllByReportID(reportIdPrefix) {
     if (!reportIdPrefix) {
-      console.error("reportIdPrefix cannot be empty or null.");
+      console.error('reportIdPrefix cannot be empty or null.');
       return;
     }
 
@@ -142,11 +128,11 @@ export default class DynamoStorageService {
     do {
       const scanParams = {
         TableName: this.tableName,
-        FilterExpression: "begins_with(rid_section_model, :reportIdPrefix)",
+        FilterExpression: 'begins_with(rid_section_model, :reportIdPrefix)',
         ExpressionAttributeValues: {
-          ":reportIdPrefix": String(reportIdPrefix),
+          ':reportIdPrefix': String(reportIdPrefix)
         },
-        ExclusiveStartKey: lastEvaluatedKey,
+        ExclusiveStartKey: lastEvaluatedKey
       };
 
       const scanCommand = new ScanCommand(scanParams);
@@ -159,17 +145,13 @@ export default class DynamoStorageService {
 
         if (!itemsToDelete || itemsToDelete.length === 0) {
           if (!lastEvaluatedKey) {
-            console.log(
-              `No items found with report ID prefix: ${reportIdPrefix}`
-            );
+            console.log(`No items found with report ID prefix: ${reportIdPrefix}`);
           }
           break;
         }
-        console.log(
-          `Found ${itemsToDelete.length} items to delete in this batch.`
-        );
+        console.log(`Found ${itemsToDelete.length} items to delete in this batch.`);
       } catch (scanError) {
-        console.error("Error scanning for items:", scanError);
+        console.error('Error scanning for items:', scanError);
         return;
       }
       const deletePromises = itemsToDelete.map(async (item) => {
@@ -180,8 +162,8 @@ export default class DynamoStorageService {
           TableName: this.tableName,
           Key: {
             rid_section_model: { S: rid_section_model },
-            timestamp: { S: timestamp },
-          },
+            timestamp: { S: timestamp }
+          }
         };
 
         const deleteItemCommand = new DeleteItemCommand(deleteParams);
@@ -189,12 +171,12 @@ export default class DynamoStorageService {
         try {
           await this.client.send(deleteItemCommand);
           console.log(
-            `Deleted item with rid_section_model: ${rid_section_model}${timestamp ? `, timestamp: ${timestamp}` : ""
-            }`
+            `Deleted item with rid_section_model: ${rid_section_model}${timestamp ? `, timestamp: ${timestamp}` : ''}`
           );
         } catch (deleteError) {
           console.error(
-            `Error deleting item: rid_section_model: ${rid_section_model}${timestamp ? `, timestamp: ${timestamp}` : ""
+            `Error deleting item: rid_section_model: ${rid_section_model}${
+              timestamp ? `, timestamp: ${timestamp}` : ''
             }`,
             deleteError
           );
@@ -207,16 +189,16 @@ export default class DynamoStorageService {
 
   async getAllByReportID(reportIdPrefix) {
     if (!reportIdPrefix) {
-      console.error("reportIdPrefix cannot be empty or null.");
+      console.error('reportIdPrefix cannot be empty or null.');
       return [];
     }
 
     const scanParams = {
       TableName: this.tableName,
-      FilterExpression: "begins_with(rid_section_model, :reportIdPrefix)",
+      FilterExpression: 'begins_with(rid_section_model, :reportIdPrefix)',
       ExpressionAttributeValues: {
-        ":reportIdPrefix": String(reportIdPrefix),
-      },
+        ':reportIdPrefix': String(reportIdPrefix)
+      }
     };
 
     const scanCommand = new ScanCommand(scanParams);
@@ -230,13 +212,11 @@ export default class DynamoStorageService {
         return [];
       }
 
-      console.log(
-        `Found ${items.length} items with report ID prefix: ${reportIdPrefix}`
-      );
+      console.log(`Found ${items.length} items with report ID prefix: ${reportIdPrefix}`);
 
       return items;
     } catch (scanError) {
-      console.error("Error scanning for items:", scanError);
+      console.error('Error scanning for items:', scanError);
       return;
     }
   }

@@ -1,9 +1,9 @@
+import fs from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
-import { convertXML } from 'simple-xml-to-json';
-import fs from 'fs/promises';
 import { parse } from 'csv-parse/sync';
+import { convertXML } from 'simple-xml-to-json';
 import { create } from 'xmlbuilder2';
-import logger from "../../../utils/logger";
+import logger from '../../../utils/logger';
 
 const js2xmlparser = require('js2xmlparser');
 const report_id = process.argv[2];
@@ -29,7 +29,7 @@ export class PolisConverter {
         passes: record['total-passes']
       });
 
-      comment.ele('text').txt(record['comment']);
+      comment.ele('text').txt(record.comment);
 
       const groupKeys = Object.keys(record)
         .filter((key) => key.match(/^group-[a-z]-/))
@@ -53,7 +53,7 @@ export class PolisConverter {
   }
 
   static async convertFromFile(filePath) {
-    const fs = await import('fs/promises');
+    const fs = await import('node:fs/promises');
     const csvContent = await fs.readFile(filePath, 'utf-8');
     return PolisConverter.convertToXml(csvContent);
   }
