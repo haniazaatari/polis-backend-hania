@@ -221,16 +221,6 @@ function getXidStuff(xid, zid) {
     return xidRecordForPtpt;
   });
 }
-export {
-  pidCache,
-  getUserInfoForUid,
-  getUserInfoForUid2,
-  getUser,
-  createDummyUser,
-  getPid,
-  getPidPromise,
-  getPidForParticipant
-};
 export default {
   pidCache,
   getXidRecordByXidOwnerId,

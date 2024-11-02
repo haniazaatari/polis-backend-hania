@@ -246,15 +246,6 @@ function detectLanguage(txt) {
     }
   ]);
 }
-export {
-  getComment,
-  getComments,
-  _getCommentsForModerationList,
-  _getCommentsList,
-  getNumberOfCommentsRemaining,
-  translateAndStoreComment,
-  detectLanguage
-};
 export default {
   getComment,
   getComments,

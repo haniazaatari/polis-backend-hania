@@ -1,11 +1,6 @@
 import LruCache from 'lru-cache';
 import _ from 'underscore';
-import {
-  queryP as pgQueryP,
-  queryP_metered as pgQueryP_metered,
-  queryP_readOnly as pgQueryP_readOnly,
-  query_readOnly as pgQuery_readOnly
-} from '../db/pg-query.js';
+import pg from '../db/pg-query.js';
 import logger from './logger.js';
 import { MPromise } from './metered.js';
 const zidToConversationIdCache = new LruCache({
@@ -17,7 +12,7 @@ export function getZinvite(zid, dontUseCache) {
   if (!dontUseCache && cachedConversationId) {
     return Promise.resolve(cachedConversationId);
   }
-  return pgQueryP_metered('getZinvite', 'select * from zinvites where zid = ($1);', [zid]).then((rows) => {
+  return pg.queryP_metered('getZinvite', 'select * from zinvites where zid = ($1);', [zid]).then((rows) => {
     const conversation_id = rows?.[0]?.zinvite || void 0;
     if (conversation_id) {
       zidToConversationIdCache.set(zid, conversation_id);
@@ -53,7 +48,7 @@ export function getZinvites(zids) {
       resolve(makeZidToConversationIdMap([zidsWithCachedConversationIds]));
       return;
     }
-    pgQuery_readOnly(`select * from zinvites where zid in (${uncachedZids.join(',')});`, [], (err, result) => {
+    pg.query_readOnly(`select * from zinvites where zid in (${uncachedZids.join(',')});`, [], (err, result) => {
       if (err) {
         reject(err);
       } else {
@@ -64,7 +59,7 @@ export function getZinvites(zids) {
 }
 
 export function getZidForRid(rid) {
-  return pgQueryP('select zid from reports where rid = ($1);', [rid]).then((row) => {
+  return pg.queryP('select zid from reports where rid = ($1);', [rid]).then((row) => {
     if (!row || !row.length) {
       return null;
     }
@@ -75,7 +70,7 @@ export function getZidForRid(rid) {
 export async function getZidForUuid(uuid) {
   logger.debug(`getZidForUuid: ${uuid}`);
   try {
-    const queryResult = await pgQueryP_readOnly('SELECT zid FROM zinvites WHERE uuid = $1', [uuid]);
+    const queryResult = await pg.queryP_readOnly('SELECT zid FROM zinvites WHERE uuid = $1', [uuid]);
 
     const rows = queryResult;
 
