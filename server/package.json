@@ -15,10 +15,9 @@
     "fix-imports": "node bin/add-extensions.js",
     "clean": "rm -rf dist",
     "build": "npm run fix-imports && npm run clean && tsc",
-    "lint": "biome lint",
-    "format": "biome format",
-    "check": "biome check",
-    "fix": "biome check --fix"
+    "lint": "biome lint --write",
+    "format": "biome format --write",
+    "check": "biome check"
   },
   "repository": {
     "type": "git",
@@ -76,7 +75,6 @@
     "pg-native": "^3.2.0",
     "pg-query-stream": "^4.7.1",
     "replacestream": "^4.0.3",
-    "request": "~2.88.2",
     "request-promise": "~4.2.6",
     "response-time": "^2.3.3",
     "simple-oauth2": "~0.2.1",
