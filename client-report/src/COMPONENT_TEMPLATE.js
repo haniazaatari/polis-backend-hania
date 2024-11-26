@@ -38,10 +38,10 @@ class ComponentName extends React.Component {
     };
   }
   render() {
-    const styles = this.getStyles();
-    console.log(styles)
+    const { base } = this.getStyles();
+    const styles = Object.assign({}, base, this.props.style);
     return (
-      <div>
+      <div style={styles}>
         {"ComponentName"}
       </div>
     );

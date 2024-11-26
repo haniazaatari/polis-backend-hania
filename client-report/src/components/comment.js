@@ -30,6 +30,8 @@ class Comment extends React.Component {
   render() {
     // const showAsAnon = !this.props.comment.social || this.props.comment.anon || this.props.comment.is_seed;
 
+    const styles = Object.assign({}, globals.paragraph, {fontStyle: "italic"});
+
     return (
       <Flex
       styleOverrides={{
@@ -52,8 +54,7 @@ class Comment extends React.Component {
       {this.props.formatTid(this.props.comment.tid)}
       </span>
       <span style={{fontWeight: 700, fontStyle: "auto"}}>{this.props.comment.is_meta ? "Metadata: " : ''}</span>
-       {/* style={[globals.paragraph, {fontStyle: "italic"}]} */}
-      <span >{ this.props.comment.txt }</span>
+      <span style={styles}>{ this.props.comment.txt }</span>
       </Flex>
       <svg width={globals.barChartWidth} height={70}>
       <line
