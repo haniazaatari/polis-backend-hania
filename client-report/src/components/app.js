@@ -28,6 +28,10 @@ import net from "../util/net";
 
 import $ from "jquery";
 
+import { vwUncertainty } from "./report_experimental/vw-example/uncertainty";
+import { sjiUncertainty } from "./report_experimental/sji-example/uncertainty";
+import UncertaintyAnalysis from "./report_experimental";
+
 var pathname = window.location.pathname; // "/report/2arcefpshi"
 var report_id = pathname.split("/")[2];
 
@@ -498,6 +502,7 @@ class App extends React.Component {
             conversation={this.state.conversation}
             voteColors={this.state.voteColors}
           />
+
           <Beeswarm
             conversation={this.state.conversation}
             extremity={this.state.extremity}
@@ -544,6 +549,7 @@ class App extends React.Component {
             formatTid={this.state.formatTid}
             voteColors={this.state.voteColors}
           />
+          <UncertaintyAnalysis uncertaintyData={sjiUncertainty} />
           {/* {false ? <CommentsGraph
             comments={this.state.comments}
             groupNames={this.state.groupNames}
