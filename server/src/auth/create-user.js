@@ -1,12 +1,13 @@
 import _ from 'underscore';
-import Config from '../config.js';
 import pg from '../db/pg-query.js';
-import emailSenders from '../email/senders.js';
+import fail from '../utils/fail.js';
+import Config from '../config.js';
+import cookies from '../utils/cookies.js';
 import Session from '../session.js';
 import Utils from '../utils/common.js';
-import cookies from '../utils/cookies.js';
-import fail from '../utils/fail.js';
 import Password from './password.js';
+import emailSenders from '../email/senders.js';
+
 const sendTextEmail = emailSenders.sendTextEmail;
 function createUser(req, res) {
   const hname = req.p.hname;
@@ -143,4 +144,5 @@ function generateAndRegisterZinvite(zid, generateShort) {
       .then(() => zinvite)
   );
 }
+export { createUser, doSendVerification, generateAndRegisterZinvite };
 export default { createUser, doSendVerification, generateAndRegisterZinvite };

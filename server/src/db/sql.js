@@ -1,3 +1,4 @@
+import Config from '../config.js';
 import sql from 'sql';
 import Config from '../config';
 const sql_conversations = sql.define({
@@ -63,9 +64,7 @@ const baseParticipantsExtendedColumns = [
   'modified',
   'show_translation_activated',
   'permanent_cookie',
-  'origin',
-  'encrypted_ip_address',
-  'encrypted_x_forwarded_for'
+  'origin'
 ];
 const sql_participants_extended = sql.define({
   name: 'participants_extended',
@@ -103,6 +102,15 @@ const sql_reports = sql.define({
     'label_group_9'
   ]
 });
+export {
+  sql_conversations,
+  sql_comments,
+  sql_votes_latest_unique,
+  sql_participant_metadata_answers,
+  sql_participants_extended,
+  sql_reports,
+  sql_users
+};
 export default {
   sql_conversations,
   sql_comments,
