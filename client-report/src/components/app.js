@@ -28,9 +28,7 @@ import net from "../util/net";
 
 import $ from "jquery";
 
-import { vwUncertainty } from "./report_experimental/vw-example/uncertainty";
-import { sjiUncertainty } from "./report_experimental/sji-example/uncertainty";
-import UncertaintyAnalysis from "./report_experimental";
+import Narrative from "./narrative";
 
 var pathname = window.location.pathname; // "/report/2arcefpshi"
 var report_id = pathname.split("/")[2];
@@ -99,6 +97,12 @@ class App extends React.Component {
   getConversation(conversation_id) {
     return net.polisGet("/api/v3/conversations", {
       conversation_id: conversation_id,
+    });
+  }
+
+  getNarrative(report_id) {
+    return net.polisGet("/api/v3/reportNarrative", {
+      report_id: report_id,
     });
   }
   getReport(report_id) {
@@ -195,6 +199,10 @@ class App extends React.Component {
       return this.getConversation(report.conversation_id);
     });
 
+    const narrativePromise = reportPromise.then((report) => {
+      return this.getNarrative(report.report_id);
+    });
+
     Promise.all([
       reportPromise,
       mathPromise,
@@ -204,6 +212,7 @@ class App extends React.Component {
       matrixPromise,
       conversationPromise,
       //conversationStatsPromise,
+      narrativePromise,
     ])
       .then((a) => {
         let [
@@ -214,6 +223,7 @@ class App extends React.Component {
           participants,
           correlationHClust,
           conversation,
+          narrative,
           //conversationstats,
         ] = a;
 
@@ -382,6 +392,7 @@ class App extends React.Component {
           repfulDisageeTidsByGroup: repfulDisageeTidsByGroup,
           formatTid: formatTid,
           report: report,
+          narrative: narrative,
           //conversationStats: conversationstats,
           computedStats: computedStats,
           nothingToShow: !comments.length || !groupDemographics.length,
@@ -549,7 +560,7 @@ class App extends React.Component {
             formatTid={this.state.formatTid}
             voteColors={this.state.voteColors}
           />
-          <UncertaintyAnalysis uncertaintyData={sjiUncertainty} />
+          <Narrative narrativeData={this.state.narrative} />
           {/* {false ? <CommentsGraph
             comments={this.state.comments}
             groupNames={this.state.groupNames}

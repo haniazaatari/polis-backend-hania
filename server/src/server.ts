@@ -53,6 +53,7 @@ import { PcaCacheItem, getPca, fetchAndCacheLatestPcaData } from "./utils/pca";
 import { getZinvite, getZinvites, getZidForRid } from "./utils/zinvite";
 
 import { handle_GET_reportExport } from "./routes/export";
+import { handle_GET_reportNarrative } from "./routes/reportNarrative";
 
 import {
   Body,
@@ -13359,6 +13360,7 @@ Thanks for using Polis!
     handle_GET_perfStats,
     handle_GET_ptptois,
     handle_GET_reports,
+    handle_GET_reportNarrative,
     handle_GET_snapshot,
     handle_GET_testConnection,
     handle_GET_testDatabase,
