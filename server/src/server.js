@@ -1,7 +1,7 @@
 import akismetLib from 'akismet';
 import AWS from 'aws-sdk';
-import badwords from 'badwords/object';
-import { Promise as BluebirdPromise } from 'bluebird';
+import badwords from 'badwords/object.js';
+import bluebird from 'bluebird';
 import http from 'http';
 import httpProxy from 'http-proxy';
 import async from 'async';
@@ -55,6 +55,7 @@ import { getPidsForGid } from './utils/participants.js';
 import { fetchAndCacheLatestPcaData, getPca } from './utils/pca.js';
 import { getZinvite, getZinvites } from './utils/zinvite.js';
 AWS.config.update({ region: Config.awsRegion });
+const { Promise: BluebirdPromise } = bluebird;
 const devMode = Config.isDevMode;
 const escapeLiteral = pg.Client.prototype.escapeLiteral;
 const doSendVerification = CreateUser.doSendVerification;
