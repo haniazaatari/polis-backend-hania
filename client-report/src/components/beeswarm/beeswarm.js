@@ -168,7 +168,7 @@ const Beeswarm = ({ comments, extremity, probabilitiesTids, probabilities, conve
     if (
       comments &&
       extremity &&
-      commentsWithExtremity /* if we poll, change this so it is auto updating */
+      !commentsWithExtremity /* if we poll, change this so it is auto updating */
     ) {
       setup();
     }
@@ -220,6 +220,130 @@ const Beeswarm = ({ comments, extremity, probabilitiesTids, probabilities, conve
       </div>
     );
 }
+
+// class Beeswarm extends React.Component {
+//   constructor(props) {
+//     super(props);
+
+//     this.svgWidth = 960;
+//     this.svgHeight = 200;
+//     this.margin = {top: 10, right: 10, bottom: 10, left: 10};
+//     this.widthMinusMargins = 960 - this.margin.left - this.margin.right;
+//     this.heightMinusMargins = 200 - this.margin.top - this.margin.bottom;
+
+//     this.state = {
+//       currentBeeswarmComment: null,
+//       commentsWithExtremity: null,
+//       axesRendered: false,
+//     };
+//   }
+//   onHoverCallback(d) {
+//     return () => {
+//       this.setState({currentBeeswarmComment: d.data});
+//     }
+//   }
+
+//   componentDidMount() {
+//     if (
+//       this.props.comments &&
+//       this.props.extremity &&
+//       !this.state.commentsWithExtremity /* if we poll, change this so it is auto updating */
+//     ) {
+//       this.setup();
+//     }
+//   }
+//   setup () {
+//       const commentsWithExtremity = [];
+//       _.each(this.props.comments, (comment) => {
+//         if (this.props.extremity[comment.tid] > 0) {
+//           const cwe = Object.assign({}, comment, {extremity: this.props.extremity[comment.tid]});
+//           commentsWithExtremity.push(cwe)
+//         }
+//       })
+
+//       var x = d3.scaleLinear()
+//         .rangeRound([0, this.widthMinusMargins]);
+
+//       x.domain(d3.extent(commentsWithExtremity, function(d) { return d.extremity; }));
+
+//       var simulation = d3.forceSimulation(commentsWithExtremity)
+//           .force("x", d3.forceX(function(d) {
+//             return x(d.extremity);
+//           }).strength(1))
+//           .force("y", d3.forceY(this.heightMinusMargins / 2))
+//           .force("collide", d3.forceCollide(4))
+//           .stop();
+
+//       for (var i = 0; i < 120; ++i) simulation.tick();
+
+//       const voronoi = d3.voronoi()
+//         .extent([[-this.margin.left, -this.margin.top], [this.widthMinusMargins + this.margin.right, this.heightMinusMargins + this.margin.top]])
+//         .x(function(d) { return d.x; })
+//         .y(function(d) { return d.y; })
+//       .polygons(commentsWithExtremity)
+
+//       // if (!this.state.axesRendered) {
+//       //   d3.select("#beeswarmAxisAttachPointD3").append("g")
+//       //   .attr("class", "axis axis--x")
+//       //   .attr("transform", "translate(0," + this.heightMinusMargins + ")")
+//       //   .call(d3.axisBottom(x).ticks(3));
+//       // }
+
+//       this.setState({
+//         x,
+//         voronoi,
+//         commentsWithExtremity,
+//         axesRendered: true
+//       })
+//   }
+//   render() {
+//     return (
+//       <div style={{width: this.svgWidth}}>
+//         <p style={globals.primaryHeading}> How divisive was the conversation? </p>
+//         <p style={globals.paragraph}>
+//           Statements (here as little circles) to the left were voted on the same way—either everyone agreed or everyone disagreed. Statements to the right were divisive—participants were split between agreement and disagreement.
+//         </p>
+//         <p style={globals.paragraph}>
+//           <strong>How to use this:</strong> Hover to see the statement text. Start on the far right to find out what the most divisive statement was.
+//         </p>
+//         <svg width={this.svgWidth} height={this.svgHeight}>
+//           <g id="beeswarmAxisAttachPointD3" transform={"translate(" + this.margin.left + "," + this.margin.top + ")"}>
+//             {
+//               this.state.commentsWithExtremity ?
+//               <VoronoiCells
+//                 probabilitiesTids={this.props.probabilitiesTids}
+//                 probabilities={this.state.currentBeeswarmComment ? this.props.probabilities[this.state.currentBeeswarmComment.tid] : null}
+//                 currentBeeswarmComment={this.state.currentBeeswarmComment}
+//                 voronoi={this.state.voronoi}
+//                 onHoverCallback={this.onHoverCallback.bind(this)}/> : null
+//             }
+//           </g>
+//           <line x1="0" y1={this.svgHeight - 10} x2={this.svgWidth} y2={this.svgHeight - 10} strokeWidth="1" stroke="black"/>
+//         </svg>
+//         <div style={{display: "flex", justifyContent: "space-between", margin: 0}}>
+//           <p style={{margin: 0}}> Consensus statements </p>
+//           <p style={{margin: 0}}> Divisive statements</p>
+//         </div>
+//         {/*<ProbabilityLegend/>*/}
+
+//         <div style={{minHeight: "140px", paddingTop: "20px"}}>
+//           { this.state.currentBeeswarmComment ?
+
+//             <CommentList
+//               conversation={this.props.conversation}
+//               ptptCount={this.props.ptptCount}
+//               math={this.props.math}
+//               formatTid={this.props.formatTid}
+//               tidsToRender={[this.state.currentBeeswarmComment.tid]}
+//               comments={this.props.comments}
+//               voteColors={this.props.voteColors}/> : null
+//           }
+//         </div>
+
+//       </div>
+//     );
+//   }
+// }
 
 export default Beeswarm;
 
