@@ -24,6 +24,8 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+        working-directory: client-report
 
       - name: Run Jest tests
         run: npm test
+        working-directory: client-report
