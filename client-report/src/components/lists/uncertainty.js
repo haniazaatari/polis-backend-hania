@@ -4,11 +4,20 @@ import React from "react";
 import CommentList from "./commentList";
 import * as globals from "../globals";
 // import style from "../../util/style";
+import Narrative from "../narrative";
 
-const Uncertainty = ({conversation, comments, ptptCount, uncertainty, formatTid, math, voteColors}) => {
-
+const Uncertainty = ({
+  conversation,
+  comments,
+  ptptCount,
+  uncertainty,
+  formatTid,
+  math,
+  voteColors,
+  narrative,
+}) => {
   if (!conversation) {
-    return <div>Loading Uncertainty...</div>
+    return <div>Loading Uncertainty...</div>;
   }
   return (
     <div>
@@ -20,7 +29,8 @@ const Uncertainty = ({conversation, comments, ptptCount, uncertainty, formatTid,
       <p style={globals.paragraph}>
         Areas of uncertainty can provide avenues to educate and open dialogue with your community.
       </p>
-      <div style={{marginTop: 50}}>
+      <Narrative sectionData={narrative.uncertainty.sections} />
+      <div style={{ marginTop: 50 }}>
         <CommentList
           conversation={conversation}
           ptptCount={ptptCount}
@@ -28,7 +38,8 @@ const Uncertainty = ({conversation, comments, ptptCount, uncertainty, formatTid,
           formatTid={formatTid}
           tidsToRender={uncertainty /* uncertainTids would be funnier */}
           comments={comments}
-          voteColors={voteColors}/>
+          voteColors={voteColors}
+        />
       </div>
     </div>
   );

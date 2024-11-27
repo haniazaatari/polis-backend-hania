@@ -1,19 +1,15 @@
 import React from "react";
 
-const UncertaintyAnalysis = ({ narrativeData }) => {
-  if (!narrativeData) return null;
+const Narrative = ({ sectionData }) => {
+  if (!sectionData) return null;
 
-  console.log("narrativeData", narrativeData);
-
-  const uncertaintyData = narrativeData.uncertainty;
+  console.log("narrativeData", sectionData);
 
   return (
-    <article style={{ maxWidth: "600px", fontFamily: "Georgia, serif" }}>
-      <h1>Areas of Uncertainty</h1>
-
-      {uncertaintyData.sections.map((section) => (
+    <article style={{ maxWidth: "600px" }}>
+      {sectionData.map((section) => (
         <div key={section.id}>
-          <h4>{section.title}</h4>
+          <h5>{section.title}</h5>
 
           {section.sentences.map((sentence, idx) => (
             <p key={idx}>
@@ -37,4 +33,4 @@ const UncertaintyAnalysis = ({ narrativeData }) => {
   );
 };
 
-export default UncertaintyAnalysis;
+export default Narrative;

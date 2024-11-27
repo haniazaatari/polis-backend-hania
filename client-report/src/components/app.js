@@ -559,8 +559,8 @@ class App extends React.Component {
             ptptCount={this.state.ptptCount}
             formatTid={this.state.formatTid}
             voteColors={this.state.voteColors}
+            narrative={this.state.narrative}
           />
-          <Narrative narrativeData={this.state.narrative} />
           {/* {false ? <CommentsGraph
             comments={this.state.comments}
             groupNames={this.state.groupNames}
