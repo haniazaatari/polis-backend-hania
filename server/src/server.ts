@@ -51,6 +51,7 @@ import Config from "./config";
 import fail from "./utils/fail";
 import { PcaCacheItem, getPca, fetchAndCacheLatestPcaData } from "./utils/pca";
 import { getZinvite, getZinvites, getZidForRid } from "./utils/zinvite";
+import { getBidIndexToPidMapping, getPidsForGid } from "./utils/participants";
 
 import { handle_GET_reportExport } from "./routes/export";
 import { handle_GET_reportNarrative } from "./routes/reportNarrative";
@@ -660,36 +661,10 @@ function initializePolisHelpers() {
           if (!rows || !rows.length) {
             throw "polis_err_unknown_conversation";
           }
-          let conv = rows[0];
+          const conv = rows[0];
           if (!conv.is_active) {
             throw "polis_err_conversation_is_closed";
           }
-          // if (conv.auth_needed_to_vote) {
-          //   return isModerator(zid, uid).then((is_mod: any) => {
-          //     if (is_mod) {
-          //       return conv;
-          //     }
-          //     return Promise.all([
-          //       pgQueryP(
-          //         "select * from xids where owner = ($1) and uid = ($2);",
-          //         [conv.owner, uid]
-          //       ),
-          //       getSocialInfoForUsers([uid], zid),
-          //       // Binding elements 'xids' and 'info' implicitly have an 'any' type.ts(7031)
-          //       // @ts-ignore
-          //     ]).then(([xids, info]) => {
-          //       var socialAccountIsLinked = info.length > 0;
-          //       // Object is of type 'unknown'.ts(2571)
-          //       // @ts-ignore
-          //       var hasXid = xids.length > 0;
-          //       if (socialAccountIsLinked || hasXid) {
-          //         return conv;
-          //       } else {
-          //         throw "polis_err_post_votes_social_needed";
-          //       }
-          //     });
-          //   });
-          // }
           if (conv.use_xid_whitelist) {
             return isXidWhitelisted(conv.owner, xid).then(
               (is_whitelisted: boolean) => {
@@ -1747,27 +1722,6 @@ function initializePolisHelpers() {
     // return res.end();
   }
 
-  function getBidIndexToPidMapping(zid: number, math_tick: number) {
-    math_tick = math_tick || -1;
-    return pgQueryP_readOnly(
-      "select * from math_bidtopid where zid = ($1) and math_env = ($2);",
-      [zid, Config.mathEnv]
-      //     Argument of type '(rows: string | any[]) => any' is not assignable to parameter of type '(value: unknown) => any'.
-      // Types of parameters 'rows' and 'value' are incompatible.
-      //   Type 'unknown' is not assignable to type 'string | any[]'.
-      //     Type 'unknown' is not assignable to type 'any[]'.ts(2345)
-      // @ts-ignore
-    ).then((rows: string | any[]) => {
-      if (!rows || !rows.length) {
-        // Could actually be a 404, would require more work to determine that.
-        return new Error("polis_err_get_pca_results_missing");
-      } else if (rows[0].data.math_tick <= math_tick) {
-        return new Error("polis_err_get_pca_results_not_new");
-      } else {
-        return rows[0].data;
-      }
-    });
-  }
   function handle_GET_bidToPid(
     req: { p: { zid: any; math_tick: any } },
     res: {
@@ -10841,29 +10795,6 @@ Thanks for using Polis!
     });
   }
 
-  // function getFacebookFriendsInConversation(zid, uid) {
-  //   if (!uid) {
-  //     return Promise.resolve([]);
-  //   }
-  //   let p = pgQueryP_readOnly(
-  //     "select * from " +
-  //     "(select * from " +
-  //     "(select * from " +
-  //     "(select friend as uid from facebook_friends where uid = ($2) union select uid from facebook_friends where friend = ($2) union select uid from facebook_users where uid = ($2)) as friends) " +
-  //     // ^ as friends
-  //     "as fb natural left join facebook_users) as fb2 " +
-  //     "inner join (select * from participants where zid = ($1) and (vote_count > 0 OR uid = ($2))) as p on fb2.uid = p.uid;", [zid, uid]);
-  //   //"select * from (select * from (select friend as uid from facebook_friends where uid = ($2) union select uid from facebook_friends where friend = ($2)) as friends where uid in (select uid from participants where zid = ($1))) as fb natural left join facebook_users;", [zid, uid]);
-  //   return p;
-  // }
-
-  // function getFacebookUsersInConversation(zid) {
-  //   let p = pgQueryP_readOnly("select * from facebook_users inner join (select * from participants where zid = ($1) and vote_count > 0) as p on facebook_users.uid = p.uid;", [zid]);
-  //   return p;
-  // }
-
-  const getSocialInfoForUsers = User.getSocialInfoForUsers;
-
   function updateVoteCount(zid: any, pid: any) {
     // return pgQueryP("update participants set vote_count = vote_count + 1 where zid = ($1) and pid = ($2);",[zid, pid]);
     return pgQueryP(
@@ -11042,44 +10973,6 @@ Thanks for using Polis!
       "select * from participant_locations where zid = ($1);",
       [zid]
     );
-  }
-
-  function getPidsForGid(zid: any, gid: number, math_tick: number) {
-    return Promise.all([
-      getPca(zid, math_tick),
-      getBidIndexToPidMapping(zid, math_tick),
-    ]).then(function (o: ParticipantOption[]) {
-      if (!o[0] || !o[0].asPOJO) {
-        return [];
-      }
-      o[0] = o[0].asPOJO;
-      let clusters = o[0]["group-clusters"];
-      let indexToBid = o[0]["base-clusters"].id; // index to bid
-      let bidToIndex = [];
-      for (let i = 0; i < indexToBid.length; i++) {
-        bidToIndex[indexToBid[i]] = i;
-      }
-      let indexToPids = o[1].bidToPid; // actually index to [pid]
-      let cluster = clusters[gid];
-      if (!cluster) {
-        return [];
-      }
-      let members = cluster.members; // bids
-      let pids: any[] = [];
-      for (var i = 0; i < members.length; i++) {
-        let bid = members[i];
-        let index = bidToIndex[bid];
-        let morePids = indexToPids[index];
-        Array.prototype.push.apply(pids, morePids);
-      }
-      pids = pids.map(function (x) {
-        return parseInt(x);
-      });
-      pids.sort(function (a, b) {
-        return a - b;
-      });
-      return pids;
-    });
   }
 
   function geoCodeWithGoogleApi(locationString: string) {
