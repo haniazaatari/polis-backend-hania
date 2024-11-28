@@ -106,6 +106,19 @@
                 </exampleFormat>
                 <length>2-3 sentences</length>
             </paragraph>
+            <paragraph type="topic_analysis_comparative">
+                <elements>
+                    <element>topic_clusters</element>
+                    <element>uncertainty_ranges</element>
+                    <element>category_patterns</element>
+                </elements>
+                <exampleFormat>
+                    Of note, within the topic [topic that had high variance between topically
+                    similar statements] [high uncertainty statement], [statement with low
+                    uncertainty] [overall observation about topic and uncertainty patterns]
+                </exampleFormat>
+                <length>2-3 sentences</length>
+            </paragraph>
         </reportingStructure>
 
         <citationRules>
@@ -183,6 +196,7 @@
             <check>context_provided</check>
             <check>citations_properly_formatted</check>
             <check>language_varied_and_clear</check>
+            <check>topically_related_statements_to_high_uncertainty_statements_checked</check>
         </qualityChecklist>
     </analysisProcess>
 
