@@ -164,6 +164,17 @@ const Overview = ({
           </a>
           {` (as comments x participants matrix)`}
         </p>
+        <p style={{ fontFamily: "monospace" }}>
+          {`Comment groups: `}
+          <a
+            download={getDownloadFilename("comment-groups", conversation)}
+            href={`//${window.location.hostname}/api/v3/reportExport/${report_id}/comment-groups.csv`}
+            type="text/csv"
+          >
+            {getDownloadFilename("comment-groups", conversation)}
+          </a>
+        </p>
+
         <div style={{ marginTop: "3em" }}>
           <p style={{ fontFamily: "monospace" }}>
             <strong>Public API endpoints (read only, Jupyter notebook friendly)</strong>
@@ -179,6 +190,9 @@ const Overview = ({
           </p>
           <p style={{ fontFamily: "monospace" }}>
             {`$ curl ${window.location.protocol}//${window.location.hostname}/api/v3/reportExport/${report_id}/participant-votes.csv`}
+          </p>
+          <p style={{ fontFamily: "monospace" }}>
+            {`$ curl ${window.location.protocol}//${window.location.hostname}/api/v3/reportExport/${report_id}/comment-groups.csv`}
           </p>
         </div>
         {doShowDataLicenseTerms && (
