@@ -21,7 +21,7 @@ import ParticipantGroups from "./lists/participantGroups";
 // import CommentsGraph from "./commentsGraph/commentsGraph";
 import ParticipantsGraph from "./participantsGraph/participantsGraph";
 // import BoxPlot from "./boxPlot/boxPlot";
-import Beeswarm from "./beeswarm/beeswarm";
+import Beeswarm from "./beeswarm/beeswarm.jsx";
 import Controls from "./controls/controls";
 
 import net from "../util/net";
