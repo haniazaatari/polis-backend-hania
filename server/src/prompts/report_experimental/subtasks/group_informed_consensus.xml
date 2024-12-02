@@ -2,7 +2,7 @@
 <polisAnalysisPrompt version="1.0">
     <metadata>
         <title>Guide to Analyzing and Reporting Group Informed Consensus in Pol.is Conversations</title>
-        <purpose>Generate consistent, evidence-based reports of uncertainty patterns and output
+        <purpose>Generate consistent, evidence-based reports of group informed consensus and output
             valid JSON</purpose>
     </metadata>
 
@@ -15,16 +15,16 @@
 
     <definitions>
         <term name="pass_rate">
-            <description>Percentage of participants selecting "pass/unsure"</description>
+            <description>Percentage of participants selecting "agreed" or "disagreed"</description>
         </term>
-        <term name="high_uncertainty">
+        <term name="high_consensus">
             <description>Statements with significant pass rates</description>
-            <threshold>30</threshold>
+            <threshold>60</threshold>
             <unit>percent</unit>
         </term>
-        <term name="group_divergence">
+        <term name="group_informed">
             <description>Difference in pass rates between groups</description>
-            <threshold>20</threshold>
+            <threshold<30</threshold>
             <unit>percent</unit>
         </term>
         <term name="valid_statement">
@@ -52,8 +52,8 @@
             <step order="3">
                 <name>Identify Patterns</name>
                 <patterns>
-                    <pattern>high_uncertainty_statements</pattern>
-                    <pattern>group_divergences</pattern>
+                    <pattern>high_consensus_statements</pattern>
+                    <pattern>group_informed</pattern>
                     <pattern>topic_clusters</pattern>
                 </patterns>
             </step>
@@ -62,31 +62,31 @@
         <reportingStructure>
             <paragraph type="overview">
                 <elements>
-                    <element>highest_uncertainty_statements</element>
+                    <element>high_consensus_statements</element>
                     <element>special_patterns</element>
                     <element>participation_context</element>
                 </elements>
                 <format>
-                    Areas of significant uncertainty included [topic1] and [topic2],
-                    with [X]% of participants expressing uncertainty about [specific_statement].
+                    Areas of significant consensus included [topic1] and [topic2],
+                    with [X]% of participants expressing consensus about [specific_statement].
                     [context] [additional_overview_analysis].
                 </format>
-                <length>2-3 sentences</length>
+                <length>4-5 sentences</length>
             </paragraph>
 
             <paragraph type="group_analysis">
                 <elements>
-                    <element>group_uncertainty_patterns</element>
+                    <element>group_informed_patterns</element>
                     <element>divergent_cases</element>
-                    <element>shared_uncertainties</element>
+                    <element>shared_consensus</element>
                 </elements>
                 <exampleFormat>
-                    Group [A] participants showed significant uncertainty around [topic1]
-                    and [topic2], differing from Group [B]'s uncertainty centered on [topic3].
-                    Both groups shared uncertainty about [shared_topic], with passage rates
+                    Group [A] participants showed significant consensus around [topic1]
+                    and [topic2], differing from Group [B]'s consensus centered on [topic3].
+                    Both groups shared consensus about [shared_topic], with passage rates
                     exceeding [X]%. [additional_group_analysis].
                 </exampleFormat>
-                <length>2-3 sentences</length>
+                <length>4-5 sentences</length>
             </paragraph>
 
             <paragraph type="topic_analysis">
@@ -96,11 +96,11 @@
                     <element>category_patterns</element>
                 </elements>
                 <exampleFormat>
-                    Category [X] emerged as a key area of uncertainty, with participants
+                    Category [X] emerged as a key area of consensus, with participants
                     passing on statements about [specific_topic] at rates of
                     [range_low]-[range_high]%.
                     [additional_categories_and_examples]. Category [category3] created additional
-                    uncertainty,
+                    consensus,
                     particularly among Group [group_name] participants who showed [percentage3]%
                     passage rates on related initiatives.
                 </exampleFormat>
@@ -114,7 +114,7 @@
             </template>
             <rules>
                 <rule>minimum_citations_per_clause>1</rule>
-                <rule>maximum_citations_per_clause>5</rule>
+                <rule>maximum_citations_per_clause>10</rule>
                 <rule>include_full_vote_breakdown>false</rule>
             </rules>
         </citationRules>
@@ -162,9 +162,9 @@
 
         <languageGuidelines>
             <uncertaintyTerms>
-                <term>expressed uncertainty</term>
-                <term>were unsure</term>
-                <term>passed on</term>
+                <term>expressed consensus</term>
+                <term>were aligned</term>
+                <term>agreed/disagreed on</term>
             </uncertaintyTerms>
 
             <styleRules>
@@ -198,12 +198,12 @@
     <responseFormat>
         <condensedJSONSchema>
             {
-            "id": "subtask_uncertainty", // This is the uncertainty subtask
-            "title": "Uncertainty Analysis",
+            "id": "subtask_group_informed_consensus", // This is the group informed consensus subtask
+            "title": "group informed consensus Analysis",
             "paragraphs": [
             {
-            "id": "string", // e.g. "uncertainty_overview"
-            "title": "string", // e.g. "Overview of Uncertainties"
+            "id": "string", // e.g. "consensus_overview"
+            "title": "string", // e.g. "Overview of Consensus"
             "sentences": [ // Each sentence is made up of clauses
             {
             "clauses": [ // Each clause has text and citations
@@ -249,12 +249,12 @@
     </responseFormat>
     <example>
         {
-        "id": "uncertainty",
-        "title": "Uncertainty Analysis",
+        "id": "consensus",
+        "title": "Consensus Analysis",
         "paragraphs": [
         {
-        "id": "uncertainty_overview",
-        "title": "Overview of Key Uncertainty Areas",
+        "id": "consensus_overview",
+        "title": "Overview of Key Consensus Areas",
         "sentences": [
         {
         "clauses": [
@@ -346,6 +346,6 @@
         }
     </example>
     <data>
-        INSERT_DATA_HERE
+      INSERT_DATA_HERE
     </data>
 </polisAnalysisPrompt>
