@@ -465,26 +465,31 @@ export async function sendCommentGroupsSummary(
     ];
     for (const groupId of groupIds) {
       const groupStats = stats.group_stats[groupId];
-      if (filterFN && filterFN(groupStats) === true) {
         row.push(
           groupStats.votes,
           groupStats.agrees,
           groupStats.disagrees,
           groupStats.passes
         );
-      } else if (filterFN === undefined) {
-        row.push(
-          groupStats.votes,
-          groupStats.agrees,
-          groupStats.disagrees,
-          groupStats.passes
-        );
-      }
     }
     if (http && res) {
-      res.write(row.join(",") + sep);
+      if (filterFN && filterFN({votes: stats.total_votes,
+        agrees: stats.total_agrees,
+        disagrees: stats.total_disagrees,
+        passes: stats.total_passes}) === true) {
+        res.write(row.join(",") + sep);
+      } else if (filterFN === undefined) {
+        res.write(row.join(",") + sep);
+      }
     } else {
-      csvText.push(row.join(",") + sep);
+      if (filterFN && filterFN({votes: stats.total_votes,
+        agrees: stats.total_agrees,
+        disagrees: stats.total_disagrees,
+        passes: stats.total_passes}) === true) {
+          csvText.push(row.join(",") + sep);
+      } else if (filterFN === undefined) {
+        csvText.push(row.join(",") + sep);
+      }
     }
   }
 
