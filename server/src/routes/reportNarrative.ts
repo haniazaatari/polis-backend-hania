@@ -118,10 +118,10 @@ const getCommentsAsXML = async (id: number) => {
     agrees: number;
     disagrees: number;
     passes: number;
-}
-  ): boolean => {
-     return v.passes / v.votes >= .2
-  }
+  }): boolean => {
+    return v.passes / v.votes >= 0.2;
+    // return true;
+  };
   try {
     const resp = await sendCommentGroupsSummary(id, undefined, false, filter);
     console.log(`CCC: ${resp}`);
