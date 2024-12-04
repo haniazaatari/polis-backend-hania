@@ -112,9 +112,18 @@ const getJSONuserMsg = async () => {
   return asJSON;
 };
 
-const getCommentsAsJson = async (id: number) => {
+const getCommentsAsXML = async (id: number) => {
+  const filter = (v: {
+    votes: number;
+    agrees: number;
+    disagrees: number;
+    passes: number;
+}
+  ): boolean => {
+     return v.passes / v.votes >= .2
+  }
   try {
-    const resp = await sendCommentGroupsSummary(id, undefined, false);
+    const resp = await sendCommentGroupsSummary(id, undefined, false, filter);
     console.log(`CCC: ${resp}`);
     const xml = PolisConverter.convertToXml(resp as string);
     return xml;
@@ -143,7 +152,7 @@ export async function handle_GET_reportNarrative(
       "utf8"
     );
     const json = await getJSONuserMsg();
-    const structured_comments = await getCommentsAsJson(zid);
+    const structured_comments = await getCommentsAsXML(zid);
     json.polisAnalysisPrompt.children[
       json.polisAnalysisPrompt.children.length - 1
     ].data.content = { structured_comments }; // insert dynamic report stuff here

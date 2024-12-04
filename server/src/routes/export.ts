@@ -329,7 +329,13 @@ type GroupVoteStats = {
 export async function sendCommentGroupsSummary(
   zid: number,
   res?: Response,
-  http = true
+  http = true,
+  filterFN?: (inp: {
+    votes: number;
+    agrees: number;
+    disagrees: number;
+    passes: number;
+}) => boolean,
 ) {
   const csvText = [];
   // Get PCA data to identify groups and get groupVotes
@@ -459,12 +465,21 @@ export async function sendCommentGroupsSummary(
     ];
     for (const groupId of groupIds) {
       const groupStats = stats.group_stats[groupId];
-      row.push(
-        groupStats.votes,
-        groupStats.agrees,
-        groupStats.disagrees,
-        groupStats.passes
-      );
+      if (filterFN && filterFN(groupStats) === true) {
+        row.push(
+          groupStats.votes,
+          groupStats.agrees,
+          groupStats.disagrees,
+          groupStats.passes
+        );
+      } else if (filterFN === undefined) {
+        row.push(
+          groupStats.votes,
+          groupStats.agrees,
+          groupStats.disagrees,
+          groupStats.passes
+        );
+      }
     }
     if (http && res) {
       res.write(row.join(",") + sep);
