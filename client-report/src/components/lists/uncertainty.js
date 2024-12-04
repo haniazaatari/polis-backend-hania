@@ -29,7 +29,7 @@ const Uncertainty = ({
       <p style={globals.paragraph}>
         Areas of uncertainty can provide avenues to educate and open dialogue with your community.
       </p>
-      <Narrative sectionData={narrative.uncertainty.sections} />
+      <Narrative sectionData={narrative.uncertainty} />
       <div style={{ marginTop: 50 }}>
         <CommentList
           conversation={conversation}

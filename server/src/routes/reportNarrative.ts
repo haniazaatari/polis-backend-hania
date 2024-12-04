@@ -5,13 +5,14 @@ import { getZidForRid } from "../utils/zinvite";
 import Anthropic from "@anthropic-ai/sdk";
 import { convertXML } from "simple-xml-to-json";
 import fs from "fs/promises";
-import { parse } from 'csv-parse/sync';
-import { create } from 'xmlbuilder2';
+import { parse } from "csv-parse/sync";
+import { create } from "xmlbuilder2";
+import { sendCommentGroupsSummary } from "./export";
 
 const js2xmlparser = require("js2xmlparser");
 
 interface PolisRecord {
-  [key: string]: string;  // Allow any string keys
+  [key: string]: string; // Allow any string keys
 }
 
 export class PolisConverter {
@@ -19,45 +20,46 @@ export class PolisConverter {
     // Parse CSV content
     const records = parse(csvContent, {
       columns: true,
-      skip_empty_lines: true
+      skip_empty_lines: true,
     }) as PolisRecord[];
 
-    if (records.length === 0) return '';
+    if (records.length === 0) return "";
 
     // Create XML document
-    const doc = create({ version: '1.0', encoding: 'UTF-8' })
-      .ele('polis-comments');
+    const doc = create({ version: "1.0", encoding: "UTF-8" }).ele(
+      "polis-comments"
+    );
 
     // Process each record
-    records.forEach(record => {
+    records.forEach((record) => {
       // Extract base comment data
-      const comment = doc.ele('comment', {
-        id: record['comment-id'],
-        votes: record['total-votes'],
-        agrees: record['total-agrees'],
-        disagrees: record['total-disagrees'],
-        passes: record['total-passes']
+      const comment = doc.ele("comment", {
+        id: record["comment-id"],
+        votes: record["total-votes"],
+        agrees: record["total-agrees"],
+        disagrees: record["total-disagrees"],
+        passes: record["total-passes"],
       });
 
       // Add comment text
-      comment.ele('text').txt(record['comment']);
+      comment.ele("text").txt(record["comment"]);
 
       // Find and process all group data
       const groupKeys = Object.keys(record)
-        .filter(key => key.match(/^group-[a-z]-/))
+        .filter((key) => key.match(/^group-[a-z]-/))
         .reduce((groups, key) => {
-          const groupId = key.split('-')[1];  // Extract 'a' from 'group-a-votes'
+          const groupId = key.split("-")[1]; // Extract 'a' from 'group-a-votes'
           if (!groups.includes(groupId)) groups.push(groupId);
           return groups;
         }, [] as string[]);
 
       // Add data for each group
-      groupKeys.forEach(groupId => {
+      groupKeys.forEach((groupId) => {
         comment.ele(`group-${groupId}`, {
           votes: record[`group-${groupId}-votes`],
           agrees: record[`group-${groupId}-agrees`],
           disagrees: record[`group-${groupId}-disagrees`],
-          passes: record[`group-${groupId}-passes`]
+          passes: record[`group-${groupId}-passes`],
         });
       });
     });
@@ -67,29 +69,29 @@ export class PolisConverter {
   }
 
   static async convertFromFile(filePath: string): Promise<string> {
-    const fs = await import('fs/promises');
-    const csvContent = await fs.readFile(filePath, 'utf-8');
+    const fs = await import("fs/promises");
+    const csvContent = await fs.readFile(filePath, "utf-8");
     return PolisConverter.convertToXml(csvContent);
   }
 
   // Helper method to validate CSV structure
   static validateCsvStructure(headers: string[]): boolean {
     const requiredBaseFields = [
-      'comment-id',
-      'comment',
-      'total-votes',
-      'total-agrees',
-      'total-disagrees',
-      'total-passes'
+      "comment-id",
+      "comment",
+      "total-votes",
+      "total-agrees",
+      "total-disagrees",
+      "total-passes",
     ];
 
-    const hasRequiredFields = requiredBaseFields.every(field => 
+    const hasRequiredFields = requiredBaseFields.every((field) =>
       headers.includes(field)
     );
 
     // Check if group fields follow the expected pattern
-    const groupFields = headers.filter(h => h.startsWith('group-'));
-    const validGroupPattern = groupFields.every(field => 
+    const groupFields = headers.filter((h) => h.startsWith("group-"));
+    const validGroupPattern = groupFields.every((field) =>
       field.match(/^group-[a-z]-(?:votes|agrees|disagrees|passes)$/)
     );
 
@@ -97,22 +99,29 @@ export class PolisConverter {
   }
 }
 
-const anthropic = new Anthropic();
-
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
 
 const getJSONuserMsg = async () => {
-  const report_xml_template = await fs.readFile("src/prompts/report_experimental/subtasks/uncertainty.xml", "utf8"); // unsure if this should be uncertainty or group_informed_consensus
+  const report_xml_template = await fs.readFile(
+    "src/prompts/report_experimental/subtasks/uncertainty.xml",
+    "utf8"
+  ); // unsure if this should be uncertainty or group_informed_consensus
   const asJSON = await convertXML(report_xml_template);
   return asJSON;
-}
+};
 
-const getCommentsAsJson = async (id: string) => {
-  const resp = await fetch(`http://localhost/api/v3/reportExport/${id}/comment-groups.csv`); // this should be rewritten to call internal api or db, not depending on localhost
-  const data = await resp.text();
-  const xml = PolisConverter.convertToXml(data)
-  return xml;
-}
-
+const getCommentsAsJson = async (id: number) => {
+  try {
+    const resp = await sendCommentGroupsSummary(id, undefined, false);
+    console.log(`CCC: ${resp}`);
+    const xml = PolisConverter.convertToXml(resp as string);
+    return xml;
+  } catch (e) {
+    console.log(e);
+  }
+};
 
 export async function handle_GET_reportNarrative(
   req: {
@@ -129,11 +138,20 @@ export async function handle_GET_reportNarrative(
       return;
     }
 
-    const system_lore = await fs.readFile("src/prompts/report_experimental/system.xml", "utf8");
+    const system_lore = await fs.readFile(
+      "src/prompts/report_experimental/system.xml",
+      "utf8"
+    );
     const json = await getJSONuserMsg();
-    const structured_comments = await getCommentsAsJson(rid);
-    json.polisAnalysisPrompt.children[json.polisAnalysisPrompt.children.length - 1].data.content = { structured_comments }; // insert dynamic report stuff here
-    const prompt_xml = js2xmlparser.parse("polis-comments-and-group-demographics", json); // then convert back to xml
+    const structured_comments = await getCommentsAsJson(zid);
+    json.polisAnalysisPrompt.children[
+      json.polisAnalysisPrompt.children.length - 1
+    ].data.content = { structured_comments }; // insert dynamic report stuff here
+    const prompt_xml = js2xmlparser.parse(
+      "polis-comments-and-group-demographics",
+      json
+    ); // then convert back to xml
+    console.log(`JSON: ${json}, COMMENTS: ${structured_comments}`);
     const uncertainty = await anthropic.messages.create({
       model: "claude-3-5-sonnet-20241022",
       max_tokens: 1000,
@@ -145,8 +163,7 @@ export async function handle_GET_reportNarrative(
           content: [
             {
               type: "text",
-              text:
-              prompt_xml,
+              text: prompt_xml,
             },
           ],
         },
@@ -162,7 +179,6 @@ export async function handle_GET_reportNarrative(
       ],
     });
 
-
     // For now just return hello world
     res.json({
       narrative: "A narrative report summarizing a polis conversation, Nov 26.",
@@ -173,6 +189,7 @@ export async function handle_GET_reportNarrative(
       err instanceof Error && err.message && err.message.startsWith("polis_")
         ? err.message
         : "polis_err_report_narrative";
+    console.log(JSON.stringify(err));
     fail(res, 500, msg, err);
   }
 }

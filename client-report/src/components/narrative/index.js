@@ -5,9 +5,13 @@ const Narrative = ({ sectionData }) => {
 
   console.log("narrativeData", sectionData);
 
+  const txt = sectionData.content[0].text;
+
+  const respData = JSON.parse(`{${txt}`);
+
   return (
     <article style={{ maxWidth: "600px" }}>
-      {sectionData.map((section) => (
+      {respData?.paragraphs?.map((section) => (
         <div key={section.id}>
           <h5>{section.title}</h5>
 

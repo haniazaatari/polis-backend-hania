@@ -326,7 +326,12 @@ type GroupVoteStats = {
   >;
 };
 
-async function sendCommentGroupsSummary(zid: number, res: Response) {
+export async function sendCommentGroupsSummary(
+  zid: number,
+  res?: Response,
+  http = true
+) {
+  const csvText = [];
   // Get PCA data to identify groups and get groupVotes
   const pca = await getPca(zid);
   if (!pca?.asPOJO) {
@@ -413,7 +418,9 @@ async function sendCommentGroupsSummary(zid: number, res: Response) {
   }
 
   // Format and send CSV
-  res.setHeader("content-type", "text/csv");
+  if (res && http) {
+    res.setHeader("content-type", "text/csv");
+  }
 
   // Create headers
   const headers = [
@@ -424,6 +431,7 @@ async function sendCommentGroupsSummary(zid: number, res: Response) {
     "total-disagrees",
     "total-passes",
   ];
+
   for (const groupId of groupIds) {
     const groupLetter = String.fromCharCode(97 + groupId); // 97 is 'a' in ASCII
     headers.push(
@@ -433,7 +441,11 @@ async function sendCommentGroupsSummary(zid: number, res: Response) {
       `group-${groupLetter}-passes`
     );
   }
-  res.write(headers.join(",") + sep);
+  if (http && res) {
+    res.write(headers.join(",") + sep);
+  } else {
+    csvText.push(headers.join(",") + sep);
+  }
 
   // Write data rows
   for (const stats of commentStats.values()) {
@@ -454,9 +466,18 @@ async function sendCommentGroupsSummary(zid: number, res: Response) {
         groupStats.passes
       );
     }
-    res.write(row.join(",") + sep);
+    if (http && res) {
+      res.write(row.join(",") + sep);
+    } else {
+      csvText.push(row.join(",") + sep);
+    }
   }
-  res.end();
+
+  if (http && res) {
+    res.end();
+  } else {
+    return csvText.join("");
+  }
 }
 
 export async function handle_GET_reportExport(
