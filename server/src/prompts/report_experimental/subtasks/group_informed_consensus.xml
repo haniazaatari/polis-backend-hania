@@ -24,7 +24,7 @@
         </term>
         <term name="group_informed">
             <description>Difference in pass rates between groups</description>
-            <threshold<30</threshold>
+            <threshold>30</threshold>
             <unit>percent</unit>
         </term>
         <term name="valid_statement">
@@ -37,10 +37,7 @@
     <analysisProcess>
         <dataProcessing>
             <step order="1">
-                <name>Filter Valid Statements</name>
-                <criteria>
-                    <criterion>vote_count >= 75</criterion>
-                </criteria>
+                <name>Filter Valid Statements more than 75 votes</name>
             </step>
             <step order="2">
                 <name>Calculate Pass Rates</name>
@@ -198,7 +195,8 @@
     <responseFormat>
         <condensedJSONSchema>
             {
-            "id": "subtask_group_informed_consensus", // This is the group informed consensus subtask
+            "id": "subtask_group_informed_consensus", // This is the group informed consensus
+            subtask
             "title": "group informed consensus Analysis",
             "paragraphs": [
             {
@@ -346,6 +344,6 @@
         }
     </example>
     <data>
-      INSERT_DATA_HERE
+        INSERT_DATA_HERE
     </data>
 </polisAnalysisPrompt>
