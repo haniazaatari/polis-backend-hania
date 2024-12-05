@@ -6,7 +6,7 @@ import * as globals from "../globals";
 // import style from "../../util/style";
 import Narrative from "../narrative";
 
-const Uncertainty = ({
+const UncertaintyNarrative = ({
   conversation,
   comments,
   ptptCount,
@@ -19,23 +19,40 @@ const Uncertainty = ({
   if (!conversation) {
     return <div>Loading Uncertainty...</div>;
   }
+
+  const txt = narrative.uncertainty.content[0].text;
+
+  const narrativeJSON = JSON.parse(`{${txt}`);
+
+  // Extract all citation IDs from the narrative structure
+  const uniqueTids = narrativeJSON.paragraphs.reduce((acc, paragraph) => {
+    paragraph?.sentences?.forEach((sentence) => {
+      sentence?.clauses?.forEach((clause) => {
+        if (Array.isArray(clause?.citations)) {
+          acc.push(...clause.citations);
+        }
+      });
+    });
+    return acc;
+  }, []);
+
+  // Deduplicate the IDs
+  const dedupedTids = [...new Set(uniqueTids || [])];
+
   return (
     <div>
-      <p style={globals.primaryHeading}> Areas of uncertainty </p>
+      <p style={globals.primaryHeading}> Uncertainty Narrative & Citations </p>
       <p style={globals.paragraph}>
-        Across all {ptptCount} participants, there was uncertainty about the following statements.
-        Greater than 30% of participants who saw these statements &apos;passed&apos;.
+        This narrative summary may contain hallucinations. Check each clause.
       </p>
-      <p style={globals.paragraph}>
-        Areas of uncertainty can provide avenues to educate and open dialogue with your community.
-      </p>
+      <Narrative sectionData={narrative.uncertainty} />
       <div style={{ marginTop: 50 }}>
         <CommentList
           conversation={conversation}
           ptptCount={ptptCount}
           math={math}
           formatTid={formatTid}
-          tidsToRender={uncertainty /* uncertainTids would be funnier */}
+          tidsToRender={dedupedTids}
           comments={comments}
           voteColors={voteColors}
         />
@@ -44,4 +61,4 @@ const Uncertainty = ({
   );
 };
 
-export default Uncertainty;
+export default UncertaintyNarrative;

@@ -16,6 +16,7 @@ import Footer from "./framework/Footer";
 import Overview from "./overview";
 import MajorityStrict from "./lists/majorityStrict";
 import Uncertainty from "./lists/uncertainty";
+import UncertaintyNarrative from "./lists/uncertaintyNarrative";
 import AllCommentsModeratedIn from "./lists/allCommentsModeratedIn";
 import ParticipantGroups from "./lists/participantGroups";
 // import CommentsGraph from "./commentsGraph/commentsGraph";
@@ -552,6 +553,16 @@ class App extends React.Component {
             voteColors={this.state.voteColors}
           />
           <Uncertainty
+            math={this.state.math}
+            comments={this.state.comments}
+            uncertainty={this.state.uncertainty}
+            conversation={this.state.conversation}
+            ptptCount={this.state.ptptCount}
+            formatTid={this.state.formatTid}
+            voteColors={this.state.voteColors}
+            narrative={this.state.narrative}
+          />
+          <UncertaintyNarrative
             math={this.state.math}
             comments={this.state.comments}
             uncertainty={this.state.uncertainty}
