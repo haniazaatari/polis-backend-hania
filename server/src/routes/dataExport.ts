@@ -39,12 +39,13 @@ function handle_GET_dataExport(
       req: { p: { filename: string } },
       res: { redirect: (arg0: any) => void }
     ) {
-      var url = s3Client.getSignedUrl("getObject", {
-        Bucket: "polis-datadump",
-        Key: Config.mathEnv + "/" + req.p.filename,
-        Expires: 60 * 60 * 24 * 7,
-      });
-      res.redirect(url);
-    }
+    var url = s3Client.getSignedUrl("getObject", {
+      Bucket: "polis-datadump",
+      Key: Config.mathEnv + "/" + req.p.filename,
+      Expires: 60 * 60 * 24 * 7,
+    });
+    res.redirect(url);
+  }
+  
 
   export { handle_GET_dataExport, handle_GET_dataExport_results }

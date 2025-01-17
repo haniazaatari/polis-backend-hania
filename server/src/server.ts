@@ -1091,28 +1091,6 @@ function initializePolisHelpers() {
     return next();
   }
 
-  function doAddDataExportTask(
-    math_env: string | undefined,
-    email: string,
-    zid: number,
-    atDate: number,
-    format: string,
-    task_bucket: number
-  ) {
-    return pgQueryP(
-      "insert into worker_tasks (math_env, task_data, task_type, task_bucket) values ($1, $2, 'generate_export_data', $3);",
-      [
-        math_env,
-        {
-          email: email,
-          zid: zid,
-          "at-date": atDate,
-          format: format,
-        },
-        task_bucket, // TODO hash the params to get a consistent number?
-      ]
-    );
-  }
   if (
     Config.runPeriodicExportTests &&
     !devMode &&
@@ -1125,7 +1103,7 @@ function initializePolisHelpers() {
       let atDate = Date.now();
       let format = "csv";
       let task_bucket = Math.abs((Math.random() * 999999999999) >> 0);
-      doAddDataExportTask(
+      Utils.doAddDataExportTask(
         math_env,
         email,
         zid,
