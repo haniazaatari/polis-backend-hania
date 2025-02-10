@@ -54,7 +54,7 @@ We'll soon be switching to [Mount](https://github.com/tolitius/mount) over Compo
 There are also a number of commands which can be run, either locally or with `docker compose run math ...`, from the root of the monorepo:
 
 * `clojure -M:run --help` - print run command help (noisy; sorry)
-* `clojure -M:run export <conversation-id> -f <export-filename>.zip` - export the conversation at `<conversation-id>` to the given filename
+* `clojure -M:run export -Z <conversation-id> -f <export-filename>.zip` - export the conversation at `<conversation-id>` to the given filename
 * `clojure -M:run update -Z <conversation-id>` - update a particular conversation
 * `clojure -M:run full` - run a full system (poller plus auxiliary task processing)
 * etc.
