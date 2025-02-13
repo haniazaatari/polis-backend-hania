@@ -6,6 +6,8 @@ var Utils = require("./util/utils");
 var translations = {
   // Arabic
   ar: require("./strings/ar.js"),
+  // Bosnian
+  bs: require("./strings/bs.js"),
   // Burmese
   my: require("./strings/my.js"),
   // Croatian
@@ -148,6 +150,8 @@ preloadHelper.acceptLanguagePromise.then(function() {
       _.extend(strings, translations.sw);
     } else if (languageCode.match(/^vi/)) {
       _.extend(strings, translations.vi);
+    } else if (languageCode.match(/^bs/)) {
+      _.extend(strings, translations.bs);
     }
   });
 });
