@@ -543,7 +543,6 @@ const App = (props) => {
         height: window.innerHeight,
       });
     }
-
     let resizeTimeout;
     window.addEventListener("resize", () => {
       clearTimeout(resizeTimeout);
