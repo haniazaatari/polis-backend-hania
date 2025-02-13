@@ -1,17 +1,19 @@
-import React, { useState } from "react";
+import React from "react";
 import * as globals from "../globals.js";
 import Narrative from "../narrative/index.jsx";
 import CommentList from "./commentList.jsx";
 import getNarrativeJSON from "../../util/getNarrativeJSON.js";
-const ConsensusNarrative = ({
-  math,
-  comments,
+
+const TopicNarrative = ({
   conversation,
+  comments,
   ptptCount,
   formatTid,
+  math,
   voteColors,
   narrative,
   model,
+  topicName,
 }) => {
   try {
     const narrativeJSON = getNarrativeJSON(narrative, narrative?.model);
@@ -30,33 +32,34 @@ const ConsensusNarrative = ({
 
     // Deduplicate the IDs
     const dedupedTids = [...new Set(uniqueTids || [])];
+
     return (
       <div>
-        <p style={globals.primaryHeading}> Consensus Across Groups </p>
+        <p style={globals.primaryHeading}>
+          {topicName.charAt(0).toUpperCase() + topicName.slice(1)}
+        </p>
         <p style={globals.paragraph}>
           This narrative summary may contain hallucinations. Check each clause.
         </p>
         <Narrative sectionData={narrative} model={model} />
-        {narrative.errors === undefined && (
-          <div style={{ marginTop: 50 }}>
-            <CommentList
-              conversation={conversation}
-              ptptCount={ptptCount}
-              math={math}
-              formatTid={formatTid}
-              tidsToRender={dedupedTids}
-              comments={comments}
-              voteColors={voteColors}
-            />
-          </div>
-        )}
+        <div style={{ marginTop: 50 }}>
+          <CommentList
+            conversation={conversation}
+            ptptCount={ptptCount}
+            math={math}
+            formatTid={formatTid}
+            tidsToRender={dedupedTids}
+            comments={comments}
+            voteColors={voteColors}
+          />
+        </div>
       </div>
     );
   } catch (err) {
-    console.error("Failed to parse narrative:", {
+    console.error(`Failed to parse narrative for topic ${topicName}:`, {
       error: err,
       rawText: narrative,
-      model: narrative?.model,
+      model,
     });
     return (
       <div>
@@ -66,4 +69,5 @@ const ConsensusNarrative = ({
     );
   }
 };
-export default ConsensusNarrative;
+
+export default TopicNarrative;

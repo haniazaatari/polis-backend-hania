@@ -335,7 +335,10 @@ export async function sendCommentGroupsSummary(
     agrees: number;
     disagrees: number;
     passes: number;
-    group_aware_consensus: number;
+    group_aware_consensus?: number;
+    comment_extremity?: number;
+    comment_id: number;
+    num_groups: number;
   }) => boolean
 ) {
   const csvText = [];
@@ -347,6 +350,7 @@ export async function sendCommentGroupsSummary(
 
   const groupClusters = pca.asPOJO["group-clusters"] as Record<number, object>;
   const groupIds = Object.keys(groupClusters).map(Number);
+  const numGroups = groupIds.length;
   const groupVotes = pca.asPOJO["group-votes"] as Record<
     number,
     GroupVoteStats
@@ -355,6 +359,9 @@ export async function sendCommentGroupsSummary(
     number,
     number
   >;
+
+  const commentExtremity =
+    (pca.asPOJO["pca"]["comment-extremity"] as Array<number>) || [];
 
   // Load comment texts
   const commentRows = (await pgQueryP_readOnly(
@@ -365,6 +372,14 @@ export async function sendCommentGroupsSummary(
 
   // Initialize stats map
   const commentStats = new Map<number, CommentGroupStats>();
+
+  // Create a mapping of tid to extremity index using math tids array
+  const tidToExtremityIndex = new Map();
+  const mathTids = pca.asPOJO.tids; // Array of tids in same order as extremity values
+  commentExtremity.forEach((extremity, index) => {
+    const tid = mathTids[index];
+    tidToExtremityIndex.set(tid, index);
+  });
 
   // Process each group's votes
   for (const groupId of groupIds) {
@@ -477,35 +492,26 @@ export async function sendCommentGroupsSummary(
         groupStats.passes
       );
     }
-    if (http && res) {
-      if (
-        filterFN &&
-        filterFN({
-          votes: stats.total_votes,
-          agrees: stats.total_agrees,
-          disagrees: stats.total_disagrees,
-          passes: stats.total_passes,
-          group_aware_consensus: groupAwareConsensus[stats.tid],
-        }) === true
-      ) {
-        res.write(row.join(",") + sep);
-      } else if (filterFN === undefined) {
-        res.write(row.join(",") + sep);
-      }
-    } else {
-      if (
-        filterFN &&
-        filterFN({
-          votes: stats.total_votes,
-          agrees: stats.total_agrees,
-          disagrees: stats.total_disagrees,
-          passes: stats.total_passes,
-          group_aware_consensus: groupAwareConsensus[stats.tid],
-        }) === true
-      ) {
-        csvText.push(row.join(",") + sep);
-      } else if (filterFN === undefined) {
-        csvText.push(row.join(",") + sep);
+    const shouldIncludeRow =
+      filterFN === undefined ||
+      filterFN({
+        votes: stats.total_votes,
+        agrees: stats.total_agrees,
+        disagrees: stats.total_disagrees,
+        passes: stats.total_passes,
+        group_aware_consensus: groupAwareConsensus[stats.tid],
+        comment_extremity: commentExtremity[tidToExtremityIndex.get(stats.tid)],
+        comment_id: stats.tid,
+        num_groups: numGroups,
+      }) === true;
+
+    const rowString = row.join(",") + sep;
+
+    if (shouldIncludeRow) {
+      if (http && res) {
+        res.write(rowString);
+      } else {
+        csvText.push(rowString);
       }
     }
   }

@@ -6,7 +6,7 @@ import * as globals from "../globals.js";
 import Narrative from "../narrative/index.jsx";
 import getNarrativeJSON from "../../util/getNarrativeJSON.js";
 
-const UncertaintyNarrative = ({
+const GroupsNarrative = ({
   conversation,
   comments,
   ptptCount,
@@ -36,7 +36,7 @@ const UncertaintyNarrative = ({
 
     return (
       <div>
-        <p style={globals.primaryHeading}> Areas of Uncertainty </p>
+        <p style={globals.primaryHeading}> Differences Between Groups </p>
         <p style={globals.paragraph}>
           This narrative summary may contain hallucinations. Check each clause.
         </p>
@@ -71,4 +71,4 @@ const UncertaintyNarrative = ({
   }
 };
 
-export default UncertaintyNarrative;
+export default GroupsNarrative;
