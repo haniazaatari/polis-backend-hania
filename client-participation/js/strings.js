@@ -96,7 +96,7 @@ preloadHelper.acceptLanguagePromise.then(function() {
       languageCode.match(/^zh-MY/)
     ) {
       _.extend(strings, translations.zh_Hans);
-    } else if (languageCode.match(/^zh/)) {
+    } else if (languageCode.match(/^zh/) || languageCode.match(/^zh-TW/)) {
       _.extend(strings, translations.zh_Hant);
     } else if (languageCode.match(/^it/)) {
       _.extend(strings, translations.it);

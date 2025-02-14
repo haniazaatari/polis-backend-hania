@@ -231,7 +231,7 @@ const getModelResponse = async (
       }
       case "openai": {
         const responseOpenAI = await openai.chat.completions.create({
-          model: modelVersion || "gpt-4o-mini",
+          model: modelVersion || "gpt-4o",
           messages: [
             { role: "system", content: system_lore },
             { role: "user", content: prompt_xml },
@@ -710,7 +710,7 @@ export async function handle_GET_reportNarrative(
     storage = new DynamoStorageService(
       process.env.AWS_REGION,
       "report_narrative_store",
-      req.query.noCache === "true",
+      req.query.noCache === "true"
     );
   }
   const modelParam = req.query.model || "openai";
