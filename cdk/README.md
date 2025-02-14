@@ -1,6 +1,6 @@
-# Welcome to your CDK TypeScript project
+# Pol.is AWS platform arch with CDK
 
-This is a blank project for CDK development with TypeScript.
+`domainName` and `dynamoTable` are needed props
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
 
