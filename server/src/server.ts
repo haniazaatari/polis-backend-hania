@@ -957,6 +957,11 @@ function initializePolisHelpers() {
   ];
 
   function hasWhitelistMatches(host: string) {
+    // In development mode, skip whitelist checks entirely.
+    if (devMode) {
+      return true;
+    }
+
     let hostWithoutProtocol = host;
     if (host.startsWith("http://")) {
       hostWithoutProtocol = host.slice(7);
