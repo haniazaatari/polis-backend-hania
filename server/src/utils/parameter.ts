@@ -503,17 +503,33 @@ function resolve_pidThing(
     if (!req.p) {
       fail(res, 500, "polis_err_this_middleware_should_be_after_auth_and_zid");
       next("polis_err_this_middleware_should_be_after_auth_and_zid");
+      return;
     }
 
     let existingValue =
       extractFromBody(req, pidThingStringName) ||
       extractFromCookie(req, pidThingStringName);
 
-    if (existingValue === "mypid" && req?.p?.zid && req.p.uid) {
+    if (existingValue === "mypid") {
+      // Always try to get/create a pid when "mypid" is encountered
+      if (!req.p.zid) {
+        fail(res, 500, "polis_err_missing_zid");
+        next("polis_err_missing_zid");
+        return;
+      }
+      if (!req.p.uid) {
+        // Skip pid resolution but don't fail - the handler can decide what to do
+        logger.debug("skipping pid resolution - no uid");
+        next();
+        return;
+      }
+      
       User.getPidPromise(req.p.zid, req.p.uid)
         .then(function (pid: number) {
           if (pid >= 0) {
             assigner(req, pidThingStringName, pid);
+          } else {
+            logger.error("polis_err_pid_not_created_or_found");
           }
           next();
         })
@@ -521,9 +537,6 @@ function resolve_pidThing(
           fail(res, 500, "polis_err_mypid_resolve_error", err);
           next(err);
         });
-    } else if (existingValue === "mypid") {
-      // don't assign anything, since we have no uid to look it up.
-      next();
     } else if (!_.isUndefined(existingValue)) {
       getInt(existingValue)
         .then(function (pidNumber: number) {
