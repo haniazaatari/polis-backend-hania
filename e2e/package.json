@@ -1,12 +1,13 @@
 {
   "name": "polis-e2e",
   "version": "1.0.0",
+  "private": true,
   "description": "End-to-End test suite for polis, using Cypress.js",
   "main": "index.js",
   "scripts": {
     "start": "cypress open",
-    "test": "cypress run --spec 'cypress/e2e/!(third-party)/**/*.cy.js'",
-    "test:all": "cypress run --spec 'cypress/**/*.cy.js'",
+    "test": "cypress run --spec 'cypress/e2e/!(requires-fb-auth)*.cy.js'",
+    "test:all": "cypress run",
     "e2e": "npm test",
     "e2e:chrome": "npm test -- --browser chrome",
     "cy:run": "cypress run",
@@ -15,13 +16,14 @@
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --write .",
     "build:embed": "node build-embed.js",
-    "build:integrated": "node build-integrated.js"
+    "build:integrated": "node build-integrated.js",
+    "serve:embed": "node build-and-serve-embed.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@faker-js/faker": "^8.2.0",
-    "cypress": "^13.5.0",
+    "@faker-js/faker": "^8.0.2",
+    "cypress": "^13.3.0",
     "cypress-terminal-report": "^5.3.9",
     "yargs": "^17.7.2"
   },
@@ -30,6 +32,7 @@
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-cypress": "^2.15.1",
     "eslint-plugin-mocha": "^10.2.0",
-    "prettier": "^3.0.3"
+    "prettier": "^3.0.3",
+    "serve-handler": "^6.1.5"
   }
 }

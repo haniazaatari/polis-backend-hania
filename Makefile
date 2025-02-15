@@ -117,12 +117,32 @@ e2e-run-interactive: ## Run E2E tests: interactively
 # Helpful CLI shortcuts
 rbs: start-rebuild
 
+embed: ## Create and serve a test embed page
+	@if [ -z "$(CONVERSATION_ID)" ] && [ -z "$(SITE_ID)" ]; then \
+		echo "Error: Must provide either CONVERSATION_ID (for regular embeds) or SITE_ID (for integrated embeds)"; \
+		echo "Usage:"; \
+		echo "  make embed CONVERSATION_ID=<id> [BASE_URL=<url>] [PORT=<port>]  # For regular embeds"; \
+		echo "  make embed SITE_ID=<id> [PAGE_ID=<id>] [BASE_URL=<url>] [PORT=<port>]  # For integrated embeds"; \
+		exit 1; \
+	fi
+	@cd e2e && BASE_URL="$(BASE_URL)" npm install
+	@if [ ! -z "$(CONVERSATION_ID)" ]; then \
+		cd e2e && BASE_URL="$(BASE_URL)" npm run serve:embed -- --type regular --conversationId $(CONVERSATION_ID) \
+			$(if $(BASE_URL),--baseUrl $(BASE_URL)) \
+			$(if $(PORT),--port $(PORT)); \
+	else \
+		cd e2e && BASE_URL="$(BASE_URL)" npm run serve:embed -- --type integrated --siteId $(SITE_ID) \
+			$(if $(PAGE_ID),--pageId $(PAGE_ID)) \
+			$(if $(BASE_URL),--baseUrl $(BASE_URL)) \
+			$(if $(PORT),--port $(PORT)); \
+	fi
+
 %:
 	@true
 
 .PHONY: help pull start stop rm-containers rm-volumes rm-images rm-ALL hash build-no-cache start-rebuild \
-	start-recreate restart-FULL-REBUILD e2e-install e2e-run e2e-run-all e2e-run-interactive \
-	build-web-assets extract-web-assets
+	start-recreate start-FULL-REBUILD e2e-install e2e-run e2e-run-all e2e-run-interactive \
+	build-web-assets extract-web-assets embed
 
 
 help:
