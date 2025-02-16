@@ -448,7 +448,6 @@ String.prototype.hashCode = function () {
 };
 
 function initializePolisHelpers() {
-
   const polisTypes = Utils.polisTypes;
   const setCookie = cookies.setCookie;
   const setParentReferrerCookie = cookies.setParentReferrerCookie;
@@ -2646,7 +2645,6 @@ Email verified! You can close this tab or hit the back button.
     }
 
     function finish(ptpt: any) {
-
       clearCookie(req, res, COOKIES.PARENT_URL);
       clearCookie(req, res, COOKIES.PARENT_REFERRER);
 
@@ -5427,7 +5425,7 @@ Email verified! You can close this tab or hit the back button.
     }
 
     async function doGetPid(): Promise<number> {
-      if (_.isUndefined(pid)) {
+      if (_.isUndefined(pid) || Number(pid) === -1) {
         const newPid = await getPidPromise(zid!, uid!, true);
         if (newPid === -1) {
           const rows = await addParticipant(zid!, uid!);
@@ -5479,17 +5477,18 @@ Email verified! You can close this tab or hit the back button.
       const pidPromise = (async () => {
         if (xid) {
           const xidUser = await getXidStuff(xid, zid!);
-          shouldCreateXidRecord = xidUser === "noXidRecord";
-          if (typeof xidUser === "object") {
+          shouldCreateXidRecord =
+            xidUser === "noXidRecord" || xidUser.pid === -1;
+          if (typeof xidUser === "object" && !shouldCreateXidRecord) {
             uid = xidUser.uid;
             pid = xidUser.pid;
             return pid;
           }
         }
-        const newPid = await doGetPid();
         if (shouldCreateXidRecord) {
           await createXidRecordByZid(zid!, uid!, xid!, null, null, null);
         }
+        const newPid = await doGetPid();
         return newPid;
       })();
 
@@ -10205,7 +10204,6 @@ Thanks for using Polis!
       return Promise.all([
         getSocialParticipants(zid, uid, hardLimit, mod, math_tick, authorUids),
       ]).then(function (stuff: never[][]) {
-
         let participantsWithSocialInfo: any[] = stuff[0] || [];
 
         participantsWithSocialInfo = participantsWithSocialInfo.map(
