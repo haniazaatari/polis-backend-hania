@@ -39,6 +39,11 @@ const argv = yargs(process.argv.slice(2))
     type: 'string',
     default: process.env.BASE_URL || 'http://localhost'
   })
+  .option('xid', {
+    alias: 'x',
+    describe: 'External user ID for the embed',
+    type: 'string'
+  })
   .option('port', {
     alias: 'P',
     describe: 'Port to serve the test page on',
@@ -90,6 +95,7 @@ if (argv.type === 'regular') {
     .replace(/<%= conversation_id %>/g, argv.conversationId)
     .replace(/<%= base_url %>/g, argv.baseUrl)
     .replace(/<%= ui_lang %>/g, argv.uiLang)
+    .replace(/<%= xid %>/g, argv.xid || '')
     // Set all user capability flags to true by default
     .replace(/<%= ucsd %>/g, '1')
     .replace(/<%= ucsf %>/g, '1')
@@ -103,6 +109,7 @@ if (argv.type === 'regular') {
     .replace(/<%= site_id %>/g, argv.siteId)
     .replace(/<%= page_id %>/g, argv.pageId)
     .replace(/<%= base_url %>/g, argv.baseUrl)
+    .replace(/<%= xid %>/g, argv.xid || '')
 }
 
 // Write output file
@@ -135,6 +142,7 @@ ${argv.type === 'regular'
   ? `Conversation ID: ${argv.conversationId}`
   : `Site ID: ${argv.siteId}\nPage ID: ${argv.pageId}`}
 Base URL: ${argv.baseUrl}
+${argv.xid ? `External User ID: ${argv.xid}` : ''}
 
 Press Ctrl+C to stop the server.
 `)

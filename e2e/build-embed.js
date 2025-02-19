@@ -11,7 +11,7 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
   .usage(
     'Usage: $0 --conversationId <conversationId> [--baseUrl <baseUrl>]\n' +
       '[--uiLang <ulLang>] [--ucsd <false>] [--ucsf <false>] [--ucsh <false>]\n' +
-      '[--ucst <false>] [--ucsv <false>] [--ucv <false>] [--ucw <false>]'
+      '[--ucst <false>] [--ucsv <false>] [--ucv <false>] [--ucw <false>] [--xid <xid>]'
   )
   .option('conversationId', {
     alias: 'id',
@@ -24,6 +24,10 @@ const argv = require('yargs/yargs')(process.argv.slice(2))
     describe: 'The base URL',
     type: 'string',
     default: 'http://localhost',
+  })
+  .option('xid', {
+    describe: 'External user ID for the embed',
+    type: 'string',
   })
   .option('uiLang', {
     alias: 'lang',
@@ -81,6 +85,7 @@ fs.readFile(inputFile, 'utf8', (err, data) => {
     .replace(/<%= ucsv %>/g, argv.ucsv ? 1 : 0)
     .replace(/<%= ucv %>/g, argv.ucv ? 1 : 0)
     .replace(/<%= ucw %>/g, argv.ucw ? 1 : 0)
+    .replace(/<%= xid %>/g, argv.xid || '')
 
   fs.writeFile(outputFile, replacedData, (err) => {
     if (err) throw err
