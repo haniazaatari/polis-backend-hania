@@ -274,15 +274,16 @@ export class CdkStack extends cdk.Stack {
     asgWeb.node.addDependency(db);
     asgMathWorker.node.addDependency(db);
 
-    // Custom Resource to update the default versions of Web & Math Worker Launch Template
+    // Custom Resource to update the default version of Web Launch Template
     const getLatestWebLTVersion = new cr.AwsCustomResource(this, 'GetLatestWebLTVersion', {
       onCreate: {
         service: 'EC2',
         action: 'describeLaunchTemplateVersions',
         parameters: {
-        LaunchTemplateId: webLaunchTemplate.launchTemplateId,
+          LaunchTemplateId: webLaunchTemplate.launchTemplateId,
+          Versions: ['$Latest']
       },
-      physicalResourceId: cr.PhysicalResourceId.of(`${webLaunchTemplate.launchTemplateId}-get-version`),
+      physicalResourceId: cr.PhysicalResourceId.of(`${id}-GetLatestWebLTVersion`),
       },
       policy: cr.AwsCustomResourcePolicy.fromSdkCalls({ resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE })
     });
@@ -292,58 +293,59 @@ export class CdkStack extends cdk.Stack {
         service: 'EC2',
         action: 'modifyLaunchTemplate',
         parameters: {
-        LaunchTemplateId: webLaunchTemplate.launchTemplateId,
-        DefaultVersion: getLatestWebLTVersion.getResponseField('LaunchTemplateVersions.0.VersionNumber'),
-      },
-      physicalResourceId: cr.PhysicalResourceId.of(webLaunchTemplate.launchTemplateId as string),
+          LaunchTemplateId: webLaunchTemplate.launchTemplateId,
+          DefaultVersion: getLatestWebLTVersion.getResponseField('LaunchTemplateVersions.0.VersionNumber'),
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(`${id}-ModifyWebLaunchTemplateDefaultVersion`),
       },
       onUpdate: {
         service: 'EC2',
         action: 'modifyLaunchTemplate',
         parameters: {
-        LaunchTemplateId: webLaunchTemplate.launchTemplateId,
-        DefaultVersion: '$LATEST'  // On update, use $LATEST
-      },
-      physicalResourceId: cr.PhysicalResourceId.of(webLaunchTemplate.launchTemplateId as string),
+          LaunchTemplateId: webLaunchTemplate.launchTemplateId,
+          DefaultVersion: '$LATEST'
+        },
+        physicalResourceId: cr.PhysicalResourceId.of(webLaunchTemplate.launchTemplateId as string),
       },
       policy: cr.AwsCustomResourcePolicy.fromSdkCalls({ resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE }),
-    });
+    }).node.addDependency(getLatestWebLTVersion);
 
-    // Custom Resource to update the default version of Math Worker Launch Template
-    const getLatestMathWorkerLTVersion = new cr.AwsCustomResource(this, 'GetLatestMathWorkerLTVersion', {
-      onCreate: {
-        service: 'EC2',
-        action: 'describeLaunchTemplateVersions',
-        parameters: {
+
+  // Custom Resource to update the default version of Math Worker Launch Template
+  const getLatestMathWorkerLTVersion = new cr.AwsCustomResource(this, 'GetLatestMathWorkerLTVersion', {
+    onCreate: {
+      service: 'EC2',
+      action: 'describeLaunchTemplateVersions',
+      parameters: {
         LaunchTemplateId: mathWorkerLaunchTemplate.launchTemplateId,
+        Versions: ['$Latest']
       },
-      physicalResourceId: cr.PhysicalResourceId.of(`${mathWorkerLaunchTemplate.launchTemplateId}-get-version`),
-      },
-      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({ resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE })
-    });
+      physicalResourceId: cr.PhysicalResourceId.of(`${id}-GetLatestMathWorkerLTVersion`),
+    },
+    policy: cr.AwsCustomResourcePolicy.fromSdkCalls({ resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE })
+  });
 
-    new cr.AwsCustomResource(this, 'ModifyMathWorkerLaunchTemplateDefaultVersion', {
-      onCreate: {
-        service: 'EC2',
-        action: 'modifyLaunchTemplate',
-        parameters: {
+  new cr.AwsCustomResource(this, 'ModifyMathWorkerLaunchTemplateDefaultVersion', {
+    onCreate: {
+      service: 'EC2',
+      action: 'modifyLaunchTemplate',
+      parameters: {
         LaunchTemplateId: mathWorkerLaunchTemplate.launchTemplateId,
         DefaultVersion: getLatestMathWorkerLTVersion.getResponseField('LaunchTemplateVersions.0.VersionNumber'),
       },
-      physicalResourceId: cr.PhysicalResourceId.of(mathWorkerLaunchTemplate.launchTemplateId as string),
-      },
-      onUpdate: {
-        service: 'EC2',
-        action: 'modifyLaunchTemplate',
-        parameters: {
+      physicalResourceId: cr.PhysicalResourceId.of(`${id}-ModifyMathWorkerLTVersion`),
+    },
+    onUpdate: {
+      service: 'EC2',
+      action: 'modifyLaunchTemplate',
+      parameters: {
         LaunchTemplateId: mathWorkerLaunchTemplate.launchTemplateId,
-        DefaultVersion: '$LATEST' // On update, use $LATEST
+        DefaultVersion: '$LATEST'
       },
       physicalResourceId: cr.PhysicalResourceId.of(mathWorkerLaunchTemplate.launchTemplateId as string),
-      },
-      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({ resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE }),
-    });
-
+    },
+    policy: cr.AwsCustomResourcePolicy.fromSdkCalls({ resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE }),
+  }).node.addDependency(getLatestMathWorkerLTVersion); // CRUCIAL: Add dependency
     new cdk.CfnOutput(this, 'LoadBalancerDNS', {
       value: lb.loadBalancerDnsName,
     });
