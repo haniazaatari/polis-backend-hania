@@ -34,23 +34,23 @@ export function getPidsForGid(zid: any, gid: number, math_tick: number) {
       return [];
     }
     o[0] = o[0].asPOJO;
-    let clusters = o[0]["group-clusters"];
-    let indexToBid = o[0]["base-clusters"].id; // index to bid
-    let bidToIndex = [];
+    const clusters = o[0]["group-clusters"];
+    const indexToBid = o[0]["base-clusters"].id; // index to bid
+    const bidToIndex = [];
     for (let i = 0; i < indexToBid.length; i++) {
       bidToIndex[indexToBid[i]] = i;
     }
-    let indexToPids = o[1].bidToPid; // actually index to [pid]
-    let cluster = clusters[gid];
+    const indexToPids = o[1].bidToPid; // actually index to [pid]
+    const cluster = clusters[gid];
     if (!cluster) {
       return [];
     }
-    let members = cluster.members; // bids
+    const members = cluster.members; // bids
     let pids: any[] = [];
-    for (var i = 0; i < members.length; i++) {
-      let bid = members[i];
-      let index = bidToIndex[bid];
-      let morePids = indexToPids ? indexToPids[index] : null;
+    for (let i = 0; i < members.length; i++) {
+      const bid = members[i];
+      const index = bidToIndex[bid];
+      const morePids = indexToPids ? indexToPids[index] : null;
       if (morePids) Array.prototype.push.apply(pids, morePids);
     }
     pids = pids.map(function (x) {

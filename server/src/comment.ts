@@ -48,14 +48,14 @@ function getComment(zid: Id, tid: Id) {
 }
 
 function getComments(o: CommentType) {
-  let commentListPromise = o.moderation
-    ? _getCommentsForModerationList(o)
-    : _getCommentsList(o);
-  let convPromise = Conversation.getConversationInfo(o.zid);
+  const commentListPromise = o.moderation
+    ? getCommentsForModerationList(o)
+    : getCommentsList(o);
+  const convPromise = Conversation.getConversationInfo(o.zid);
   return Promise.all([convPromise, commentListPromise])
     .then(function (a) {
       let rows = a[1];
-      let cols = [
+      const cols = [
         "txt",
         "tid",
         "created",
@@ -79,7 +79,7 @@ function getComments(o: CommentType) {
         cols.push("count"); //  in  moderation queries, we join in the vote count
       }
       rows = rows.map(function (row: Row) {
-        let x = _.pick(row, cols);
+        const x = _.pick(row, cols);
         if (!_.isUndefined(x.count)) {
           x.count = Number(x.count);
         }
@@ -96,7 +96,7 @@ function getComments(o: CommentType) {
     });
 }
 
-function _getCommentsForModerationList(o: {
+function getCommentsForModerationList(o: {
   include_voting_patterns: any;
   modIn: boolean;
   zid: any;
@@ -104,8 +104,8 @@ function _getCommentsForModerationList(o: {
   mod: any;
   mod_gt: any;
 }) {
-  var strictCheck = Promise.resolve(null);
-  var include_voting_patterns = o.include_voting_patterns;
+  let strictCheck = Promise.resolve(null);
+  const include_voting_patterns = o.include_voting_patterns;
 
   if (o.modIn) {
     strictCheck = pg
@@ -119,7 +119,7 @@ function _getCommentsForModerationList(o: {
 
   return strictCheck.then((strict_moderation) => {
     let modClause = "";
-    let params = [o.zid];
+    const params = [o.zid];
     if (!_.isUndefined(o.mod)) {
       modClause = " and comments.mod = ($2)";
       params.push(o.mod);
@@ -158,10 +158,10 @@ function _getCommentsForModerationList(o: {
       )
       .then((rows: Row[]) => {
         // each comment will have up to three rows. merge those into one with agree/disagree/pass counts.
-        let adp: { [key: string]: Row } = {};
+        const adp: { [key: string]: Row } = {};
         for (let i = 0; i < rows.length; i++) {
-          let row = rows[i];
-          let o = (adp[row.tid] = adp[row.tid] || {
+          const row = rows[i];
+          const o = (adp[row.tid] = adp[row.tid] || {
             agree_count: 0,
             disagree_count: 0,
             pass_count: 0,
@@ -179,7 +179,7 @@ function _getCommentsForModerationList(o: {
         });
 
         for (let i = 0; i < rows.length; i++) {
-          let row = rows[i];
+          const row = rows[i];
           row.agree_count = adp[row.tid].agree_count;
           row.disagree_count = adp[row.tid].disagree_count;
           row.pass_count = adp[row.tid].pass_count;
@@ -190,7 +190,7 @@ function _getCommentsForModerationList(o: {
   });
 }
 
-function _getCommentsList(o: {
+function getCommentsList(o: {
   zid: any;
   pid: any;
   tids: any;
@@ -333,21 +333,9 @@ function detectLanguage(txt: any) {
   ]);
 }
 
-export {
-  getComment,
-  getComments,
-  _getCommentsForModerationList,
-  _getCommentsList,
-  getNumberOfCommentsRemaining,
-  translateAndStoreComment,
-  detectLanguage,
-};
-
 export default {
   getComment,
   getComments,
-  _getCommentsForModerationList,
-  _getCommentsList,
   getNumberOfCommentsRemaining,
   translateAndStoreComment,
   detectLanguage,

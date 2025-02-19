@@ -47,8 +47,8 @@ function handle_DELETE_metadata_answers(
   req: { p: { uid?: any; pmaid: any } },
   res: { send: (arg0: number) => void }
 ) {
-  let uid = req.p.uid;
-  let pmaid = req.p.pmaid;
+  const uid = req.p.uid;
+  const pmaid = req.p.pmaid;
 
   getZidForAnswer(pmaid, function (err: any, zid: any) {
     if (err) {

@@ -6,8 +6,6 @@ const DEFAULTS = {
   auth_opt_tw: false,
 };
 
-export { DEFAULTS };
-
 export default {
   DEFAULTS,
 };

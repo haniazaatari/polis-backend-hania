@@ -317,7 +317,7 @@ const getGacThresholdByGroupCount = (numGroups: number): number => {
   return thresholds[numGroups] ?? 0.24;
 };
 
-export async function handle_GET_groupInformedConsensus(
+async function handle_GET_groupInformedConsensus(
   rid: string,
   storage: DynamoStorageService | undefined,
   res: Response<any, Record<string, any>>,
@@ -403,7 +403,7 @@ export async function handle_GET_groupInformedConsensus(
   res.flush();
 }
 
-export async function handle_GET_uncertainty(
+async function handle_GET_uncertainty(
   rid: string,
   storage: DynamoStorageService | undefined,
   res: Response<any, Record<string, any>>,
@@ -487,7 +487,7 @@ export async function handle_GET_uncertainty(
   res.flush();
 }
 
-export async function handle_GET_groups(
+async function handle_GET_groups(
   rid: string,
   storage: DynamoStorageService | undefined,
   res: Response<any, Record<string, any>>,
@@ -572,7 +572,7 @@ export async function handle_GET_groups(
   res.flush();
 }
 
-export async function handle_GET_topics(
+async function handle_GET_topics(
   rid: string,
   storage: DynamoStorageService | undefined,
   res: Response<any, Record<string, any>>,

@@ -18,6 +18,7 @@ async function main() {
     },
   });
 
+  // eslint-disable-next-line no-console
   console.log(msg.response.text());
 }
 

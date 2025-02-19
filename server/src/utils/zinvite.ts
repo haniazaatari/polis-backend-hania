@@ -11,12 +11,12 @@ import {
 } from "../db/pg-query";
 import { MPromise } from "./metered";
 
-let zidToConversationIdCache = new LruCache({
+const zidToConversationIdCache = new LruCache({
   max: 1000,
 });
 
 export function getZinvite(zid: any, dontUseCache?: boolean) {
-  let cachedConversationId = zidToConversationIdCache.get(zid);
+  const cachedConversationId = zidToConversationIdCache.get(zid);
   if (!dontUseCache && cachedConversationId) {
     return Promise.resolve(cachedConversationId);
   }
@@ -25,7 +25,7 @@ export function getZinvite(zid: any, dontUseCache?: boolean) {
     "select * from zinvites where zid = ($1);",
     [zid]
   ).then(function (rows: { zinvite: any }[]) {
-    let conversation_id = (rows && rows[0] && rows[0].zinvite) || void 0;
+    const conversation_id = (rows && rows[0] && rows[0].zinvite) || void 0;
     if (conversation_id) {
       zidToConversationIdCache.set(zid, conversation_id);
     }
@@ -42,10 +42,10 @@ export function getZinvites(zids: any[]) {
   });
   zids = _.uniq(zids);
 
-  let uncachedZids = zids.filter(function (zid: any) {
+  const uncachedZids = zids.filter(function (zid: any) {
     return !zidToConversationIdCache.get(zid);
   });
-  let zidsWithCachedConversationIds = zids
+  const zidsWithCachedConversationIds = zids
     .filter(function (zid: any) {
       return !!zidToConversationIdCache.get(zid);
     })
@@ -57,7 +57,7 @@ export function getZinvites(zids: any[]) {
     });
 
   function makeZidToConversationIdMap(arrays: any[]) {
-    let zid2conversation_id = {};
+    const zid2conversation_id = {};
     arrays.forEach(function (a: any[]) {
       a.forEach(function (o: { zid: string | number; zinvite: any }) {
         // (property) zid: string | number

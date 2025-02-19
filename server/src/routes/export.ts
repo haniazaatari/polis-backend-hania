@@ -90,7 +90,7 @@ type PcaData = {
 
 const sep = "\n";
 
-export const formatEscapedText = (s: string) => `"${s.replace(/"/g, '""')}"`;
+const formatEscapedText = (s: string) => `"${s.replace(/"/g, '""')}"`;
 
 export function formatCSVHeaders<T>(colFns: Formatters<T>) {
   return Object.keys(colFns).join(",");
@@ -140,7 +140,7 @@ export async function loadConversationSummary(zid: number, siteUrl: string) {
   type PcaData = {
     "in-conv": number[];
     "user-vote-counts": Record<number, number>;
-    "group-clusters": Array<{id: number; center: number[]; members: number[]}> | Record<number, object>;
+    "group-clusters": Array<{ id: number; center: number[]; members: number[] }> | Record<number, object>;
     "n-cmts": number;
     [key: string]: any;
   };
@@ -273,7 +273,7 @@ export async function sendParticipantVotesSummary(zid: number, res: Response) {
   }
 
   const pca = await getPca(zid);
-  
+
   // Define the getGroupId function
   function getGroupId(pca: { asPOJO: any } | undefined, pid: number): number | undefined {
     if (!pca || !pca.asPOJO) {
@@ -281,28 +281,28 @@ export async function sendParticipantVotesSummary(zid: number, res: Response) {
     }
 
     const pcaData = pca.asPOJO as PcaData;
-    
+
     // Check if participant is in the conversation
     const inConv = pcaData["in-conv"];
     if (!inConv || !Array.isArray(inConv) || !inConv.includes(pid)) {
       logger.info(`Participant ${pid} not found in in-conv array`);
       return undefined;
     }
-    
+
     // Get the base clusters and group clusters
     const baseClusters = pcaData["base-clusters"];
     const groupClusters = pcaData["group-clusters"];
-    
+
     if (!baseClusters || !baseClusters.members || !Array.isArray(baseClusters.members)) {
       logger.info(`No base clusters found in PCA data`);
       return undefined;
     }
-    
+
     if (!groupClusters || !Array.isArray(groupClusters) || groupClusters.length === 0) {
       logger.info(`No group clusters found in PCA data`);
       return undefined;
     }
-    
+
     // Step 1: Find which base cluster contains the participant
     let baseClusterId = -1;
     for (let i = 0; i < baseClusters.members.length; i++) {
@@ -312,17 +312,17 @@ export async function sendParticipantVotesSummary(zid: number, res: Response) {
         break;
       }
     }
-    
+
     if (baseClusterId === -1) {
       // We couldn't find the participant in any base cluster
       logger.info(`Could not find base cluster for participant ${pid}`);
       return undefined;
     }
-    
+
     // Step 2: Find which group cluster contains this base cluster
     for (const groupCluster of groupClusters) {
-      if (groupCluster.members && Array.isArray(groupCluster.members) && 
-          groupCluster.members.includes(baseClusterId)) {
+      if (groupCluster.members && Array.isArray(groupCluster.members) &&
+        groupCluster.members.includes(baseClusterId)) {
         return groupCluster.id;
       }
     }
@@ -331,7 +331,7 @@ export async function sendParticipantVotesSummary(zid: number, res: Response) {
     logger.info(`Could not find group cluster for participant ${pid}`);
     return undefined;
   }
-  
+
   res.setHeader("content-type", "text/csv");
   res.write(
     [
@@ -348,7 +348,7 @@ export async function sendParticipantVotesSummary(zid: number, res: Response) {
   // Query the votes in participant order so that we can summarize them in a streaming pass
   let currentParticipantId = -1;
   const currentParticipantVotes = new Map<number, number>();
-  
+
   function sendCurrentParticipantRow() {
     let agrees = 0;
     let disagrees = 0;
@@ -423,8 +423,8 @@ export async function sendCommentGroupsSummary(
   }
 
   const groupClusters = pca.asPOJO["group-clusters"];
-  const groupIds = Array.isArray(groupClusters) 
-    ? groupClusters.map(g => g.id) 
+  const groupIds = Array.isArray(groupClusters)
+    ? groupClusters.map(g => g.id)
     : Object.keys(groupClusters as Record<string, any>).map(Number);
   const numGroups = groupIds.length;
   const groupVotes = pca.asPOJO["group-votes"] as Record<

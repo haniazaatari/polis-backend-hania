@@ -14,11 +14,6 @@ type Options = {
   domain?: any;
 };
 
-type Req = {
-  headers?: { origin: string };
-  cookies: { [x: string]: any };
-};
-
 const COOKIES = {
   COOKIE_TEST: "ct",
   HAS_EMAIL: "e",
@@ -32,8 +27,6 @@ const COOKIES = {
   TRY_COOKIE: "tryCookie",
 };
 
-const getUserInfoForSessionToken = Session.getUserInfoForSessionToken;
-
 const COOKIES_TO_CLEAR = {
   e: true,
   token2: true,
@@ -43,7 +36,7 @@ const COOKIES_TO_CLEAR = {
   parent_url: true,
 };
 
-let oneYear = 1000 * 60 * 60 * 24 * 365;
+const oneYear = 1000 * 60 * 60 * 24 * 365;
 
 function cookieDomain(req: any) {
   const origin = req?.headers?.origin || "";
@@ -140,8 +133,8 @@ function addCookies(
     email: any;
     created: any;
   }) {
-    let email = opts.email;
-    let created = opts.created;
+    const email = opts.email;
+    const created = opts.created;
 
     setTokenCookie(req, res, token);
     setUidCookie(req, res, uid);
@@ -160,7 +153,7 @@ function getPermanentCookieAndEnsureItIsSet(
   res: any
 ) {
   if (!req.cookies[COOKIES.PERMANENT_COOKIE]) {
-    let token = Session.makeSessionToken();
+    const token = Session.makeSessionToken();
     setPermanentCookie(req, res, token);
     return token;
   } else {
@@ -199,56 +192,10 @@ function clearCookies(
   );
 }
 
-function clearCookie(
-  req: { [key: string]: any; headers?: { origin: string } },
-  res: {
-    [key: string]: any;
-    clearCookie?: (arg0: any, arg1: { path: string; domain?: string }) => void;
-  },
-  cookieName: any
-) {
-  res?.clearCookie?.(cookieName, {
-    path: "/",
-    domain: cookieDomain(req),
-  });
-}
-
-function doCookieAuth(
-  assigner: (arg0: any, arg1: string, arg2: number) => void,
-  isOptional: any,
-  req: { cookies: { [x: string]: any }; body: { uid?: any } },
-  res: { status: (arg0: number) => void },
-  next: { (err: any): void; (arg0?: string): void }
-) {
-  let token = req.cookies[COOKIES.TOKEN];
-
-  //if (req.body.uid) { next(401); return; } // shouldn't be in the post - TODO - see if we can do the auth in parallel for non-destructive operations
-  getUserInfoForSessionToken(token, res, function (err: any, uid?: any) {
-    if (err) {
-      clearCookies(req, res); // TODO_MULTI_DATACENTER_CONSIDERATION
-      if (isOptional) {
-        next();
-      } else {
-        res.status(403);
-        next("polis_err_auth_no_such_token");
-      }
-      return;
-    }
-    if (req.body.uid && req.body.uid !== uid) {
-      res.status(401);
-      next("polis_err_auth_mismatch_uid");
-      return;
-    }
-    assigner(req, "uid", Number(uid));
-    next();
-  });
-}
-
 export default {
   COOKIES,
   COOKIES_TO_CLEAR,
   cookieDomain,
-  setCookie,
   setParentReferrerCookie,
   setParentUrlCookie,
   setPermanentCookie,
@@ -256,6 +203,4 @@ export default {
   addCookies,
   getPermanentCookieAndEnsureItIsSet,
   clearCookies,
-  clearCookie,
-  doCookieAuth,
 };

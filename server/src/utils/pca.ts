@@ -65,7 +65,6 @@ export type PcaCacheItem = {
   asBufferOfGzippedJson: any;
   expiration: number;
 };
-
 const pcaCacheSize = Config.cacheMathResults ? 300 : 1;
 const pcaCache = new LruCache<number, PcaCacheItem>({
   max: pcaCacheSize,
@@ -76,7 +75,7 @@ let lastPrefetchedMathTick = -1;
 
 // Background polling function to proactively cache PCA data
 export function fetchAndCacheLatestPcaData() {
-  let lastPrefetchPollStartTime = Date.now();
+  const lastPrefetchPollStartTime = Date.now();
 
   function waitTime() {
     const timePassed = Date.now() - lastPrefetchPollStartTime;
@@ -85,13 +84,13 @@ export function fetchAndCacheLatestPcaData() {
 
   function pollForLatestPcaData() {
     lastPrefetchPollStartTime = Date.now();
-    
+
     pgQueryP_readOnly<Array<{ data: any; math_tick: any; caching_tick: any; zid: any }>>(
       "select * from math_main where caching_tick > ($1) order by caching_tick limit 10;",
       [lastPrefetchedMathTick]
     ).then((rows) => {
       const rowsArray = rows as Array<{ data: any; math_tick: any; caching_tick: any; zid: any }>;
-      
+
       if (!rowsArray || !rowsArray.length) {
         // call again
         logger.info("mathpoll done");
@@ -122,7 +121,7 @@ export function fetchAndCacheLatestPcaData() {
 
         return updatePcaCache(row.zid, item);
       });
-      
+
       Promise.all(results).then(() => {
         setTimeout(pollForLatestPcaData, waitTime());
       });
@@ -177,7 +176,7 @@ export function getPca(
 
     // Ensure rows is an array with proper type assertion
     const rowsArray = rows as Array<{ data: any; math_tick: any }>;
-    
+
     if (!rowsArray || !rowsArray.length) {
       logger.info(
         "mathpoll related; after cache miss, unable to find data for",
@@ -246,7 +245,7 @@ function processMathObject(o: { [x: string]: any }) {
     if (!o) {
       return o;
     }
-    
+
     // Helper function to safely map arrays or convert objects to arrays
     function safeMap(input: any, mapFn: (item: any, index: number) => any): any[] {
       if (Array.isArray(input)) {
@@ -259,10 +258,10 @@ function processMathObject(o: { [x: string]: any }) {
 
     // Process all subgroup properties in a single loop
     const subgroupProperties = [
-      "group-clusters", "repness", "group-votes", 
+      "group-clusters", "repness", "group-votes",
       "subgroup-repness", "subgroup-votes", "subgroup-clusters"
     ];
-    
+
     subgroupProperties.forEach(prop => {
       if (o[prop]) {
         o[prop] = safeMap(o[prop], (val, i) => ({
@@ -285,17 +284,17 @@ function processMathObject(o: { [x: string]: any }) {
 
   // Process all non-array properties that need to be converted to arrays
   const propsToConvert = [
-    "repness", "group-votes", "subgroup-repness", 
+    "repness", "group-votes", "subgroup-repness",
     "subgroup-votes", "subgroup-clusters"
   ];
-  
+
   propsToConvert.forEach(prop => {
     if (!_.isArray(o[prop])) {
       o[prop] = _.keys(o[prop]).map((gid: string) => ({
-        id: Number(gid), 
+        id: Number(gid),
         val: o[prop][gid]
       }));
-      
+
       // Apply remapSubgroupStuff to subgroup properties
       if (prop.startsWith("subgroup-")) {
         o[prop].map(remapSubgroupStuff);

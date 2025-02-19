@@ -39,7 +39,7 @@ function sendPasswordResetEmail(
       if (!userInfo) {
         return callback?.("missing user info");
       }
-      let body = `Hi ${userInfo.hname},
+      const body = `Hi ${userInfo.hname},
 
 We have just received a password reset request for ${userInfo.email}
 
@@ -95,8 +95,8 @@ function handle_POST_auth_password(
     };
   }
 ) {
-  let pwresettoken = req.p.pwresettoken;
-  let newPassword = req.p.newPassword;
+  const pwresettoken = req.p.pwresettoken;
+  const newPassword = req.p.newPassword;
 
   getUidForPwResetToken(
     pwresettoken,
@@ -115,7 +115,7 @@ function handle_POST_auth_password(
         );
         return;
       }
-      let uid = Number(userParams.uid);
+      const uid = Number(userParams.uid);
       generateHashedPassword(
         newPassword,
         function (err: any, hashedPassword: any) {
@@ -125,7 +125,7 @@ function handle_POST_auth_password(
               "do update set pwhash = excluded.pwhash;",
             [uid, hashedPassword]
           ).then(
-            (rows: any) => {
+            () => {
               res.status(200).json("Password reset successful.");
               clearPwResetToken(pwresettoken, function (err: any) {
                 if (err) {
@@ -155,9 +155,9 @@ function handle_POST_auth_pwresettoken(
     };
   }
 ) {
-  let email = req.p.email;
+  const email = req.p.email;
 
-  let server = getServerNameWithProtocol(req);
+  const server = getServerNameWithProtocol(req);
 
   // let's clear the cookies here, in case something is borked.
   cookies.clearCookies(req, res);
@@ -186,7 +186,7 @@ function handle_POST_auth_pwresettoken(
 }
 
 function sendPasswordResetEmailFailure(email: any, server: any) {
-  let body = `We were unable to find a pol.is account registered with the email address: ${email}
+  const body = `We were unable to find a pol.is account registered with the email address: ${email}
 
 You may have used another email address to create your account.
 

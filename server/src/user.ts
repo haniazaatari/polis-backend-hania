@@ -43,7 +43,7 @@ function getUserInfoForUid2(uid: any) {
           if (!results.rows || !results.rows.length) {
             return reject(null);
           }
-          let o = results.rows[0];
+          const o = results.rows[0];
           resolve(o);
         }
       );
@@ -64,13 +64,11 @@ async function getUser(
 
   let xidInfoPromise = Promise.resolve(null);
   if (zid_optional && xid_optional) {
-    //     let xidInfoPromise: Promise<null>
     // Type 'Promise<unknown>' is not assignable to type 'Promise<null>'.
     //       Type 'unknown' is not assignable to type 'null'.ts(2322)
     // @ts-ignore
     xidInfoPromise = Conversation.getXidRecord(xid_optional, zid_optional);
   } else if (xid_optional && owner_uid_optional) {
-    // let xidInfoPromise: Promise<null>
     // Type 'Promise<unknown>' is not assignable to type 'Promise<null>'.ts(2322)
     // @ts-ignore
     xidInfoPromise = Conversation.getXidRecordByXidOwnerId(
@@ -86,16 +84,16 @@ async function getUser(
     getTwitterInfo([uid]),
     xidInfoPromise,
   ]);
-  let info = o[0];
-  let fbInfo = o[1];
-  let twInfo = o[2];
-  let xInfo = o[3];
-  let hasFacebook = fbInfo && fbInfo.length && fbInfo[0];
-  let hasTwitter = twInfo && twInfo.length && twInfo[0];
-  let hasXid = xInfo && xInfo.length && xInfo[0];
+  const info = o[0];
+  const fbInfo = o[1];
+  const twInfo = o[2];
+  const xInfo = o[3];
+  const hasFacebook = fbInfo && fbInfo.length && fbInfo[0];
+  const hasTwitter = twInfo && twInfo.length && twInfo[0];
+  const hasXid = xInfo && xInfo.length && xInfo[0];
   if (hasFacebook) {
-    let width = 40;
-    let height = 40;
+    const width = 40;
+    const height = 40;
     fbInfo.fb_picture =
       "https://graph.facebook.com/v2.2/" +
       fbInfo.fb_user_id +
@@ -166,7 +164,7 @@ function createDummyUser() {
   );
 }
 
-let pidCache: LRUCache<string, number> = new LruCache({
+const pidCache: LRUCache<string, number> = new LruCache({
   max: 9000,
 });
 
@@ -176,8 +174,8 @@ function getPid(
   uid: string,
   callback: (arg0: null, arg1: number) => void
 ) {
-  let cacheKey = zid + "_" + uid;
-  let cachedPid = pidCache.get(cacheKey);
+  const cacheKey = zid + "_" + uid;
+  const cachedPid = pidCache.get(cacheKey);
   if (!_.isUndefined(cachedPid)) {
     callback(null, cachedPid);
     return;
@@ -198,8 +196,8 @@ function getPid(
 
 // returns a pid of -1 if it's missing
 function getPidPromise(zid: string, uid: string, usePrimary?: boolean) {
-  let cacheKey = zid + "_" + uid;
-  let cachedPid = pidCache.get(cacheKey);
+  const cacheKey = zid + "_" + uid;
+  const cachedPid = pidCache.get(cacheKey);
   //   (alias) function MPromise(name: string, f: (resolve: (value: unknown) => void, reject: (reason?: any) => void) => void): Promise<unknown>
   // import MPromise
   // 'new' expression, whose target lacks a construct signature, implicitly has an 'any' type.ts(7009)
@@ -223,7 +221,7 @@ function getPidPromise(zid: string, uid: string, usePrimary?: boolean) {
             resolve(-1);
             return;
           }
-          let pid = results.rows[0].pid;
+          const pid = results.rows[0].pid;
           pidCache.set(cacheKey, pid);
           resolve(pid);
         }
@@ -234,16 +232,15 @@ function getPidPromise(zid: string, uid: string, usePrimary?: boolean) {
 
 // must follow auth and need('zid'...) middleware
 function getPidForParticipant(
-  assigner: (arg0: any, arg1: string, arg2: any) => void,
-  cache: any
+  assigner: (arg0: any, arg1: string, arg2: any) => void
 ) {
   return function (
     req: { p: { zid: any; uid: any } },
     res: any,
     next: (arg0?: string) => void
   ) {
-    let zid = req.p.zid;
-    let uid = req.p.uid;
+    const zid = req.p.zid;
+    const uid = req.p.uid;
 
     function finish(pid: any) {
       assigner(req, "pid", pid);
@@ -252,7 +249,7 @@ function getPidForParticipant(
     getPidPromise(zid, uid).then(
       function (pid: number) {
         if (pid === -1) {
-          let msg = "polis_err_get_pid_for_participant_missing";
+          const msg = "polis_err_get_pid_for_participant_missing";
           logger.error(msg, {
             zid,
             uid,
@@ -298,7 +295,7 @@ function getXidRecordByXidOwnerId(
             return null;
           }
 
-          var shouldCreateXidEntryPromise = !zid_optional
+          const shouldCreateXidEntryPromise = !zid_optional
             ? Promise.resolve(true)
             : Conversation.getConversationInfo(zid_optional).then(
                 (conv: { use_xid_whitelist: any }) => {
@@ -350,7 +347,7 @@ function getXidStuff(xid: any, zid: any) {
     if (!rows || !rows.length) {
       return "noXidRecord";
     }
-    let xidRecordForPtpt = rows[0];
+    const xidRecordForPtpt = rows[0];
     if (xidRecordForPtpt) {
       return getPidPromise(zid, xidRecordForPtpt.uid, true).then(
         (pidForXid: any) => {
@@ -363,16 +360,7 @@ function getXidStuff(xid: any, zid: any) {
   });
 }
 
-export {
-  pidCache,
-  getUserInfoForUid,
-  getUserInfoForUid2,
-  getUser,
-  createDummyUser,
-  getPid,
-  getPidPromise,
-  getPidForParticipant,
-};
+export { pidCache, getPidForParticipant };
 
 export default {
   pidCache,

@@ -17,7 +17,7 @@ import logger from "../utils/logger";
 // v2 docs, since we use v2 in our package.json: "aws:sdk": "2.78.0"
 AWS.config.update({ region: Config.awsRegion });
 
-function sendTextEmailWithBackup(
+function sendTextEmailWithBackupOnly(
   sender: any,
   recipient: any,
   subject: any,
@@ -91,7 +91,7 @@ function sendTextEmail(
   const mailOptions = getMailOptions(thisTransportType);
   const transporter = nodemailer.createTransport(mailOptions);
 
-  let promise: any = transporter
+  const promise: any = transporter
     .sendMail({ from: sender, to: recipient, subject: subject, text: text })
     .catch(function (err: any) {
       logger.error(
@@ -115,12 +115,7 @@ function sendTextEmail(
   return promise;
 }
 
-export {
-  sendTextEmail,
-  sendTextEmailWithBackup as sendTextEmailWithBackupOnly,
-};
-
 export default {
-  sendTextEmail: sendTextEmail,
-  sendTextEmailWithBackupOnly: sendTextEmailWithBackup,
+  sendTextEmail,
+  sendTextEmailWithBackupOnly,
 };

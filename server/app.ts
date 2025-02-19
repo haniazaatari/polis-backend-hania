@@ -10,9 +10,6 @@ dotenv.config();
 
 import Promise from "bluebird";
 import express from "express";
-// import compression from "compression";
-// import cookieParser from "cookie-parser";
-// import bodyParser from "body-parser";
 import morgan from "morgan";
 
 import Config from "./src/config";
@@ -30,10 +27,10 @@ app.use(morgan("dev"));
 // See: https://expressjs.com/en/guide/behind-proxies.html
 app.set("trust proxy", 1);
 
-var helpersInitialized = new Promise(function (resolve, reject) {
+const helpersInitialized = new Promise(function (resolve) {
   resolve(server.initializePolisHelpers());
 });
-/* @ts-ignore */
+
 helpersInitialized.then(
   function (o) {
     const {
@@ -195,16 +192,14 @@ helpersInitialized.then(
       getUrlLimitLength,
       moveToBody,
       need,
-      needCookie,
-      needHeader,
       resolve_pidThing,
       want,
       wantCookie,
       wantHeader,
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
     } = require("./src/utils/parameter");
 
     app.disable("x-powered-by");
-    // app.disable('etag'); // seems to be eating CPU, and we're not using etags yet. https://www.dropbox.com/s/hgfd5dm0e29728w/Screenshot%202015-06-01%2023.42.47.png?dl=0
 
     ////////////////////////////////////////////
     ////////////////////////////////////////////
@@ -282,7 +277,6 @@ helpersInitialized.then(
     app.get(
       "/api/v3/math/correlationMatrix",
       moveToBody,
-      // need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
       need("report_id", getReportIdFetchRid, assignToPCustom("rid")),
       want("math_tick", getInt, assignToP, -1),
       handle_GET_math_correlationMatrix
@@ -1513,7 +1507,7 @@ helpersInitialized.then(
     );
 
     function makeFetchIndexWithoutPreloadData() {
-      let port = staticFilesParticipationPort;
+      const port = staticFilesParticipationPort;
       return function (req, res) {
         return fetchIndexWithoutPreloadData(req, res, port);
       };
@@ -1571,7 +1565,6 @@ helpersInitialized.then(
     app.get(/^\/bot\/support(\/.*)?/, fetchIndexForAdminPage);
 
     app.get(/^\/inbox(\/.*)?$/, fetchIndexWithoutPreloadData);
-    // app.get(/^\/r/, fetchIndexWithoutPreloadData);
     app.get(/^\/hk/, fetchIndexWithoutPreloadData);
     app.get(/^\/s\//, fetchIndexWithoutPreloadData);
     app.get(/^\/s$/, fetchIndexWithoutPreloadData);
@@ -1679,7 +1672,7 @@ helpersInitialized.then(
         pathAndQuery = pathAndQuery.replace("/?", "?");
       }
 
-      let fullUrl = req.protocol + "://" + req.get("host") + pathAndQuery;
+      const fullUrl = req.protocol + "://" + req.get("host") + pathAndQuery;
 
       if (pathAndQuery !== req.originalUrl) {
         res.redirect(fullUrl);
@@ -1688,18 +1681,18 @@ helpersInitialized.then(
       }
     });
 
-    var missingFilesGet404 = false;
+    const missingFilesGet404 = false;
     if (missingFilesGet404) {
       // 404 everything else
       app.get(
-        /^\/[^(api\/)]?.*/,
+        /^\/[^(api/)]?.*/,
         makeFileFetcher(hostname, staticFilesAdminPort, "/404.html", {
           "Content-Type": "text/html",
         })
       );
     } else {
       // proxy everything else
-      app.get(/^\/[^(api\/)]?.*/, proxy);
+      app.get(/^\/[^(api/)]?.*/, proxy);
     }
 
     app.listen(Config.serverPort);

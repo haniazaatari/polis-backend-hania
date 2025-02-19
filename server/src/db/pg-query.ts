@@ -58,13 +58,16 @@ const readsPgConnection = Object.assign(
 // split requests into centralized read/write transactor pool vs read pool for scalability concerns in keeping
 // pressure down on the transactor (read+write) server
 
-// const PoolConstructor = pgnative?.Pool ?? Pool;
 const readWritePool: Pool = new Pool(pgConnection as PoolConfig);
 const readPool: Pool = new Pool(readsPgConnection as PoolConfig);
 
 // Same syntax as pg.client.query, but uses connection pool
 // Also takes care of calling 'done'.
-function queryImpl<T>(pool: Pool, queryString: string, ...args: any[]) {
+function queryImpl<T>(
+  pool: Pool,
+  queryString: string,
+  ...args: any[]
+): Promise<T[]> {
   // variable arity depending on whether or not query has params (default to [])
   let params: any[];
   let callback: ((arg0: any, arg1?: any) => void) | undefined;

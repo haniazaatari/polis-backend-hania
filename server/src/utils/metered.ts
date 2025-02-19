@@ -21,7 +21,7 @@ export function addInRamMetric(metricName: string, val: number) {
       index: 0,
     };
   }
-  let index = METRICS_IN_RAM[metricName].index;
+  const index = METRICS_IN_RAM[metricName].index;
   METRICS_IN_RAM[metricName].values[index] = val;
   METRICS_IN_RAM[metricName].index = (index + 1) % 1000;
 }
@@ -31,8 +31,8 @@ export function MPromise(
   name: string,
   f: (resolve: (value: unknown) => void, reject: (reason?: any) => void) => void
 ) {
-  let p = new Promise(f);
-  let start = Date.now();
+  const p = new Promise(f);
+  const start = Date.now();
   setTimeout(function () {
     // TODO either add this arg to the function definition
     // TODO or remove this arg from the function call
@@ -43,8 +43,8 @@ export function MPromise(
   }, 100);
   p.then(
     function () {
-      let end = Date.now();
-      let duration = end - start;
+      const end = Date.now();
+      const duration = end - start;
       setTimeout(function () {
         // TODO either add this arg to the function definition
         // TODO or remove this arg from the function call
@@ -55,8 +55,8 @@ export function MPromise(
       }, 100);
     },
     function () {
-      let end = Date.now();
-      let duration = end - start;
+      const end = Date.now();
+      const duration = end - start;
       setTimeout(function () {
         // TODO either add this arg to the function definition
         // TODO or remove this arg from the function call
@@ -68,8 +68,8 @@ export function MPromise(
     }
   ).catch(function (err) {
     logger.error("MPromise internal error", err);
-    let end = Date.now();
-    let duration = end - start;
+    const end = Date.now();
+    const duration = end - start;
     setTimeout(function () {
       // TODO either add this arg to the function definition
       // TODO or remove this arg from the function call

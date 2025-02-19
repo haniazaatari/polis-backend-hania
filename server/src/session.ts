@@ -33,7 +33,7 @@ function encrypt(text: string | null) {
   //   Argument of type 'string | null' is not assignable to parameter of type 'string'.
   //   Type 'null' is not assignable to type 'string'.ts(2769)
   // @ts-ignore
-  var crypted = cipher.update(text, "utf8", "hex");
+  let crypted = cipher.update(text, "utf8", "hex");
   // Type 'string' is not assignable to type 'Buffer & string'.
   // Type 'string' is not assignable to type 'Buffer'.ts(2322)
   // @ts-ignore
@@ -41,30 +41,6 @@ function encrypt(text: string | null) {
   return crypted;
 }
 
-function decrypt(text: string) {
-  const algorithm = "aes-256-ctr";
-  const password = Config.encryptionPassword;
-  //
-  // TODO replace deprecated createDecipher method with current createDecipheriv method
-  //
-  //  function createDecipher(algorithm: crypto.CipherCCMTypes, password: crypto.BinaryLike, options: crypto.CipherCCMOptions): crypto.DecipherCCM (+2 overloads)
-  //
-  // @deprecated — since v10.0.0 use createDecipheriv()
-  //
-  // The signature '(algorithm: string, password: BinaryLike, options: TransformOptions | undefined): DecipherCCM & DecipherGCM & Decipher' of 'crypto.createDecipher' is deprecated.ts(6387)
-  // crypto.d.ts(253, 9): The declaration was marked as deprecated here.
-  // No overload matches this call.
-  //   Overload 1 of 3, '(algorithm: CipherGCMTypes, password: BinaryLike, options?: CipherGCMOptions | undefined): DecipherGCM', gave the following error.
-  //     Argument of type '"aes-256-ctr"' is not assignable to parameter of type 'CipherGCMTypes'.
-  //   Overload 2 of 3, '(algorithm: string, password: BinaryLike, options?: TransformOptions | undefined): Decipher', gave the following error.
-  //     Argument of type 'string | undefined' is not assignable to parameter of type 'BinaryLike'.ts(2769)
-  // @ts-ignore
-  const decipher = crypto.createDecipher(algorithm, password);
-  var dec = decipher.update(text, "hex", "utf8");
-  dec += decipher.final("utf8");
-  return dec;
-}
-decrypt; // appease linter
 function makeSessionToken() {
   // These can probably be shortened at some point.
   return crypto
@@ -87,7 +63,7 @@ function getUserInfoForSessionToken(
   res: any,
   cb: (arg0: number | null, arg1?: unknown) => void
 ) {
-  let cachedUid = userTokenCache.get(sessionToken);
+  const cachedUid = userTokenCache.get(sessionToken);
   if (cachedUid) {
     cb(null, cachedUid);
     return;
@@ -107,7 +83,7 @@ function getUserInfoForSessionToken(
         cb(403);
         return;
       }
-      let uid = results.rows[0].uid;
+      const uid = results.rows[0].uid;
       userTokenCache.set(sessionToken, uid);
       cb(null, uid);
     }
@@ -115,12 +91,12 @@ function getUserInfoForSessionToken(
 }
 
 function startSession(uid: any, cb: (arg0: null, arg1?: string) => void) {
-  let token = makeSessionToken();
+  const token = makeSessionToken();
   logger.info("startSession");
   pg.query(
     "insert into auth_tokens (uid, token, created) values ($1, $2, default);",
     [uid, token],
-    function (err: any, repliesSetToken: any) {
+    function (err: any) {
       if (err) {
         cb(err);
         return;
@@ -135,7 +111,7 @@ function endSession(sessionToken: any, cb: (err: any, data?: any) => void) {
   pg.query(
     "delete from auth_tokens where token = ($1);",
     [sessionToken],
-    function (err: any, results: any) {
+    function (err: any) {
       if (err) {
         cb(err);
         return;
@@ -153,11 +129,11 @@ function setupPwReset(uid: any, cb: (arg0: null, arg1?: string) => void) {
       .replace(/[^A-Za-z0-9]/g, "")
       .substr(0, 100);
   }
-  let token = makePwResetToken();
+  const token = makePwResetToken();
   pg.query(
     "insert into pwreset_tokens (uid, token, created) values ($1, $2, default);",
     [uid, token],
-    function (errSetToken: any, repliesSetToken: any) {
+    function (errSetToken: any) {
       if (errSetToken) {
         cb(errSetToken);
         return;
@@ -197,7 +173,7 @@ function clearPwResetToken(pwresettoken: any, cb: (arg0: null) => void) {
   pg.query(
     "delete from pwreset_tokens where token = ($1);",
     [pwresettoken],
-    function (errDelToken: any, repliesSetToken: any) {
+    function (errDelToken: any) {
       if (errDelToken) {
         cb(errDelToken);
         return;
@@ -207,21 +183,8 @@ function clearPwResetToken(pwresettoken: any, cb: (arg0: null) => void) {
   );
 }
 
-export {
-  encrypt,
-  decrypt,
-  makeSessionToken,
-  getUserInfoForSessionToken,
-  startSession,
-  endSession,
-  setupPwReset,
-  getUidForPwResetToken,
-  clearPwResetToken,
-};
-
 export default {
   encrypt,
-  decrypt,
   makeSessionToken,
   getUserInfoForSessionToken,
   startSession,

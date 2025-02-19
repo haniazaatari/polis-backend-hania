@@ -41,7 +41,7 @@ export default class DynamoStorageService {
     if (config.dynamoDbEndpoint) {
       clientConfig.endpoint = config.dynamoDbEndpoint;
     }
-    
+
     this.client = new DynamoDBClient(clientConfig);
     this.tableName = tableName;
     this.cacheDisabled = disableCache || false;
@@ -57,7 +57,7 @@ export default class DynamoStorageService {
       });
       await this.client.send(describeCmd);
       logger.info(`Table "${this.tableName}" already exists.`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       if (error.name === "ResourceNotFoundException") {
         logger.info(`Table "${this.tableName}" not found. Creating now...`);
@@ -203,14 +203,12 @@ export default class DynamoStorageService {
         try {
           await this.client.send(deleteItemCommand);
           console.log(
-            `Deleted item with rid_section_model: ${rid_section_model}${
-              timestamp ? `, timestamp: ${timestamp}` : ""
+            `Deleted item with rid_section_model: ${rid_section_model}${timestamp ? `, timestamp: ${timestamp}` : ""
             }`
           );
         } catch (deleteError) {
           console.error(
-            `Error deleting item: rid_section_model: ${rid_section_model}${
-              timestamp ? `, timestamp: ${timestamp}` : ""
+            `Error deleting item: rid_section_model: ${rid_section_model}${timestamp ? `, timestamp: ${timestamp}` : ""
             }`,
             deleteError
           );
