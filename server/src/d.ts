@@ -155,16 +155,9 @@ export type ConversationType = {
   limit?: any;
 };
 
-export type TwitterParameters = {
-  [key: string]: any;
-  user_id?: any;
-  screen_name?: any;
-};
-
 export type ParticipantSocialNetworkInfo = {
   [key: string]: any;
   facebook?: any;
-  twitter?: any;
 };
 
 export type ParticipantOption = {

@@ -115,10 +115,6 @@ helpersInitialized.then(
       handle_GET_testConnection,
       handle_GET_testDatabase,
       handle_GET_tryCookie,
-      handle_GET_twitter_image,
-      handle_GET_twitter_oauth_callback,
-      handle_GET_twitter_users,
-      handle_GET_twitterBtn,
       handle_GET_users,
       handle_GET_verification,
       handle_GET_votes,
@@ -728,8 +724,6 @@ helpersInitialized.then(
       ),
       want("txt", getOptionalStringLimitLength(997), assignToP),
       want("vote", getIntInRange(-1, 1), assignToP),
-      want("twitter_tweet_id", getStringLimitLength(999), assignToP),
-      want("quote_twitter_screen_name", getStringLimitLength(999), assignToP),
       want("quote_txt", getStringLimitLength(999), assignToP),
       want("quote_src_url", getUrlLimitLength(999), assignToP),
       want("anon", getBool, assignToP),
@@ -1292,27 +1286,6 @@ helpersInitialized.then(
     );
 
     app.get(
-      "/api/v3/twitterBtn",
-      moveToBody,
-      authOptional(assignToP),
-      want("dest", getStringLimitLength(9999), assignToP),
-      want("owner", getBool, assignToP, true),
-      handle_GET_twitterBtn
-    );
-
-    app.get(
-      "/api/v3/twitter_oauth_callback",
-      moveToBody,
-      enableAgid,
-      auth(assignToP),
-      need("dest", getStringLimitLength(9999), assignToP),
-      need("oauth_token", getStringLimitLength(9999), assignToP), // TODO verify
-      need("oauth_verifier", getStringLimitLength(9999), assignToP), // TODO verify
-      want("owner", getBool, assignToP, true),
-      handle_GET_twitter_oauth_callback
-    );
-
-    app.get(
       "/api/v3/locations",
       moveToBody,
       authOptional(assignToP),
@@ -1365,14 +1338,6 @@ helpersInitialized.then(
       want("math_tick", getInt, assignToP, -1),
       want("ptptoiLimit", getIntInRange(0, 99), assignToP),
       handle_GET_votes_famous
-    );
-
-    app.get(
-      "/api/v3/twitter_users",
-      moveToBody,
-      authOptional(assignToP),
-      want("twitter_user_id", getInt, assignToP), // if not provided, returns info for the signed-in user
-      handle_GET_twitter_users
     );
 
     app.post(
@@ -1455,17 +1420,6 @@ helpersInitialized.then(
         assignToPCustom("zid")
       ),
       handle_GET_iim_conversation
-    );
-
-    // proxy for fetching twitter profile images
-    // Needed because Twitter doesn't provide profile pics in response to a request - you have to fetch the user info, then parse that to get the URL, requiring two round trips.
-    // There is a bulk user data API, but it's too slow to block on in our /famous route.
-    // So references to this route are injected into the twitter part of the /famous response.
-    app.get(
-      "/twitter_image",
-      moveToBody,
-      need("id", getStringLimitLength(999), assignToP),
-      handle_GET_twitter_image
     );
 
     // TODO this should probably be exempt from the CORS restrictions
@@ -1634,17 +1588,6 @@ helpersInitialized.then(
         hostname,
         staticFilesParticipationPort,
         "/football.html",
-        {
-          "Content-Type": "text/html",
-        }
-      )
-    );
-    app.get(
-      /^\/twitterAuthReturn(\/.*)?$/,
-      makeFileFetcher(
-        hostname,
-        staticFilesParticipationPort,
-        "/twitterAuthReturn.html",
         {
           "Content-Type": "text/html",
         }

@@ -81,7 +81,6 @@ async function getUser(
   const o: any[] = await Promise.all([
     getUserInfoForUid2(uid),
     getFacebookInfo([uid]),
-    getTwitterInfo([uid]),
     xidInfoPromise,
   ]);
   const info = o[0];
@@ -89,7 +88,6 @@ async function getUser(
   const twInfo = o[2];
   const xInfo = o[3];
   const hasFacebook = fbInfo && fbInfo.length && fbInfo[0];
-  const hasTwitter = twInfo && twInfo.length && twInfo[0];
   const hasXid = xInfo && xInfo.length && xInfo[0];
   if (hasFacebook) {
     const width = 40;
@@ -103,9 +101,6 @@ async function getUser(
       height;
     delete fbInfo[0].response;
   }
-  if (hasTwitter) {
-    delete twInfo[0].response;
-  }
   if (hasXid) {
     delete xInfo[0].owner;
     delete xInfo[0].created;
@@ -117,21 +112,12 @@ async function getUser(
     hname: info.hname,
     hasFacebook: !!hasFacebook,
     facebook: fbInfo && fbInfo[0],
-    twitter: twInfo && twInfo[0],
-    hasTwitter: !!hasTwitter,
     hasXid: !!hasXid,
     xInfo: xInfo && xInfo[0],
     finishedTutorial: !!info.tut,
     site_ids: [info.site_id],
     created: Number(info.created),
   };
-}
-
-function getTwitterInfo(uids: any[]) {
-  return pg.queryP_readOnly(
-    "select * from twitter_users where uid in ($1);",
-    uids
-  );
 }
 
 function getFacebookInfo(uids: any[]) {
@@ -298,12 +284,12 @@ function getXidRecordByXidOwnerId(
           const shouldCreateXidEntryPromise = !zid_optional
             ? Promise.resolve(true)
             : Conversation.getConversationInfo(zid_optional).then(
-                (conv: { use_xid_whitelist: any }) => {
-                  return conv.use_xid_whitelist
-                    ? Conversation.isXidWhitelisted(owner, xid)
-                    : Promise.resolve(true);
-                }
-              );
+              (conv: { use_xid_whitelist: any }) => {
+                return conv.use_xid_whitelist
+                  ? Conversation.isXidWhitelisted(owner, xid)
+                  : Promise.resolve(true);
+              }
+            );
 
           return shouldCreateXidEntryPromise.then((should: any) => {
             if (!should) {

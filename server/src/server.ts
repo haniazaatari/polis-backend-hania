@@ -59,7 +59,6 @@ import {
   UserType,
   ConversationType,
   CommentType,
-  TwitterParameters,
   ParticipantSocialNetworkInfo,
   DemographicEntry,
   Demo,
@@ -917,7 +916,6 @@ function initializePolisHelpers() {
     "localhost:5001",
     "localhost:5010",
     "facebook.com",
-    "api.twitter.com",
     "", // for API
   ];
 
@@ -1774,7 +1772,6 @@ function initializePolisHelpers() {
   }
 
   const LOCATION_SOURCES = {
-    Twitter: 400,
     Facebook: 300,
     HTML5: 200,
     IP: 100,
@@ -1786,7 +1783,6 @@ function initializePolisHelpers() {
       pgQueryP_readOnly("select * from facebook_users where uid = ($1);", [
         uid,
       ]),
-      pgQueryP_readOnly("select * from twitter_users where uid = ($1);", [uid]),
       //     No overload matches this call.
       // Overload 1 of 2, '(onFulfill?: ((value: [unknown, unknown]) => Resolvable<{ location: any; source: number; } | null>) | undefined, onReject?: ((error: any) => Resolvable<{ location: any; source: number; } | null>) | undefined): Bluebird<...>', gave the following error.
       //   Argument of type '(o: any[][]) => { location: any; source: number; } | null' is not assignable to parameter of type '(value: [unknown, unknown]) => Resolvable<{ location: any; source: number; } | null>'.
@@ -1800,16 +1796,10 @@ function initializePolisHelpers() {
       // @ts-ignore
     ]).then(function (o: any[][]) {
       const fb = o[0] && o[0][0];
-      const tw = o[1] && o[1][0];
       if (fb && _.isString(fb.location)) {
         return {
           location: fb.location,
           source: LOCATION_SOURCES.Facebook,
-        };
-      } else if (tw && _.isString(tw.location)) {
-        return {
-          location: tw.location,
-          source: LOCATION_SOURCES.Twitter,
         };
       }
       return null;
@@ -4974,19 +4964,10 @@ Email verified! You can close this tab or hit the back button.
       .then(function (comments: any[]) {
         comments = comments.map(function (c: {
           social: {
-            twitter_user_id: string;
-            twitter_profile_image_url_https: string;
             fb_user_id: any;
             fb_picture: string;
           };
         }) {
-          const hasTwitter = c.social && c.social.twitter_user_id;
-          if (hasTwitter) {
-            c.social.twitter_profile_image_url_https =
-              getServerNameWithProtocol(req) +
-              "/twitter_image?id=" +
-              c.social.twitter_user_id;
-          }
           const hasFacebook = c.social && c.social.fb_user_id;
           if (hasFacebook) {
             const width = 40;
@@ -8302,239 +8283,6 @@ Thanks for using Polis!
       });
   }
 
-  function getTwitterRequestToken(returnUrl: string) {
-    const oauth = new OAuth.OAuth(
-      "https://api.twitter.com/oauth/request_token", // null
-      "https://api.twitter.com/oauth/access_token", // null
-      // Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-      // Type 'undefined' is not assignable to type 'string'.ts(2345)
-      // @ts-ignore
-      Config.twitterConsumerKey, //'your application consumer key',
-      Config.twitterConsumerSecret, //'your application secret',
-      "1.0A",
-      null,
-      "HMAC-SHA1"
-    );
-    const body = {
-      oauth_callback: returnUrl,
-    };
-    return new Promise(function (
-      resolve: (arg0: any) => void,
-      reject: (arg0: any) => void
-    ) {
-      oauth.post(
-        "https://api.twitter.com/oauth/request_token",
-        // Argument of type 'undefined' is not assignable to parameter of type 'string'.ts(2345)
-        // @ts-ignore
-        void 0, //'your user token for this app', //test user token
-        void 0, //'your user secret for this app', //test user secret
-        body,
-        "multipart/form-data",
-        function (err: any, data: any) {
-          if (err) {
-            logger.error("get twitter token failed", err);
-            reject(err);
-          } else {
-            resolve(data);
-          }
-        }
-      );
-    });
-  }
-
-  function handle_GET_twitterBtn(
-    req: { p: { dest: string; owner: string } },
-    res: { redirect: (arg0: string) => void }
-  ) {
-    let dest = req.p.dest || "/inbox";
-    dest = encodeURIComponent(getServerNameWithProtocol(req) + dest);
-    const returnUrl =
-      getServerNameWithProtocol(req) +
-      "/api/v3/twitter_oauth_callback?owner=" +
-      req.p.owner +
-      "&dest=" +
-      dest;
-
-    getTwitterRequestToken(returnUrl)
-      .then(function (data: string) {
-        data += "&callback_url=" + dest;
-        // data += "&callback_url=" + encodeURIComponent(getServerNameWithProtocol(req) + "/foo");
-        res.redirect("https://api.twitter.com/oauth/authenticate?" + data);
-      })
-      .catch(function (err: any) {
-        fail(res, 500, "polis_err_twitter_auth_01", err);
-      });
-  }
-  function getTwitterAccessToken(body: {
-    oauth_verifier: any;
-    oauth_token: any;
-  }) {
-    const oauth = new OAuth.OAuth(
-      "https://api.twitter.com/oauth/request_token", // null
-      "https://api.twitter.com/oauth/access_token", // null
-      // Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-      // Type 'undefined' is not assignable to type 'string'.ts(2345)
-      // @ts-ignore
-      Config.twitterConsumerKey, //'your application consumer key',
-      Config.twitterConsumerSecret, //'your application secret',
-      "1.0A",
-      null,
-      "HMAC-SHA1"
-    );
-    return new Promise(function (
-      resolve: (arg0: any) => void,
-      reject: (arg0: any) => void
-    ) {
-      oauth.post(
-        "https://api.twitter.com/oauth/access_token",
-        // Argument of type 'undefined' is not assignable to parameter of type 'string'.ts(2345)
-        // @ts-ignore
-        void 0, //'your user token for this app', //test user token
-        void 0, //'your user secret for this app', //test user secret
-        body,
-        "multipart/form-data",
-        function (err: any, data: any) {
-          if (err) {
-            logger.error("get twitter token failed", err);
-            reject(err);
-          } else {
-            resolve(data);
-          }
-        }
-      );
-    });
-  }
-
-  // TODO expire this stuff
-  const twitterUserInfoCache = new LruCache({
-    max: 10000,
-  });
-  function getTwitterUserInfo(
-    o: { twitter_user_id: any; twitter_screen_name?: any },
-    useCache: boolean
-  ) {
-    const twitter_user_id = o.twitter_user_id;
-    const twitter_screen_name = o.twitter_screen_name;
-    const params: TwitterParameters = {};
-    let identifier: string; // this is way sloppy, but should be ok for caching and logging
-    if (twitter_user_id) {
-      params.user_id = twitter_user_id;
-      identifier = twitter_user_id;
-    } else if (twitter_screen_name) {
-      params.screen_name = twitter_screen_name;
-      identifier = twitter_screen_name;
-    }
-
-    const oauth = new OAuth.OAuth(
-      "https://api.twitter.com/oauth/request_token", // null
-      "https://api.twitter.com/oauth/access_token", // null
-      // Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-      // Type 'undefined' is not assignable to type 'string'.ts(2345)
-      // @ts-ignore
-      Config.twitterConsumerKey, //'your application consumer key',
-      Config.twitterConsumerSecret, //'your application secret',
-      "1.0A",
-      null,
-      "HMAC-SHA1"
-    );
-
-    // 'new' expression, whose target lacks a construct signature, implicitly has an 'any' type.ts(7009)
-    // @ts-ignore
-    return new MPromise(
-      "getTwitterUserInfo",
-      function (
-        resolve: (arg0: any) => void,
-        reject: (arg0?: undefined) => void
-      ) {
-        const cachedCopy = twitterUserInfoCache.get(identifier);
-        if (useCache && cachedCopy) {
-          return resolve(cachedCopy);
-        }
-        if (
-          suspendedOrPotentiallyProblematicTwitterIds.indexOf(identifier) >= 0
-        ) {
-          return reject();
-        }
-        oauth.post(
-          "https://api.twitter.com/1.1/users/lookup.json",
-          // Argument of type 'undefined' is not assignable to parameter of type 'string'.ts(2345)
-          // @ts-ignore
-          void 0, //'your user token for this app', //test user token
-          void 0, //'your user secret for this app', //test user secret
-          params,
-          "multipart/form-data",
-          function (err: any, data: any) {
-            if (err) {
-              logger.error(
-                "get twitter token failed for identifier: " + identifier,
-                err
-              );
-              suspendedOrPotentiallyProblematicTwitterIds.push(identifier);
-              reject(err);
-            } else {
-              twitterUserInfoCache.set(identifier, data);
-              resolve(data);
-            }
-          }
-        );
-      }
-    );
-  }
-
-  // Certain twitter ids may be suspended.
-  // Twitter will error if we request info on them.
-  //  so keep a list of these for as long as the server is running,
-  //  so we don't repeat requests for them.
-  // This is probably not optimal, but is pretty easy.
-  const suspendedOrPotentiallyProblematicTwitterIds: any[] = [];
-  function getTwitterUserInfoBulk(list_of_twitter_user_id: any[]) {
-    list_of_twitter_user_id = list_of_twitter_user_id || [];
-    const oauth = new OAuth.OAuth(
-      "https://api.twitter.com/oauth/request_token", // null
-      "https://api.twitter.com/oauth/access_token", // null
-      // Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-      // Type 'undefined' is not assignable to type 'string'.ts(2345)
-      // @ts-ignore
-      Config.twitterConsumerKey, //'your application consumer key',
-      Config.twitterConsumerSecret, //'your application secret',
-      "1.0A",
-      null,
-      "HMAC-SHA1"
-    );
-    return new Promise(function (
-      resolve: (arg0: any) => void,
-      reject: (arg0: any) => void
-    ) {
-      oauth.post(
-        "https://api.twitter.com/1.1/users/lookup.json",
-        // Argument of type 'undefined' is not assignable to parameter of type 'string'.ts(2345)
-        // @ts-ignore
-        void 0, //'your user token for this app', //test user token
-        void 0, //'your user secret for this app', //test user secret
-        {
-          user_id: list_of_twitter_user_id.join(","),
-        },
-        "multipart/form-data",
-        function (err: any, data: any) {
-          if (err) {
-            logger.error("get twitter token failed", err);
-            // we should probably check that the error is code 17:  { statusCode: 404, data: '{"errors":[{"code":17,"message":"No user matches for specified terms."}]}' }
-            list_of_twitter_user_id.forEach(function (id: string) {
-              logger.info(
-                "adding twitter_user_id to suspendedOrPotentiallyProblematicTwitterIds: " +
-                id
-              );
-              suspendedOrPotentiallyProblematicTwitterIds.push(id);
-            });
-            reject(err);
-          } else {
-            data = JSON.parse(data);
-            resolve(data);
-          }
-        }
-      );
-    });
-  }
   function switchToUser(req: any, res: any, uid?: any): Promise<void> {
     return new Promise((resolve, reject) => {
       startSession(uid, (errSess: any, token: any) => {
@@ -8575,78 +8323,6 @@ Thanks for using Polis!
       );
     });
   }
-  function updateSomeTwitterUsers() {
-    return (
-      pgQueryP_readOnly(
-        "select uid, twitter_user_id from twitter_users where modified < (now_as_millis() - 30*60*1000) order by modified desc limit 100;"
-      )
-        //     Argument of type '(results: string | any[]) => never[] | undefined' is not assignable to parameter of type '(value: unknown) => never[] | PromiseLike<never[] | undefined> | undefined'.
-        // Types of parameters 'results' and 'value' are incompatible.
-        //   Type 'unknown' is not assignable to type 'string | any[]'.
-        //     Type 'unknown' is not assignable to type 'any[]'.ts(2345)
-        // @ts-ignore
-        .then(function (results: string | any[]) {
-          let twitter_user_ids = _.pluck(results, "twitter_user_id");
-          if (results.length === 0) {
-            return [];
-          }
-          twitter_user_ids = _.difference(
-            twitter_user_ids,
-            suspendedOrPotentiallyProblematicTwitterIds
-          );
-          if (twitter_user_ids.length === 0) {
-            return [];
-          }
-
-          getTwitterUserInfoBulk(twitter_user_ids)
-            .then(function (info: any[]) {
-              const updateQueries = info.map(function (u: {
-                id: any;
-                screen_name: any;
-                name: any;
-                followers_count: any;
-                friends_count: any;
-                verified: any;
-                profile_image_url_https: any;
-                location: any;
-              }) {
-                const q =
-                  "update twitter_users set " +
-                  "screen_name = ($2)," +
-                  "name = ($3)," +
-                  "followers_count = ($4)," +
-                  "friends_count = ($5)," +
-                  "verified = ($6)," +
-                  "profile_image_url_https = ($7)," +
-                  "location = ($8)," +
-                  "modified = now_as_millis() " +
-                  "where twitter_user_id = ($1);";
-
-                return pgQueryP(q, [
-                  u.id,
-                  u.screen_name,
-                  u.name,
-                  u.followers_count,
-                  u.friends_count,
-                  u.verified,
-                  u.profile_image_url_https,
-                  u.location,
-                ]);
-              });
-              return Promise.all(updateQueries);
-            })
-            .catch(function (err: any) {
-              logger.error(
-                "error updating twitter users: " + twitter_user_ids.join(" "),
-                err
-              );
-            });
-        })
-    );
-  }
-  // Ensure we don't call this more than 60 times in each 15 minute window (across all of our servers/use-cases)
-  setInterval(updateSomeTwitterUsers, 1 * 60 * 1000);
-  updateSomeTwitterUsers();
 
   const addParticipant = async (zid: string, uid?: string): Promise<any> => {
     await pgQueryP(
@@ -8659,202 +8335,6 @@ Thanks for using Polis!
       [zid, uid]
     );
   };
-
-  function handle_GET_twitter_oauth_callback(
-    req: { p: { uid?: any; dest: any; oauth_verifier: any; oauth_token: any } },
-    res: { redirect: (arg0: any) => void }
-  ) {
-    const uid = req.p.uid;
-
-    // TODO "Upon a successful authentication, your callback_url would receive a request containing the oauth_token and oauth_verifier parameters. Your application should verify that the token matches the request token received in step 1."
-
-    const dest = req.p.dest;
-    // this api sometimes succeeds, and sometimes fails, not sure why
-    function tryGettingTwitterAccessToken() {
-      return getTwitterAccessToken({
-        oauth_verifier: req.p.oauth_verifier,
-        oauth_token: req.p.oauth_token, // confused. needed, but docs say this: "The request token is also passed in the oauth_token portion of the header, but this will have been added by the signing process."
-      });
-    }
-    retryFunctionWithPromise(tryGettingTwitterAccessToken, 20)
-      .then(
-        function (o: string) {
-          const pairs = o.split("&");
-          const kv: TwitterParameters = {};
-          pairs.forEach(function (pair: string) {
-            const pairSplit = pair.split("=");
-            const k = pairSplit[0];
-            const v = pairSplit[1];
-            kv[k] = v;
-          });
-
-          // TODO - if no auth, generate a new user.
-
-          getTwitterUserInfo(
-            {
-              twitter_user_id: kv.user_id,
-            },
-            false
-          )
-            .then(
-              function (userStringPayload: string) {
-                const u: UserType = JSON.parse(userStringPayload)[0];
-                return pgQueryP(
-                  "insert into twitter_users (" +
-                  "uid," +
-                  "twitter_user_id," +
-                  "screen_name," +
-                  "name," +
-                  "followers_count," +
-                  "friends_count," +
-                  "verified," +
-                  "profile_image_url_https," +
-                  "location," +
-                  "response" +
-                  ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);",
-                  [
-                    uid,
-                    u.id,
-                    u.screen_name,
-                    u.name,
-                    u.followers_count,
-                    u.friends_count,
-                    u.verified,
-                    u.profile_image_url_https,
-                    u.location,
-                    JSON.stringify(u),
-                  ]
-                ).then(
-                  function () {
-                    // SUCCESS
-                    // There was no existing record
-                    // set the user's hname, if not already set
-                    pgQueryP(
-                      "update users set hname = ($2) where uid = ($1) and hname is NULL;",
-                      [uid, u.name]
-                    )
-                      .then(
-                        function () {
-                          // OK, ready
-                          u.uid = uid;
-                          res.redirect(dest);
-                        },
-                        function (err: any) {
-                          fail(res, 500, "polis_err_twitter_auth_update", err);
-                        }
-                      )
-                      .catch(function (err: any) {
-                        fail(
-                          res,
-                          500,
-                          "polis_err_twitter_auth_update_misc",
-                          err
-                        );
-                      });
-                  },
-                  function (err: any) {
-                    if (isDuplicateKey(err)) {
-                      // we know the uid OR twitter_user_id is filled
-                      // check if the uid is there with the same twitter_user_id - if so, redirect and good!
-                      // determine which kind of duplicate
-                      Promise.all([
-                        pgQueryP(
-                          "select * from twitter_users where uid = ($1);",
-                          [uid]
-                        ),
-                        pgQueryP(
-                          "select * from twitter_users where twitter_user_id = ($1);",
-                          [u.id]
-                        ),
-                      ])
-                        //                       No overload matches this call.
-                        // Overload 1 of 2, '(onFulfill?: ((value: [unknown, unknown]) => Resolvable<void>) | undefined, onReject?: ((error: any) => Resolvable<void>) | undefined): Bluebird<void>', gave the following error.
-                        //   Argument of type '(foo: any[][]) => void' is not assignable to parameter of type '(value: [unknown, unknown]) => Resolvable<void>'.
-                        //     Types of parameters 'foo' and 'value' are incompatible.
-                        //       Type '[unknown, unknown]' is not assignable to type 'any[][]'.
-                        // Overload 2 of 2, '(onfulfilled?: ((value: [unknown, unknown]) => Resolvable<void>) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Bluebird<void>', gave the following error.
-                        //   Argument of type '(foo: any[][]) => void' is not assignable to parameter of type '(value: [unknown, unknown]) => Resolvable<void>'.
-                        //     Types of parameters 'foo' and 'value' are incompatible.
-                        //                       Type '[unknown, unknown]' is not assignable to type 'any[][]'.ts(2769)
-                        // @ts-ignore
-                        .then(function (foo: any[][]) {
-                          const recordForUid = foo[0][0];
-                          const recordForTwitterId = foo[1][0];
-                          if (recordForUid && recordForTwitterId) {
-                            if (recordForUid.uid === recordForTwitterId.uid) {
-                              // match
-                              res.redirect(dest);
-                            } else {
-                              // TODO_SECURITY_REVIEW
-                              // both exist, but not same uid
-                              switchToUser(req, res, recordForTwitterId.uid)
-                                .then(function () {
-                                  res.redirect(dest);
-                                })
-                                .catch(function (err: any) {
-                                  fail(
-                                    res,
-                                    500,
-                                    "polis_err_twitter_auth_456",
-                                    err
-                                  );
-                                });
-                            }
-                          } else if (recordForUid) {
-                            // currently signed in user has a twitter account attached, but it's a different twitter account, and they are now signing in with a different twitter account.
-                            // the newly supplied twitter account is not attached to anything.
-                            fail(
-                              res,
-                              500,
-                              "polis_err_twitter_already_attached",
-                              err
-                            );
-                          } else if (recordForTwitterId) {
-                            // currently signed in user has no twitter account attached, but they just signed in with a twitter account which is attached to another user.
-                            // For now, let's just have it sign in as that user.
-                            // TODO_SECURITY_REVIEW
-                            switchToUser(req, res, recordForTwitterId.uid)
-                              .then(function () {
-                                res.redirect(dest);
-                              })
-                              .catch(function (err: any) {
-                                fail(
-                                  res,
-                                  500,
-                                  "polis_err_twitter_auth_234",
-                                  err
-                                );
-                              });
-                          } else {
-                            fail(res, 500, "polis_err_twitter_auth_345");
-                          }
-                        });
-
-                      // else check if the uid is there and has some other screen_name - if so, ????????
-
-                      // else check if the screen_name is there, but for a different uid - if so, ??????
-                    } else {
-                      fail(res, 500, "polis_err_twitter_auth_05", err);
-                    }
-                  }
-                );
-              },
-              function (err: any) {
-                fail(res, 500, "polis_err_twitter_auth_041", err);
-              }
-            )
-            .catch(function (err: any) {
-              fail(res, 500, "polis_err_twitter_auth_04", err);
-            });
-        },
-        function (err: any) {
-          fail(res, 500, "polis_err_twitter_auth_gettoken", err);
-        }
-      )
-      .catch(function (err: any) {
-        fail(res, 500, "polis_err_twitter_auth_misc", err);
-      });
-  }
 
   function getSocialParticipantsForMod_timed(
     zid?: any,
@@ -8891,13 +8371,6 @@ Thanks for using Polis!
       "xids_subset as (select * from xids where owner = ($3) and x_profile_image_url is not null), " +
       "all_rows as (select " +
       "final_set.mod, " +
-      "twitter_users.twitter_user_id as tw__twitter_user_id, " +
-      "twitter_users.screen_name as tw__screen_name, " +
-      "twitter_users.name as tw__name, " +
-      "twitter_users.followers_count as tw__followers_count, " +
-      "twitter_users.verified as tw__verified, " +
-      "twitter_users.profile_image_url_https as tw__profile_image_url_https, " +
-      "twitter_users.location as tw__location, " +
       "facebook_users.fb_user_id as fb__fb_user_id, " +
       "facebook_users.fb_name as fb__fb_name, " +
       "facebook_users.fb_link as fb__fb_link, " +
@@ -8908,11 +8381,10 @@ Thanks for using Polis!
       "xids_subset.x_name as x_name, " +
       "final_set.pid " +
       "from final_set " +
-      "left join twitter_users on final_set.uid = twitter_users.uid " +
       "left join facebook_users on final_set.uid = facebook_users.uid " +
       "left join xids_subset on final_set.uid = xids_subset.uid " +
       ") " +
-      "select * from all_rows where (tw__twitter_user_id is not null) or (fb__fb_user_id is not null) or (xid is not null) " +
+      "select * from all_rows where (fb__fb_user_id is not null) or (xid is not null) " +
       ";";
     return pgQueryP(q, params);
   }
@@ -8952,7 +8424,6 @@ Thanks for using Polis!
       "p as (select uid, pid, mod from participants where zid = ($1) and vote_count >= 1), " +
       "xids_subset as (select * from xids where owner in (select org_id from conversations where zid = ($1)) and x_profile_image_url is not null), " +
       "xid_ptpts as (select p.uid, 100 as priority from p inner join xids_subset on xids_subset.uid = p.uid where p.mod >= ($4)), " +
-      "twitter_ptpts as (select p.uid, 10 as priority from p inner join twitter_users  on twitter_users.uid  = p.uid where p.mod >= ($4)), " +
       "all_fb_users as (select p.uid,   9 as priority from p inner join facebook_users on facebook_users.uid = p.uid where p.mod >= ($4)), " +
       "self as (select CAST($2 as INTEGER) as uid, 1000 as priority), " +
       (authorsQuery ? "authors as " + authorsQuery + ", " : "") +
@@ -8960,8 +8431,6 @@ Thanks for using Polis!
       "from ( " +
       "select * from self " +
       (authorsQuery ? "union " + "select * from authors " : "") +
-      "union " +
-      "select * from twitter_ptpts " +
       "union " +
       "select * from all_fb_users " +
       "union " +
@@ -8981,12 +8450,6 @@ Thanks for using Polis!
       ") " + // in invisible_uids
       "select " +
       "final_set.priority, " +
-      "twitter_users.twitter_user_id as tw__twitter_user_id, " +
-      "twitter_users.screen_name as tw__screen_name, " +
-      "twitter_users.name as tw__name, " +
-      "twitter_users.followers_count as tw__followers_count, " +
-      "twitter_users.verified as tw__verified, " +
-      "twitter_users.location as tw__location, " +
       "facebook_users.fb_user_id as fb__fb_user_id, " +
       "facebook_users.fb_name as fb__fb_name, " +
       "facebook_users.fb_link as fb__fb_link, " +
@@ -8998,7 +8461,6 @@ Thanks for using Polis!
       "xids_subset.x_email as x_email, " +
       "p.pid " +
       "from final_set " +
-      "left join twitter_users on final_set.uid = twitter_users.uid " +
       "left join facebook_users on final_set.uid = facebook_users.uid " +
       "left join xids_subset on final_set.uid = xids_subset.uid " +
       "left join p on final_set.uid = p.uid " +
@@ -9238,41 +8700,6 @@ Thanks for using Polis!
       };
       return o;
     });
-  }
-  // Value of type 'typeof LRUCache' is not callable. Did you mean to include 'new'? ts(2348)
-  // @ts-ignore
-  const twitterShareCountCache = LruCache({
-    maxAge: 1000 * 60 * 30, // 30 minutes
-    max: 999,
-  });
-
-  function getTwitterShareCountForConversation(conversation_id: string) {
-    const cached = twitterShareCountCache.get(conversation_id);
-    if (cached) {
-      return Promise.resolve(cached);
-    }
-    const httpUrl =
-      "https://cdn.api.twitter.com/1/urls/count.json?url=http://pol.is/" +
-      conversation_id;
-    const httpsUrl =
-      "https://cdn.api.twitter.com/1/urls/count.json?url=https://pol.is/" +
-      conversation_id;
-    return Promise.all([request.get(httpUrl), request.get(httpsUrl)]).then(
-      function (a: any[]) {
-        const httpResult = a[0];
-        const httpsResult = a[1];
-        const httpCount = JSON.parse(httpResult).count;
-        const httpsCount = JSON.parse(httpsResult).count;
-        if (httpCount > 0 && httpsCount > 0 && httpCount === httpsCount) {
-          logger.warn(
-            "found matching http and https twitter share counts, if this is common, check twitter api to see if it has changed."
-          );
-        }
-        const count = httpCount + httpsCount;
-        twitterShareCountCache.set(conversation_id, count);
-        return count;
-      }
-    );
   }
 
   // Value of type 'typeof LRUCache' is not callable. Did you mean to include 'new'? ts(2348)
@@ -9530,13 +8957,9 @@ Thanks for using Polis!
     const x: ParticipantSocialNetworkInfo = {};
     _.each(p, function (val: null, key: string) {
       const fbMatch = /fb__(.*)/.exec(key);
-      const twMatch = /tw__(.*)/.exec(key);
       if (fbMatch && fbMatch.length === 2 && val !== null) {
         x.facebook = x.facebook || {};
         x.facebook[fbMatch[1]] = val;
-      } else if (twMatch && twMatch.length === 2 && val !== null) {
-        x.twitter = x.twitter || {};
-        x.twitter[twMatch[1]] = val;
       } else {
         x[key] = val;
       }
@@ -9726,8 +9149,6 @@ Thanks for using Polis!
           ") order by uid) " +
           "select authors.uid from authors inner join facebook_users on facebook_users.uid = authors.uid " +
           "union " +
-          "select authors.uid from authors inner join twitter_users on twitter_users.uid = authors.uid " +
-          "union " +
           "select authors.uid from authors inner join xids on xids.uid = authors.uid " +
           "order by uid;";
 
@@ -9762,12 +9183,6 @@ Thanks for using Polis!
 
             if (p.priority === 1000) {
               x.isSelf = true;
-            }
-            if (x.twitter) {
-              x.twitter.profile_image_url_https =
-                getServerNameWithProtocol(req) +
-                "/twitter_image?id=" +
-                x.twitter.twitter_user_id;
             }
             return x;
           }
@@ -9813,41 +9228,6 @@ Thanks for using Polis!
       });
     });
   } // end doFamousQuery
-
-  function handle_GET_twitter_users(
-    req: { p: { uid?: any; twitter_user_id: any } },
-    res: {
-      status: (
-        arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
-    }
-  ) {
-    const uid = req.p.uid;
-    let p;
-    if (uid) {
-      p = pgQueryP_readOnly("select * from twitter_users where uid = ($1);", [
-        uid,
-      ]);
-    } else if (req.p.twitter_user_id) {
-      p = pgQueryP_readOnly(
-        "select * from twitter_users where twitter_user_id = ($1);",
-        [req.p.twitter_user_id]
-      );
-    } else {
-      fail(res, 401, "polis_err_missing_uid_or_twitter_user_id");
-      return;
-    }
-    p.then(function (data: any) {
-      data = data[0];
-      data.profile_image_url_https =
-        getServerNameWithProtocol(req) +
-        "/twitter_image?id=" +
-        data.twitter_user_id;
-      res.status(200).json(data);
-    }).catch(function (err: any) {
-      fail(res, 500, "polis_err_twitter_user_info_get", err);
-    });
-  }
 
   function doSendEinvite(req: any, email: any) {
     return generateTokenP(30, false).then(function (einvite: any) {
@@ -10879,18 +10259,11 @@ Thanks for using Polis!
     }
 
     setTimeout(function () {
-      // Kick off requests to twitter and FB to get the share counts.
+      // Kick off requests to FB to get the share counts.
       // This will be nice because we cache them so it will be fast when
       // client requests these later.
       // TODO actually store these values in a cache that is shared between
       // the servers, probably just in the db.
-      if (Config.twitterConsumerKey) {
-        getTwitterShareCountForConversation(conversation_id).catch(function (
-          err: string
-        ) {
-          logger.error("polis_err_fetching_twitter_share_count", err);
-        });
-      }
       if (Config.fbAppId) {
         getFacebookShareCountForConversation(conversation_id).catch(function (
           err: string
@@ -10984,62 +10357,6 @@ Thanks for using Polis!
       });
   }
 
-  function handle_GET_twitter_image(
-    req: { p: { id: any } },
-    res: {
-      setHeader: (arg0: string, arg1: string) => void;
-      writeHead: (arg0: number) => void;
-      end: (arg0: string) => void;
-      status: (
-        arg0: number
-      ) => { (): any; new(): any; end: { (): void; new(): any } };
-    }
-  ) {
-    getTwitterUserInfo(
-      {
-        twitter_user_id: req.p.id,
-      },
-      true
-    )
-      .then(function (data: string) {
-        const parsedData = JSON.parse(data);
-        if (!parsedData || !parsedData.length) {
-          fail(res, 500, "polis_err_finding_twitter_user_info");
-          return;
-        }
-        const url = parsedData[0].profile_image_url; // not https to save a round-trip
-        let finished = false;
-        http
-          .get(url, function (twitterResponse: { pipe: (arg0: any) => void }) {
-            if (!finished) {
-              clearTimeout(timeoutHandle);
-              finished = true;
-              res.setHeader(
-                "Cache-Control",
-                "no-transform,public,max-age=18000,s-maxage=18000"
-              );
-              twitterResponse.pipe(res);
-            }
-          })
-          .on("error", function (err: any) {
-            finished = true;
-            fail(res, 500, "polis_err_finding_file " + url, err);
-          });
-
-        const timeoutHandle = setTimeout(function () {
-          if (!finished) {
-            finished = true;
-            res.writeHead(504);
-            res.end("request timed out");
-            logger.debug("twitter_image timeout");
-          }
-        }, 9999);
-      })
-      .catch(function (err: any) {
-        logger.error("polis_err_missing_twitter_image", err);
-        res.status(500).end();
-      });
-  }
   const handle_GET_conditionalIndexFetcher = (function () {
     return function (req: any, res: { redirect: (arg0: string) => void }) {
       if (hasAuthToken(req)) {
@@ -11223,10 +10540,6 @@ Thanks for using Polis!
     handle_GET_testConnection,
     handle_GET_testDatabase,
     handle_GET_tryCookie,
-    handle_GET_twitter_image,
-    handle_GET_twitter_oauth_callback,
-    handle_GET_twitter_users,
-    handle_GET_twitterBtn,
     handle_GET_users,
     handle_GET_verification,
     handle_GET_votes,
