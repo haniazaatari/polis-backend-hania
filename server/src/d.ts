@@ -155,11 +155,6 @@ export type ConversationType = {
   limit?: any;
 };
 
-export type ParticipantSocialNetworkInfo = {
-  [key: string]: any;
-  facebook?: any;
-};
-
 export type ParticipantOption = {
   bidToPid?: any;
   asPOJO?: any;
@@ -174,7 +169,6 @@ export type DemographicEntry = {
   gender_null: number;
   birth_year: number;
   birth_year_count: number;
-  ms_birth_year_estimate_fb: number;
   ms_birth_year_count: number;
   birth_year_guess: number;
   birth_year_guess_count: number;
@@ -182,9 +176,6 @@ export type DemographicEntry = {
 
 export type Demo = {
   pid?: any;
-  fb_gender?: any;
-  ms_gender_estimate_fb?: any;
-  ms_birth_year_estimate_fb: number;
 };
 
 export type Vote = {

@@ -40,7 +40,6 @@ helpersInitialized.then(
       COOKIES,
       denyIfNotFromWhitelistedDomain,
       devMode,
-      enableAgid,
       fetchThirdPartyCookieTestPt1,
       fetchThirdPartyCookieTestPt2,
       fetchIndexForAdminPage,
@@ -88,13 +87,11 @@ helpersInitialized.then(
       handle_GET_domainWhitelist,
       handle_GET_dummyButton,
       handle_GET_einvites,
-      handle_GET_facebook_delete,
       handle_GET_groupDemographics,
       handle_GET_iim_conversation,
       handle_GET_iip_conversation,
       handle_GET_implicit_conversation_generation,
       handle_GET_launchPrep,
-      handle_GET_locations,
       handle_GET_math_pca,
       handle_GET_math_pca2,
       handle_GET_metadata,
@@ -110,7 +107,6 @@ helpersInitialized.then(
       handle_GET_perfStats,
       handle_GET_ptptois,
       handle_GET_reports,
-      handle_GET_snapshot,
 
       handle_GET_testConnection,
       handle_GET_testDatabase,
@@ -124,7 +120,6 @@ helpersInitialized.then(
       handle_GET_zinvites,
 
       handle_POST_auth_deregister,
-      handle_POST_auth_facebook,
       handle_POST_auth_login,
       handle_POST_auth_new,
       handle_POST_auth_password,
@@ -591,43 +586,6 @@ helpersInitialized.then(
       handle_GET_conversationStats
     );
 
-    app.get(
-      "/api/v3/snapshot",
-      moveToBody,
-      auth(assignToP),
-      need(
-        "conversation_id",
-        getConversationIdFetchZid,
-        assignToPCustom("zid")
-      ),
-      handle_GET_snapshot
-    );
-
-    // this endpoint isn't really ready for general use TODO_SECURITY
-    app.get(
-      "/api/v3/facebook/delete",
-      moveToBody,
-      auth(assignToP),
-      handle_GET_facebook_delete
-    );
-
-    app.post(
-      "/api/v3/auth/facebook",
-      enableAgid,
-      authOptional(assignToP),
-      want("fb_granted_scopes", getStringLimitLength(1, 9999), assignToP),
-      want("fb_friends_response", getStringLimitLength(1, 99999), assignToP),
-      want("fb_public_profile", getStringLimitLength(1, 99999), assignToP),
-      want("fb_email", getEmail, assignToP),
-      want("hname", getOptionalStringLimitLength(9999), assignToP),
-      want("provided_email", getEmail, assignToP),
-      want("conversation_id", getOptionalStringLimitLength(999), assignToP),
-      want("password", getPassword, assignToP),
-      need("response", getStringLimitLength(1, 9999), assignToP),
-      want("owner", getBool, assignToP, true),
-      handle_POST_auth_facebook
-    );
-
     app.post(
       "/api/v3/auth/new",
       want("anon", getBool, assignToP),
@@ -1002,8 +960,6 @@ helpersInitialized.then(
       want("style_btn", getOptionalStringLimitLength(500), assignToP),
       want("auth_needed_to_vote", getBool, assignToP),
       want("auth_needed_to_write", getBool, assignToP),
-      want("auth_opt_fb", getBool, assignToP),
-      want("auth_opt_tw", getBool, assignToP),
       want("auth_opt_allow_3rdparty", getBool, assignToP),
       want("verifyMeta", getBool, assignToP),
       want("send_created_email", getBool, assignToP), // ideally the email would be sent on the post, but we post before they click create to allow owner to prepopulate comments.
@@ -1285,19 +1241,6 @@ helpersInitialized.then(
       handle_POST_sendCreatedLinkToEmail
     );
 
-    app.get(
-      "/api/v3/locations",
-      moveToBody,
-      authOptional(assignToP),
-      need(
-        "conversation_id",
-        getConversationIdFetchZid,
-        assignToPCustom("zid")
-      ),
-      need("gid", getInt, assignToP),
-      handle_GET_locations
-    );
-
     app.put(
       "/api/v3/ptptois",
       moveToBody,
@@ -1375,8 +1318,6 @@ helpersInitialized.then(
       want("referrer", getStringLimitLength(1, 10000), assignToP),
       want("auth_needed_to_vote", getBool, assignToP),
       want("auth_needed_to_write", getBool, assignToP),
-      want("auth_opt_fb", getBool, assignToP),
-      want("auth_opt_tw", getBool, assignToP),
       want("auth_opt_allow_3rdparty", getBool, assignToP),
       want("show_vis", getBool, assignToP),
       want("show_share", getBool, assignToP),

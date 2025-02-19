@@ -6,15 +6,12 @@ import akismetLib from "akismet";
 import AWS from "aws-sdk";
 import badwords from "badwords/object";
 import { Promise as BluebirdPromise } from "bluebird";
-import http from "http";
 import httpProxy from "http-proxy";
 import async from "async";
 // @ts-ignore
-import FB from "fb";
 import { google } from "googleapis";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import OAuth from "oauth";
 import replaceStream from "replacestream";
 import responseTime from "response-time";
 import request from "request-promise"; // includes Request, but adds promise methods
@@ -59,7 +56,6 @@ import {
   UserType,
   ConversationType,
   CommentType,
-  ParticipantSocialNetworkInfo,
   DemographicEntry,
   Demo,
   Vote,
@@ -92,13 +88,11 @@ import {
 AWS.config.update({ region: Config.awsRegion });
 const devMode = Config.isDevMode;
 const escapeLiteral = pg.Client.prototype.escapeLiteral;
-const doSendVerification = CreateUser.doSendVerification;
 const generateAndRegisterZinvite = CreateUser.generateAndRegisterZinvite;
 const generateToken = Password.generateToken;
 const generateTokenP = Password.generateTokenP;
 
 // TODO: Maybe able to remove
-import { checkPassword } from "./auth/password";
 import cookies from "./utils/cookies";
 const COOKIES = cookies.COOKIES;
 const COOKIES_TO_CLEAR = cookies.COOKIES_TO_CLEAR;
@@ -893,17 +887,6 @@ function initializePolisHelpers() {
     return _auth(assigner, false);
   }
 
-  function enableAgid(req: { body: Body }, res: any, next: () => void) {
-    req.body.agid = 1;
-    next();
-  }
-  // 2xx
-  // 4xx
-  // 5xx
-  // logins
-  // failed logins
-  // forgot password
-
   const whitelistedCrossDomainRoutes = [
     /^\/api\/v[0-9]+\/launchPrep/,
     /^\/api\/v[0-9]+\/setFirstCookie/,
@@ -915,7 +898,6 @@ function initializePolisHelpers() {
     "localhost:5000",
     "localhost:5001",
     "localhost:5010",
-    "facebook.com",
     "", // for API
   ];
 
@@ -1757,96 +1739,6 @@ function initializePolisHelpers() {
     );
   }
 
-  function createParticpantLocationRecord(
-    zid: any,
-    uid?: any,
-    pid?: any,
-    lat?: any,
-    lng?: any,
-    source?: any
-  ) {
-    return pgQueryP(
-      "insert into participant_locations (zid, uid, pid, lat, lng, source) values ($1,$2,$3,$4,$5,$6);",
-      [zid, uid, pid, lat, lng, source]
-    );
-  }
-
-  const LOCATION_SOURCES = {
-    Facebook: 300,
-    HTML5: 200,
-    IP: 100,
-    manual_entry: 1,
-  };
-
-  function getUsersLocationName(uid?: any) {
-    return Promise.all([
-      pgQueryP_readOnly("select * from facebook_users where uid = ($1);", [
-        uid,
-      ]),
-      //     No overload matches this call.
-      // Overload 1 of 2, '(onFulfill?: ((value: [unknown, unknown]) => Resolvable<{ location: any; source: number; } | null>) | undefined, onReject?: ((error: any) => Resolvable<{ location: any; source: number; } | null>) | undefined): Bluebird<...>', gave the following error.
-      //   Argument of type '(o: any[][]) => { location: any; source: number; } | null' is not assignable to parameter of type '(value: [unknown, unknown]) => Resolvable<{ location: any; source: number; } | null>'.
-      //     Types of parameters 'o' and 'value' are incompatible.
-      //       Type '[unknown, unknown]' is not assignable to type 'any[][]'.
-      //         Type 'unknown' is not assignable to type 'any[]'.
-      // Overload 2 of 2, '(onfulfilled?: ((value: [unknown, unknown]) => Resolvable<{ location: any; source: number; } | null>) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Bluebird<...>', gave the following error.
-      //   Argument of type '(o: any[][]) => { location: any; source: number; } | null' is not assignable to parameter of type '(value: [unknown, unknown]) => Resolvable<{ location: any; source: number; } | null>'.
-      //     Types of parameters 'o' and 'value' are incompatible.
-      //       Type '[unknown, unknown]' is not assignable to type 'any[][]'.ts(2769)
-      // @ts-ignore
-    ]).then(function (o: any[][]) {
-      const fb = o[0] && o[0][0];
-      if (fb && _.isString(fb.location)) {
-        return {
-          location: fb.location,
-          source: LOCATION_SOURCES.Facebook,
-        };
-      }
-      return null;
-    });
-  }
-
-  function populateParticipantLocationRecordIfPossible(
-    zid: any,
-    uid?: any,
-    pid?: any
-  ) {
-    getUsersLocationName(uid)
-      // Argument of type '(locationData: { location: any; source: any; }) => void' is not assignable to parameter of type '(value: [unknown, unknown]) => void | PromiseLike<void>'.
-      // Types of parameters 'locationData' and 'value' are incompatible.
-      // Type '[unknown, unknown]' is not assignable to type '{ location: any; source: any; }'.ts(2345)
-      // @ts-ignore
-      .then(function (locationData: { location: any; source: any }) {
-        if (!locationData || !Config.googleApiKey) {
-          return;
-        }
-        geoCode(locationData.location)
-          .then(function (o: { lat: any; lng: any }) {
-            createParticpantLocationRecord(
-              zid,
-              uid,
-              pid,
-              o.lat,
-              o.lng,
-              locationData.source
-            ).catch(function (err: any) {
-              if (!isDuplicateKey(err)) {
-                logger.error(
-                  "polis_err_creating_particpant_location_record",
-                  err
-                );
-              }
-            });
-          })
-          .catch(function (err: any) {
-            logger.error("polis_err_geocoding", err);
-          });
-      })
-      .catch(function (err: any) {
-        logger.error("polis_err_fetching_user_location_name", err);
-      });
-  }
-
   function updateLastInteractionTimeForConversation(zid: any, uid?: any) {
     return pgQueryP(
       "update participants set last_interaction = now_as_millis(), nsli = 0 where zid = ($1) and uid = ($2);",
@@ -1897,15 +1789,13 @@ function initializePolisHelpers() {
     //     Type 'unknown' is not assignable to type 'any[]'.ts(2345)
     // @ts-ignore
     return addParticipant(zid, uid).then(function (rows: any[]) {
-      const pid = rows && rows[0] && rows[0].pid;
       const ptpt = rows[0];
-
       doAddExtendedParticipantInfo();
 
       if (pmaid_answers && pmaid_answers.length) {
         saveMetadataChoices();
       }
-      populateParticipantLocationRecordIfPossible(zid, uid, pid);
+
       return ptpt;
     });
   }
@@ -1957,11 +1847,7 @@ function initializePolisHelpers() {
     //     Type 'unknown' is not assignable to type 'any[]'.ts(2345)
     // @ts-ignore
     return addParticipant(zid, uid).then((rows: any[]) => {
-      const ptpt = rows[0];
-      const pid = ptpt.pid;
-      populateParticipantLocationRecordIfPossible(zid, uid, pid);
       addExtendedParticipantInfo(zid, uid, info);
-
       return rows;
     });
   }
@@ -2225,21 +2111,6 @@ Thank you for using Polis`;
       email,
       "Get Started with Polis",
       body
-    );
-  }
-
-  function isEmailVerified(email: any) {
-    return (
-      dbPgQuery
-        .queryP("select * from email_validations where email = ($1);", [email])
-        //     Argument of type '(rows: string | any[]) => boolean' is not assignable to parameter of type '(value: unknown) => boolean | PromiseLike<boolean>'.
-        // Types of parameters 'rows' and 'value' are incompatible.
-        //   Type 'unknown' is not assignable to type 'string | any[]'.
-        //     Type 'unknown' is not assignable to type 'any[]'.ts(2345)
-        // @ts-ignore
-        .then(function (rows: string | any[]) {
-          return rows.length > 0;
-        })
     );
   }
 
@@ -2549,13 +2420,6 @@ Email verified! You can close this tab or hit the back button.
         function (ptpt: { pid: any }) {
           if (ptpt) {
             finish(ptpt);
-
-            // populate their location if needed - no need to wait on this.
-            populateParticipantLocationRecordIfPossible(
-              zid,
-              req.p.uid,
-              ptpt.pid
-            );
             addExtendedParticipantInfo(zid, req.p.uid, info);
             return;
           }
@@ -3494,115 +3358,6 @@ Email verified! You can close this tab or hit the back button.
     });
   }
 
-  function deleteFacebookUserRecord(o: { uid?: any }) {
-    if (!isPolisDev(o.uid)) {
-      // limit to test accounts for now
-      return Promise.reject("polis_err_not_implemented");
-    }
-    return pgQueryP("delete from facebook_users where uid = ($1);", [o.uid]);
-  }
-
-  function createFacebookUserRecord(
-    o: { uid?: any } & {
-      fb_user_id: any;
-      fb_public_profile: any;
-      fb_login_status: any;
-      fb_access_token: any;
-      fb_granted_scopes: any;
-      fb_friends_response: any;
-      response: any;
-    }
-  ) {
-    const profileInfo = o.fb_public_profile;
-    // Create facebook user record
-    return pgQueryP(
-      "insert into facebook_users (uid, fb_user_id, fb_name, fb_link, fb_public_profile, fb_login_status, fb_access_token, fb_granted_scopes, fb_location_id, location, fb_friends_response, response) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);",
-      [
-        o.uid,
-        o.fb_user_id,
-        profileInfo.name,
-        profileInfo.link,
-        JSON.stringify(o.fb_public_profile),
-        o.fb_login_status,
-        // o.fb_auth_response,
-        o.fb_access_token,
-        o.fb_granted_scopes,
-        profileInfo.locationInfo && profileInfo.locationInfo.id,
-        profileInfo.locationInfo && profileInfo.locationInfo.name,
-        o.fb_friends_response || "",
-        o.response,
-      ]
-    );
-  }
-
-  function updateFacebookUserRecord(
-    o: { uid?: any } & {
-      // uid provided later
-      fb_user_id: any;
-      fb_public_profile: any;
-      fb_login_status: any;
-      // fb_auth_response: fb_auth_response,
-      fb_access_token: any;
-      fb_granted_scopes: any;
-      fb_friends_response: any;
-      response: any;
-    }
-  ) {
-    const profileInfo = o.fb_public_profile;
-    const fb_public_profile_string = JSON.stringify(o.fb_public_profile);
-    // Create facebook user record
-    return pgQueryP(
-      "update facebook_users set modified=now_as_millis(), fb_user_id=($2), fb_name=($3), fb_link=($4), fb_public_profile=($5), fb_login_status=($6), fb_access_token=($7), fb_granted_scopes=($8), fb_location_id=($9), location=($10), fb_friends_response=($11), response=($12) where uid = ($1);",
-      [
-        o.uid,
-        o.fb_user_id,
-        profileInfo.name,
-        profileInfo.link,
-        fb_public_profile_string,
-        o.fb_login_status,
-        // o.fb_auth_response,
-        o.fb_access_token,
-        o.fb_granted_scopes,
-        profileInfo.locationInfo && profileInfo.locationInfo.id,
-        profileInfo.locationInfo && profileInfo.locationInfo.name,
-        o.fb_friends_response || "",
-        o.response,
-      ]
-    );
-  }
-
-  function addFacebookFriends(uid?: any, fb_friends_response?: any[]) {
-    const fbFriendIds = (fb_friends_response || [])
-      .map(function (friend: { id: string }) {
-        return friend.id + "";
-      })
-      .filter(function (id: string) {
-        // NOTE: would just store facebook IDs as numbers, but they're too big for JS numbers.
-        const hasNonNumericalCharacters = /[^0-9]/.test(id);
-        if (hasNonNumericalCharacters) {
-          emailBadProblemTime(
-            "found facebook ID with non-numerical characters " + id
-          );
-        }
-        return !hasNonNumericalCharacters;
-      })
-      .map(function (id: string) {
-        return "'" + id + "'"; // wrap in quotes to force pg to treat them as strings
-      });
-    if (!fbFriendIds.length) {
-      return Promise.resolve();
-    } else {
-      // add friends to the table
-      // TODO periodically remove duplicates from the table, and pray for postgres upsert to arrive soon.
-      return pgQueryP(
-        "insert into facebook_friends (uid, friend) select ($1), uid from facebook_users where fb_user_id in (" +
-        fbFriendIds.join(",") +
-        ");",
-        [uid]
-      );
-    }
-  }
-
   function handle_GET_perfStats(req: any, res: { json: (arg0: any) => void }) {
     res.json(METRICS_IN_RAM);
   }
@@ -4007,571 +3762,7 @@ Email verified! You can close this tab or hit the back button.
         fail(res, 500, "polis_err_conversationStats_misc", err);
       });
   }
-  function handle_GET_snapshot() {
-    throw new Error(
-      "TODO Needs to clone participants_extended and any other new tables as well."
-    );
-  }
-  function handle_GET_facebook_delete(
-    req: { p: any },
-    res: { json: (arg0: {}) => void }
-  ) {
-    deleteFacebookUserRecord(req.p)
-      .then(function () {
-        res.json({});
-      })
-      .catch(function (err: any) {
-        fail(res, 500, err);
-      });
-  }
-  function getFriends(fb_access_token: any) {
-    // 'getMoreFriends' implicitly has return type 'any' because it does not have a return type annotation and is referenced directly or indirectly in one of its return expressions.ts(7023)
-    // @ts-ignore
-    function getMoreFriends(friendsSoFar: any[], urlForNextCall: any) {
-      // urlForNextCall includes access token
-      return request
-        .get(urlForNextCall)
-        .then(
-          (response: {
-            data: string | any[];
-            paging: { next: any };
-          }): Promise<any[]> => {
-            const { data, paging } = response;
-            if (data.length) {
-              friendsSoFar.push(...data);
-              if (paging.next) {
-                return getMoreFriends(friendsSoFar, paging.next);
-              }
-            }
-            return Promise.resolve(friendsSoFar);
-          }
-        )
-        .catch(() => {
-          emailBadProblemTime("getMoreFriends failed");
-          return Promise.resolve(friendsSoFar);
-        });
-    }
-    return new Promise(function (
-      resolve: (arg0: any) => void,
-      reject: (arg0: any) => void
-    ) {
-      FB.setAccessToken(fb_access_token);
-      FB.api(
-        "/me/friends",
-        function (response: {
-          error: any;
-          data: any[];
-          paging: { next: any };
-        }) {
-          if (response && !response.error) {
-            const friendsSoFar = response.data;
-            if (response.data.length && response.paging.next) {
-              getMoreFriends(friendsSoFar, response.paging.next).then(
-                resolve,
-                reject
-              );
-            } else {
-              resolve(friendsSoFar || []);
-            }
-          } else {
-            reject(response);
-          }
-        }
-      );
-    });
-  } // end getFriends
 
-  function getLocationInfo(fb_access_token: any, location: { id: string }) {
-    return new Promise(function (resolve: (arg0: {}) => void) {
-      if (location && location.id) {
-        FB.setAccessToken(fb_access_token);
-        FB.api("/" + location.id, function (locationResponse: any) {
-          resolve(locationResponse);
-        });
-      } else {
-        resolve({});
-      }
-    });
-  }
-  function handle_POST_auth_facebook(
-    req: {
-      p: {
-        response?: string;
-        locationInfo?: any;
-        fb_friends_response?: string;
-      };
-      headers?: { referer: string };
-      cookies?: any;
-    },
-    res: any
-  ) {
-    const response = JSON.parse(req?.p?.response || "");
-    const fb_access_token =
-      response && response.authResponse && response.authResponse.accessToken;
-    if (!fb_access_token) {
-      emailBadProblemTime(
-        "polis_err_missing_fb_access_token " +
-        req?.headers?.referer +
-        "\n\n" +
-        req.p.response
-      );
-      fail(res, 500, "polis_err_missing_fb_access_token");
-      return;
-    }
-    const fields = [
-      "email",
-      "first_name",
-      "friends",
-      "gender",
-      "id",
-      "is_verified",
-      "last_name",
-      "link",
-      "locale",
-      "location",
-      "name",
-      "timezone",
-      "updated_time",
-      "verified",
-    ];
-
-    FB.setAccessToken(fb_access_token);
-    FB.api(
-      "me",
-      {
-        fields: fields,
-      },
-      function (fbRes: { error: any; friends: string | any[]; location: any }) {
-        if (!fbRes || fbRes.error) {
-          fail(res, 500, "polis_err_fb_auth_check", fbRes && fbRes.error);
-          return;
-        }
-
-        const friendsPromise =
-          fbRes && fbRes.friends && fbRes.friends.length
-            ? getFriends(fb_access_token)
-            : Promise.resolve([]);
-
-        Promise.all([
-          getLocationInfo(fb_access_token, fbRes.location),
-          friendsPromise,
-        ]).then(function (a: any[]) {
-          const locationResponse = a[0];
-          const friends = a[1];
-
-          if (locationResponse) {
-            req.p.locationInfo = locationResponse;
-          }
-          if (friends) {
-            req.p.fb_friends_response = JSON.stringify(friends);
-          }
-          response.locationInfo = locationResponse;
-          do_handle_POST_auth_facebook(req, res, {
-            locationInfo: locationResponse,
-            friends: friends,
-            info: _.pick(fbRes, fields),
-          });
-        });
-      }
-    );
-  }
-  function do_handle_POST_auth_facebook(
-    req: {
-      p: {
-        response?: string;
-        password?: any;
-        uid?: any;
-        fb_granted_scopes?: any;
-        fb_friends_response?: any;
-      };
-      cookies?: { [x: string]: any };
-    },
-    res: {
-      json: (arg0: { uid?: any; hname: any; email: any }) => void;
-      status: (
-        arg0: number
-      ) => {
-        (): any;
-        new(): any;
-        json: {
-          (arg0: { uid?: any; hname: any; email: any }): void;
-          new(): any;
-        };
-        send: { (arg0: string): void; new(): any };
-      };
-    },
-    o: { locationInfo?: any; friends: any; info: any }
-  ) {
-    // If a pol.is user record exists, and someone logs in with a facebook account that has the same email address, we should bind that facebook account to the pol.is account, and let the user sign in.
-    const TRUST_FB_TO_VALIDATE_EMAIL = true;
-    const email = o.info.email;
-    const hname = o.info.name;
-    const fb_friends_response = o.friends;
-    const fb_user_id = o.info.id;
-    const response = JSON.parse(req?.p?.response || "");
-    const fb_public_profile = o.info;
-    const fb_login_status = response.status;
-    const fb_access_token = response.authResponse.accessToken;
-    const verified = o.info.verified;
-
-    const password = req.p.password;
-    const uid = req.p.uid;
-
-    const fbUserRecord = {
-      // uid provided later
-      fb_user_id: fb_user_id,
-      fb_public_profile: fb_public_profile,
-      fb_login_status: fb_login_status,
-      fb_access_token: fb_access_token,
-      fb_granted_scopes: req.p.fb_granted_scopes,
-      fb_friends_response: req.p.fb_friends_response || "",
-      response: req.p.response,
-    };
-    function doFbUserHasAccountLinked(user: {
-      fb_user_id: any;
-      uid: string;
-      hname: any;
-      email: any;
-    }) {
-      if (user.fb_user_id === fb_user_id) {
-        updateFacebookUserRecord(
-          Object.assign(
-            {},
-            {
-              uid: user.uid,
-            },
-            fbUserRecord
-          )
-        )
-          .then(
-            function () {
-              const friendsAddedPromise = fb_friends_response
-                ? addFacebookFriends(user.uid, fb_friends_response)
-                : Promise.resolve();
-              return friendsAddedPromise.then(
-                function () {
-                  startSessionAndAddCookies(req, res, user.uid)
-                    .then(function () {
-                      res.json({
-                        uid: user.uid,
-                        hname: user.hname,
-                        email: user.email,
-                        // token: token
-                      });
-                    })
-                    .catch(function (err: any) {
-                      fail(res, 500, "polis_err_reg_fb_start_session2", err);
-                    });
-                },
-                function (err: any) {
-                  fail(res, 500, "polis_err_linking_fb_friends2", err);
-                }
-              );
-            },
-            function (err: any) {
-              fail(res, 500, "polis_err_updating_fb_info", err);
-            }
-          )
-          .catch(function (err: any) {
-            fail(res, 500, "polis_err_fb_auth_misc", err);
-          });
-      } else {
-        // the user with that email has a different FB account attached
-        // so clobber the old facebook_users record and add the new one.
-        deleteFacebookUserRecord(user).then(
-          function () {
-            doFbNotLinkedButUserWithEmailExists(user);
-          },
-          function (err: any) {
-            emailBadProblemTime(
-              "facebook auth where user exists with different facebook account " +
-              user.uid
-            );
-            fail(
-              res,
-              500,
-              "polis_err_reg_fb_user_exists_with_different_account",
-              err
-            );
-          }
-        );
-      }
-    } // doFbUserHasAccountLinked
-
-    function doFbNotLinkedButUserWithEmailExists(user: { uid?: any }) {
-      // user for this email exists, but does not have FB account linked.
-      // user will be prompted for their password, and client will repeat the call with password
-      // fail(res, 409, "polis_err_reg_user_exits_with_email_but_has_no_facebook_linked")
-      if (!TRUST_FB_TO_VALIDATE_EMAIL && !password) {
-        fail(res, 403, "polis_err_user_with_this_email_exists " + email);
-      } else {
-        const pwPromise = TRUST_FB_TO_VALIDATE_EMAIL
-          ? Promise.resolve(true)
-          : checkPassword(user.uid, password || "");
-        pwPromise.then(
-          function (ok: any) {
-            if (ok) {
-              createFacebookUserRecord(
-                Object.assign(
-                  {},
-                  {
-                    uid: user.uid,
-                  },
-                  fbUserRecord
-                )
-              )
-                .then(
-                  function () {
-                    const friendsAddedPromise = fb_friends_response
-                      ? addFacebookFriends(user.uid, fb_friends_response)
-                      : Promise.resolve();
-                    return friendsAddedPromise
-                      .then(
-                        function () {
-                          return startSessionAndAddCookies(
-                            req,
-                            res,
-                            user.uid
-                          ).then(function () {
-                            return user;
-                          });
-                        },
-                        function (err: any) {
-                          fail(res, 500, "polis_err_linking_fb_friends", err);
-                        }
-                      )
-                      .then(
-                        //                       Argument of type '(user: { uid?: any; hname: any; email: any; }) => void' is not assignable to parameter of type '(value: void | { uid?: any; }) => void | PromiseLike<void>'.
-                        // Types of parameters 'user' and 'value' are incompatible.
-                        //   Type 'void | { uid?: any; }' is not assignable to type '{ uid?: any; hname: any; email: any; }'.
-                        //                       Type 'void' is not assignable to type '{ uid?: any; hname: any; email: any; }'.ts(2345)
-                        // @ts-ignore
-                        function (user: { uid?: any; hname: any; email: any }) {
-                          res.status(200).json({
-                            uid: user.uid,
-                            hname: user.hname,
-                            email: user.email,
-                            // token: token,
-                          });
-                        },
-                        function (err: any) {
-                          fail(res, 500, "polis_err_linking_fb_misc", err);
-                        }
-                      );
-                  },
-                  function (err: any) {
-                    fail(
-                      res,
-                      500,
-                      "polis_err_linking_fb_to_existing_polis_account",
-                      err
-                    );
-                  }
-                )
-                .catch(function (err: any) {
-                  fail(
-                    res,
-                    500,
-                    "polis_err_linking_fb_to_existing_polis_account_misc",
-                    err
-                  );
-                });
-            } else {
-              fail(res, 403, "polis_err_password_mismatch");
-            }
-          },
-          function (err: any) {
-            fail(res, 500, "polis_err_password_check", err);
-          }
-        );
-      }
-    } // end doFbNotLinkedButUserWithEmailExists
-
-    function doFbNoUserExistsYet() {
-      let promise;
-      if (uid) {
-        // user record already exists, so populate that in case it has missing info
-        promise = Promise.all([
-          pgQueryP("select * from users where uid = ($1);", [uid]),
-          pgQueryP(
-            "update users set hname = ($2) where uid = ($1) and hname is NULL;",
-            [uid, hname]
-          ),
-          pgQueryP(
-            "update users set email = ($2) where uid = ($1) and email is NULL;",
-            [uid, email]
-          ),
-          //         No overload matches this call.
-          // Overload 1 of 2, '(onFulfill?: ((value: [unknown, unknown, unknown]) => any) | undefined, onReject?: ((error: any) => any) | undefined): Bluebird<any>', gave the following error.
-          //   Argument of type '(o: any[][]) => any' is not assignable to parameter of type '(value: [unknown, unknown, unknown]) => any'.
-          //     Types of parameters 'o' and 'value' are incompatible.
-          //       Type '[unknown, unknown, unknown]' is not assignable to type 'any[][]'.
-          //         Type 'unknown' is not assignable to type 'any[]'.
-          // Overload 2 of 2, '(onfulfilled?: ((value: [unknown, unknown, unknown]) => any) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Bluebird<any>', gave the following error.
-          //   Argument of type '(o: any[][]) => any' is not assignable to parameter of type '(value: [unknown, unknown, unknown]) => any'.
-          //     Types of parameters 'o' and 'value' are incompatible.
-          //           Type '[unknown, unknown, unknown]' is not assignable to type 'any[][]'.ts(2769)
-          // @ts-ignore
-        ]).then(function (o: any[][]) {
-          const user = o[0][0];
-          return user;
-        });
-      } else {
-        const query =
-          "insert into users " +
-          "(email, hname) VALUES " +
-          "($1, $2) " +
-          "returning *;";
-        //       Argument of type '(rows: string | any[]) => any' is not assignable to parameter of type '(value: unknown) => any'.
-        // Types of parameters 'rows' and 'value' are incompatible.
-        //   Type 'unknown' is not assignable to type 'string | any[]'.
-        //         Type 'unknown' is not assignable to type 'any[]'.ts(2345)
-        // @ts-ignore
-        promise = pgQueryP(query, [email, hname]).then(function (
-          rows: string | any[]
-        ) {
-          const user = (rows && rows.length && rows[0]) || null;
-          return user;
-        });
-      }
-      // Create user record
-      promise
-        .then(function (user: any) {
-          return createFacebookUserRecord(
-            Object.assign({}, user, fbUserRecord)
-          ).then(function () {
-            return user;
-          });
-        })
-        .then(
-          function (user: { uid?: any }) {
-            if (fb_friends_response) {
-              return addFacebookFriends(user.uid, fb_friends_response).then(
-                function () {
-                  return user;
-                }
-              );
-            } else {
-              // no friends, or this user is first polis user among his/her friends.
-              return user;
-            }
-          },
-          function (err: any) {
-            fail(res, 500, "polis_err_reg_fb_user_creating_record2", err);
-          }
-        )
-        .then(
-          //         Argument of type '(user: { uid?: any; }) => Bluebird<void | { uid?: any; }>' is not assignable to parameter of type '(value: void | { uid?: any; }) => void | { uid?: any; } | PromiseLike<void | { uid?: any; }>'.
-          // Types of parameters 'user' and 'value' are incompatible.
-          //   Type 'void | { uid?: any; }' is not assignable to type '{ uid?: any; }'.
-          //         Type 'void' is not assignable to type '{ uid?: any; }'.ts(2345)
-          // @ts-ignore
-          function (user: { uid?: any }) {
-            const uid = user.uid;
-            return startSessionAndAddCookies(req, res, uid).then(
-              function () {
-                return user;
-              },
-              function (err: any) {
-                fail(res, 500, "polis_err_reg_fb_user_creating_record3", err);
-              }
-            );
-          },
-          function (err: any) {
-            fail(res, 500, "polis_err_reg_fb_user_creating_record", err);
-          }
-        )
-        .then(
-          //         Argument of type '(user: { uid?: any; hname: any; email: any; }) => void' is not assignable to parameter of type '(value: void | { uid?: any; }) => void | PromiseLike<void>'.
-          // Types of parameters 'user' and 'value' are incompatible.
-          //   Type 'void | { uid?: any; }' is not assignable to type '{ uid?: any; hname: any; email: any; }'.
-          //         Type 'void' is not assignable to type '{ uid?: any; hname: any; email: any; }'.ts(2345)
-          // @ts-ignore
-          function (user: { uid?: any; hname: any; email: any }) {
-            res.json({
-              uid: user.uid,
-              hname: user.hname,
-              email: user.email,
-              // token: token
-            });
-          },
-          function (err: any) {
-            fail(res, 500, "polis_err_reg_fb_user_misc22", err);
-          }
-        )
-        .catch(function (err: any) {
-          fail(res, 500, "polis_err_reg_fb_user_misc2", err);
-        });
-    } // end doFbNoUserExistsYet
-
-    let emailVerifiedPromise = Promise.resolve(true);
-    if (!verified) {
-      if (email) {
-        // Type 'Promise<unknown>' is missing the following properties from type 'Bluebird<boolean>': caught, error, lastly, bind, and 38 more.ts(2740)
-        // @ts-ignore
-        emailVerifiedPromise = isEmailVerified(email);
-      } else {
-        emailVerifiedPromise = Promise.resolve(false);
-      }
-    }
-
-    Promise.all([emailVerifiedPromise]).then(function (a: any[]) {
-      const isVerifiedByPolisOrFacebook = a[0];
-
-      if (!isVerifiedByPolisOrFacebook) {
-        if (email) {
-          doSendVerification(req, email);
-          res.status(403).send("polis_err_reg_fb_verification_email_sent");
-          return;
-        } else {
-          res
-            .status(403)
-            .send("polis_err_reg_fb_verification_noemail_unverified");
-          return;
-        }
-      }
-
-      pgQueryP(
-        "select users.*, facebook_users.fb_user_id from users left join facebook_users on users.uid = facebook_users.uid " +
-        "where users.email = ($1) " +
-        "   or facebook_users.fb_user_id = ($2) " +
-        ";",
-        [email, fb_user_id]
-      )
-        .then(
-          //         Argument of type '(rows: string | any[]) => void' is not assignable to parameter of type '(value: unknown) => void | PromiseLike<void>'.
-          // Types of parameters 'rows' and 'value' are incompatible.
-          //   Type 'unknown' is not assignable to type 'string | any[]'.
-          //         Type 'unknown' is not assignable to type 'any[]'.ts(2345)
-          // @ts-ignore
-          function (rows: string | any[]) {
-            let user = (rows && rows.length && rows[0]) || null;
-            if (rows && rows.length > 1) {
-              // the auth provided us with email and fb_user_id where the email is one polis user, and the fb_user_id is for another.
-              // go with the one matching the fb_user_id in this case, and leave the email matching account alone.
-              user = _.find(rows, function (row: { fb_user_id: any }) {
-                return row.fb_user_id === fb_user_id;
-              });
-            }
-            if (user) {
-              if (user.fb_user_id) {
-                doFbUserHasAccountLinked(user);
-              } else {
-                doFbNotLinkedButUserWithEmailExists(user);
-              }
-            } else {
-              doFbNoUserExistsYet();
-            }
-          },
-          function (err: any) {
-            fail(res, 500, "polis_err_reg_fb_user_looking_up_email", err);
-          }
-        )
-        .catch(function (err: any) {
-          fail(res, 500, "polis_err_reg_fb_user_misc", err);
-        });
-    });
-  } // end do_handle_POST_auth_facebook
   function handle_POST_auth_new(req: any, res: any) {
     CreateUser.createUser(req, res);
   } // end /api/v3/auth/new
@@ -4737,40 +3928,6 @@ Email verified! You can close this tab or hit the back button.
         fail(res, 500, "polis_err_get_participation_misc", err);
       });
   }
-  function getAgeRange(demo: Demo) {
-    const currentYear = new Date().getUTCFullYear();
-    const birthYear = demo.ms_birth_year_estimate_fb;
-    if (_.isNull(birthYear) || _.isUndefined(birthYear) || _.isNaN(birthYear)) {
-      return "?";
-    }
-    const age = currentYear - birthYear;
-    if (age < 12) {
-      return "0-11";
-    } else if (age < 18) {
-      return "12-17";
-    } else if (age < 25) {
-      return "18-24";
-    } else if (age < 35) {
-      return "25-34";
-    } else if (age < 45) {
-      return "35-44";
-    } else if (age < 55) {
-      return "45-54";
-    } else if (age < 65) {
-      return "55-64";
-    } else {
-      return "65+";
-    }
-  }
-
-  // 0 male, 1 female, 2 other, or NULL
-  function getGender(demo: Demo) {
-    let gender = demo.fb_gender;
-    if (_.isNull(gender) || _.isUndefined(gender)) {
-      gender = demo.ms_gender_estimate_fb;
-    }
-    return gender;
-  }
 
   function getDemographicsForVotersOnComments(zid: any, comments: any[]) {
     function isAgree(v: { vote: any }) {
@@ -4809,8 +3966,6 @@ Email verified! You can close this tab or hit the back button.
       demo = demo.map((d: Demo) => {
         return {
           pid: d.pid,
-          gender: getGender(d),
-          ageRange: getAgeRange(d),
         };
       });
       const demoByPid = _.indexBy(demo, "pid");
@@ -4962,21 +4117,6 @@ Email verified! You can close this tab or hit the back button.
         }
       })
       .then(function (comments: any[]) {
-        comments = comments.map(function (c: {
-          social: {
-            fb_user_id: any;
-            fb_picture: string;
-          };
-        }) {
-          const hasFacebook = c.social && c.social.fb_user_id;
-          if (hasFacebook) {
-            const width = 40;
-            const height = 40;
-            c.social.fb_picture = `https://graph.facebook.com/v2.2/${c.social.fb_user_id}/picture?width=${width}&height=${height}`;
-          }
-          return c;
-        });
-
         if (req.p.include_demographics) {
           isModerator(req.p.zid, req.p.uid)
             .then((owner: any) => {
@@ -7330,8 +6470,6 @@ Email verified! You can close this tab or hit the back button.
         conv.auth_opt_allow_3rdparty,
         true
       );
-      conv.auth_opt_fb_computed = false;
-      conv.auth_opt_tw_computed = false;
 
       conv.translations = translations;
 
@@ -7978,8 +7116,6 @@ Email verified! You can close this tab or hit the back button.
         auth_needed_to_vote: any;
         auth_needed_to_write: any;
         auth_opt_allow_3rdparty: any;
-        auth_opt_fb: any;
-        auth_opt_tw: any;
         conversation_id: any;
       };
     },
@@ -8035,8 +7171,6 @@ Email verified! You can close this tab or hit the back button.
                 auth_opt_allow_3rdparty:
                   req.p.auth_opt_allow_3rdparty ||
                   DEFAULTS.auth_opt_allow_3rdparty,
-                auth_opt_fb: DEFAULTS.auth_opt_fb,
-                auth_opt_tw: DEFAULTS.auth_opt_tw,
               })
               .returning("*")
               .toString();
@@ -8283,47 +7417,6 @@ Thanks for using Polis!
       });
   }
 
-  function switchToUser(req: any, res: any, uid?: any): Promise<void> {
-    return new Promise((resolve, reject) => {
-      startSession(uid, (errSess: any, token: any) => {
-        if (errSess) {
-          reject(errSess);
-          return;
-        }
-        addCookies(req, res, token, uid)
-          .then(() => resolve())
-          .catch(() => reject("polis_err_adding_cookies"));
-      });
-    });
-  }
-  // retry, resolving with first success, or rejecting with final error
-  function retryFunctionWithPromise(
-    f: { (): any; (): Promise<any> },
-    numTries: number
-  ) {
-    return new Promise(function (
-      resolve: (arg0: any) => void,
-      reject: (arg0: any) => void
-    ) {
-      logger.debug("retryFunctionWithPromise", { numTries });
-      f().then(
-        function (x: any) {
-          logger.debug("retryFunctionWithPromise RESOLVED");
-          resolve(x);
-        },
-        function (err: any) {
-          numTries -= 1;
-          if (numTries <= 0) {
-            logger.error("retryFunctionWithPromise REJECTED", err);
-            reject(err);
-          } else {
-            retryFunctionWithPromise(f, numTries).then(resolve, reject);
-          }
-        }
-      );
-    });
-  }
-
   const addParticipant = async (zid: string, uid?: string): Promise<any> => {
     await pgQueryP(
       "INSERT INTO participants_extended (zid, uid) VALUES ($1, $2);",
@@ -8371,20 +7464,14 @@ Thanks for using Polis!
       "xids_subset as (select * from xids where owner = ($3) and x_profile_image_url is not null), " +
       "all_rows as (select " +
       "final_set.mod, " +
-      "facebook_users.fb_user_id as fb__fb_user_id, " +
-      "facebook_users.fb_name as fb__fb_name, " +
-      "facebook_users.fb_link as fb__fb_link, " +
-      "facebook_users.fb_public_profile as fb__fb_public_profile, " +
-      "facebook_users.location as fb__location, " +
       "xids_subset.x_profile_image_url as x_profile_image_url, " +
       "xids_subset.xid as xid, " +
       "xids_subset.x_name as x_name, " +
       "final_set.pid " +
       "from final_set " +
-      "left join facebook_users on final_set.uid = facebook_users.uid " +
       "left join xids_subset on final_set.uid = xids_subset.uid " +
       ") " +
-      "select * from all_rows where (fb__fb_user_id is not null) or (xid is not null) " +
+      "select * from all_rows where (xid is not null) " +
       ";";
     return pgQueryP(q, params);
   }
@@ -8424,15 +7511,12 @@ Thanks for using Polis!
       "p as (select uid, pid, mod from participants where zid = ($1) and vote_count >= 1), " +
       "xids_subset as (select * from xids where owner in (select org_id from conversations where zid = ($1)) and x_profile_image_url is not null), " +
       "xid_ptpts as (select p.uid, 100 as priority from p inner join xids_subset on xids_subset.uid = p.uid where p.mod >= ($4)), " +
-      "all_fb_users as (select p.uid,   9 as priority from p inner join facebook_users on facebook_users.uid = p.uid where p.mod >= ($4)), " +
       "self as (select CAST($2 as INTEGER) as uid, 1000 as priority), " +
       (authorsQuery ? "authors as " + authorsQuery + ", " : "") +
       "pptpts as (select prioritized_ptpts.uid, max(prioritized_ptpts.priority) as priority " +
       "from ( " +
       "select * from self " +
       (authorsQuery ? "union " + "select * from authors " : "") +
-      "union " +
-      "select * from all_fb_users " +
       "union " +
       "select * from xid_ptpts " +
       ") as prioritized_ptpts " +
@@ -8450,18 +7534,12 @@ Thanks for using Polis!
       ") " + // in invisible_uids
       "select " +
       "final_set.priority, " +
-      "facebook_users.fb_user_id as fb__fb_user_id, " +
-      "facebook_users.fb_name as fb__fb_name, " +
-      "facebook_users.fb_link as fb__fb_link, " +
-      "facebook_users.fb_public_profile as fb__fb_public_profile, " +
-      "facebook_users.location as fb__location, " +
       "xids_subset.x_profile_image_url as x_profile_image_url, " +
       "xids_subset.xid as xid, " +
       "xids_subset.x_name as x_name, " +
       "xids_subset.x_email as x_email, " +
       "p.pid " +
       "from final_set " +
-      "left join facebook_users on final_set.uid = facebook_users.uid " +
       "left join xids_subset on final_set.uid = xids_subset.uid " +
       "left join p on final_set.uid = p.uid " +
       ";";
@@ -8648,80 +7726,7 @@ Thanks for using Polis!
     });
     return vectors2;
   }
-  function getLocationsForParticipants(zid: any) {
-    return pgQueryP_readOnly(
-      "select * from participant_locations where zid = ($1);",
-      [zid]
-    );
-  }
 
-  function geoCodeWithGoogleApi(locationString: string) {
-    const googleApiKey = Config.googleApiKey;
-    const address = encodeURI(locationString);
-
-    if (!googleApiKey) {
-      return Promise.reject("polis_err_geocoding_no_api_key");
-    }
-
-    return new Promise(function (
-      resolve: (arg0: any) => void,
-      reject: (arg0: string) => void
-    ) {
-      request
-        .get(
-          "https://maps.googleapis.com/maps/api/geocode/json?address=" +
-          address +
-          "&key=" +
-          googleApiKey
-        )
-        .then(function (response: any) {
-          response = JSON.parse(response);
-          if (response.status !== "OK") {
-            reject("polis_err_geocoding_failed");
-            return;
-          }
-          const bestResult = response.results[0]; // NOTE: seems like there could be multiple responses - using first for now
-          resolve(bestResult);
-        }, reject)
-        .catch(reject);
-    });
-  }
-
-  function geoCode(locationString: any) {
-    return geoCodeWithGoogleApi(locationString).then(function (result: {
-      geometry: { location: { lat: any; lng: any } };
-    }) {
-      const lat = result.geometry.location.lat;
-      const lng = result.geometry.location.lng;
-
-      const o = {
-        lat: lat,
-        lng: lng,
-      };
-      return o;
-    });
-  }
-
-  // Value of type 'typeof LRUCache' is not callable. Did you mean to include 'new'? ts(2348)
-  // @ts-ignore
-  const fbShareCountCache = LruCache({
-    maxAge: 1000 * 60 * 30, // 30 minutes
-    max: 999,
-  });
-
-  function getFacebookShareCountForConversation(conversation_id: string) {
-    const cached = fbShareCountCache.get(conversation_id);
-    if (cached) {
-      return Promise.resolve(cached);
-    }
-    const url =
-      "http://graph.facebook.com/?id=https://pol.is/" + conversation_id;
-    return request.get(url).then(function (result: string) {
-      const shares = JSON.parse(result).shares;
-      fbShareCountCache.set(conversation_id, shares);
-      return shares;
-    });
-  }
   function getParticipantDemographicsForConversation(zid: any) {
     return pgQueryP(
       "select * from demographic_data left join participants on participants.uid = demographic_data.uid where zid = ($1);",
@@ -8808,7 +7813,7 @@ Thanks for using Polis!
           // gender_null: number; birth_year: number; birth_year_count: number;
           // meta_comment_agrees: { }; meta_comment_disagrees: { }; meta_comment_passes: { }; }
           // ' is missing the following properties from type 'DemographicEntry':
-          // ms_birth_year_estimate_fb, ms_birth_year_count, birth_year_guess,
+          // ms_birth_year_count, birth_year_guess,
           // birth_year_guess_countts(2739)
           //
           // @ts-ignore
@@ -8822,111 +7827,72 @@ Thanks for using Polis!
 
               // compute convenient counts
               let gender = null;
-              if (_.isNumber(ptptMeta.fb_gender)) {
-                gender = ptptMeta.fb_gender;
-              } else if (_.isNumber(ptptMeta.gender_guess)) {
+              if (_.isNumber(ptptMeta.gender_guess)) {
                 gender = ptptMeta.gender_guess;
-              } else if (_.isNumber(ptptMeta.ms_gender_estimate_fb)) {
-                gender = ptptMeta.ms_gender_estimate_fb;
+
+                if (gender === 0) {
+                  s.gender_male += 1;
+                } else if (gender === 1) {
+                  s.gender_female += 1;
+                } else {
+                  s.gender_null += 1;
+                }
+                let birthYear = null;
+                if (ptptMeta.birth_year_guess > 1900) {
+                  birthYear = ptptMeta.birth_year_guess;
+                }
+                if (birthYear > 1900) {
+                  s.birth_year += birthYear;
+                  s.birth_year_count += 1;
+                }
               }
-              if (gender === 0) {
-                s.gender_male += 1;
-              } else if (gender === 1) {
-                s.gender_female += 1;
-              } else {
-                s.gender_null += 1;
-              }
-              let birthYear = null;
-              if (ptptMeta.ms_birth_year_estimate_fb > 1900) {
-                birthYear = ptptMeta.ms_birth_year_estimate_fb;
-              } else if (ptptMeta.birth_year_guess > 1900) {
-                birthYear = ptptMeta.birth_year_guess;
-              }
-              if (birthYear > 1900) {
-                s.birth_year += birthYear;
-                s.birth_year_count += 1;
-              }
-            }
-            const ptptMetaVotes = pidToMetaVotes[pid];
-            if (ptptMetaVotes) {
-              for (let v = 0; v < ptptMetaVotes.length; v++) {
-                const vote = ptptMetaVotes[v];
-                if (vote.vote === polisTypes.reactions.pass) {
-                  // Element implicitly has an 'any' type because expression of type 'string | number' can't be used to index type '{}'.
-                  // No index signature with a parameter of type 'string' was found on type '{}'.ts(7053)
-                  // @ts-ignore
-                  s.meta_comment_passes[vote.tid] =
+              const ptptMetaVotes = pidToMetaVotes[pid];
+              if (ptptMetaVotes) {
+                for (let v = 0; v < ptptMetaVotes.length; v++) {
+                  const vote = ptptMetaVotes[v];
+                  if (vote.vote === polisTypes.reactions.pass) {
                     // Element implicitly has an 'any' type because expression of type 'string | number' can't be used to index type '{}'.
                     // No index signature with a parameter of type 'string' was found on type '{}'.ts(7053)
                     // @ts-ignore
-                    1 + (s.meta_comment_passes[vote.tid] || 0);
-                } else if (vote.vote === polisTypes.reactions.pull) {
-                  // Element implicitly has an 'any' type because expression of type 'string | number' can't be used to index type '{}'.
-                  // No index signature with a parameter of type 'string' was found on type '{}'.ts(7053)
-                  // @ts-ignore
-                  s.meta_comment_agrees[vote.tid] =
+                    s.meta_comment_passes[vote.tid] =
+                      // Element implicitly has an 'any' type because expression of type 'string | number' can't be used to index type '{}'.
+                      // No index signature with a parameter of type 'string' was found on type '{}'.ts(7053)
+                      // @ts-ignore
+                      1 + (s.meta_comment_passes[vote.tid] || 0);
+                  } else if (vote.vote === polisTypes.reactions.pull) {
                     // Element implicitly has an 'any' type because expression of type 'string | number' can't be used to index type '{}'.
                     // No index signature with a parameter of type 'string' was found on type '{}'.ts(7053)
                     // @ts-ignore
-                    1 + (s.meta_comment_agrees[vote.tid] || 0);
-                } else if (vote.vote === polisTypes.reactions.push) {
-                  // Element implicitly has an 'any' type because expression of type 'string | number' can't be used to index type '{}'.
-                  // No index signature with a parameter of type 'string' was found on type '{}'.ts(7053)
-                  // @ts-ignore
-                  s.meta_comment_disagrees[vote.tid] =
+                    s.meta_comment_agrees[vote.tid] =
+                      // Element implicitly has an 'any' type because expression of type 'string | number' can't be used to index type '{}'.
+                      // No index signature with a parameter of type 'string' was found on type '{}'.ts(7053)
+                      // @ts-ignore
+                      1 + (s.meta_comment_agrees[vote.tid] || 0);
+                  } else if (vote.vote === polisTypes.reactions.push) {
                     // Element implicitly has an 'any' type because expression of type 'string | number' can't be used to index type '{}'.
                     // No index signature with a parameter of type 'string' was found on type '{}'.ts(7053)
                     // @ts-ignore
-                    1 + (s.meta_comment_disagrees[vote.tid] || 0);
+                    s.meta_comment_disagrees[vote.tid] =
+                      // Element implicitly has an 'any' type because expression of type 'string | number' can't be used to index type '{}'.
+                      // No index signature with a parameter of type 'string' was found on type '{}'.ts(7053)
+                      // @ts-ignore
+                      1 + (s.meta_comment_disagrees[vote.tid] || 0);
+                  }
                 }
               }
             }
+            s.birth_year_guess = s.birth_year_guess / s.birth_year_guess_count;
+            s.birth_year = s.birth_year / s.birth_year_count;
           }
-          s.ms_birth_year_estimate_fb =
-            s.ms_birth_year_estimate_fb / s.ms_birth_year_count;
-          s.birth_year_guess = s.birth_year_guess / s.birth_year_guess_count;
-          s.birth_year = s.birth_year / s.birth_year_count;
-        }
 
-        res.json(groupStats);
+          res.json(groupStats);
+        }
       })
       .catch((err: any) => {
         fail(res, 500, "polis_err_groupDemographics", err);
       });
   }
 
-  function handle_GET_locations(
-    req: { p: { zid: any; gid: any } },
-    res: {
-      status: (
-        arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
-    }
-  ) {
-    const zid = req.p.zid;
-    const gid = req.p.gid;
-
-    Promise.all([getPidsForGid(zid, gid, -1), getLocationsForParticipants(zid)])
-      .then(function (o: any[]) {
-        const pids = o[0];
-        let locations = o[1];
-        locations = locations.filter(function (locData: { pid: any }) {
-          const pidIsInGroup = _.indexOf(pids, locData.pid, true) >= 0; // uses binary search
-          return pidIsInGroup;
-        });
-        locations = locations.map(function (locData: { lat: any; lng: any }) {
-          return {
-            lat: locData.lat,
-            lng: locData.lng,
-            n: 1,
-          };
-        });
-        res.status(200).json(locations);
-      })
-      .catch(function (err: any) {
-        fail(res, 500, "polis_err_locations_01", err);
-      });
-  }
   function removeNullOrUndefinedProperties(o: { [x: string]: any }) {
     for (const k in o) {
       const v = o[k];
@@ -8952,46 +7918,6 @@ Thanks for using Polis!
     return p;
   }
 
-  function pullFbTwIntoSubObjects(ptptoiRecord: any) {
-    const p = ptptoiRecord;
-    const x: ParticipantSocialNetworkInfo = {};
-    _.each(p, function (val: null, key: string) {
-      const fbMatch = /fb__(.*)/.exec(key);
-      if (fbMatch && fbMatch.length === 2 && val !== null) {
-        x.facebook = x.facebook || {};
-        x.facebook[fbMatch[1]] = val;
-      } else {
-        x[key] = val;
-      }
-    });
-    // extract props from fb_public_profile
-    if (x.facebook && x.facebook.fb_public_profile) {
-      try {
-        const temp = JSON.parse(x.facebook.fb_public_profile);
-        x.facebook.verified = temp.verified;
-        // shouln't return this to client
-        delete x.facebook.fb_public_profile;
-      } catch (err) {
-        logger.error(
-          "error parsing JSON of fb_public_profile for uid: " + p.uid,
-          err
-        );
-      }
-
-      if (!_.isUndefined(x.facebook.fb_user_id)) {
-        const width = 40;
-        const height = 40;
-        x.facebook.fb_picture =
-          "https://graph.facebook.com/v2.2/" +
-          x.facebook.fb_user_id +
-          "/picture?width=" +
-          width +
-          "&height=" +
-          height;
-      }
-    }
-    return x;
-  }
   function handle_PUT_ptptois(
     req: { p: { zid: any; uid?: any; pid: any; mod: any } },
     res: {
@@ -9048,7 +7974,6 @@ Thanks for using Polis!
         if (isAllowed) {
           ptptois = ptptois.map(pullXInfoIntoSubObjects);
           ptptois = ptptois.map(removeNullOrUndefinedProperties);
-          ptptois = ptptois.map(pullFbTwIntoSubObjects);
           ptptois = ptptois.map(function (p: { conversation_id: any }) {
             p.conversation_id = req.p.conversation_id;
             return p;
@@ -9071,7 +7996,7 @@ Thanks for using Polis!
       ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
     }
   ) {
-    doFamousQuery(req.p, req)
+    doFamousQuery(req.p)
       .then(
         function (data: any) {
           res.status(200).json(data);
@@ -9086,8 +8011,7 @@ Thanks for using Polis!
   }
 
   function doFamousQuery(
-    o?: { uid?: any; zid: any; math_tick: any; ptptoiLimit: any },
-    req?: any
+    o?: { uid?: any; zid: any; math_tick: any; ptptoiLimit: any }
   ) {
     const uid = o?.uid;
     const zid = o?.zid;
@@ -9147,7 +8071,6 @@ Thanks for using Polis!
           "authors as (select distinct(uid) from comments where zid = ($1) and tid in (" +
           featuredTids.join(",") +
           ") order by uid) " +
-          "select authors.uid from authors inner join facebook_users on facebook_users.uid = authors.uid " +
           "union " +
           "select authors.uid from authors inner join xids on xids.uid = authors.uid " +
           "order by uid;";
@@ -9177,10 +8100,7 @@ Thanks for using Polis!
 
         participantsWithSocialInfo = participantsWithSocialInfo.map(
           function (p: { priority: number }) {
-            let x = pullXInfoIntoSubObjects(p);
-            // nest the fb and tw properties in sub objects
-            x = pullFbTwIntoSubObjects(x);
-
+            const x = pullXInfoIntoSubObjects(p);
             if (p.priority === 1000) {
               x.isSelf = true;
             }
@@ -9732,8 +8652,6 @@ Thanks for using Polis!
           conv.auth_opt_allow_3rdparty,
           DEFAULTS.auth_opt_allow_3rdparty
         );
-        const auth_opt_fb_computed = false;
-        const auth_opt_tw_computed = false;
 
         conv = {
           topic: conv.topic,
@@ -9753,8 +8671,6 @@ Thanks for using Polis!
           auth_needed_to_vote: false,
           auth_needed_to_write: false,
           auth_opt_allow_3rdparty: auth_opt_allow_3rdparty,
-          auth_opt_fb_computed: auth_opt_fb_computed,
-          auth_opt_tw_computed: auth_opt_tw_computed,
         };
         conv.conversation_id = conversation_id;
         return conv;
@@ -10122,14 +9038,14 @@ Thanks for using Polis!
         );
       }
 
-      let fbMetaTagsString =
+      let metaTagsString =
         '<meta property="og:image" content="https://s3.amazonaws.com/pol.is/polis_logo.png" />\n';
       if (preloadData && preloadData.conversation) {
-        fbMetaTagsString +=
+        metaTagsString +=
           '    <meta property="og:title" content="' +
           encode(preloadData.conversation.topic) +
           '" />\n';
-        fbMetaTagsString +=
+        metaTagsString +=
           '    <meta property="og:description" content="' +
           encode(preloadData.conversation.description) +
           '" />\n';
@@ -10137,7 +9053,7 @@ Thanks for using Polis!
       x = x.pipe(
         replaceStream(
           "<!-- REPLACE_THIS_WITH_FB_META_TAGS -->",
-          fbMetaTagsString
+          metaTagsString
         )
       );
 
@@ -10257,21 +9173,6 @@ Thanks for using Polis!
     if (match && match.length) {
       conversation_id = match[0];
     }
-
-    setTimeout(function () {
-      // Kick off requests to FB to get the share counts.
-      // This will be nice because we cache them so it will be fast when
-      // client requests these later.
-      // TODO actually store these values in a cache that is shared between
-      // the servers, probably just in the db.
-      if (Config.fbAppId) {
-        getFacebookShareCountForConversation(conversation_id).catch(function (
-          err: string
-        ) {
-          logger.error("polis_err_fetching_facebook_share_count", err);
-        });
-      }
-    }, 100);
 
     doGetConversationPreloadInfo(conversation_id)
       .then(function (x: any) {
@@ -10465,7 +9366,6 @@ Thanks for using Polis!
     denyIfNotFromWhitelistedDomain,
     devMode,
     emailTeam,
-    enableAgid,
     fail,
     fetchThirdPartyCookieTestPt1,
     fetchThirdPartyCookieTestPt2,
@@ -10513,13 +9413,11 @@ Thanks for using Polis!
     handle_GET_domainWhitelist,
     handle_GET_dummyButton,
     handle_GET_einvites,
-    handle_GET_facebook_delete,
     handle_GET_groupDemographics,
     handle_GET_iim_conversation,
     handle_GET_iip_conversation,
     handle_GET_implicit_conversation_generation,
     handle_GET_launchPrep,
-    handle_GET_locations,
     handle_GET_math_pca,
     handle_GET_math_pca2,
     handle_GET_metadata,
@@ -10536,7 +9434,6 @@ Thanks for using Polis!
     handle_GET_ptptois,
     handle_GET_reports,
     handle_GET_reportNarrative,
-    handle_GET_snapshot,
     handle_GET_testConnection,
     handle_GET_testDatabase,
     handle_GET_tryCookie,
@@ -10548,7 +9445,6 @@ Thanks for using Polis!
     handle_GET_xids,
     handle_GET_zinvites,
     handle_POST_auth_deregister,
-    handle_POST_auth_facebook,
     handle_POST_auth_login,
     handle_POST_auth_new,
     handle_POST_auth_password,

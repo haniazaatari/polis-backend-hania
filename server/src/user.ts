@@ -80,27 +80,11 @@ async function getUser(
 
   const o: any[] = await Promise.all([
     getUserInfoForUid2(uid),
-    getFacebookInfo([uid]),
     xidInfoPromise,
   ]);
   const info = o[0];
-  const fbInfo = o[1];
-  const twInfo = o[2];
-  const xInfo = o[3];
-  const hasFacebook = fbInfo && fbInfo.length && fbInfo[0];
+  const xInfo = o[2];
   const hasXid = xInfo && xInfo.length && xInfo[0];
-  if (hasFacebook) {
-    const width = 40;
-    const height = 40;
-    fbInfo.fb_picture =
-      "https://graph.facebook.com/v2.2/" +
-      fbInfo.fb_user_id +
-      "/picture?width=" +
-      width +
-      "&height=" +
-      height;
-    delete fbInfo[0].response;
-  }
   if (hasXid) {
     delete xInfo[0].owner;
     delete xInfo[0].created;
@@ -110,21 +94,12 @@ async function getUser(
     uid: uid,
     email: info.email,
     hname: info.hname,
-    hasFacebook: !!hasFacebook,
-    facebook: fbInfo && fbInfo[0],
     hasXid: !!hasXid,
     xInfo: xInfo && xInfo[0],
     finishedTutorial: !!info.tut,
     site_ids: [info.site_id],
     created: Number(info.created),
   };
-}
-
-function getFacebookInfo(uids: any[]) {
-  return pg.queryP_readOnly(
-    "select * from facebook_users where uid in ($1);",
-    uids
-  );
 }
 
 function createDummyUser() {

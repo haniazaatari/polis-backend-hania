@@ -81,9 +81,7 @@ export default {
   dynamoDbEndpoint: process.env.DYNAMODB_ENDPOINT || null,
   emailTransportTypes: process.env.EMAIL_TRANSPORT_TYPES || null,
   encryptionPassword: process.env.ENCRYPTION_PASSWORD_00001 as string,
-  fbAppId: process.env.FB_APP_ID || null,
   geminiApiKey: process.env.GEMINI_API_KEY || null,
-  googleApiKey: process.env.GOOGLE_API_KEY || null,
   googleJigsawPerspectiveApiKey:
     process.env.GOOGLE_JIGSAW_PERSPECTIVE_API_KEY || null,
   logLevel: process.env.SERVER_LOG_LEVEL as string,
