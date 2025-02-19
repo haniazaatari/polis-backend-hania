@@ -35,8 +35,6 @@ docker run -p 8080:8080 --name polis-client-admin polis-client-admin:local npm s
 Now you can see the web interface at [http://localhost:8080], but if it is not connected to the Server API you won't
 get very far. Still it can be useful for developing and debugging builds.
 
-## Configuration
-
 ### Common Problems
 
 If you having troubles with npm dependencies try run the commands below:

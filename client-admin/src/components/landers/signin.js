@@ -26,10 +26,6 @@ class SignIn extends React.Component {
     console.log(error, errorInfo)
   }
 
-  // getDest() {
-  //   return this.props.location.pathname.slice("/signin".length);
-  // }
-
   handleLoginClicked(e) {
     e.preventDefault()
     const attrs = {
@@ -37,10 +33,6 @@ class SignIn extends React.Component {
       password: this.password.value
     }
 
-    // var dest = this.getDest();
-    // if (!dest.length) {
-    //   dest = "/";
-    // }
     this.props.dispatch(doSignin(attrs))
   }
 

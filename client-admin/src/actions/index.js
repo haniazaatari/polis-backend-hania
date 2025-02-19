@@ -28,13 +28,6 @@ export const UPDATE_ZID_METADATA_ERROR = 'UPDATE_ZID_METADATA_ERROR'
 
 export const OPTIMISTIC_ZID_METADATA_UPDATE = 'OPTIMISTIC_ZID_METADATA_UPDATE'
 
-/* report */
-export const UPDATE_REPORT_STARTED = 'UPDATE_REPORT_STARTED'
-export const UPDATE_REPORT_SUCCESS = 'UPDATE_REPORT_SUCCESS'
-export const UPDATE_REPORT_ERROR = 'UPDATE_REPORT_ERROR'
-
-export const OPTIMISTIC_REPORT_UPDATE = 'OPTIMISTIC_REPORT_UPDATE'
-
 /* moderation */
 export const REQUEST_COMMENTS = 'REQUEST_COMMENTS'
 export const RECEIVE_COMMENTS = 'RECEIVE_COMMENTS'
@@ -65,58 +58,21 @@ export const COMMENT_IS_META = 'COMMENT_IS_META'
 export const COMMENT_IS_META_SUCCESS = 'COMMENT_IS_META_SUCCESS'
 export const COMMENT_IS_META_ERROR = 'COMMENT_IS_META_ERROR'
 
-export const REQUEST_PARTICIPANTS = 'REQUEST_PARTICIPANTS'
-export const RECEIVE_PARTICIPANTS = 'RECEIVE_PARTICIPANTS'
-export const PARTICIPANTS_FETCH_ERROR = 'PARTICIPANTS_FETCH_ERROR'
-
-export const REQUEST_DEFAULT_PARTICIPANTS = 'REQUEST_DEFAULT_PARTICIPANTS'
-export const RECEIVE_DEFAULT_PARTICIPANTS = 'RECEIVE_DEFAULT_PARTICIPANTS'
-export const DEFAULT_PARTICIPANTS_FETCH_ERROR =
-  'DEFAULT_PARTICIPANTS_FETCH_ERROR'
-
-export const REQUEST_FEATURED_PARTICIPANTS = 'REQUEST_FEATURED_PARTICIPANTS'
-export const RECEIVE_FEATURED_PARTICIPANTS = 'RECEIVE_FEATURED_PARTICIPANTS'
-export const FEATURED_PARTICIPANTS_FETCH_ERROR =
-  'FEATURED_PARTICIPANTS_FETCH_ERROR'
-
-export const REQUEST_HIDDEN_PARTICIPANTS = 'REQUEST_HIDDEN_PARTICIPANTS'
-export const RECEIVE_HIDDEN_PARTICIPANTS = 'RECEIVE_HIDDEN_PARTICIPANTS'
-export const HIDDEN_PARTICIPANTS_FETCH_ERROR = 'HIDDEN_PARTICIPANTS_FETCH_ERROR'
-
-/* participant actions */
-export const FEATURE_PARTICIPANT = 'FEATURE_PARTICIPANT'
-export const FEATURE_PARTICIPANT_SUCCESS = 'FEATURE_PARTICIPANT_SUCCESS'
-export const FEATURE_PARTICIPANT_ERROR = 'FEATURE_PARTICIPANT_ERROR'
-
-export const HIDE_PARTICIPANT = 'HIDE_PARTICIPANT'
-export const HIDE_PARTICIPANT_SUCCESS = 'HIDE_PARTICIPANT_SUCCESS'
-export const HIDE_PARTICIPANT_ERROR = 'HIDE_PARTICIPANT_ERROR'
-
 /* submit seed comment */
 export const SEED_COMMENT_LOCAL_UPDATE = 'SEED_COMMENT_LOCAL_UPDATE'
 export const SUBMIT_SEED_COMMENT = 'SUBMIT_SEED_COMMENT'
 export const SUBMIT_SEED_COMMENT_SUCCESS = 'SUBMIT_SEED_COMMENT_SUCCESS'
 export const SUBMIT_SEED_COMMENT_ERROR = 'SUBMIT_SEED_COMMENT_ERROR'
 
-export const REQUEST_SEED_COMMENTS = 'REQUEST_SEED_COMMENTS'
-export const RECEIVE_SEED_COMMENTS = 'RECEIVE_SEED_COMMENTS'
-export const SEED_COMMENTS_FETCH_ERROR = 'SEED_COMMENTS_FETCH_ERROR'
-
 /* conversation stats */
 export const REQUEST_CONVERSATION_STATS = 'REQUEST_CONVERSATION_STATS'
 export const RECEIVE_CONVERSATION_STATS = 'RECEIVE_CONVERSATION_STATS'
 export const CONVERSATION_STATS_FETCH_ERROR = 'CONVERSATION_STATS_FETCH_ERROR'
 
-export const DATA_EXPORT_STARTED = 'DATA_EXPORT_STARTED'
-export const DATA_EXPORT_SUCCESS = 'DATA_EXPORT_SUCCESS'
-export const DATA_EXPORT_ERROR = 'DATA_EXPORT_ERROR'
-
 export const CREATEUSER_INITIATED = 'CREATEUSER_INITIATED'
-// export const CREATEUSER_SUCCESSFUL = "CREATEUSER_SUCCESSFUL";
 export const CREATEUSER_ERROR = 'CREATEUSER_ERROR'
 
 export const SIGNIN_INITIATED = 'SIGNIN_INITIATED'
-// export const SIGNIN_SUCCESSFUL = "SIGNIN_SUCCESSFUL";
 export const SIGNIN_ERROR = 'SIGNIN_ERROR'
 
 export const SIGNOUT_INITIATED = 'SIGNOUT_INITIATED'
@@ -130,16 +86,6 @@ export const PWRESET_INIT_ERROR = 'PWRESET_INIT_ERROR'
 export const PWRESET_INITIATED = 'PWRESET_INITIATED'
 export const PWRESET_SUCCESS = 'PWRESET_SUCCESS'
 export const PWRESET_ERROR = 'PWRESET_ERROR'
-
-export const SUBMIT_CONTRIB = 'SUBMIT_CONTRIB'
-export const SUBMIT_CONTRIB_SUCCESS = 'SUBMIT_CONTRIB_SUCCESS'
-export const SUBMIT_CONTRIB_ERROR = 'SUBMIT_CONTRIB_ERROR'
-
-/* MATH */
-
-export const REQUEST_MATH = 'REQUEST_MATH'
-export const RECEIVE_MATH = 'RECEIVE_MATH'
-export const MATH_FETCH_ERROR = 'MATH_FETCH_ERROR'
 
 /* ======= Actions ======= */
 
@@ -595,32 +541,6 @@ export const handleSeedCommentSubmit = (comment) => {
   }
 }
 
-// FIXME
-// eslint-disable-next-line no-unused-vars
-const makeStandardStart = (type) => {
-  return {
-    type: type
-  }
-}
-
-// FIXME
-// eslint-disable-next-line no-unused-vars
-const makeStandardError = (type, err) => {
-  return {
-    type: type,
-    data: err
-  }
-}
-
-// FIXME
-// eslint-disable-next-line no-unused-vars
-const makeStandardSuccess = (type, data) => {
-  return {
-    type: type,
-    data: data
-  }
-}
-
 /* create conversation */
 
 const createConversationStart = () => {
@@ -667,91 +587,6 @@ export const handleCreateConversationSubmit = (routeTo) => {
   }
 }
 
-/* request all comments */
-
-const requestComments = () => {
-  return {
-    type: REQUEST_COMMENTS
-  }
-}
-
-const receiveComments = (data) => {
-  return {
-    type: RECEIVE_COMMENTS,
-    data: data
-  }
-}
-
-const commentsFetchError = (err) => {
-  return {
-    type: COMMENTS_FETCH_ERROR,
-    data: err
-  }
-}
-
-const fetchAllComments = (conversation_id) => {
-  // let includeSocial = "include_social=true&";
-  const includeSocial = ''
-  return $.get(
-    '/api/v3/comments?moderation=true&include_voting_patterns=false&' +
-    includeSocial +
-    'conversation_id=' +
-    conversation_id
-  )
-}
-
-export const populateCommentsStore = (conversation_id) => {
-  return (dispatch) => {
-    dispatch(requestComments())
-    return fetchAllComments(conversation_id).then(
-      (res) => dispatch(receiveComments(res)),
-      (err) => dispatch(commentsFetchError(err))
-    )
-  }
-}
-
-/* request math */
-
-const requestMath = () => {
-  return {
-    type: REQUEST_MATH
-  }
-}
-
-const receiveMath = (data) => {
-  return {
-    type: RECEIVE_MATH,
-    data: data
-  }
-}
-
-const mathFetchError = (err) => {
-  return {
-    type: MATH_FETCH_ERROR,
-    data: err
-  }
-}
-
-const fetchMath = (conversation_id, math_tick) => {
-  return $.get(
-    '/api/v3/math/pca2?&math_tick=' +
-    math_tick +
-    '&conversation_id=' +
-    conversation_id
-  )
-}
-
-export const populateMathStore = (conversation_id) => {
-  return (dispatch, getState) => {
-    dispatch(requestMath())
-    const math_tick = getState().math.math_tick
-    return fetchMath(conversation_id, math_tick).then(
-      (res) => dispatch(receiveMath(res)),
-      (err) => dispatch(mathFetchError(err))
-    )
-  }
-}
-
 /* unmoderated comments */
 
 const requestUnmoderatedComments = () => {
@@ -775,7 +610,6 @@ const unmoderatedCommentsFetchError = (err) => {
 }
 
 const fetchUnmoderatedComments = (conversation_id) => {
-  // let includeSocial = "include_social=true&";
   const includeSocial = ''
   return $.get(
     '/api/v3/comments?moderation=true&include_voting_patterns=false&' +
@@ -818,7 +652,6 @@ const acceptedCommentsFetchError = (err) => {
 }
 
 const fetchAcceptedComments = (conversation_id) => {
-  // let includeSocial = "include_social=true&";
   const includeSocial = ''
   return $.get(
     '/api/v3/comments?moderation=true&include_voting_patterns=false&mod=1&' +
@@ -861,7 +694,6 @@ const rejectedCommentsFetchError = (err) => {
 }
 
 const fetchRejectedComments = (conversation_id) => {
-  // let includeSocial = "include_social=true&";
   const includeSocial = ''
   return $.get(
     '/api/v3/comments?moderation=true&include_voting_patterns=false&' +
@@ -892,9 +724,6 @@ export const populateAllCommentStores = (conversation_id) => {
     )
   }
 }
-
-// export const populateAllCommentStores = (conversation) => {
-// }
 
 /* moderator clicked accept comment */
 
@@ -1029,287 +858,6 @@ export const changeCommentCommentIsMeta = (comment, is_meta) => {
   }
 }
 
-/* request participants */
-
-const requestParticipants = () => {
-  return {
-    type: REQUEST_PARTICIPANTS
-  }
-}
-
-const receiveParticipants = (data) => {
-  return {
-    type: RECEIVE_PARTICIPANTS,
-    data: data
-  }
-}
-
-const participantsFetchError = (err) => {
-  return {
-    type: PARTICIPANTS_FETCH_ERROR,
-    data: err
-  }
-}
-
-const fetchParticipants = (conversation_id) => {
-  return $.get('/api/v3/ptptois?conversation_id=' + conversation_id)
-}
-
-export const populateParticipantsStore = (conversation_id) => {
-  return (dispatch) => {
-    dispatch(requestParticipants())
-    return fetchParticipants(conversation_id).then(
-      (res) => dispatch(receiveParticipants(res)),
-      (err) => dispatch(participantsFetchError(err))
-    )
-  }
-}
-
-/* request default participants for ptpt moderation view */
-
-const requestDefaultParticipants = () => {
-  return {
-    type: REQUEST_DEFAULT_PARTICIPANTS
-  }
-}
-
-const receiveDefaultParticipants = (data) => {
-  return {
-    type: RECEIVE_DEFAULT_PARTICIPANTS,
-    data: data
-  }
-}
-
-const defaultParticipantFetchError = (err) => {
-  return {
-    type: DEFAULT_PARTICIPANTS_FETCH_ERROR,
-    data: err
-  }
-}
-
-const fetchDefaultParticipants = (conversation_id) => {
-  return $.get('/api/v3/ptptois?mod=0&conversation_id=' + conversation_id)
-}
-
-export const populateDefaultParticipantStore = (conversation_id) => {
-  return (dispatch) => {
-    dispatch(requestDefaultParticipants())
-    return fetchDefaultParticipants(conversation_id).then(
-      (res) => dispatch(receiveDefaultParticipants(res)),
-      (err) => dispatch(defaultParticipantFetchError(err))
-    )
-  }
-}
-
-/* request featured participants for ptpt moderation view */
-
-const requestFeaturedParticipants = () => {
-  return {
-    type: REQUEST_FEATURED_PARTICIPANTS
-  }
-}
-
-const receiveFeaturedParticipants = (data) => {
-  return {
-    type: RECEIVE_FEATURED_PARTICIPANTS,
-    data: data
-  }
-}
-
-const featuredParticipantFetchError = (err) => {
-  return {
-    type: FEATURED_PARTICIPANTS_FETCH_ERROR,
-    data: err
-  }
-}
-
-const fetchFeaturedParticipants = (conversation_id) => {
-  return $.get('/api/v3/ptptois?mod=1&conversation_id=' + conversation_id)
-}
-
-export const populateFeaturedParticipantStore = (conversation_id) => {
-  return (dispatch) => {
-    dispatch(requestFeaturedParticipants())
-    return fetchFeaturedParticipants(conversation_id).then(
-      (res) => dispatch(receiveFeaturedParticipants(res)),
-      (err) => dispatch(featuredParticipantFetchError(err))
-    )
-  }
-}
-
-/* request hidden participants for ptpt moderation view */
-
-const requestHiddenParticipants = () => {
-  return {
-    type: REQUEST_HIDDEN_PARTICIPANTS
-  }
-}
-
-const receiveHiddenParticipants = (data) => {
-  return {
-    type: RECEIVE_HIDDEN_PARTICIPANTS,
-    data: data
-  }
-}
-
-const hiddenParticipantFetchError = (err) => {
-  return {
-    type: HIDDEN_PARTICIPANTS_FETCH_ERROR,
-    data: err
-  }
-}
-
-const fetchHiddenParticipants = (conversation_id) => {
-  return $.get('/api/v3/ptptois?mod=-1&conversation_id=' + conversation_id)
-}
-
-export const populateHiddenParticipantStore = (conversation_id) => {
-  return (dispatch) => {
-    dispatch(requestHiddenParticipants())
-    return fetchHiddenParticipants(conversation_id).then(
-      (res) => dispatch(receiveHiddenParticipants(res)),
-      (err) => dispatch(hiddenParticipantFetchError(err))
-    )
-  }
-}
-
-/* populate ALL stores todo/accept/reject/seed */
-
-export const populateAllParticipantStores = (conversation_id) => {
-  return (dispatch) => {
-    return $.when(
-      dispatch(populateDefaultParticipantStore(conversation_id)),
-      dispatch(populateFeaturedParticipantStore(conversation_id)),
-      dispatch(populateHiddenParticipantStore(conversation_id))
-    )
-  }
-}
-
-/* moderator clicked feature ptpt */
-
-const optimisticFeatureParticipant = (participant) => {
-  return {
-    type: FEATURE_PARTICIPANT,
-    participant: participant
-  }
-}
-
-const featureParticipantSuccess = (data) => {
-  return {
-    type: FEATURE_PARTICIPANT_SUCCESS,
-    data: data
-  }
-}
-
-const featureParticipantError = (err) => {
-  return {
-    type: FEATURE_PARTICIPANT_ERROR,
-    data: err
-  }
-}
-
-const putFeatureParticipant = (participant) => {
-  return $.ajax({
-    method: 'PUT',
-    url: '/api/v3/ptptois',
-    data: Object.assign(participant, { mod: 1 })
-  })
-}
-
-export const changeParticipantStatusToFeatured = (participant) => {
-  return (dispatch) => {
-    dispatch(optimisticFeatureParticipant(participant))
-    return putFeatureParticipant(participant).then(
-      (res) => dispatch(featureParticipantSuccess(res)),
-      (err) => dispatch(featureParticipantError(err))
-    )
-  }
-}
-/* moderator clicked hide ptpt */
-
-const optimisticHideParticipant = (participant) => {
-  return {
-    type: FEATURE_PARTICIPANT,
-    participant: participant
-  }
-}
-
-const hideParticipantSuccess = (data) => {
-  return {
-    type: FEATURE_PARTICIPANT_SUCCESS,
-    data: data
-  }
-}
-
-const hideParticipantError = (err) => {
-  return {
-    type: FEATURE_PARTICIPANT_ERROR,
-    data: err
-  }
-}
-
-const putHideParticipant = (participant) => {
-  return $.ajax({
-    method: 'PUT',
-    url: '/api/v3/ptptois',
-    data: Object.assign(participant, { mod: -1 })
-  })
-}
-
-export const changeParticipantStatusToHidden = (participant) => {
-  return (dispatch) => {
-    dispatch(optimisticHideParticipant(participant))
-    return putHideParticipant(participant).then(
-      (res) => dispatch(hideParticipantSuccess(res)),
-      (err) => dispatch(hideParticipantError(err))
-    )
-  }
-}
-
-/* moderator clicked unmoderate ptpt */
-const optimisticUnmoderateParticipant = (participant) => {
-  return {
-    type: FEATURE_PARTICIPANT,
-    participant: participant
-  }
-}
-
-// FIXME
-// eslint-disable-next-line no-unused-vars
-const unmoderateParticipantSuccess = (data) => {
-  return {
-    type: FEATURE_PARTICIPANT_SUCCESS,
-    data: data
-  }
-}
-
-// FIXME
-// eslint-disable-next-line no-unused-vars
-const unmoderateParticipantError = (err) => {
-  return {
-    type: FEATURE_PARTICIPANT_ERROR,
-    data: err
-  }
-}
-
-const putUnmoderateParticipant = (participant) => {
-  return $.ajax({
-    method: 'PUT',
-    url: '/api/v3/ptptois',
-    data: Object.assign(participant, { mod: 0 })
-  })
-}
-
-export const changeParticipantStatusToUnmoderated = (participant) => {
-  return (dispatch) => {
-    dispatch(optimisticUnmoderateParticipant(participant))
-    return putUnmoderateParticipant(participant).then(
-      (res) => dispatch(hideParticipantSuccess(res)),
-      (err) => dispatch(hideParticipantError(err))
-    )
-  }
-}
-
 /* request conversation stats */
 
 const requestConversationStats = () => {
@@ -1346,62 +894,6 @@ export const populateConversationStatsStore = (conversation_id, until) => {
     return fetchConversationStats(conversation_id, until).then(
       (res) => dispatch(receiveConversationStats(res)),
       (err) => dispatch(conversationStatsFetchError(err))
-    )
-  }
-}
-
-/* data export */
-
-const dataExportStarted = () => {
-  return {
-    type: DATA_EXPORT_STARTED
-  }
-}
-
-const dataExportSuccess = () => {
-  return {
-    type: DATA_EXPORT_SUCCESS
-  }
-}
-
-const dataExportError = () => {
-  return {
-    type: DATA_EXPORT_ERROR
-  }
-}
-
-const dataExportGet = (
-  conversation_id,
-  format,
-  unixTimestamp,
-  untilEnabled
-) => {
-  //       url += ("&unixTimestamp=" + ((ctx.date/1000) << 0));
-
-  /* https://pol.is/api/v3/dataExport?conversation_id=2arcefpshi&format=csv&unixTimestamp=1447362000 */
-  let url = `/api/v3/dataExport?conversation_id=${conversation_id}&format=${format}`
-  if (untilEnabled) {
-    url += `&unixTimestamp=${unixTimestamp}`
-  }
-  return $.get(url)
-}
-
-export const startDataExport = (
-  conversation_id,
-  format,
-  unixTimestamp,
-  untilEnabled
-) => {
-  return (dispatch) => {
-    dispatch(dataExportStarted())
-    return dataExportGet(
-      conversation_id,
-      format,
-      unixTimestamp,
-      untilEnabled
-    ).then(
-      (res) => dispatch(dataExportSuccess(res)),
-      (err) => dispatch(dataExportError(err))
     )
   }
 }

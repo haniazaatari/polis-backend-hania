@@ -90,5 +90,3 @@ class ModerateCommentsSeed extends React.Component {
 }
 
 export default ModerateCommentsSeed
-
-// value={this.props.seedText}

@@ -17,7 +17,6 @@ const signin = (
         pending: true,
         error: false
       })
-
     case 'signin reset state':
       return Object.assign({}, state, {
         loading: false,

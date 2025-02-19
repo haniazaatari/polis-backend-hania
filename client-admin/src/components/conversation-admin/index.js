@@ -10,9 +10,8 @@ import { Switch, Route, Link } from 'react-router-dom'
 import ConversationConfig from './conversation-config'
 import ConversationStats from './stats'
 
-import ModerateComments from './comment-moderation/'
+import CommentModeration from './comment-moderation/'
 
-// import DataExport from "./data-export";
 import ShareAndEmbed from './share-and-embed'
 
 import Reports from './report/reports'
@@ -116,14 +115,13 @@ class ConversationAdminContainer extends React.Component {
             <Route exact path={`${match.path}/reports`} component={Reports} />
             <Route
               path={`${match.path}/comments`}
-              component={ModerateComments}
+              component={CommentModeration}
             />
             <Route
               exact
               path={`${match.path}/stats`}
               component={ConversationStats}
             />
-            {/* <Route exact path={`${match.path}/export`} component={DataExport} /> */}
           </Switch>
         </Box>
       </Flex>
