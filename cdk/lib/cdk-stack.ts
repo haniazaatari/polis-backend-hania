@@ -22,7 +22,7 @@ interface PolisStackProps extends cdk.StackProps {
 }
 const defaultBranch = 'edge';
 
-function createPolisUserData(props: PolisStackProps, isMathWorker: boolean, databaseEndpoint: string, dbUser:string): ec2.UserData {
+function createPolisUserData(props: PolisStackProps, isMathWorker: boolean, databaseEndpoint: string): ec2.UserData {
   const userData = ec2.UserData.forLinux();
 
   const baseCommands = [
@@ -43,8 +43,7 @@ function createPolisUserData(props: PolisStackProps, isMathWorker: boolean, data
 
   // Read environment file and modify DATABASE_URL
   const envContent = readFileSync(props.envFile, 'utf8');
-  const databaseUrl = `postgres://${dbUser}:${dbUser}@${databaseEndpoint}/polisdb`; // Construct URL
-  const modifiedEnvContent = envContent.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL=${databaseUrl}`);
+  const modifiedEnvContent = envContent.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL=${databaseEndpoint}`);
 
   const appCommands = [
       'cd /opt',
@@ -161,17 +160,13 @@ export class CdkStack extends cdk.Stack {
       databaseName: 'polisdb',
       removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
       deletionProtection: true,
-      publiclyAccessible: false
+      publiclyAccessible: false,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
     });
 
-    // Get the database endpoint address AFTER the DB is created
-    const databaseEndpoint = db.dbInstanceEndpointAddress;
-     // Get the generated secret
-    const dbSecret = db.secret;
-    if (!dbSecret) {
-      throw new Error("Database secret is undefined.");
-    }
-    const dbUser = dbSecret.secretValueFromJson('username').unsafeUnwrap();
+    const databaseUrl = `postgres://${db.secret?.secretValueFromJson('username').unsafeUnwrap()}:${db.secret?.secretValueFromJson('password').unsafeUnwrap()}@${db.instanceEndpoint.socketAddress}:${db.dbInstanceEndpointPort}/polisdb`;
 
     const asgWeb = new autoscaling.AutoScalingGroup(this, 'Asg', {
       vpc,
@@ -184,7 +179,7 @@ export class CdkStack extends cdk.Stack {
         keyPair: props.enableSSHAccess && webKeyPair ?
             ec2.KeyPair.fromKeyPairName(this, 'ImportedWebKeyPair', webKeyPair.keyName) :
             undefined, // Conditionally add key pair
-      userData: createPolisUserData(props, false, databaseEndpoint, dbUser),
+      userData: createPolisUserData(props, false, databaseUrl),
     });
 
     const asgMathWorker = new autoscaling.AutoScalingGroup(this, 'AsgMathWorker', {
@@ -198,7 +193,7 @@ export class CdkStack extends cdk.Stack {
         ec2.KeyPair.fromKeyPairName(this, 'ImportedMathWorkerKeyPair', mathWorkerKeyPair.keyName) :
         undefined, // Conditionally add
       role: mathRole,
-      userData: createPolisUserData(props, true, databaseEndpoint, dbUser),
+      userData: createPolisUserData(props, true, databaseUrl),
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
       },
