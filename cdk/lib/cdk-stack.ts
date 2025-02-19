@@ -23,49 +23,80 @@ interface PolisStackProps extends cdk.StackProps {
 }
 const defaultBranch = 'edge';
 
-function createPolisUserData(props: PolisStackProps, isMathWorker: boolean, databaseEndpoint: string): ec2.UserData {
+// function createPolisUserData(props: PolisStackProps, isMathWorker: boolean, databaseEndpoint: string): ec2.UserData {
+//   const userData = ec2.UserData.forLinux();
+
+//   const baseCommands = [
+//     '#!/bin/bash',
+//     'set -e',
+//     'set -x',
+//     // Use yum instead of dnf
+//     'yum update -y',
+//     'yum install -y docker git',
+//     'systemctl start docker',
+//     'systemctl enable docker',
+//     // Improved logging
+//     'exec 1>>/var/log/user-data.log 2>&1',
+//     'echo "Starting User Data Execution at $(date)"', // Timestamp
+//     'pwd',
+//     'ls -l',
+//   ];
+
+//   // Read environment file and modify DATABASE_URL
+//   const envContent = readFileSync(props.envFile, 'utf8');
+//   const modifiedEnvContent = envContent.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL=${databaseEndpoint}`);
+
+//   const appCommands = [
+//       'cd /opt',
+//       'git clone https://github.com/compdemocracy/polis.git polis',
+//       'cd /opt/polis',
+//       `git checkout ${props.branch || defaultBranch}`,
+//       'cat > .env << \'ENVEOF\'',
+//       modifiedEnvContent, // Use modified content
+//       'ENVEOF',
+//       `cd ${isMathWorker ? 'math' : 'server'}`,
+//       `docker pull compdemocracy/polis-${isMathWorker ? 'math' : 'server'}:latest`,
+//       'docker run -d \\',
+//       `    --name polis-${isMathWorker ? 'math' : 'server'} \\`,
+//       '    --restart unless-stopped \\',
+//       '    --memory-reservation=2g \\',
+//       '    --memory=$(free -b | awk \'/Mem:/ {printf "%.0f", $2*0.8}\') \\',
+//       '    --env-file ../.env \\', // Use the modified .env file
+//       `    compdemocracy/polis-${isMathWorker ? 'math' : 'server'}:latest`,
+//   ];
+
+//   userData.addCommands(...baseCommands, ...appCommands);
+//   return userData;
+// }
+
+function createPolisUserData_DockerCompose(props: PolisStackProps, databaseUrl: string, isMathWorker: boolean): ec2.UserData {
   const userData = ec2.UserData.forLinux();
 
   const baseCommands = [
-    '#!/bin/bash',
-    'set -e',
-    'set -x',
-    // Use yum instead of dnf
-    'yum update -y',
-    'yum install -y docker git',
-    'systemctl start docker',
-    'systemctl enable docker',
-    // Improved logging
-    'exec 1>>/var/log/user-data.log 2>&1',
-    'echo "Starting User Data Execution at $(date)"', // Timestamp
-    'pwd',
-    'ls -l',
-  ];
-
-  // Read environment file and modify DATABASE_URL
-  const envContent = readFileSync(props.envFile, 'utf8');
-  const modifiedEnvContent = envContent.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL=${databaseEndpoint}`);
-
-  const appCommands = [
+      '#!/bin/bash',
+      'set -e',
+      'set -x',
+      'yum update -y',
+      'yum install -y docker-compose-plugin git',
+      'systemctl start docker',
+      'systemctl enable docker',
+      'sleep 10',
+      'systemctl status docker',
+      'exec 1>>/var/log/user-data.log 2>&1',
+      'echo "Starting User Data Execution at $(date)"',
       'cd /opt',
       'git clone https://github.com/compdemocracy/polis.git polis',
       'cd /opt/polis',
       `git checkout ${props.branch || defaultBranch}`,
-      'cat > .env << \'ENVEOF\'',
-      modifiedEnvContent, // Use modified content
-      'ENVEOF',
-      `cd ${isMathWorker ? 'math' : 'server'}`,
-      `docker pull compdemocracy/polis-${isMathWorker ? 'math' : 'server'}:latest`,
-      'docker run -d \\',
-      `    --name polis-${isMathWorker ? 'math' : 'server'} \\`,
-      '    --restart unless-stopped \\',
-      '    --memory-reservation=2g \\',
-      '    --memory=$(free -b | awk \'/Mem:/ {printf "%.0f", $2*0.8}\') \\',
-      '    --env-file ../.env \\', // Use the modified .env file
-      `    compdemocracy/polis-${isMathWorker ? 'math' : 'server'}:latest`,
+      'cp example.env .env',
+      `sed -i 's|^DATABASE_URL=.*|DATABASE_URL=${databaseUrl}|' .env`,
+      // Set SERVICE environment variable based on isMathWorker
+      `export SERVICE=${isMathWorker ? 'math' : 'server'}`,
+      `export DATABASE_URL="${databaseUrl}"`, // Pass the database URL
+      // Use a single docker compose command
+      'docker compose up -d'
   ];
-
-  userData.addCommands(...baseCommands, ...appCommands);
+  userData.addCommands(...baseCommands);
   return userData;
 }
 
@@ -198,7 +229,7 @@ export class CdkStack extends cdk.Stack {
     // --- Launch Templates ---
     const webLaunchTemplate = new ec2.LaunchTemplate(this, 'WebLaunchTemplate', {
       machineImage: machineImageWeb,
-      userData: createPolisUserData(props, false, databaseUrl),
+      userData: createPolisUserData_DockerCompose(props, databaseUrl, false),
       instanceType: instanceTypeWeb,
       securityGroup: webSecurityGroup,
       keyName: props.enableSSHAccess && props.webKeyPairName ? props.webKeyPairName : undefined, // Conditionally add key pair
@@ -207,7 +238,7 @@ export class CdkStack extends cdk.Stack {
 
     const mathWorkerLaunchTemplate = new ec2.LaunchTemplate(this, 'MathWorkerLaunchTemplate', {
       machineImage: machineImageMathWorker,
-      userData: createPolisUserData(props, true, databaseUrl),
+      userData: createPolisUserData_DockerCompose(props, databaseUrl, true),
       instanceType: instanceTypeMathWorker,
       securityGroup: mathWorkerSecurityGroup,
       keyName: props.enableSSHAccess && props.mathWorkerKeyPairName ? props.mathWorkerKeyPairName : undefined,
@@ -220,11 +251,6 @@ export class CdkStack extends cdk.Stack {
       minCapacity: 2,
       maxCapacity: 10,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      signals: autoscaling.Signals.waitForMinCapacity({
-        minSuccessPercentage: 90,
-        // Optional: Add a warm-up period:
-        // timeout: cdk.Duration.minutes(10),
-      }),
     });
 
     const asgMathWorker = new autoscaling.AutoScalingGroup(this, 'AsgMathWorker', {
@@ -235,11 +261,6 @@ export class CdkStack extends cdk.Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
       },
-      signals: autoscaling.Signals.waitForMinCapacity({
-        minSuccessPercentage: 90,
-        // Optional: Add a warm-up period:
-        // timeout: cdk.Duration.minutes(10),
-      }),
     });
 
     // Allow traffic from the web ASG to the database
