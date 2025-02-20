@@ -161,6 +161,24 @@ export class CdkStack extends cdk.Stack {
       subnetGroup: dbSubnetGroup,
     });
 
+    const dbSecretArnParam = new ssm.StringParameter(this, 'DBSecretArnParameter', {
+      parameterName: '/polis/db-secret-arn',
+      stringValue: db.secret!.secretArn,
+      description: 'SSM Parameter storing the ARN of the Polis Database Secret',
+    });
+
+    const dbHostParam = new ssm.StringParameter(this, 'DBHostParameter', {
+      parameterName: '/aws/reference/ec2/DB_HOST',
+      stringValue: db.dbInstanceEndpointAddress,
+      description: 'SSM Parameter storing the Polis Database Host',
+    });
+
+    const dbPortParam = new ssm.StringParameter(this, 'DBPortParameter', {
+      parameterName: '/aws/reference/ec2/DB_PORT',
+      stringValue: db.dbInstanceEndpointPort,
+      description: 'SSM Parameter storing the Polis Database Port',
+    });
+
     const usrdata = (CLOUDWATCH_LOG_GROUP_NAME: string, service: string) => {
       let ld;
       ld = ec2.UserData.forLinux();
@@ -178,6 +196,7 @@ export class CdkStack extends cdk.Stack {
         'sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose',
         'sudo chmod +x /usr/local/bin/docker-compose',
         'docker-compose --version', // Verify installation
+        'sudo yum install -y jq',
         `export SERVICE=${service}`,
         'exec 1>>/var/log/user-data.log 2>&1',
         'echo "Finished User Data Execution at $(date)"',

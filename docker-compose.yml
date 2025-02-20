@@ -30,7 +30,7 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     env_file:
       - ${SERVER_ENV_FILE:-.env}
-    image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis/polis-server:${TAG:-initial-tag}
+    image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis:${TAG:-server-latest}
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -38,7 +38,7 @@ services:
       args:
         NODE_ENV: production
       labels:
-        polis_tag: ${TAG:-dev}
+        polis_tag: ${TAG:-server-latest}
     depends_on:
       - "file-server"
     networks:
@@ -50,11 +50,11 @@ services:
       - server-logs:/app/logs
 
   math:
-    image: ${ECR_REPO_URI}/polis-math:${TAG:-dev}
+    image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis:${TAG:-math-latest}
     build:
       context: ./math
       labels:
-        polis_tag: ${TAG:-dev}
+        polis_tag: ${TAG:-math-latest}
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - LOGGING_LEVEL=${MATH_LOG_LEVEL:-warn}
