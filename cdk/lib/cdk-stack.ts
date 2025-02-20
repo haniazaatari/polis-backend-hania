@@ -6,11 +6,12 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
-import * as cr from 'aws-cdk-lib/custom-resources';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
-import { readFileSync } from 'fs';
 
 interface PolisStackProps extends cdk.StackProps {
   domainName?: string;
@@ -22,83 +23,6 @@ interface PolisStackProps extends cdk.StackProps {
   mathWorkerKeyPairName?: string; // Key pair for math worker
 }
 const defaultBranch = 'edge';
-
-// function createPolisUserData(props: PolisStackProps, isMathWorker: boolean, databaseEndpoint: string): ec2.UserData {
-//   const userData = ec2.UserData.forLinux();
-
-//   const baseCommands = [
-//     '#!/bin/bash',
-//     'set -e',
-//     'set -x',
-//     // Use yum instead of dnf
-//     'yum update -y',
-//     'yum install -y docker git',
-//     'systemctl start docker',
-//     'systemctl enable docker',
-//     // Improved logging
-//     'exec 1>>/var/log/user-data.log 2>&1',
-//     'echo "Starting User Data Execution at $(date)"', // Timestamp
-//     'pwd',
-//     'ls -l',
-//   ];
-
-//   // Read environment file and modify DATABASE_URL
-//   const envContent = readFileSync(props.envFile, 'utf8');
-//   const modifiedEnvContent = envContent.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL=${databaseEndpoint}`);
-
-//   const appCommands = [
-//       'cd /opt',
-//       'git clone https://github.com/compdemocracy/polis.git polis',
-//       'cd /opt/polis',
-//       `git checkout ${props.branch || defaultBranch}`,
-//       'cat > .env << \'ENVEOF\'',
-//       modifiedEnvContent, // Use modified content
-//       'ENVEOF',
-//       `cd ${isMathWorker ? 'math' : 'server'}`,
-//       `docker pull compdemocracy/polis-${isMathWorker ? 'math' : 'server'}:latest`,
-//       'docker run -d \\',
-//       `    --name polis-${isMathWorker ? 'math' : 'server'} \\`,
-//       '    --restart unless-stopped \\',
-//       '    --memory-reservation=2g \\',
-//       '    --memory=$(free -b | awk \'/Mem:/ {printf "%.0f", $2*0.8}\') \\',
-//       '    --env-file ../.env \\', // Use the modified .env file
-//       `    compdemocracy/polis-${isMathWorker ? 'math' : 'server'}:latest`,
-//   ];
-
-//   userData.addCommands(...baseCommands, ...appCommands);
-//   return userData;
-// }
-
-function createPolisUserData_DockerCompose(props: PolisStackProps, databaseUrl: string, isMathWorker: boolean): ec2.UserData {
-  const userData = ec2.UserData.forLinux();
-
-  const baseCommands = [
-      '#!/bin/bash',
-      'set -e',
-      'set -x',
-      'sudo yum install -y amazon-linux-extras',
-      'sudo amazon-linux-extras install docker',
-      'sudo systemctl start docker',
-      'sudo usermod -a -G docker $USER',
-      'sudo systemctl enable docker',
-      'sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose',
-      'sudo chmod +x /usr/local/bin/docker-compose',
-      'exec 1>>/var/log/user-data.log 2>&1',
-      'echo "Starting User Data Execution at $(date)"',
-      'cd /opt',
-      'git clone https://github.com/compdemocracy/polis.git polis',
-      'cd /opt/polis',
-      'git checkout te-cdk-replatform', //DEBUG ENTRY
-      // `git checkout ${props.branch || defaultBranch}`,
-      'cp example.env .env',
-      `sed -i 's|^DATABASE_URL=.*|DATABASE_URL=${databaseUrl}|' .env`,
-      `export SERVICE=${isMathWorker ? 'math' : 'server'}`,
-      `export DATABASE_URL="${databaseUrl}"`,
-      `docker-compose up -d ${isMathWorker ? 'math' : 'server'}`
-  ];
-  userData.addCommands(...baseCommands);
-  return userData;
-}
 
 export class CdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PolisStackProps) {
@@ -127,6 +51,8 @@ export class CdkStack extends cdk.Stack {
       ]
     });
 
+    const logGroup = new logs.LogGroup(this, 'LogGroup');
+
     const instanceTypeWeb = ec2.InstanceType.of(ec2.InstanceClass.M3, ec2.InstanceSize.MEDIUM);
     const machineImageWeb = new ec2.AmazonLinuxImage({ generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2 });
     const instanceTypeMathWorker = ec2.InstanceType.of(ec2.InstanceClass.C5, ec2.InstanceSize.XLARGE2);
@@ -150,48 +76,58 @@ export class CdkStack extends cdk.Stack {
     }
 
     // Key Pair Creation
-    let webKeyPairName = props.webKeyPairName;
-    if (props.enableSSHAccess && !webKeyPairName) {
-      webKeyPairName = `${id}-WebKeyPair-${this.region}`;
-      new ec2.CfnKeyPair(this, 'WebKeyPair', {
-        keyName: webKeyPairName,
-      });
+    let webKeyPair: ec2.IKeyPair | undefined;
+    if (props.enableSSHAccess) {
+      webKeyPair = props.webKeyPairName
+      ? ec2.KeyPair.fromKeyPairName(this, 'WebKeyPair', props.webKeyPairName)
+      : new ec2.KeyPair(this, 'WebKeyPair');
     }
 
-    let mathWorkerKeyPairName = props.mathWorkerKeyPairName;
-    if (props.enableSSHAccess && !mathWorkerKeyPairName) {
-      mathWorkerKeyPairName = `${id}-MathWorkerKeyPair-${this.region}`;
-      new ec2.CfnKeyPair(this, 'MathWorkerKeyPair', {
-        keyName: mathWorkerKeyPairName,
-      });
-    }
+    let mathWorkerKeyPair: ec2.IKeyPair | undefined;
+      if (props.enableSSHAccess) {
+        mathWorkerKeyPair = props.mathWorkerKeyPairName
+        ? ec2.KeyPair.fromKeyPairName(this, 'MathWorkerKeyPair', props.mathWorkerKeyPairName)
+        : new ec2.KeyPair(this, 'MathWorkerKeyPair');
+      }
 
-    // Create IAM role for the math instance
-    const mathRole = new iam.Role(this, 'MathWorkerRole', {
+    const instanceRole = new iam.Role(this, 'InstanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+      managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEC2RoleforAWSCodeDeploy'), // Add CodeDeploy permissions
+      ],
     });
 
-    mathRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
-    );
-
-    // Create IAM role for the web instance
-    const webRole = new iam.Role(this, 'WebRole', {
-      assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
+    // IAM Role for CodeDeploy
+    const codeDeployRole = new iam.Role(this, 'CodeDeployRole', {
+      assumedBy: new iam.ServicePrincipal('codedeploy.amazonaws.com'),
+      managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSCodeDeployRole'),
+      ],
     });
-
-    webRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore')
-    );
 
     // ALB Security Group - Allow HTTP/HTTPS from anywhere
     const lbSecurityGroup = new ec2.SecurityGroup(this, 'LBSecurityGroup', {
-        vpc,
-        description: 'Security group for the load balancer',
-        allowAllOutbound: true,
+      vpc,
+      description: 'Security group for the load balancer',
+      allowAllOutbound: true,
     });
     lbSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP from anywhere');
     lbSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow HTTPS from anywhere');
+
+    // things are dockerized so we need ECR
+    const ecrRepository = new ecr.Repository(this, 'PolisRepository', {
+      repositoryName: 'polis',
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // fine for alpha testing - change to retain after
+      imageScanOnPush: true, // Enable image scanning (recommended)
+    });
+
+    ecrRepository.grantPull(instanceRole);
+
+    const imageTagParameter = new ssm.StringParameter(this, 'ImageTagParameter', {
+      parameterName: '/polis/image-tag',
+      stringValue: 'initial-tag', //CI/CD will update this
+    });
 
 
     // --- Web ASG ---
@@ -224,27 +160,77 @@ export class CdkStack extends cdk.Stack {
       subnetGroup: dbSubnetGroup,
     });
 
-    // Get the secret *value* as a Token. This is the correct way.
-    const secretValue = db.secret!.secretValueFromJson('password');
-    const username = db.secret!.secretValueFromJson('username');
+    const usrdata = (CLOUDWATCH_LOG_GROUP_NAME: string, service: string) => {
+      let ld;
+      ld = ec2.UserData.forLinux();
+      ld.addCommands(
+        '#!/bin/bash',
+        'set -e',
+        'set -x',
+        'sudo yum update -y',
+        'sudo yum install -y amazon-cloudwatch-agent -y',
+        `cat << EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+  {
+    "agent": {
+      "metrics_collection_interval": 60,
+      "run_as_user": "root"
+    },
+    "logs": {
+      "logs_collected": {
+        "files": {
+          "collect_list": [
+            {
+              "file_path": "/var/log/user-data.log",
+              "log_group_name": "${CLOUDWATCH_LOG_GROUP_NAME}",
+              "log_stream_name": "{instance_id}-user-data",
+              "timestamp_format": "%Y-%m-%d %H:%M:%S UTC"
+            },
+            {
+              "file_path": "/var/log/docker/containers/*.log",
+              "log_group_name": "${CLOUDWATCH_LOG_GROUP_NAME}",
+              "log_stream_name": "{instance_id}-docker-container",
+              "timestamp_format": "%Y-%m-%dT%H:%M:%S.%fZ",
+              "multi_line_start_pattern": "^\\\\d{4}-\\\\d{2}-\\\\d{2}T\\\\d{2}:\\\\d{2}:\\\\d{2}\\\\.\\\\d+Z"
+            }
+          ]
+        }
+      }
+    }
+  }
+  EOF`,
+        'sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s',
+        'sudo yum install -y amazon-linux-extras',
+        'sudo amazon-linux-extras install docker -y',
+        'sudo systemctl start docker',
+        'sudo systemctl enable docker',
+        'sudo usermod -a -G docker ec2-user',
+        'sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose',
+        'sudo chmod +x /usr/local/bin/docker-compose',
+        'docker-compose --version', // Verify installation
+        `export SERVICE=${service}`,
+        'exec 1>>/var/log/user-data.log 2>&1',
+        'echo "Finished User Data Execution at $(date)"',
+      );
+      return ld;
+    };
 
     // --- Launch Templates ---
     const webLaunchTemplate = new ec2.LaunchTemplate(this, 'WebLaunchTemplate', {
       machineImage: machineImageWeb,
-      userData: createPolisUserData_DockerCompose(props, `postgres://${cdk.Token.asString(username)}:${cdk.Token.asString(secretValue)}@${db.dbInstanceEndpointAddress}:${db.dbInstanceEndpointPort}/polisdb`, false),
+      userData: usrdata(logGroup.logGroupName, "server"),
       instanceType: instanceTypeWeb,
       securityGroup: webSecurityGroup,
-      keyName: props.enableSSHAccess && props.webKeyPairName ? props.webKeyPairName : undefined, // Conditionally add key pair
-      role: webRole,
+      keyPair: props.enableSSHAccess ? webKeyPair : undefined, // Conditionally add key pair
+      role: instanceRole,
   });
 
     const mathWorkerLaunchTemplate = new ec2.LaunchTemplate(this, 'MathWorkerLaunchTemplate', {
       machineImage: machineImageMathWorker,
-      userData: createPolisUserData_DockerCompose(props, `postgres://${cdk.Token.asString(username)}:${cdk.Token.asString(secretValue)}@${db.dbInstanceEndpointAddress}:${db.dbInstanceEndpointPort}/polisdb`, true),
+      userData: usrdata(logGroup.logGroupName, "math"),
       instanceType: instanceTypeMathWorker,
       securityGroup: mathWorkerSecurityGroup,
-      keyName: props.enableSSHAccess && props.mathWorkerKeyPairName ? props.mathWorkerKeyPairName : undefined,
-      role: mathRole,
+      keyPair: props.enableSSHAccess ? mathWorkerKeyPair : undefined,
+      role: instanceRole,
     });
 
     const asgWeb = new autoscaling.AutoScalingGroup(this, 'Asg', {
@@ -263,6 +249,21 @@ export class CdkStack extends cdk.Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
       },
+    });
+
+    // DEPLOY STUFF
+    const application = new codedeploy.ServerApplication(this, 'CodeDeployApplication', {
+      applicationName: 'PolisApplication',
+    });
+  
+    const deploymentGroup = new codedeploy.ServerDeploymentGroup(this, 'DeploymentGroup', {
+      application,
+      deploymentGroupName: 'PolisDeploymentGroup',
+      autoScalingGroups: [asgWeb, asgMathWorker], // Your ASGs
+      deploymentConfig: codedeploy.ServerDeploymentConfig.ONE_AT_A_TIME, // Or another config
+      role: codeDeployRole, // The IAM role for CodeDeploy
+      installAgent: true, // Installs the CodeDeploy agent.
+      // we also need configure alarms and auto-rollback here.
     });
 
     // Allow traffic from the web ASG to the database
@@ -289,88 +290,9 @@ export class CdkStack extends cdk.Stack {
     //   recordName: props?.domainName,
     //   target: route53.RecordTarget.fromAlias(new targets.LoadBalancerTarget(lb)),
     // });
-
-    // CloudWatch Logging
-    const logGroup = new logs.LogGroup(this, 'LogGroup');
     asgWeb.node.addDependency(logGroup);
     asgMathWorker.node.addDependency(logGroup);
     asgWeb.node.addDependency(db);
     asgMathWorker.node.addDependency(db);
-
-    // Custom Resource to update the default version of Web Launch Template
-    const getLatestWebLTVersion = new cr.AwsCustomResource(this, 'GetLatestWebLTVersion', {
-      onCreate: {
-        service: 'EC2',
-        action: 'describeLaunchTemplateVersions',
-        parameters: {
-          LaunchTemplateId: webLaunchTemplate.launchTemplateId,
-          Versions: ['$Latest']
-      },
-      physicalResourceId: cr.PhysicalResourceId.of(`${id}-GetLatestWebLTVersion`),
-      },
-      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({ resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE })
-    });
-
-    new cr.AwsCustomResource(this, 'ModifyWebLaunchTemplateDefaultVersion', {
-      onCreate: {
-        service: 'EC2',
-        action: 'modifyLaunchTemplate',
-        parameters: {
-          LaunchTemplateId: webLaunchTemplate.launchTemplateId,
-          DefaultVersion: getLatestWebLTVersion.getResponseField('LaunchTemplateVersions.0.VersionNumber'),
-        },
-        physicalResourceId: cr.PhysicalResourceId.of(`${id}-ModifyWebLaunchTemplateDefaultVersion`),
-      },
-      onUpdate: {
-        service: 'EC2',
-        action: 'modifyLaunchTemplate',
-        parameters: {
-          LaunchTemplateId: webLaunchTemplate.launchTemplateId,
-          DefaultVersion: '$LATEST'
-        },
-        physicalResourceId: cr.PhysicalResourceId.of(webLaunchTemplate.launchTemplateId as string),
-      },
-      policy: cr.AwsCustomResourcePolicy.fromSdkCalls({ resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE }),
-    }).node.addDependency(getLatestWebLTVersion);
-
-
-  // Custom Resource to update the default version of Math Worker Launch Template
-  const getLatestMathWorkerLTVersion = new cr.AwsCustomResource(this, 'GetLatestMathWorkerLTVersion', {
-    onCreate: {
-      service: 'EC2',
-      action: 'describeLaunchTemplateVersions',
-      parameters: {
-        LaunchTemplateId: mathWorkerLaunchTemplate.launchTemplateId,
-        Versions: ['$Latest']
-      },
-      physicalResourceId: cr.PhysicalResourceId.of(`${id}-GetLatestMathWorkerLTVersion`),
-    },
-    policy: cr.AwsCustomResourcePolicy.fromSdkCalls({ resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE })
-  });
-
-  new cr.AwsCustomResource(this, 'ModifyMathWorkerLaunchTemplateDefaultVersion', {
-    onCreate: {
-      service: 'EC2',
-      action: 'modifyLaunchTemplate',
-      parameters: {
-        LaunchTemplateId: mathWorkerLaunchTemplate.launchTemplateId,
-        DefaultVersion: getLatestMathWorkerLTVersion.getResponseField('LaunchTemplateVersions.0.VersionNumber'),
-      },
-      physicalResourceId: cr.PhysicalResourceId.of(`${id}-ModifyMathWorkerLTVersion`),
-    },
-    onUpdate: {
-      service: 'EC2',
-      action: 'modifyLaunchTemplate',
-      parameters: {
-        LaunchTemplateId: mathWorkerLaunchTemplate.launchTemplateId,
-        DefaultVersion: '$LATEST'
-      },
-      physicalResourceId: cr.PhysicalResourceId.of(mathWorkerLaunchTemplate.launchTemplateId as string),
-    },
-    policy: cr.AwsCustomResourcePolicy.fromSdkCalls({ resources: cr.AwsCustomResourcePolicy.ANY_RESOURCE }),
-  }).node.addDependency(getLatestMathWorkerLTVersion); // CRUCIAL: Add dependency
-    new cdk.CfnOutput(this, 'LoadBalancerDNS', {
-      value: lb.loadBalancerDnsName,
-    });
   }
 }
