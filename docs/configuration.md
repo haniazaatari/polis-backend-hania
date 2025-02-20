@@ -46,8 +46,7 @@ If you are doing development on a url other than `localhost` or `localhost:5000`
 **`API_DEV_HOSTNAME`** value to your development hostname:port, e.g. `myhost:8000` or `api.testserver.net`.
 **`DEV_MODE`** should be `true`.
 
-If you are deploying to a custom domain (not `pol.is`) then you need to update both the **`API_PROD_HOSTNAME`** and
-**`DOMAIN_OVERRIDE`** values to your custom hostname (omitting `http(s)://` protocol).
+If you are deploying to a custom domain (not `pol.is`) then you need to update **`API_PROD_HOSTNAME`** to your custom hostname (omitting `http(s)://` protocol).
 **`DEV_MODE`** should be `false`.
 
 ### General Settings
@@ -118,12 +117,10 @@ If you are deploying to a custom domain (not `pol.is`) then you need to update b
 ### URL/Hostname Settings
 
 - **`API_DEV_HOSTNAME`** typically `localhost` unless you are running a development instance elsewhere.
-- **`API_PROD_HOSTNAME`** the hostname of your site (e.g. `pol.is`, or `example.com`). Should match **`DOMAIN_OVERRIDE`**. (In the future these two options may be combined into one.)
-- **`DOMAIN_OVERRIDE`** the hostname of your site. Should match **`API_PROD_HOSTNAME`**.
+- **`API_PROD_HOSTNAME`** the hostname of your site (e.g. `pol.is`, or `example.com`).
 - **`DOMAIN_WHITELIST_ITEM_01`** - **`08`** up to 8 possible additional whitelisted domains for client applications to make API requests from. Typical setups that use the same URL for the API service as for the public-facing web sites do not need to configure these.
 - **`EMBED_SERVICE_HOSTNAME`** should match **`API_DEV_HOSTNAME`** in production, or **`API_DEV_HOSTNAME`** in development. Embedded conversations make API requests to this host.
 - **`DEV_API_EXTERNAL_PORT`** The port that the API server will be exposed to the outside world, in development, via docker-compose.dev.yml. This should match the port of **`API_DEV_HOSTNAME`** if customized.
-- **`SERVICE_URL`** used by client-report to make API calls. Only necessary if client-report is hosted separately from the API service. Can be left blank.
 - **`STATIC_FILES_HOST`** Used by the API service to fetch static assets (the compiled client applications) from a static file server. Within the docker compose setup this is `file-server`, but could be an external hostname, such as a CDN or S3 bucket.
 
 ### Third Party API Credentials

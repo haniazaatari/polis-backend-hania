@@ -5,8 +5,6 @@ const path = require('path');
 const webpack = require('webpack');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
-const serviceUrl = process.env.SERVICE_URL || 'http://localhost:5000';
-
 module.exports = {
   ...common,
   mode: 'development',
@@ -23,7 +21,7 @@ module.exports = {
     }),
     new webpack.DefinePlugin({
       'process.env.NODE_ENV': JSON.stringify('development'),
-      'process.env.SERVICE_URL': JSON.stringify(process.env.SERVICE_URL),
+      'process.env.API_DEV_HOSTNAME': JSON.stringify(process.env.API_DEV_HOSTNAME || 'localhost:5000'),
     }),
     new webpack.HotModuleReplacementPlugin(),
   ],
@@ -34,7 +32,7 @@ module.exports = {
     port: 5010,
     proxy: {
       '/api': {
-        target: serviceUrl,
+        target: `http://${process.env.API_DEV_HOSTNAME}`,
         secure: false
       }
     },

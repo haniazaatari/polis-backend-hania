@@ -14,31 +14,16 @@
 // If client-report is running on any polis production hostname,
 // it should send requests to that hostname.
 //
-// Otherwise, use the SERVICE_URL environment variable, if set, or default to
-// the current origin (e.g. "https://mypolis.xyz/").
-
-// NOTE: SERVICE_URL is currently not present in the production build.
-// It is only present in the dev build via webpack-dev-server.
-
-const serviceUrl = process.env.SERVICE_URL;
-const hostname = self.location.hostname;
-const port = self.location.port;
+// Otherwise defaults to the current origin (e.g. "https://mypolis.xyz/").
 
 const getDomainPrefix = () => {
-  if (hostname === 'localhost') {
-    if (serviceUrl) return `${serviceUrl}/`;
-    if (port === '' || port === '80') return 'http://localhost/';
-    return 'http://localhost:5000/';
+  if (process.env.NODE_ENV === 'development') {
+    return `http://${process.env.API_DEV_HOSTNAME}/`;
   }
-
-  if (hostname.includes('pol.is')) return `https://${hostname}/`;
-  if (hostname.includes('polis.io')) return `https://${hostname}/`;
-
-  if (serviceUrl) return `${serviceUrl}/`;
-
-  return `${self.origin}/`;
-};
+  return `${document.location.protocol}//${document.location.host}/`;
+}
 
 const urlPrefix = getDomainPrefix();
+console.log('urlPrefix', urlPrefix);
 
 export default { urlPrefix };

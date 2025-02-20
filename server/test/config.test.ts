@@ -26,22 +26,8 @@ describe("Config", () => {
       expect(Config.getServerNameWithProtocol(req)).toBe('https://pol.is');
     });
 
-    test('returns domain override value when DOMAIN_OVERRIDE is set', async () => {
-      jest.replaceProperty(process, 'env', {DEV_MODE: 'false', DOMAIN_OVERRIDE: 'example.co'});
-
-      const { default: Config } = await import('../src/config');
-      const req = {
-        protocol: 'http',
-        headers: {
-          host: 'localhost'
-        }
-      };
-
-      expect(Config.getServerNameWithProtocol(req)).toBe('http://example.co');
-    });
-
     test('returns given req domain when DEV_MODE is true', async () => {
-      jest.replaceProperty(process, 'env', {DEV_MODE: 'true', DOMAIN_OVERRIDE: 'example.co'});
+      jest.replaceProperty(process, 'env', {DEV_MODE: 'true'});
 
       const { default: Config } = await import('../src/config');
       const req = {
@@ -55,7 +41,7 @@ describe("Config", () => {
     });
 
     test('returns https://embed.pol.is when req domain contains embed.pol.is', async () => {
-      jest.replaceProperty(process, 'env', {DEV_MODE: 'true', DOMAIN_OVERRIDE: 'example.co'});
+      jest.replaceProperty(process, 'env', {DEV_MODE: 'true'});
 
       const { default: Config } = await import('../src/config');
       const req = {

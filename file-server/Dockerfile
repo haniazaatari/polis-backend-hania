@@ -67,9 +67,7 @@ COPY client-report/. .
 
 # GIT_HASH will be set properly when running `make` (see Makefile).
 ARG GIT_HASH
-ARG SERVICE_URL
 ENV GIT_HASH=${GIT_HASH:-placeholder}
-ENV SERVICE_URL=${SERVICE_URL}
 
 RUN npm run build:prod
 

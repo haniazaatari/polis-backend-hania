@@ -22,8 +22,6 @@ COPY . .
 # GIT_HASH is optional and will be set properly when running `make` (see Makefile).
 # Or may be passed in at build time with --build-arg GIT_HASH=$(git rev-parse --short HEAD)
 ARG GIT_HASH
-ARG SERVICE_URL
 ENV GIT_HASH=${GIT_HASH:-placeholder}
-ENV SERVICE_URL=${SERVICE_URL}
 
 CMD npm run build:prod
