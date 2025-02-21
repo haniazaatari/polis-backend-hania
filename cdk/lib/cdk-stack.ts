@@ -95,7 +95,9 @@ export class CdkStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       managedPolicies: [
           iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
-          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEC2RoleforAWSCodeDeploy'), // Add CodeDeploy permissions
+          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEC2RoleforAWSCodeDeploy'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName('SecretsManagerReadWrite'),
+          iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ContainerRegistryReadOnly')
       ],
     });
 
@@ -168,13 +170,13 @@ export class CdkStack extends cdk.Stack {
     });
 
     const dbHostParam = new ssm.StringParameter(this, 'DBHostParameter', {
-      parameterName: '/aws/reference/ec2/DB_HOST',
+      parameterName: '/polis/db-host',
       stringValue: db.dbInstanceEndpointAddress,
       description: 'SSM Parameter storing the Polis Database Host',
     });
 
     const dbPortParam = new ssm.StringParameter(this, 'DBPortParameter', {
-      parameterName: '/aws/reference/ec2/DB_PORT',
+      parameterName: '/polis/db-port',
       stringValue: db.dbInstanceEndpointPort,
       description: 'SSM Parameter storing the Polis Database Port',
     });

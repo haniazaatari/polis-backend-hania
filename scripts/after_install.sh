@@ -26,7 +26,7 @@ fi
 # --- Database Configuration ---
 
 # 1. Get Secret ARN from SSM Parameter
-SECRET_ARN=$(aws ssm get-parameter --name /polis/db-secret-arn --query 'Parameter.Value' --output text)
+SECRET_ARN=$(aws ssm get-parameter --name /polis/db-secret-arn --query 'Parameter.Value' --output text --region us-east-1)
 
 if [ -z "$SECRET_ARN" ]; then
   echo "Error: Could not retrieve DB Secret ARN from SSM Parameter /polis/db-secret-arn"
@@ -36,7 +36,7 @@ fi
 echo "Retrieved Secret ARN from SSM Parameter: $SECRET_ARN"
 
 # 2. Retrieve Secret Value from Secrets Manager
-SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --query 'SecretString' --output text)
+SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --query 'SecretString' --output text --region us-east-1)
 
 if [ -z "$SECRET_JSON" ]; then
   echo "Error: Could not retrieve DB Secret from Secrets Manager using ARN: $SECRET_ARN"
@@ -57,8 +57,8 @@ fi
 echo "Parsed DB_USER and DB_PASSWORD from Secret JSON"
 
 # 4. Get DB Host and Port from SSM Parameters (already present, but ensure correct parameter names)
-DB_HOST=$(aws ssm get-parameter --name /aws/reference/ec2/DB_HOST --query 'Parameter.Value' --output text)
-DB_PORT=$(aws ssm get-parameter --name /aws/reference/ec2/DB_PORT --query 'Parameter.Value' --output text)
+DB_HOST=$(aws ssm get-parameter --name /polis/db-host --query 'Parameter.Value' --output text --region us-east-1)
+DB_PORT=$(aws ssm get-parameter --name /polis/db-port --query 'Parameter.Value' --output text --region us-east-1)
 
 if [ -z "$DB_HOST" ] || [ -z "$DB_PORT" ]; then
   echo "Error: Could not retrieve DB_HOST or DB_PORT from SSM Parameters"
@@ -76,7 +76,7 @@ echo "Updated DATABASE_URL in .env file"
 
 # Get the image tag from SSM (already present, but might be updated later for image tags)
 # IMAGE_TAG=$(aws ssm get-parameter --name /polis/image-tag --query 'Parameter.Value' --output text --with-decryption)
-ECR_REPO_URI=$(aws ecr describe-repositories --repository-names polis --query 'repositories[0].repositoryUri' --output text)
+ECR_REPO_URI=$(aws ecr describe-repositories --repository-names polis --query 'repositories[0].repositoryUri' --output text --region us-east-1)
 
 # Set environment variable for docker-compose (already present)
 # export IMAGE_TAG
