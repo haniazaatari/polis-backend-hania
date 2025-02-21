@@ -119,14 +119,22 @@ export class CdkStack extends cdk.Stack {
     lbSecurityGroup.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow HTTPS from anywhere');
 
     // things are dockerized so we need ECR
-    const ecrRepository = new ecr.Repository(this, 'PolisRepository', {
-      repositoryName: 'polis',
+    const ecrWebRepository = new ecr.Repository(this, 'PolisRepositoryServer', {
+      repositoryName: 'polis/server',
       removalPolicy: cdk.RemovalPolicy.DESTROY, // fine for alpha testing - change to retain after
       imageScanOnPush: true, // Enable image scanning (recommended)
     });
 
-    ecrRepository.grantPull(instanceRole);
+    const ecrMathRepository = new ecr.Repository(this, 'PolisRepositoryMath', {
+      repositoryName: 'polis/math',
+      removalPolicy: cdk.RemovalPolicy.DESTROY, // fine for alpha testing - change to retain after
+      imageScanOnPush: true, // Enable image scanning (recommended)
+    });
 
+    ecrWebRepository.grantPull(instanceRole);
+    ecrMathRepository.grantPull(instanceRole);
+
+    // might remove this, not sure it's necessary since latest image is always pulled
     const imageTagParameter = new ssm.StringParameter(this, 'ImageTagParameter', {
       parameterName: '/polis/image-tag',
       stringValue: 'initial-tag', //CI/CD will update this

@@ -1,6 +1,6 @@
 # Pol.is AWS platform arch with CDK
 
-`domainName` and `dynamoTable` are needed props
+
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
 
