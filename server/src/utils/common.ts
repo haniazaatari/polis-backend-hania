@@ -39,7 +39,7 @@ type Mod = {
   ok: number;
 };
 
-const serverUrl = Config.getServerUrl();
+const serverUrl = Config.getServerNameWithProtocol();
 
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
 

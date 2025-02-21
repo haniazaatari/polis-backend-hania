@@ -157,7 +157,7 @@ function handle_POST_auth_pwresettoken(
 ) {
   let email = req.p.email;
 
-  let server = getServerNameWithProtocol(req);
+  let server = getServerNameWithProtocol();
 
   // let's clear the cookies here, in case something is borked.
   cookies.clearCookies(req, res);
@@ -190,7 +190,7 @@ function sendPasswordResetEmailFailure(email: any, server: any) {
 
 You may have used another email address to create your account.
 
-If you need to create a new account, you can do that here ${server}/home
+If you need to create a new account, you can do that here ${getServerNameWithProtocol()}/home
 
 Feel free to reply to this email if you need help.`;
 

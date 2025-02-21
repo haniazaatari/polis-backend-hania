@@ -20,7 +20,7 @@ export default {
   isDevMode: devMode,
   serverPort,
 
-  getServerNameWithProtocol: (req: any): string => {
+  getServerNameWithProtocol: (): string => {
     if (devMode) {
       // Use API_DEV_HOSTNAME, which should include the port.
       return `http://${devHostname}`;
@@ -34,14 +34,6 @@ export default {
       return devHostname;
     }
     return prodHostname;
-  },
-
-  getServerUrl: (): string => {
-    if (devMode) {
-      return `http://${devHostname}`;
-    } else {
-      return `https://${prodHostname}`;
-    }
   },
 
   adminEmailDataExport: process.env.ADMIN_EMAIL_DATA_EXPORT as string,
@@ -84,14 +76,14 @@ export default {
   shouldUseTranslationAPI: setGoogleApplicationCredentials(),
   staticFilesAdminPort: parseInt(
     process.env.STATIC_FILES_ADMIN_PORT ||
-      process.env.STATIC_FILES_PORT ||
-      "8080",
+    process.env.STATIC_FILES_PORT ||
+    "8080",
     10
   ),
   staticFilesParticipationPort: parseInt(
     process.env.STATIC_FILES_PARTICIPATION_PORT ||
-      process.env.STATIC_FILES_PORT ||
-      "8080",
+    process.env.STATIC_FILES_PORT ||
+    "8080",
     10
   ),
   staticFilesHost: process.env.STATIC_FILES_HOST as string,
