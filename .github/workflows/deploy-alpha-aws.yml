@@ -27,9 +27,9 @@ jobs:
 
       - name: Install Docker Compose
         run: |
-          sudo apt-get update
-          sudo apt-get install -y docker-compose-plugin # Install docker-compose plugin for docker CLI
-          docker compose version # Verify installation
+          sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version # Verify installation
         
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
