@@ -160,7 +160,7 @@ export class CdkStack extends cdk.Stack {
 
     const db = new rds.DatabaseInstance(this, 'Database', {
       engine: rds.DatabaseInstanceEngine.postgres({version: rds.PostgresEngineVersion.VER_17 }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE),
       vpc,
       allocatedStorage: 20,
       storageType: rds.StorageType.GP2,
@@ -223,7 +223,10 @@ export class CdkStack extends cdk.Stack {
 }
 EOF`,
         'sudo systemctl restart docker',
-        'sudo systemctl status docker'
+        'sudo systemctl status docker',
+        `echo "Writing service type '${service}' to /tmp/service_type.txt"`,
+        `echo "${service}" > /tmp/service_type.txt`,
+        `echo "Contents of /tmp/service_type.txt: $(cat /tmp/service_type.txt)"`
       );
       return ld;
     };
@@ -236,7 +239,7 @@ EOF`,
       securityGroup: webSecurityGroup,
       keyPair: props.enableSSHAccess ? webKeyPair : undefined, // Conditionally add key pair
       role: instanceRole,
-  });
+    });
 
     const mathWorkerLaunchTemplate = new ec2.LaunchTemplate(this, 'MathWorkerLaunchTemplate', {
       machineImage: machineImageMathWorker,

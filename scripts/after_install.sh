@@ -74,7 +74,11 @@ sed -i "s|^DATABASE_SSL=.*|DATABASE_SSL=true|" .env
 
 echo "Updated DATABASE_URL in .env file and SSL"
 
+SERVICE_FROM_FILE=$(cat /tmp/service_type.txt) # Read file content into variable
+
+echo "DEBUG: Service type read from /tmp/service_type.txt: [$SERVICE_FROM_FILE]"
+
 # Set environment variable for docker-compose (already present)
 # export IMAGE_TAG
 /usr/local/bin/docker-compose config # Validate
-/usr/local/bin/docker-compose up -d $SERVICE # Start Docker Compose service
+/usr/local/bin/docker-compose up -d $SERVICE_FROM_FILE # Start Docker Compose service
