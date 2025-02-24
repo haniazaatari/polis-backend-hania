@@ -314,7 +314,7 @@ EOF`,
     const hostedZone = route53.HostedZone.fromLookup(this, 'Zone', { domainName: 'pol.is' }); // Assuming 'pol.is' is the parent domain
     const certificate = new acm.Certificate(this, 'Certificate', {
       domainName: domainName, // e.g., awstest.pol.is
-      validation: acm.CertificateValidation.fromDns(hostedZone), // DNS validation
+      validation: acm.CertificateValidation.fromDns(),
     });
 
     const httpsListener = lb.addListener('HttpsListener', {
