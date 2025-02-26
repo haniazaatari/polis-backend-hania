@@ -337,7 +337,9 @@ EOF`,
     });
 
     asgWeb.node.addDependency(logGroup);
+    asgWeb.node.addDependency(webAppEnvVarsSecret);
     asgMathWorker.node.addDependency(logGroup);
+    asgMathWorker.node.addDependency(webAppEnvVarsSecret);
     asgWeb.node.addDependency(db);
     asgMathWorker.node.addDependency(db);
   }
