@@ -194,6 +194,9 @@ export class CdkStack extends cdk.Stack {
         '#!/bin/bash',
         'set -e',
         'set -x',
+        `echo "Writing service type '${service}' to /tmp/service_type.txt"`,
+        `echo "${service}" > /tmp/service_type.txt`,
+        `echo "Contents of /tmp/service_type.txt: $(cat /tmp/service_type.txt)"`,
         'sudo yum update -y',
         'sudo yum install -y amazon-cloudwatch-agent -y',
         'sudo yum install -y amazon-linux-extras',
@@ -220,10 +223,7 @@ export class CdkStack extends cdk.Stack {
 }
 EOF`,
         'sudo systemctl restart docker',
-        'sudo systemctl status docker',
-        `echo "Writing service type '${service}' to /tmp/service_type.txt"`,
-        `echo "${service}" > /tmp/service_type.txt`,
-        `echo "Contents of /tmp/service_type.txt: $(cat /tmp/service_type.txt)"`
+        'sudo systemctl status docker'
       );
       return ld;
     };
