@@ -17,10 +17,10 @@ fi
 cd polis
 
 # --- Fetch pre-configured .env from SSM Parameter Store ---
-PRE_CONFIGURED_ENV=$(aws ssm get-parameter --name "/polis/pre-configured-env" --query 'Parameter.Value' --output text --region us-east-1)
+PRE_CONFIGURED_ENV=$(aws ssm get-parameter --name "/polis/polis-web-app-env-vars" --query 'Parameter.Value' --output text --region us-east-1)
 
 if [ -z "$PRE_CONFIGURED_ENV" ]; then
-  echo "Error: Could not retrieve pre-configured .env from SSM Parameter /polis/pre-configured-env"
+  echo "Error: Could not retrieve pre-configured .env from SSM Parameter /polis/polis-web-app-env-vars"
   exit 1
 fi
 
