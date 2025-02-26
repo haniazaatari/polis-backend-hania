@@ -26,9 +26,10 @@ fi
 
 echo "Retrieved pre-configured .env from SSM Parameter"
 
-# --- Create .env file with pre-configured content ---
+# --- Create/Overwrite .env file with pre-configured content ---
+echo "Creating/Overwriting .env file with pre-configured content from SSM"
 echo "$PRE_CONFIGURED_ENV" > .env
-echo ".env file created with pre-configured content."
+echo ".env file created/overwritten with pre-configured content."
 
 # --- Database Configuration and Environment Variables from Secrets Manager ---
 # 1. Get Secret ARN from SSM Parameter
@@ -51,12 +52,8 @@ fi
 
 echo "Retrieved Secret JSON from Secrets Manager"
 
-# 3. Parse secrets JSON using jq
-SECRETS_VARS=$(echo "$SECRET_JSON" | jq -r 'to_entries[] | .key + "=" + (.value | tostring)')
-
-# --- Construct DATABASE_URL from secrets ---
-DATABASE_URL="postgres://${username}:${password}@${host}:${port}/${dbname}" # **IMPORTANT: Use variable names from Secrets Manager JSON**
-DATABASE_URL=$(echo "$SECRET_JSON" | jq -r '"postgres://\(.username):\(.password)@\(.host):\(.port)/\(.dbname)"') # Construct DATABASE_URL using jq
+# 3. Parse secrets JSON using jq to construct DATABASE_URL
+DATABASE_URL=$(echo "$SECRET_JSON" | jq -r '"postgres://\(.username):\(.password)@\(.host):\(.port)/\(.dbname)"')
 
 echo "Constructed DATABASE_URL: $DATABASE_URL"
 
