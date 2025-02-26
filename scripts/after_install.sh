@@ -17,10 +17,10 @@ fi
 cd polis
 
 # --- Fetch pre-configured .env from SSM Parameter Store ---
-PRE_CONFIGURED_ENV=$(aws ssm get-parameter --name "/polis/polis-web-app-env-vars" --query 'Parameter.Value' --output text --region us-east-1)
+PRE_CONFIGURED_ENV=$(aws ssm get-parameter --name "polis-web-app-env-vars" --query 'Parameter.Value' --output text --region us-east-1)
 
 if [ -z "$PRE_CONFIGURED_ENV" ]; then
-  echo "Error: Could not retrieve pre-configured .env from SSM Parameter /polis/polis-web-app-env-vars"
+  echo "Error: Could not retrieve pre-configured .env from SSM Parameter polis-web-app-env-vars"
   exit 1
 fi
 
@@ -52,8 +52,18 @@ fi
 
 echo "Retrieved Secret JSON from Secrets Manager"
 
-# 3. Parse secrets JSON using jq to construct DATABASE_URL
-DATABASE_URL=$(echo "$SECRET_JSON" | jq -r '"postgres://\(.username):\(.password)@\(.host):\(.port)/\(.dbname)"')
+# 3. Parse secrets JSON using jq to get dbname, username, password
+DB_USERNAME=$(echo "$SECRET_JSON" | jq -r '.username')
+DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r '.password')
+DB_NAME=$(echo "$SECRET_JSON" | jq -r '.dbname')
+
+# 4. Get DB Host and Port from SSM Parameters
+DB_HOST=$(aws ssm get-parameter --name "/polis/db-host" --query 'Parameter.Value' --output text --region us-east-1)
+DB_PORT=$(aws ssm get-parameter --name "/polis/db-port" --query 'Parameter.Value' --output text --region us-east-1)
+
+
+# --- Construct DATABASE_URL using values from Secrets Manager AND SSM Parameters ---
+DATABASE_URL="postgres://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
 echo "Constructed DATABASE_URL: $DATABASE_URL"
 
