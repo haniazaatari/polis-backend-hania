@@ -40,17 +40,27 @@ SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "$SECRET_ARN" --qu
 
 if [ -z "$SECRET_JSON" ]; then
   echo "Error: Could not retrieve DB Secret from Secrets Manager using ARN: $SECRET_ARN"
+  exit 1 # Exit if Secret Value cannot be retrieved
 fi
 
 echo "Retrieved Secret JSON from Secrets Manager"
 
-# 3. Parse secrets JSON using jq
+# 3. Parse secrets JSON using jq - **Corrected jq command to handle number values**
 SECRETS_VARS=$(echo "$SECRET_JSON" | jq -r 'to_entries[] | .key + "=" + (.value | tostring)')
 
-# 4. Read existing .env file into an associative array
+# 4. Read existing .env file into an associative array - **Robust Reading and Debugging**
 declare -A ENV_VARS
+echo "--- .env file content before reading into array ---"
+cat .env # Print the content of .env for debugging
+echo "--- End of .env file content ---"
+
 while IFS='=' read -r key value; do
-  ENV_VARS["$key"]="$value"
+  echo "DEBUG: Reading .env line - Key: [$key], Value: [$value]" # Debug output
+  if [[ -n "$key" ]]; then # Check if key is NOT empty
+    ENV_VARS["$key"]="$value"
+  else
+    echo "DEBUG: Skipping line with empty key in .env" # Debug output for empty key lines
+  fi
 done < .env
 
 echo "Existing .env file content read into ENV_VARS array"
