@@ -11,13 +11,15 @@ if [ ! -d "polis" ]; then
   echo "Cloning public repository from $GIT_REPO_URL, branch: $GIT_BRANCH (HTTPS - Public Repo)"
   git clone -b "$GIT_BRANCH" "$GIT_REPO_URL" polis
 else
-  echo "Polis directory already exists, skipping cloning."
+  echo "Polis directory already exists, skipping cloning, pulling instead"
 fi
 
 cd polis
+git config --global --add safe.directory /opt/polis/polis
+git pull
 
 # --- Fetch pre-configured .env from SSM Parameter Store ---
-PRE_CONFIGURED_ENV=$(aws secretsmanager describe-secret --secret-id polis-web-app-env-vars --query ARN --output text --region us-east-1)
+PRE_CONFIGURED_ENV=$(aws secretsmanager get-secret-value --secret-id polis-web-app-env-vars --query SecretString --output text --region us-east-1)
 
 
 if [ -z "$PRE_CONFIGURED_ENV" ]; then
