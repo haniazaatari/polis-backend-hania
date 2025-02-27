@@ -211,7 +211,7 @@ const getModelResponse = async (
       }
       case "claude": {
         const responseClaude = await anthropic.messages.create({
-          model: modelVersion || "claude-3-5-sonnet-20241022",
+          model: modelVersion || "claude-3-7-sonnet-20250219",
           max_tokens: 3000,
           temperature: 0,
           system: system_lore,
