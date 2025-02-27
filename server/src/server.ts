@@ -11543,31 +11543,27 @@ Thanks for using Polis!
     res: any,
     next: () => void
   ) {
-    if (devMode) {
-      let b = "";
-      if (req.body) {
-        let temp = _.clone(req.body);
-        if (temp.password) {
-          temp.password = "some_password";
-        }
-        if (temp.newPassword) {
-          temp.newPassword = "some_password";
-        }
-        if (temp.password2) {
-          temp.password2 = "some_password";
-        }
-        if (temp.hname) {
-          temp.hname = "somebody";
-        }
-        if (temp.polisApiKey) {
-          temp.polisApiKey = "pkey_somePolisApiKey";
-        }
-        b = JSON.stringify(temp);
+    let b = "";
+    if (req.body) {
+      let temp = _.clone(req.body);
+      if (temp.password) {
+        temp.password = "some_password";
       }
-      logger.debug("middleware_log_request_body", { path: req.path, body: b });
-    } else {
-      // don't log the route or params, since Heroku does that for us.
+      if (temp.newPassword) {
+        temp.newPassword = "some_password";
+      }
+      if (temp.password2) {
+        temp.password2 = "some_password";
+      }
+      if (temp.hname) {
+        temp.hname = "somebody";
+      }
+      if (temp.polisApiKey) {
+        temp.polisApiKey = "pkey_somePolisApiKey";
+      }
+      b = JSON.stringify(temp);
     }
+    logger.debug("middleware_log_request_body", { path: req.path, body: b });
     next();
   }
 

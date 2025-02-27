@@ -23,7 +23,7 @@ export default {
   serverPort,
 
   getServerNameWithProtocol: (req: any): string => {
-    if (devMode) {
+    if (devMode || isTrue(process.env.USE_NETWORK_HOST)) {
       // usually localhost:5000
       return `${req.protocol}://${req.headers.host}`;
     }
