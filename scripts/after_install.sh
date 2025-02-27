@@ -78,6 +78,10 @@ cat .env
 SERVICE_FROM_FILE=$(cat /tmp/service_type.txt)
 echo "DEBUG: Service type read from /tmp/service_type.txt: [$SERVICE_FROM_FILE]"
 
+sudo systemctl restart amazon-ssm-agent
+
+sleep 5
+
 /usr/local/bin/docker-compose config
 
 if [ "$SERVICE_FROM_FILE" == "server" ]; then
