@@ -693,26 +693,26 @@ function initializePolisHelpers() {
     },
     next: () => any
   ) {
-    // Exempt dev mode or healthcheck path from HTTPS check
-    if (devMode || req.path === "/api/v3/testConnection") {
-      return next();
-    }
+    // // Exempt dev mode or healthcheck path from HTTPS check
+    // if (devMode || req.path === "/api/v3/testConnection") {
+    //   return next();
+    // }
 
-    // Check if the request is already HTTPS
-    const isHttps = req.headers["x-forwarded-proto"] === "https";
+    // // Check if the request is already HTTPS
+    // const isHttps = req.headers["x-forwarded-proto"] === "https";
 
-    if (!isHttps) {
-      logger.debug("redirecting to https", { headers: req.headers });
-      // Only redirect GET requests; otherwise, send a 400 error for non-GET methods
-      if (req.method === "GET") {
-        res.writeHead(302, {
-          Location: `https://${req.headers.host}${req.url}`,
-        });
-        return res.end();
-      } else {
-        res.status(400).send("Please use HTTPS when submitting data.");
-      }
-    }
+    // if (!isHttps) {
+    //   logger.debug("redirecting to https", { headers: req.headers });
+    //   // Only redirect GET requests; otherwise, send a 400 error for non-GET methods
+    //   if (req.method === "GET") {
+    //     res.writeHead(302, {
+    //       Location: `https://${req.headers.host}${req.url}`,
+    //     });
+    //     return res.end();
+    //   } else {
+    //     res.status(400).send("Please use HTTPS when submitting data.");
+    //   }
+    // }
     return next();
   }
 

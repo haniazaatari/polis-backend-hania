@@ -15,8 +15,8 @@ else
 fi
 
 cd polis
-git config --global --add safe.directory /opt/polis/polis
-git pull
+sudo git config --global --add safe.directory /opt/polis/polis
+sudo git pull
 
 # --- Fetch pre-configured .env from SSM Parameter Store ---
 PRE_CONFIGURED_ENV=$(aws secretsmanager get-secret-value --secret-id polis-web-app-env-vars --query SecretString --output text --region us-east-1)
@@ -80,7 +80,10 @@ cat .env
 SERVICE_FROM_FILE=$(cat /tmp/service_type.txt)
 echo "DEBUG: Service type read from /tmp/service_type.txt: [$SERVICE_FROM_FILE]"
 
-/usr/local/bin/docker-compose stop
+echo "Stopping and removing existing Docker containers..."
+/usr/local/bin/docker-compose down || true  # Stop all services, ignore errors if none running
+docker rm -f $(docker ps -aq) || true      # Forcefully remove all containers, ignore errors
+echo "Docker containers stopped and removed."
 
 /usr/local/bin/docker-compose config
 
