@@ -2,7 +2,7 @@ import fs from "fs";
 import isTrue from "boolean";
 
 const devHostname: string = process.env.API_DEV_HOSTNAME || "localhost:5000";
-const devMode: boolean = isTrue(process.env.DEV_MODE);
+const devMode = true;
 const domainOverride: string | null = process.env.DOMAIN_OVERRIDE || null;
 const prodHostname: string = process.env.API_PROD_HOSTNAME || "pol.is";
 const serverPort: number = parseInt(
@@ -23,7 +23,7 @@ export default {
   serverPort,
 
   getServerNameWithProtocol: (req: any): string => {
-    if (devMode || isTrueString(process.env.USE_NETWORK_HOST)) {
+    if (devMode) {
       // usually localhost:5000
       return `${req.protocol}://${req.headers.host}`;
     }
@@ -44,7 +44,7 @@ export default {
   },
 
   getServerHostname: (): string => {
-    if (devMode  || isTrueString(process.env.USE_NETWORK_HOST)) {
+    if (devMode) {
       return devHostname;
     }
     if (domainOverride) {
@@ -54,7 +54,7 @@ export default {
   },
 
   getServerUrl: (): string => {
-    if (devMode  || isTrueString(process.env.USE_NETWORK_HOST)) {
+    if (devMode) {
       return `http://${devHostname}`;
     } else {
       return `https://${prodHostname}`;
@@ -124,10 +124,6 @@ export default {
 // Use this function when a value should default to true if not set.
 function isTrueOrBlank(val: string | boolean | undefined): boolean {
   return val === undefined || val === "" || isTrue(val);
-}
-
-export const isTrueString = (val: unknown) => {
-  return true;
 }
 
 function setGoogleApplicationCredentials(): boolean {

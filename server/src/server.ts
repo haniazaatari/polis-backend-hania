@@ -24,7 +24,6 @@ import timeout from "connect-timeout";
 import _ from "underscore";
 import pg from "pg";
 import { encode } from "html-entities";
-import isTrue from "boolean";
 
 import { METRICS_IN_RAM, addInRamMetric, MPromise } from "./utils/metered";
 import CreateUser from "./auth/create-user";
@@ -40,7 +39,7 @@ import dbPgQuery, {
   queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty,
 } from "./db/pg-query";
 
-import Config, { isTrueString } from "./config";
+import Config from "./config";
 import fail from "./utils/fail";
 import { PcaCacheItem, getPca, fetchAndCacheLatestPcaData } from "./utils/pca";
 import { getZinvite, getZinvites, getZidForRid } from "./utils/zinvite";
@@ -695,11 +694,7 @@ function initializePolisHelpers() {
     next: () => any
   ) {
     // Exempt dev mode or healthcheck path from HTTPS check
-    if (
-      devMode ||
-      req.path === "/api/v3/testConnection" ||
-      isTrueString(process.env.USE_NETWORK_HOST)
-    ) {
+    if (devMode || req.path === "/api/v3/testConnection") {
       return next();
     }
 
@@ -11098,7 +11093,7 @@ Thanks for using Polis!
       return;
     }
 
-    if (devMode || isTrueString(process.env.USE_NETWORK_HOST)) {
+    if (devMode) {
       addStaticFileHeaders(res);
     }
     let port = Config.staticFilesParticipationPort;
@@ -11121,10 +11116,7 @@ Thanks for using Polis!
         end: () => void;
       }
     ) {
-      let protocol =
-        devMode || isTrueString(process.env.USE_NETWORK_HOST)
-          ? "http://"
-          : "https://";
+      let protocol = devMode ? "http://" : "https://";
       let url = protocol + req?.headers?.host + path;
       res.writeHead(302, {
         Location: url,
@@ -11285,7 +11277,7 @@ Thanks for using Polis!
     let headers = {
       "Content-Type": "text/html",
     };
-    if (!devMode && !isTrueString(process.env.USE_NETWORK_HOST)) {
+    if (!devMode) {
       Object.assign(headers, {
         // 'Cache-Control': 'no-transform,public,max-age=60,s-maxage=60', // Cloudflare will probably cache it for one or two hours
         "Cache-Control": "no-cache", // Cloudflare will probably cache it for one or two hours
@@ -11311,7 +11303,11 @@ Thanks for using Polis!
       //   Property 'pipe' is missing in type '{ path: string; headers?: { host: string; } | undefined; }' but required in type '{ headers?: { host: any; } | undefined; path: any; pipe: (arg0: any) => void; }'.ts(2345)
       // @ts-ignore
       return fetchUnsupportedBrowserPage(req, res);
-    } else if (false) {
+    } else if (
+      !browserSupportsPushState(req) &&
+      req.path.length > 1 &&
+      !/^\/api/.exec(req.path) // TODO probably better to create a list of client-side route regexes (whitelist), rather than trying to blacklist things like API calls.
+    ) {
       // Redirect to the same URL with the path behind the fragment "#"
       res.writeHead(302, {
         Location: "https://" + req?.headers?.host + "/#" + req.path,
@@ -11547,27 +11543,31 @@ Thanks for using Polis!
     res: any,
     next: () => void
   ) {
-    let b = "";
-    if (req.body) {
-      let temp = _.clone(req.body);
-      if (temp.password) {
-        temp.password = "some_password";
+    if (devMode) {
+      let b = "";
+      if (req.body) {
+        let temp = _.clone(req.body);
+        if (temp.password) {
+          temp.password = "some_password";
+        }
+        if (temp.newPassword) {
+          temp.newPassword = "some_password";
+        }
+        if (temp.password2) {
+          temp.password2 = "some_password";
+        }
+        if (temp.hname) {
+          temp.hname = "somebody";
+        }
+        if (temp.polisApiKey) {
+          temp.polisApiKey = "pkey_somePolisApiKey";
+        }
+        b = JSON.stringify(temp);
       }
-      if (temp.newPassword) {
-        temp.newPassword = "some_password";
-      }
-      if (temp.password2) {
-        temp.password2 = "some_password";
-      }
-      if (temp.hname) {
-        temp.hname = "somebody";
-      }
-      if (temp.polisApiKey) {
-        temp.polisApiKey = "pkey_somePolisApiKey";
-      }
-      b = JSON.stringify(temp);
+      logger.debug("middleware_log_request_body", { path: req.path, body: b });
+    } else {
+      // don't log the route or params, since Heroku does that for us.
     }
-    logger.debug("middleware_log_request_body", { path: req.path, body: b });
     next();
   }
 
