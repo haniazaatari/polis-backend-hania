@@ -2,7 +2,7 @@ import fs from "fs";
 import isTrue from "boolean";
 
 const devHostname: string = process.env.API_DEV_HOSTNAME || "localhost:5000";
-const devMode = true;
+const devMode: boolean = isTrue(process.env.DEV_MODE);
 const domainOverride: string | null = process.env.DOMAIN_OVERRIDE || null;
 const prodHostname: string = process.env.API_PROD_HOSTNAME || "pol.is";
 const serverPort: number = parseInt(
