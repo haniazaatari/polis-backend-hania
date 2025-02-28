@@ -28,7 +28,7 @@ app.use(morgan("dev"));
 // Trust the X-Forwarded-Proto and X-Forwarded-Host, but only on private subnets.
 // See: https://github.com/pol-is/polis/issues/546
 // See: https://expressjs.com/en/guide/behind-proxies.html
-app.set("trust proxy", "uniquelocal");
+app.set("trust proxy", 1);
 
 var helpersInitialized = new Promise(function (resolve, reject) {
   resolve(server.initializePolisHelpers());
