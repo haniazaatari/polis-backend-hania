@@ -28,7 +28,7 @@ services:
   server:
     environment:
       - DATABASE_URL=${DATABASE_URL}
-      - DATABASE_SSL=true
+      - DATABASE_SSL=${DATABASE_SSL}
     env_file:
       - ${SERVER_ENV_FILE:-.env}
     image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis/server:latest
