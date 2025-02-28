@@ -23,7 +23,7 @@ export default {
   serverPort,
 
   getServerNameWithProtocol: (req: any): string => {
-    if (devMode || isTrue(process.env.USE_NETWORK_HOST)) {
+    if (devMode || isTrueString(process.env.USE_NETWORK_HOST)) {
       // usually localhost:5000
       return `${req.protocol}://${req.headers.host}`;
     }
@@ -44,7 +44,7 @@ export default {
   },
 
   getServerHostname: (): string => {
-    if (devMode  || isTrue(process.env.USE_NETWORK_HOST)) {
+    if (devMode  || isTrueString(process.env.USE_NETWORK_HOST)) {
       return devHostname;
     }
     if (domainOverride) {
@@ -54,7 +54,7 @@ export default {
   },
 
   getServerUrl: (): string => {
-    if (devMode  || isTrue(process.env.USE_NETWORK_HOST)) {
+    if (devMode  || isTrueString(process.env.USE_NETWORK_HOST)) {
       return `http://${devHostname}`;
     } else {
       return `https://${prodHostname}`;
@@ -125,6 +125,8 @@ export default {
 function isTrueOrBlank(val: string | boolean | undefined): boolean {
   return val === undefined || val === "" || isTrue(val);
 }
+
+const isTrueString = (val: unknown) => val === "true";
 
 function setGoogleApplicationCredentials(): boolean {
   if (!shouldUseTranslationAPI) {

@@ -11094,7 +11094,7 @@ Thanks for using Polis!
       return;
     }
 
-    if (devMode || isTrue(process.env.USE_NETWORK_HOST)) {
+    if (devMode || isTrueString(process.env.USE_NETWORK_HOST)) {
       addStaticFileHeaders(res);
     }
     let port = Config.staticFilesParticipationPort;
@@ -11117,7 +11117,7 @@ Thanks for using Polis!
         end: () => void;
       }
     ) {
-      let protocol = (devMode || isTrue(process.env.USE_NETWORK_HOST)) ? "http://" : "https://";
+      let protocol = (devMode || isTrueString(process.env.USE_NETWORK_HOST)) ? "http://" : "https://";
       let url = protocol + req?.headers?.host + path;
       res.writeHead(302, {
         Location: url,
@@ -11278,7 +11278,7 @@ Thanks for using Polis!
     let headers = {
       "Content-Type": "text/html",
     };
-    if (!devMode && !isTrue(process.env.USE_NETWORK_HOST)) {
+    if (!devMode && !isTrueString(process.env.USE_NETWORK_HOST)) {
       Object.assign(headers, {
         // 'Cache-Control': 'no-transform,public,max-age=60,s-maxage=60', // Cloudflare will probably cache it for one or two hours
         "Cache-Control": "no-cache", // Cloudflare will probably cache it for one or two hours
