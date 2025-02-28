@@ -40,7 +40,7 @@ import dbPgQuery, {
   queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty,
 } from "./db/pg-query";
 
-import Config from "./config";
+import Config, { isTrueString } from "./config";
 import fail from "./utils/fail";
 import { PcaCacheItem, getPca, fetchAndCacheLatestPcaData } from "./utils/pca";
 import { getZinvite, getZinvites, getZidForRid } from "./utils/zinvite";

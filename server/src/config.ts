@@ -126,7 +126,7 @@ function isTrueOrBlank(val: string | boolean | undefined): boolean {
   return val === undefined || val === "" || isTrue(val);
 }
 
-const isTrueString = (val: unknown) => val === "true";
+export const isTrueString = (val: unknown) => val === "true";
 
 function setGoogleApplicationCredentials(): boolean {
   if (!shouldUseTranslationAPI) {
