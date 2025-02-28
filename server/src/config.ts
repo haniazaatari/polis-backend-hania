@@ -127,10 +127,7 @@ function isTrueOrBlank(val: string | boolean | undefined): boolean {
 }
 
 export const isTrueString = (val: unknown) => {
-  console.log(`
-    ~~~~~~~~~~~~~~~~ IS TRUE: ${val === true}
-  `)
-  return val === "true";
+  return true;
 }
 
 function setGoogleApplicationCredentials(): boolean {
