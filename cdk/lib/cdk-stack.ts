@@ -300,6 +300,7 @@ EOF`,
       vpc,
       internetFacing: true,
       securityGroup: lbSecurityGroup, // Use the dedicated ALB security group
+      idleTimeout: cdk.Duration.seconds(300),
     });
 
     const webTargetGroup = new elbv2.ApplicationTargetGroup(this, 'WebAppTargetGroup', {
