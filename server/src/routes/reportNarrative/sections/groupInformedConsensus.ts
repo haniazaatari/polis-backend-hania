@@ -117,8 +117,15 @@ export async function handle_GET_groupInformedConsensus({
       modelVersion
     );
 
+    // Add debugging logs before checking the environment variable
+    console.log(`DEBUG: About to check env var in ${section.name}`);
+    console.log(
+      `DEBUG: Env var value: ${process.env.DEBUG_NARRATIVE_COVERAGE_WRITE_TO_DISK}`
+    );
+
     // Add this line to log coverage data - it won't affect the existing flow
     if (process.env.DEBUG_NARRATIVE_COVERAGE_WRITE_TO_DISK === "true") {
+      console.log(`DEBUG: Environment check passed, calling logModelCoverage`);
       await logModelCoverage(
         "groupInformedConsensus",
         rid,
@@ -126,6 +133,8 @@ export async function handle_GET_groupInformedConsensus({
         commentsResult.xml, // All comments sent to the model
         resp // The model's response
       );
+    } else {
+      console.log(`DEBUG: Environment check failed, skipping logModelCoverage`);
     }
 
     // Extract cited comments from response
