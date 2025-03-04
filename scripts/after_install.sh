@@ -53,8 +53,6 @@ if [ -z "$SECRET_JSON" ]; then
   exit 1
 fi
 
-echo "Retrieved Secret JSON from Secrets Manager"
-
 # 3. Parse secrets JSON using jq to get dbname, username, password
 DB_USERNAME=$(echo "$SECRET_JSON" | jq -r '.username')
 DB_PASSWORD=$(echo "$SECRET_JSON" | jq -r '.password')
