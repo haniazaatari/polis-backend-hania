@@ -56,7 +56,7 @@ export async function handle_GET_reportNarrative(
   res.flush();
 
   const system_lore = await fs.readFile(
-    "src/report_experimental/system.xml",
+    "src/routes/reportNarrative/prompts/system.xml",
     "utf8"
   );
 

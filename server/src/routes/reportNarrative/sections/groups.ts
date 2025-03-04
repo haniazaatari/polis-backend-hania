@@ -9,6 +9,7 @@ import {
   logCoverageMetrics,
 } from "../coverage/metrics";
 import { CommentCoverageMetrics, SectionHandlerParams } from "../types";
+import { logModelCoverage } from "../utils/coverageDebug";
 
 export async function handle_GET_groups({
   rid,
@@ -22,7 +23,7 @@ export async function handle_GET_groups({
 }: SectionHandlerParams) {
   const section = {
     name: "groups",
-    templatePath: "src/report_experimental/subtaskPrompts/groups.xml",
+    templatePath: "src/routes/reportNarrative/prompts/subtasks/groups.xml",
     filter: (v: {
       votes?: number;
       agrees?: number;
@@ -106,6 +107,17 @@ export async function handle_GET_groups({
       prompt_xml,
       modelVersion
     );
+
+    // Add this line to log coverage data
+    if (process.env.DEBUG_NARRATIVE_COVERAGE_WRITE_TO_DISK === "true") {
+      await logModelCoverage(
+        "groups",
+        rid,
+        zid as number,
+        commentsResult.xml, // All comments sent to the model
+        resp // The model's response
+      );
+    }
 
     // Extract cited comments from response
     const citedCommentIds = extractCitedCommentIds(resp);

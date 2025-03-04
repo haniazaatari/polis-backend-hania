@@ -11,6 +11,7 @@ import {
   logCoverageMetrics,
 } from "../coverage/metrics";
 import { CommentCoverageMetrics, SectionHandlerParams } from "../types";
+import { logModelCoverage } from "../utils/coverageDebug";
 
 export async function handle_GET_uncertainty({
   rid,
@@ -24,7 +25,7 @@ export async function handle_GET_uncertainty({
 }: SectionHandlerParams) {
   const section = {
     name: "uncertainty",
-    templatePath: "src/report_experimental/subtaskPrompts/uncertainty.xml",
+    templatePath: "src/routes/reportNarrative/prompts/subtasks/uncertainty.xml",
     // Revert to original simple pass ratio check
     filter: (v: { passes?: number; votes?: number }) => {
       const passes = v.passes ?? 0;
@@ -103,6 +104,17 @@ export async function handle_GET_uncertainty({
       prompt_xml,
       modelVersion
     );
+
+    // Add this line to log coverage data
+    if (process.env.DEBUG_NARRATIVE_COVERAGE_WRITE_TO_DISK === "true") {
+      await logModelCoverage(
+        "uncertainty",
+        rid,
+        zid as number,
+        commentsResult.xml, // All comments sent to the model
+        resp // The model's response
+      );
+    }
 
     // Extract cited comments from response
     const citedCommentIds = extractCitedCommentIds(resp);

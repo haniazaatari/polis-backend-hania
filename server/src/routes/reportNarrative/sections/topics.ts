@@ -9,8 +9,9 @@ import {
   logCoverageMetrics,
 } from "../coverage/metrics";
 import { CommentCoverageMetrics, SectionHandlerParams } from "../types";
-import { getTopicsFromRID } from "../../../report_experimental/topics-example";
+import { getTopicsFromRID } from "../utils/topics";
 import { PathLike } from "fs";
+import { logModelCoverage } from "../utils/coverageDebug";
 
 export async function handle_GET_topics({
   rid,
@@ -50,7 +51,7 @@ export async function handle_GET_topics({
   const sections = topics.map(
     (topic: { name: string; citations: number[] }) => ({
       name: `topic_${topic.name.toLowerCase().replace(/\s+/g, "_")}`,
-      templatePath: "src/report_experimental/subtaskPrompts/topics.xml",
+      templatePath: "src/routes/reportNarrative/prompts/subtasks/topics.xml",
       filter: (v: { comment_id: number }) => {
         // Check if the comment_id is in the citations array for this topic
         return topic.citations.includes(v.comment_id);
@@ -140,6 +141,17 @@ export async function handle_GET_topics({
             prompt_xml,
             modelVersion
           );
+
+          // Add this line to log coverage data
+          if (process.env.DEBUG_NARRATIVE_COVERAGE_WRITE_TO_DISK === "true") {
+            await logModelCoverage(
+              "topics",
+              rid,
+              zid as number,
+              commentsResult.xml, // All comments sent to the model
+              resp // The model's response
+            );
+          }
 
           // Extract cited comments from response
           const citedCommentIds = extractCitedCommentIds(resp);

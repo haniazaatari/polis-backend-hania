@@ -10,6 +10,7 @@ import {
 } from "../coverage/metrics";
 import { CommentCoverageMetrics, SectionHandlerParams } from "../types";
 import { getGacThresholdByGroupCount } from "../utils/filters";
+import { logModelCoverage } from "../utils/coverageDebug";
 
 export async function handle_GET_groupInformedConsensus({
   rid,
@@ -24,7 +25,7 @@ export async function handle_GET_groupInformedConsensus({
   const section = {
     name: "group_informed_consensus",
     templatePath:
-      "src/report_experimental/subtaskPrompts/group_informed_consensus.xml",
+      "src/routes/reportNarrative/prompts/subtasks/group_informed_consensus.xml",
     filter: (v: {
       votes?: number;
       agrees?: number;
@@ -115,6 +116,17 @@ export async function handle_GET_groupInformedConsensus({
       prompt_xml,
       modelVersion
     );
+
+    // Add this line to log coverage data - it won't affect the existing flow
+    if (process.env.DEBUG_NARRATIVE_COVERAGE_WRITE_TO_DISK === "true") {
+      await logModelCoverage(
+        "groupInformedConsensus",
+        rid,
+        zid as number,
+        commentsResult.xml, // All comments sent to the model
+        resp // The model's response
+      );
+    }
 
     // Extract cited comments from response
     const citedCommentIds = extractCitedCommentIds(resp);
