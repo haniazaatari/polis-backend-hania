@@ -114,6 +114,66 @@ const anthropic = new Anthropic({
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
 
+// Add this interface to track comment coverage metrics
+interface CommentCoverageMetrics {
+  totalComments: number;
+  filteredComments: number;
+  citedComments: number;
+  omittedComments: number;
+}
+
+// Add this function to get total comment count for a conversation
+const getTotalCommentCount = async (zid: number): Promise<number> => {
+  try {
+    const resp = await sendCommentGroupsSummary(zid, undefined, false);
+    const records = parse(resp as string, {
+      columns: true,
+      skip_empty_lines: true,
+    }) as PolisRecord[];
+    return records.length;
+  } catch (e) {
+    console.error("Error getting total comment count:", e);
+    return 0;
+  }
+};
+
+// Update the extractCitedCommentIds function to handle null responses
+const extractCitedCommentIds = (modelResponse: string | null): number[] => {
+  if (!modelResponse) return [];
+
+  try {
+    const responseObj = JSON.parse(modelResponse);
+    const citedCommentIds = new Set<number>();
+
+    // Extract citations from paragraphs
+    if (responseObj.paragraphs) {
+      responseObj.paragraphs.forEach((paragraph: any) => {
+        if (paragraph.sentences) {
+          paragraph.sentences.forEach((sentence: any) => {
+            if (sentence.clauses) {
+              sentence.clauses.forEach((clause: any) => {
+                if (clause.citations && Array.isArray(clause.citations)) {
+                  clause.citations.forEach((citation: any) => {
+                    if (citation.comment_id) {
+                      citedCommentIds.add(Number(citation.comment_id));
+                    }
+                  });
+                }
+              });
+            }
+          });
+        }
+      });
+    }
+
+    return Array.from(citedCommentIds);
+  } catch (e) {
+    console.error("Error extracting cited comment IDs:", e);
+    return [];
+  }
+};
+
+// Modify getCommentsAsXML to return both XML and filtered comment count
 const getCommentsAsXML = async (
   id: number,
   filter?: (v: {
@@ -125,14 +185,22 @@ const getCommentsAsXML = async (
     comment_extremity?: number;
     comment_id: number;
   }) => boolean
-) => {
+): Promise<{ xml: string; filteredCount: number }> => {
   try {
     const resp = await sendCommentGroupsSummary(id, undefined, false, filter);
     const xml = PolisConverter.convertToXml(resp as string);
+
+    // Count filtered comments
+    const records = parse(resp as string, {
+      columns: true,
+      skip_empty_lines: true,
+    }) as PolisRecord[];
+    const filteredCount = records.length;
+
     // eslint-disable-next-line no-console
     if (xml.trim().length === 0)
       console.error("No data has been returned by sendCommentGroupsSummary");
-    return xml;
+    return { xml, filteredCount };
   } catch (e) {
     console.error("Error in getCommentsAsXML:", e);
     throw e; // Re-throw instead of returning empty string
@@ -277,6 +345,7 @@ const getGacThresholdByGroupCount = (numGroups: number): number => {
   return thresholds[numGroups] ?? 0.24;
 };
 
+// Modify handle_GET_groupInformedConsensus to track comment coverage
 export async function handle_GET_groupInformedConsensus(
   rid: string,
   storage: DynamoStorageService | undefined,
@@ -284,28 +353,71 @@ export async function handle_GET_groupInformedConsensus(
   model: string,
   system_lore: string,
   zid: number | undefined,
-  modelVersion?: string
+  modelVersion?: string,
+  totalComments?: number
 ) {
   const section = {
     name: "group_informed_consensus",
     templatePath:
       "src/report_experimental/subtaskPrompts/group_informed_consensus.xml",
-    filter: (v: { group_aware_consensus: number; num_groups: number }) =>
-      (v.group_aware_consensus ?? 0) >
-      getGacThresholdByGroupCount(v.num_groups),
+    filter: (v: {
+      votes: number;
+      agrees: number;
+      disagrees: number;
+      passes: number;
+      group_aware_consensus?: number;
+      comment_extremity?: number;
+      comment_id: number;
+      num_groups?: number;
+    }) => {
+      // Only apply filter if both properties exist
+      if (v.group_aware_consensus !== undefined && v.num_groups !== undefined) {
+        return (
+          v.group_aware_consensus > getGacThresholdByGroupCount(v.num_groups)
+        );
+      }
+      return false;
+    },
   };
 
   const cachedResponse = await storage?.queryItemsByRidSectionModel(
     `${rid}#${section.name}#${model}`
   );
-  // @ts-expect-error function args ignore temp
-  const structured_comments = await getCommentsAsXML(zid, section.filter);
-  // send cached response first if avalable
+
+  // Get comments with count
+  const commentsResult = await getCommentsAsXML(zid as number, section.filter);
+  const structured_comments = commentsResult.xml;
+  const filteredCount = commentsResult.filteredCount;
+
+  // Coverage metrics
+  const metrics: CommentCoverageMetrics = {
+    totalComments: totalComments || 0,
+    filteredComments: filteredCount,
+    citedComments: 0,
+    omittedComments: filteredCount, // Will update after getting response
+  };
+
+  // send cached response first if available
   if (
     Array.isArray(cachedResponse) &&
     cachedResponse?.length &&
     isFreshData(cachedResponse[0].timestamp)
   ) {
+    // Extract cited comments from cached response
+    const citedCommentIds = extractCitedCommentIds(
+      cachedResponse[0].report_data
+    );
+    metrics.citedComments = citedCommentIds.length;
+    metrics.omittedComments = filteredCount - citedCommentIds.length;
+
+    // Log metrics
+    console.log(`\n=== COMMENT COVERAGE FOR ${section.name.toUpperCase()} ===`);
+    console.log(`TOTAL COMMENTS IN CONVERSATION: ${metrics.totalComments}`);
+    console.log(`TOTAL COMMENTS PASSING FILTER: ${metrics.filteredComments}`);
+    console.log(`CITATIONS SELECTED BY MODEL: ${metrics.citedComments}`);
+    console.log(`COMMENTS LEFT OUT BY MODEL: ${metrics.omittedComments}`);
+    console.log("=======================================\n");
+
     res.write(
       JSON.stringify({
         [section.name]: {
@@ -315,6 +427,7 @@ export async function handle_GET_groupInformedConsensus(
             structured_comments?.trim().length === 0
               ? "NO_CONTENT_AFTER_FILTER"
               : undefined,
+          coverage: metrics,
         },
       }) + `|||`
     );
@@ -343,6 +456,19 @@ export async function handle_GET_groupInformedConsensus(
       modelVersion
     );
 
+    // Extract cited comments from response
+    const citedCommentIds = extractCitedCommentIds(resp);
+    metrics.citedComments = citedCommentIds.length;
+    metrics.omittedComments = filteredCount - citedCommentIds.length;
+
+    // Log metrics
+    console.log(`\n=== COMMENT COVERAGE FOR ${section.name.toUpperCase()} ===`);
+    console.log(`TOTAL COMMENTS IN CONVERSATION: ${metrics.totalComments}`);
+    console.log(`TOTAL COMMENTS PASSING FILTER: ${metrics.filteredComments}`);
+    console.log(`CITATIONS SELECTED BY MODEL: ${metrics.citedComments}`);
+    console.log(`COMMENTS LEFT OUT BY MODEL: ${metrics.omittedComments}`);
+    console.log("=======================================\n");
+
     const reportItem = {
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
@@ -352,6 +478,7 @@ export async function handle_GET_groupInformedConsensus(
         structured_comments?.trim().length === 0
           ? "NO_CONTENT_AFTER_FILTER"
           : undefined,
+      coverage: metrics,
     };
 
     storage?.putItem(reportItem);
@@ -365,6 +492,7 @@ export async function handle_GET_groupInformedConsensus(
             structured_comments?.trim().length === 0
               ? "NO_CONTENT_AFTER_FILTER"
               : undefined,
+          coverage: metrics,
         },
       }) + `|||`
     );
@@ -380,7 +508,8 @@ export async function handle_GET_uncertainty(
   model: string,
   system_lore: string,
   zid: number | undefined,
-  modelVersion?: string
+  modelVersion?: string,
+  totalComments?: number
 ) {
   const section = {
     name: "uncertainty",
@@ -392,14 +521,41 @@ export async function handle_GET_uncertainty(
   const cachedResponse = await storage?.queryItemsByRidSectionModel(
     `${rid}#${section.name}#${model}`
   );
-  // @ts-expect-error function args ignore temp
-  const structured_comments = await getCommentsAsXML(zid, section.filter);
-  // send cached response first if avalable
+
+  // Get comments with count
+  const commentsResult = await getCommentsAsXML(zid as number, section.filter);
+  const structured_comments = commentsResult.xml;
+  const filteredCount = commentsResult.filteredCount;
+
+  // Coverage metrics
+  const metrics: CommentCoverageMetrics = {
+    totalComments: totalComments || 0,
+    filteredComments: filteredCount,
+    citedComments: 0,
+    omittedComments: filteredCount, // Will update after getting response
+  };
+
+  // send cached response first if available
   if (
     Array.isArray(cachedResponse) &&
     cachedResponse?.length &&
     isFreshData(cachedResponse[0].timestamp)
   ) {
+    // Extract cited comments from cached response
+    const citedCommentIds = extractCitedCommentIds(
+      cachedResponse[0].report_data
+    );
+    metrics.citedComments = citedCommentIds.length;
+    metrics.omittedComments = filteredCount - citedCommentIds.length;
+
+    // Log metrics
+    console.log(`\n=== COMMENT COVERAGE FOR ${section.name.toUpperCase()} ===`);
+    console.log(`TOTAL COMMENTS IN CONVERSATION: ${metrics.totalComments}`);
+    console.log(`TOTAL COMMENTS PASSING FILTER: ${metrics.filteredComments}`);
+    console.log(`CITATIONS SELECTED BY MODEL: ${metrics.citedComments}`);
+    console.log(`COMMENTS LEFT OUT BY MODEL: ${metrics.omittedComments}`);
+    console.log("=======================================\n");
+
     res.write(
       JSON.stringify({
         [section.name]: {
@@ -409,6 +565,7 @@ export async function handle_GET_uncertainty(
             structured_comments?.trim().length === 0
               ? "NO_CONTENT_AFTER_FILTER"
               : undefined,
+          coverage: metrics,
         },
       }) + `|||`
     );
@@ -437,6 +594,19 @@ export async function handle_GET_uncertainty(
       modelVersion
     );
 
+    // Extract cited comments from response
+    const citedCommentIds = extractCitedCommentIds(resp);
+    metrics.citedComments = citedCommentIds.length;
+    metrics.omittedComments = filteredCount - citedCommentIds.length;
+
+    // Log metrics
+    console.log(`\n=== COMMENT COVERAGE FOR ${section.name.toUpperCase()} ===`);
+    console.log(`TOTAL COMMENTS IN CONVERSATION: ${metrics.totalComments}`);
+    console.log(`TOTAL COMMENTS PASSING FILTER: ${metrics.filteredComments}`);
+    console.log(`CITATIONS SELECTED BY MODEL: ${metrics.citedComments}`);
+    console.log(`COMMENTS LEFT OUT BY MODEL: ${metrics.omittedComments}`);
+    console.log("=======================================\n");
+
     const reportItem = {
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
@@ -446,6 +616,7 @@ export async function handle_GET_uncertainty(
         structured_comments?.trim().length === 0
           ? "NO_CONTENT_AFTER_FILTER"
           : undefined,
+      coverage: metrics,
     };
 
     storage?.putItem(reportItem);
@@ -459,6 +630,7 @@ export async function handle_GET_uncertainty(
             structured_comments?.trim().length === 0
               ? "NO_CONTENT_AFTER_FILTER"
               : undefined,
+          coverage: metrics,
         },
       }) + `|||`
     );
@@ -474,12 +646,21 @@ export async function handle_GET_groups(
   model: string,
   system_lore: string,
   zid: number | undefined,
-  modelVersion?: string
+  modelVersion?: string,
+  totalComments?: number
 ) {
   const section = {
     name: "groups",
     templatePath: "src/report_experimental/subtaskPrompts/groups.xml",
-    filter: (v: { comment_extremity: number }) => {
+    filter: (v: {
+      votes: number;
+      agrees: number;
+      disagrees: number;
+      passes: number;
+      group_aware_consensus?: number;
+      comment_extremity?: number;
+      comment_id: number;
+    }) => {
       return (v.comment_extremity ?? 0) > 1;
     },
   };
@@ -487,14 +668,41 @@ export async function handle_GET_groups(
   const cachedResponse = await storage?.queryItemsByRidSectionModel(
     `${rid}#${section.name}#${model}`
   );
-  // @ts-expect-error function args ignore temp
-  const structured_comments = await getCommentsAsXML(zid, section.filter);
-  // send cached response first if avalable
+
+  // Get comments with count
+  const commentsResult = await getCommentsAsXML(zid as number, section.filter);
+  const structured_comments = commentsResult.xml;
+  const filteredCount = commentsResult.filteredCount;
+
+  // Coverage metrics
+  const metrics: CommentCoverageMetrics = {
+    totalComments: totalComments || 0,
+    filteredComments: filteredCount,
+    citedComments: 0,
+    omittedComments: filteredCount, // Will update after getting response
+  };
+
+  // send cached response first if available
   if (
     Array.isArray(cachedResponse) &&
     cachedResponse?.length &&
     isFreshData(cachedResponse[0].timestamp)
   ) {
+    // Extract cited comments from cached response
+    const citedCommentIds = extractCitedCommentIds(
+      cachedResponse[0].report_data
+    );
+    metrics.citedComments = citedCommentIds.length;
+    metrics.omittedComments = filteredCount - citedCommentIds.length;
+
+    // Log metrics
+    console.log(`\n=== COMMENT COVERAGE FOR ${section.name.toUpperCase()} ===`);
+    console.log(`TOTAL COMMENTS IN CONVERSATION: ${metrics.totalComments}`);
+    console.log(`TOTAL COMMENTS PASSING FILTER: ${metrics.filteredComments}`);
+    console.log(`CITATIONS SELECTED BY MODEL: ${metrics.citedComments}`);
+    console.log(`COMMENTS LEFT OUT BY MODEL: ${metrics.omittedComments}`);
+    console.log("=======================================\n");
+
     res.write(
       JSON.stringify({
         [section.name]: {
@@ -504,6 +712,7 @@ export async function handle_GET_groups(
             structured_comments?.trim().length === 0
               ? "NO_CONTENT_AFTER_FILTER"
               : undefined,
+          coverage: metrics,
         },
       }) + `|||`
     );
@@ -532,6 +741,19 @@ export async function handle_GET_groups(
       modelVersion
     );
 
+    // Extract cited comments from response
+    const citedCommentIds = extractCitedCommentIds(resp);
+    metrics.citedComments = citedCommentIds.length;
+    metrics.omittedComments = filteredCount - citedCommentIds.length;
+
+    // Log metrics
+    console.log(`\n=== COMMENT COVERAGE FOR ${section.name.toUpperCase()} ===`);
+    console.log(`TOTAL COMMENTS IN CONVERSATION: ${metrics.totalComments}`);
+    console.log(`TOTAL COMMENTS PASSING FILTER: ${metrics.filteredComments}`);
+    console.log(`CITATIONS SELECTED BY MODEL: ${metrics.citedComments}`);
+    console.log(`COMMENTS LEFT OUT BY MODEL: ${metrics.omittedComments}`);
+    console.log("=======================================\n");
+
     const reportItem = {
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
@@ -541,6 +763,7 @@ export async function handle_GET_groups(
         structured_comments?.trim().length === 0
           ? "NO_CONTENT_AFTER_FILTER"
           : undefined,
+      coverage: metrics,
     };
 
     storage?.putItem(reportItem);
@@ -554,6 +777,7 @@ export async function handle_GET_groups(
             structured_comments?.trim().length === 0
               ? "NO_CONTENT_AFTER_FILTER"
               : undefined,
+          coverage: metrics,
         },
       }) + `|||`
     );
@@ -569,7 +793,8 @@ export async function handle_GET_topics(
   model: string,
   system_lore: string,
   zid: number,
-  modelVersion?: string
+  modelVersion?: string,
+  totalComments?: number
 ) {
   let topics;
   const cachedTopics = await storage?.queryItemsByRidSectionModel(
@@ -608,21 +833,56 @@ export async function handle_GET_topics(
 
   sections.forEach(
     async (
-      section: { name: any; templatePath: PathLike | fs.FileHandle },
+      section: {
+        name: any;
+        templatePath: PathLike | fs.FileHandle;
+        filter: (v: { comment_id: number }) => boolean;
+      },
       i: number,
       arr: any
     ) => {
       const cachedResponse = await storage?.queryItemsByRidSectionModel(
         `${rid}#${section.name}#${model}`
       );
-      // @ts-expect-error function args ignore temp
-      const structured_comments = await getCommentsAsXML(zid, section.filter);
-      // send cached response first if avalable
+
+      // Get comments with count
+      const commentsResult = await getCommentsAsXML(zid, section.filter);
+      const structured_comments = commentsResult.xml;
+      const filteredCount = commentsResult.filteredCount;
+
+      // Coverage metrics
+      const metrics: CommentCoverageMetrics = {
+        totalComments: totalComments || 0,
+        filteredComments: filteredCount,
+        citedComments: 0,
+        omittedComments: filteredCount, // Will update after getting response
+      };
+
+      // send cached response first if available
       if (
         Array.isArray(cachedResponse) &&
         cachedResponse?.length &&
         isFreshData(cachedResponse[0].timestamp)
       ) {
+        // Extract cited comments from cached response
+        const citedCommentIds = extractCitedCommentIds(
+          cachedResponse[0].report_data
+        );
+        metrics.citedComments = citedCommentIds.length;
+        metrics.omittedComments = filteredCount - citedCommentIds.length;
+
+        // Log metrics
+        console.log(
+          `\n=== COMMENT COVERAGE FOR ${section.name.toUpperCase()} ===`
+        );
+        console.log(`TOTAL COMMENTS IN CONVERSATION: ${metrics.totalComments}`);
+        console.log(
+          `TOTAL COMMENTS PASSING FILTER: ${metrics.filteredComments}`
+        );
+        console.log(`CITATIONS SELECTED BY MODEL: ${metrics.citedComments}`);
+        console.log(`COMMENTS LEFT OUT BY MODEL: ${metrics.omittedComments}`);
+        console.log("=======================================\n");
+
         res.write(
           JSON.stringify({
             [section.name]: {
@@ -632,6 +892,7 @@ export async function handle_GET_topics(
                 structured_comments?.trim().length === 0
                   ? "NO_CONTENT_AFTER_FILTER"
                   : undefined,
+              coverage: metrics,
             },
           }) + `|||`
         );
@@ -662,6 +923,25 @@ export async function handle_GET_topics(
             modelVersion
           );
 
+          // Extract cited comments from response
+          const citedCommentIds = extractCitedCommentIds(resp);
+          metrics.citedComments = citedCommentIds.length;
+          metrics.omittedComments = filteredCount - citedCommentIds.length;
+
+          // Log metrics
+          console.log(
+            `\n=== COMMENT COVERAGE FOR ${section.name.toUpperCase()} ===`
+          );
+          console.log(
+            `TOTAL COMMENTS IN CONVERSATION: ${metrics.totalComments}`
+          );
+          console.log(
+            `TOTAL COMMENTS PASSING FILTER: ${metrics.filteredComments}`
+          );
+          console.log(`CITATIONS SELECTED BY MODEL: ${metrics.citedComments}`);
+          console.log(`COMMENTS LEFT OUT BY MODEL: ${metrics.omittedComments}`);
+          console.log("=======================================\n");
+
           const reportItem = {
             rid_section_model: `${rid}#${section.name}#${model}`,
             timestamp: new Date().toISOString(),
@@ -671,6 +951,7 @@ export async function handle_GET_topics(
               structured_comments?.trim().length === 0
                 ? "NO_CONTENT_AFTER_FILTER"
                 : undefined,
+            coverage: metrics,
           };
 
           storage?.putItem(reportItem);
@@ -684,6 +965,7 @@ export async function handle_GET_topics(
                   structured_comments?.trim().length === 0
                     ? "NO_CONTENT_AFTER_FILTER"
                     : undefined,
+                coverage: metrics,
               },
             }) + `|||`
           );
@@ -733,6 +1015,12 @@ export async function handle_GET_reportNarrative(
     return;
   }
 
+  // Get total comment count for the conversation
+  const totalComments = await getTotalCommentCount(zid);
+  console.log(`\n=== COMMENT COVERAGE SUMMARY ===`);
+  console.log(`TOTAL COMMENTS IN CONVERSATION: ${totalComments}`);
+  console.log(`================================\n`);
+
   res.write(`POLIS-PING: retrieving system lore`);
 
   // @ts-expect-error flush - calling due to use of compression
@@ -756,7 +1044,8 @@ export async function handle_GET_reportNarrative(
         modelParam as string,
         system_lore,
         zid,
-        modelVersionParam as string
+        modelVersionParam as string,
+        totalComments
       ),
       handle_GET_uncertainty(
         rid,
@@ -765,7 +1054,8 @@ export async function handle_GET_reportNarrative(
         modelParam as string,
         system_lore,
         zid,
-        modelVersionParam as string
+        modelVersionParam as string,
+        totalComments
       ),
       handle_GET_groups(
         rid,
@@ -774,7 +1064,8 @@ export async function handle_GET_reportNarrative(
         modelParam as string,
         system_lore,
         zid,
-        modelVersionParam as string
+        modelVersionParam as string,
+        totalComments
       ),
       handle_GET_topics(
         rid,
@@ -783,7 +1074,8 @@ export async function handle_GET_reportNarrative(
         modelParam as string,
         system_lore,
         zid,
-        modelVersionParam as string
+        modelVersionParam as string,
+        totalComments
       ),
     ];
     await Promise.all(promises);
