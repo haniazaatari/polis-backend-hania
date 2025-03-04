@@ -1,5 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
+import { convertXML } from "simple-xml-to-json";
+import { extractCitedCommentIds } from "../coverage/metrics";
 
 /**
  * Logs model inputs and outputs to disk for coverage analysis
@@ -36,14 +38,66 @@ export async function logModelCoverage(
 
     console.log(`DEBUG: Writing file ${filename}`);
 
+    // Parse XML to JSON if it's a string (XML)
+    let inputCommentsJson = null;
+    try {
+      if (typeof inputComments === "string") {
+        // This is XML, try to convert to JSON
+        inputCommentsJson = convertXML(inputComments);
+      }
+    } catch (xmlError) {
+      console.error(
+        `WARNING: Could not parse XML: ${
+          xmlError instanceof Error ? xmlError.message : String(xmlError)
+        }`
+      );
+    }
+
+    // Calculate coverage statistics
+    const citedCommentIds = extractCitedCommentIds(modelResponse);
+
+    // Count total comments in the input
+    let totalCommentsProvided = 0;
+    if (inputCommentsJson) {
+      try {
+        // Try to count comments from the parsed XML structure
+        // This is a simplified approach - adjust based on actual XML structure
+        const comments = inputCommentsJson.comments?.children || [];
+        totalCommentsProvided = comments.length;
+      } catch (countError) {
+        console.error(
+          `WARNING: Could not count comments in XML: ${
+            countError instanceof Error
+              ? countError.message
+              : String(countError)
+          }`
+        );
+      }
+    }
+
+    // Create coverage stats
+    const coverageStats = {
+      totalCommentsProvided,
+      citedCommentsCount: citedCommentIds.length,
+      coveragePercentage:
+        totalCommentsProvided > 0
+          ? ((citedCommentIds.length / totalCommentsProvided) * 100).toFixed(
+              2
+            ) + "%"
+          : "N/A",
+      citedCommentIds,
+    };
+
     const debugData = {
+      coverageStats,
       metadata: {
         section: sectionName,
         rid,
         zid,
         timestamp: new Date().toISOString(),
       },
-      inputComments,
+      inputCommentsXml: inputComments,
+      inputCommentsJson,
       modelResponse,
     };
 
@@ -55,6 +109,9 @@ export async function logModelCoverage(
 
     console.log(
       `SUCCESS: Coverage debug for ${sectionName} saved to debug/coverage/${filename}`
+    );
+    console.log(
+      `COVERAGE STATS: Total comments: ${totalCommentsProvided}, Cited: ${citedCommentIds.length}, Coverage: ${coverageStats.coveragePercentage}`
     );
   } catch (error) {
     console.error(
