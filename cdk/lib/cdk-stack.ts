@@ -199,8 +199,7 @@ export class CdkStack extends cdk.Stack {
         `echo "Contents of /tmp/service_type.txt: $(cat /tmp/service_type.txt)"`,
         'sudo yum update -y',
         'sudo yum install -y amazon-cloudwatch-agent -y',
-        'sudo yum install -y amazon-linux-extras',
-        'sudo amazon-linux-extras install docker -y',
+        'sudo dnf install -y wget ruby docker',
         'sudo systemctl start docker',
         'sudo systemctl enable docker',
         'sudo usermod -a -G docker ec2-user',
@@ -231,16 +230,6 @@ EOF`,
     // --- Launch Templates ---
     const webLaunchTemplate = new ec2.LaunchTemplate(this, 'WebLaunchTemplate', {
       machineImage: machineImageWeb,
-      blockDevices: [
-        {
-          deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(30, {
-            volumeType: ec2.EbsDeviceVolumeType.GP3,
-            encrypted: true,
-            deleteOnTermination: true,
-          }),
-        },
-      ],
       userData: usrdata(logGroup.logGroupName, "server"),
       instanceType: instanceTypeWeb,
       securityGroup: webSecurityGroup,
