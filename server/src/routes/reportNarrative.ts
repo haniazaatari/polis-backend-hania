@@ -4,6 +4,7 @@ import fail from "../utils/fail";
 import { getZidForRid } from "../utils/zinvite";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { countTokens } from '@anthropic-ai/tokenizer';
 import {
   GenerateContentRequest,
   GoogleGenerativeAI,
@@ -157,9 +158,32 @@ const getModelResponse = async (
   model: string,
   system_lore: string,
   prompt_xml: string,
-  modelVersion?: string
+  modelVersion?: string,
+  isTopic?: boolean
 ) => {
   try {
+    if (isTopic && countTokens(prompt_xml) > 30000) {
+      return `{
+        "id": "polis_narrative_error_message",
+        "title": "Too many comments",
+        "paragraphs": [
+          {
+            "id": "polis_narrative_error_message",
+            "title": "Too many comments",
+            "sentences": [
+              {
+                "clauses": [
+                  {
+                    "text": "There are currently too many comments in this conversation for our AI to generate a topic response",
+                    "citations": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }`;
+    }
     const gemeniModel = genAI.getGenerativeModel({
       // model: "gemini-1.5-pro-002",
       model: modelVersion || "gemini-2.0-pro-exp-02-05",
@@ -255,7 +279,7 @@ const getModelResponse = async (
             {
               "clauses": [
                 {
-                  "text": "There was an error generating the narrative. Please refresh the page once all sections have been generated. It may also be a problem with this model, especially if your content discussed sensitive topics.",
+                  "text": "There are currently too many comments in this conversation for our AI to generate a topic response" : "There was an error generating the narrative. Please refresh the page once all sections have been generated. It may also be a problem with this model, especially if your content discussed sensitive topics.",
                   "citations": []
                 }
               ]
@@ -635,6 +659,11 @@ export async function handle_GET_topics(
             },
           }) + `|||`
         );
+        // it's possible that the last response is cached, so the stream will hang unless we explicitly attempt to close it in both forks
+        if (arr.length - 1 === i) {
+          console.log("all promises completed");
+          res.end();
+        }
       } else {
         const fileContents = await fs.readFile(section.templatePath, "utf8");
         const json = await convertXML(fileContents);
@@ -652,14 +681,15 @@ export async function handle_GET_topics(
           "polis-comments-and-group-demographics",
           json
         );
-        res.write(`POLIS-PING: calling topic timeout`);
+        // res.write(`POLIS-PING: calling topic timeout`);
         setTimeout(async () => {
-          res.write(`POLIS-PING: calling topic`);
+          // res.write(`POLIS-PING: calling topic`);
           const resp = await getModelResponse(
             model,
             system_lore,
             prompt_xml,
-            modelVersion
+            modelVersion,
+            true
           );
 
           const reportItem = {
@@ -687,7 +717,7 @@ export async function handle_GET_topics(
               },
             }) + `|||`
           );
-          console.log("topic over");
+          console.log("topic over: ", section.name);
           // @ts-expect-error flush - calling due to use of compression
           res.flush();
 
@@ -695,7 +725,7 @@ export async function handle_GET_topics(
             console.log("all promises completed");
             res.end();
           }
-        }, 3000 * i);
+        }, 500 * i);
       }
     }
   );

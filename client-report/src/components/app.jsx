@@ -211,11 +211,11 @@ const App = (props) => {
               .filter(Boolean)
               .forEach((j) => {
                 try {
-                  const c = JSON.parse(j);
-                  setNarrative((prevNarrative) => ({
-                    ...(prevNarrative || {}),
-                    ...c,
-                  }));
+                  const chunk = JSON.parse(j);
+                  setNarrative((prevNarrative) => {
+                    const nextNarrative = { ...prevNarrative, ...chunk };
+                    return nextNarrative;
+                  });
                 } catch (error) {
                   console.warn("Error parsing narrative chunk:", error);
                 }

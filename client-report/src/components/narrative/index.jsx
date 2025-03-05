@@ -18,13 +18,13 @@ const Narrative = ({ sectionData, model }) => {
           <h5>{section.title}</h5>
 
           {section.sentences.map((sentence, idx) => (
-            <p key={idx}>
+            <p key={JSON.stringify(sentence)}>
               {sentence.clauses.map((clause, cIdx) => (
-                <span key={cIdx}>
+                <span key={clause.text}>
                   {clause.text}
                   {clause.citations.map((citation, citIdx) => (
-                    <sup key={citIdx}>
-                      {citation}
+                    <sup key={JSON.stringify(citation)}>
+                      {typeof citation === 'object' ?  Object.entries(citation)[1] : citation}
                       {citIdx < clause.citations.length - 1 ? ", " : ""}
                     </sup>
                   ))}
