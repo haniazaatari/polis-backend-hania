@@ -146,7 +146,7 @@ function setGoogleApplicationCredentials(): boolean {
 
     const creds_string = googleCredentialsBase64
       ? Buffer.from(googleCredentialsBase64, "base64").toString("ascii")
-      : (googleCredsStringified as string).replaceAll("\\n", "\n");
+      : (googleCredsStringified as string);
 
     // Tell translation library where to find credentials, and write them to disk.
     const credentialsFilePath = ".google_creds_temp";
