@@ -5468,10 +5468,14 @@ Email verified! You can close this tab or hit the back button.
         return false;
       });
 
+      console.log(5471);
+
       // Only analyze comments if we have a Jigsaw API key
       const jigsawModerationPromise = Config.googleJigsawPerspectiveApiKey
         ? analyzeComment(txt)
         : Promise.resolve(null);
+
+      console.log(5478);
 
       const isModeratorPromise = isModerator(zid!, uid!);
       const conversationInfoPromise = getConversationInfo(zid!);
@@ -5534,6 +5538,8 @@ Email verified! You can close this tab or hit the back button.
         return;
       }
 
+      console.log(5541);
+
       const bad = hasBadWords(txt);
 
       const velocity = 1;
@@ -5575,7 +5581,12 @@ Email verified! You can close this tab or hit the back button.
         active = true;
       }
 
+      console.log(5584);
+
       const [detections] = await Promise.all([detectLanguage(txt)]);
+
+      console.log(5588);
+
       const detection = Array.isArray(detections) ? detections[0] : detections;
       const lang = detection.language;
       const lang_confidence = detection.confidence;
