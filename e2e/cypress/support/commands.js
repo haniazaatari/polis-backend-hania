@@ -104,8 +104,12 @@ Cypress.Commands.add('anonymousParticipant', ({ convoId }) => {
   )
 })
 
-Cypress.Commands.add('createConvo', (topic, description) => {
-  cy.ensureUser('moderator')
+Cypress.Commands.add('createConvo', (topic, description, user) => {
+  // If user provided, login and set up session
+  if (user) {
+    apiLogin(user)
+  }
+
   cy.request('POST', '/api/v3/conversations', {
     is_active: true,
     is_draft: true,
@@ -135,7 +139,6 @@ Cypress.Commands.add('ensureConversation', (userLabel) => {
 Cypress.Commands.add('seedComment', (convoId, commentText) => {
   const text = commentText || faker.lorem.sentences()
 
-  cy.ensureUser('moderator')
   cy.request('POST', '/api/v3/comments', {
     conversation_id: convoId,
     is_seed: true,
@@ -213,24 +216,36 @@ Cypress.Commands.add('vote', () => {
   })
 })
 
-Cypress.Commands.add('initAndVote', (userLabel, convoId) => {
+// Core voting logic that can be used after establishing a session
+Cypress.Commands.add('voteOnConversation', (convoId, xid) => {
   cy.intercept('GET', '/api/v3/participationInit*').as('participationInit')
-
-  cy.ensureUser(userLabel)
-  cy.visit('/' + convoId)
+  let url = '/' + convoId;
+  if (xid) {
+    url += '?xid=' + xid;
+  }
+  cy.visit(url)
   cy.wait('@participationInit')
 
-  recursiveVote()
+  cy.get('[data-view-name="vote-view"]', { timeout: 10000 }).then(function voteLoop($voteView) {
+    if ($voteView.find('button#agreeButton').length && !$voteView.find('.Notification.Notification--warning').length) {
+      cy.vote()
+      cy.get('[data-view-name="vote-view"]').then(voteLoop)
+    }
+  })
+})
+
+// Legacy support for visualization tests
+Cypress.Commands.add('initAndVote', (userLabel, convoId) => {
+  cy.ensureUser(userLabel)
+  cy.voteOnConversation(convoId)
 })
 
 function apiLogin(user) {
-  cy.request('POST', '/api/v3/auth/login', { email: user.email, password: user.password })
-}
-
-function recursiveVote() {
-  cy.get('[data-view-name="vote-view"]').then(($voteView) => {
-    if ($voteView.find('button#agreeButton').length) {
-      cy.vote().then(() => recursiveVote())
-    }
+  cy.request('POST', '/api/v3/auth/login', {
+    email: user.email,
+    password: user.password
+  }).then((response) => {
+    cy.setCookie('token2', response.body.token)
+    cy.setCookie('uid2', String(response.body.uid))
   })
 }
