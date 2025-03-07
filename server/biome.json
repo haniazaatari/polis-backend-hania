@@ -34,10 +34,27 @@
         "useNodejsImportProtocol": "off"
       },
       "suspicious": {
-        "noExplicitAny": "off"
+        "noConsole": "off"
       }
     }
   },
+  "overrides": [
+    {
+      "include": ["src/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": {
+              "level": "error",
+              "options": {
+                "allow": []
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "organizeImports": {
     "enabled": true
   },

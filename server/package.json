@@ -20,7 +20,8 @@
     "lint:unsafe": "biome lint --write --unsafe",
     "lint:list": "biome lint 2>&1 | grep 'Users' | sed 's/:.*//' | sed 's|.*/server/||' | sort | uniq",
     "format": "biome format --write",
-    "check": "biome check --max-diagnostics=none"
+    "check": "biome check --max-diagnostics=none",
+    "check:fix": "biome check --fix --unsafe"
   },
   "repository": {
     "type": "git",
