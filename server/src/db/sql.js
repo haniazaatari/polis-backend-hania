@@ -1,6 +1,5 @@
-import Config from '../config.js';
 import sql from 'sql';
-import Config from '../config';
+import Config from '../config.js';
 const sql_conversations = sql.define({
   name: 'conversations',
   columns: [

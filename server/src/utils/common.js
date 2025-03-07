@@ -1,16 +1,17 @@
 import akismetLib from 'akismet';
 import pg from 'pg';
 import _ from 'underscore';
-import Config from '../config';
-import Conversation from '../conversation';
+import Config from '../config.js';
+import Conversation from '../conversation.js';
 import {
   queryP as pgQueryP,
   queryP_readOnly as pgQueryP_readOnly,
   query_readOnly as pgQuery_readOnly
-} from '../db/pg-query';
-import logger from '../utils/logger';
-import { MPromise } from '../utils/metered';
-const serverUrl = Config.getServerUrl();
+} from '../db/pg-query.js';
+import logger from '../utils/logger.js';
+import { MPromise } from './metered.js';
+
+const serverUrl = Config.getServerNameWithProtocol();
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
 const akismet = akismetLib.client({
   blog: serverUrl,
@@ -77,10 +78,11 @@ polisTypes.reactionValues = _.values(polisTypes.reactions);
 polisTypes.starValues = _.values(polisTypes.staractions);
 function isConversationOwner(zid, uid, callback) {
   pgQuery_readOnly('SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);', [zid, uid], (err, docs) => {
+    let resultError = err;
     if (!docs || !docs.rows || docs.rows.length === 0) {
-      err = err || 1;
+      resultError = resultError || 1;
     }
-    callback?.(err);
+    callback?.(resultError);
   });
 }
 function isModerator(zid, uid) {
@@ -103,7 +105,7 @@ function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) 
         'at-date': atDate,
         format: format
       },
-      task_bucket // TODO hash the params to get a consistent number?
+      task_bucket
     ]
   );
 }

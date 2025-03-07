@@ -1,6 +1,3 @@
-import fail from '../utils/fail';
-import { getZidForRid } from '../utils/zinvite';
-
 import fs from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { countTokens } from '@anthropic-ai/tokenizer';
@@ -9,82 +6,70 @@ import { parse } from 'csv-parse/sync';
 import OpenAI from 'openai';
 import { convertXML } from 'simple-xml-to-json';
 import { create } from 'xmlbuilder2';
-import config from '../config';
-import { getTopicsFromRID } from '../report_experimental/topics-example';
-import logger from '../utils/logger';
-import DynamoStorageService from '../utils/storage';
-import { sendCommentGroupsSummary } from './export';
-
+import config from '../config.js';
+import { getTopicsFromRID } from '../report_experimental/topics-example.js';
+import fail from '../utils/fail.js';
+import logger from '../utils/logger.js';
+import DynamoStorageService from '../utils/storage.js';
+import { getZidForRid } from '../utils/zinvite.js';
+import { sendCommentGroupsSummary } from './export.js';
 const js2xmlparser = require('js2xmlparser');
 
-export class PolisConverter {
-  static convertToXml(csvContent) {
-    const records = parse(csvContent, {
-      columns: true,
-      skip_empty_lines: true
+export function convertToXml(csvContent) {
+  const records = parse(csvContent, {
+    columns: true,
+    skip_empty_lines: true
+  });
+  if (records.length === 0) return '';
+  const doc = create({ version: '1.0', encoding: 'UTF-8' }).ele('polis-comments');
+  for (const record of records) {
+    const comment = doc.ele('comment', {
+      id: record['comment-id'],
+      votes: record['total-votes'],
+      agrees: record['total-agrees'],
+      disagrees: record['total-disagrees'],
+      passes: record['total-passes']
     });
-
-    if (records.length === 0) return '';
-
-    const doc = create({ version: '1.0', encoding: 'UTF-8' }).ele('polis-comments');
-
-    records.forEach((record) => {
-      const comment = doc.ele('comment', {
-        id: record['comment-id'],
-        votes: record['total-votes'],
-        agrees: record['total-agrees'],
-        disagrees: record['total-disagrees'],
-        passes: record['total-passes']
+    comment.ele('text').txt(record.comment);
+    const groupKeys = Object.keys(record)
+      .filter((key) => key.match(/^group-[a-z]-/))
+      .reduce((groups, key) => {
+        const groupId = key.split('-')[1];
+        if (!groups.includes(groupId)) groups.push(groupId);
+        return groups;
+      }, []);
+    for (const groupId of groupKeys) {
+      comment.ele(`group-${groupId}`, {
+        votes: record[`group-${groupId}-votes`],
+        agrees: record[`group-${groupId}-agrees`],
+        disagrees: record[`group-${groupId}-disagrees`],
+        passes: record[`group-${groupId}-passes`]
       });
-
-      comment.ele('text').txt(record.comment);
-
-      const groupKeys = Object.keys(record)
-        .filter((key) => key.match(/^group-[a-z]-/))
-        .reduce((groups, key) => {
-          const groupId = key.split('-')[1];
-          if (!groups.includes(groupId)) groups.push(groupId);
-          return groups;
-        }, []);
-
-      groupKeys.forEach((groupId) => {
-        comment.ele(`group-${groupId}`, {
-          votes: record[`group-${groupId}-votes`],
-          agrees: record[`group-${groupId}-agrees`],
-          disagrees: record[`group-${groupId}-disagrees`],
-          passes: record[`group-${groupId}-passes`]
-        });
-      });
-    });
-
-    return doc.end({ prettyPrint: true });
+    }
   }
+  return doc.end({ prettyPrint: true });
+}
 
-  static async convertFromFile(filePath) {
-    const fs = await import('node:fs/promises');
-    const csvContent = await fs.readFile(filePath, 'utf-8');
-    return PolisConverter.convertToXml(csvContent);
-  }
+export async function convertFromFile(filePath) {
+  const csvContent = await fs.readFile(filePath, 'utf-8');
+  return convertToXml(csvContent);
+}
 
-  static validateCsvStructure(headers) {
-    const requiredBaseFields = [
-      'comment-id',
-      'comment',
-      'total-votes',
-      'total-agrees',
-      'total-disagrees',
-      'total-passes'
-    ];
-
-    const hasRequiredFields = requiredBaseFields.every((field) => headers.includes(field));
-
-    const groupFields = headers.filter((h) => h.startsWith('group-'));
-    const validGroupPattern = groupFields.every((field) =>
-      field.match(/^group-[a-z]-(?:votes|agrees|disagrees|passes)$/)
-    );
-
-    return hasRequiredFields && validGroupPattern;
-  }
+export function validateCsvStructure(headers) {
+  const requiredBaseFields = [
+    'comment-id',
+    'comment',
+    'total-votes',
+    'total-agrees',
+    'total-disagrees',
+    'total-passes'
+  ];
+  const hasRequiredFields = requiredBaseFields.every((field) => headers.includes(field));
+  const groupFields = headers.filter((h) => h.startsWith('group-'));
+  const validGroupPattern = groupFields.every((field) =>
+    field.match(/^group-[a-z]-(?:votes|agrees|disagrees|passes)$/)
+  );
+  return hasRequiredFields && validGroupPattern;
 }
 
 const anthropic = config.anthropicApiKey
@@ -92,13 +77,11 @@ const anthropic = config.anthropicApiKey
       apiKey: config.anthropicApiKey
     })
   : null;
-
 const genAI = config.geminiApiKey ? new GoogleGenerativeAI(config.geminiApiKey) : null;
-
 const getCommentsAsXML = async (id, filter) => {
   try {
     const resp = await sendCommentGroupsSummary(id, undefined, false, filter);
-    const xml = PolisConverter.convertToXml(resp);
+    const xml = convertToXml(resp);
     if (xml.trim().length === 0) logger.error('No data has been returned by sendCommentGroupsSummary');
     return xml;
   } catch (e) {
@@ -106,14 +89,12 @@ const getCommentsAsXML = async (id, filter) => {
     throw e;
   }
 };
-
 const isFreshData = (timestamp) => {
   const now = new Date().getTime();
   const then = new Date(timestamp).getTime();
   const elapsed = Math.abs(now - then);
   return elapsed < config.maxReportCacheDuration;
 };
-
 const getModelResponse = async (model, system_lore, prompt_xml, modelVersion, isTopic) => {
   try {
     if (isTopic && countTokens(prompt_xml) > 30000) {
@@ -189,7 +170,6 @@ const getModelResponse = async (model, system_lore, prompt_xml, modelVersion, is
           apiKey: config.openaiApiKey
         })
       : null;
-
     switch (model) {
       case 'gemini': {
         if (!gemeniModel) {
@@ -261,7 +241,6 @@ const getModelResponse = async (model, system_lore, prompt_xml, modelVersion, is
     }`;
   }
 };
-
 const getGacThresholdByGroupCount = (numGroups) => {
   const thresholds = {
     2: 0.7,
@@ -271,14 +250,12 @@ const getGacThresholdByGroupCount = (numGroups) => {
   };
   return thresholds[numGroups] ?? 0.24;
 };
-
 export async function handle_GET_groupInformedConsensus(rid, storage, res, model, system_lore, zid, modelVersion) {
   const section = {
     name: 'group_informed_consensus',
     templatePath: 'src/report_experimental/subtaskPrompts/group_informed_consensus.xml',
     filter: (v) => (v.group_aware_consensus ?? 0) > getGacThresholdByGroupCount(v.num_groups)
   };
-
   const cachedResponse = await storage?.queryItemsByRidSectionModel(`${rid}#${section.name}#${model}`);
   const structured_comments = await getCommentsAsXML(zid, section.filter);
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
@@ -297,11 +274,8 @@ export async function handle_GET_groupInformedConsensus(rid, storage, res, model
     json.polisAnalysisPrompt.children[json.polisAnalysisPrompt.children.length - 1].data.content = {
       structured_comments
     };
-
     const prompt_xml = js2xmlparser.parse('polis-comments-and-group-demographics', json);
-
     const resp = await getModelResponse(model, system_lore, prompt_xml, modelVersion);
-
     const reportItem = {
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
@@ -309,9 +283,7 @@ export async function handle_GET_groupInformedConsensus(rid, storage, res, model
       model,
       errors: structured_comments?.trim().length === 0 ? 'NO_CONTENT_AFTER_FILTER' : undefined
     };
-
     storage?.putItem(reportItem);
-
     res.write(
       `${JSON.stringify({
         [section.name]: {
@@ -324,14 +296,12 @@ export async function handle_GET_groupInformedConsensus(rid, storage, res, model
   }
   res.flush();
 }
-
 export async function handle_GET_uncertainty(rid, storage, res, model, system_lore, zid, modelVersion) {
   const section = {
     name: 'uncertainty',
     templatePath: 'src/report_experimental/subtaskPrompts/uncertainty.xml',
     filter: (v) => v.passes / v.votes >= 0.2
   };
-
   const cachedResponse = await storage?.queryItemsByRidSectionModel(`${rid}#${section.name}#${model}`);
   const structured_comments = await getCommentsAsXML(zid, section.filter);
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
@@ -350,11 +320,8 @@ export async function handle_GET_uncertainty(rid, storage, res, model, system_lo
     json.polisAnalysisPrompt.children[json.polisAnalysisPrompt.children.length - 1].data.content = {
       structured_comments
     };
-
     const prompt_xml = js2xmlparser.parse('polis-comments-and-group-demographics', json);
-
     const resp = await getModelResponse(model, system_lore, prompt_xml, modelVersion);
-
     const reportItem = {
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
@@ -362,9 +329,7 @@ export async function handle_GET_uncertainty(rid, storage, res, model, system_lo
       model,
       errors: structured_comments?.trim().length === 0 ? 'NO_CONTENT_AFTER_FILTER' : undefined
     };
-
     storage?.putItem(reportItem);
-
     res.write(
       `${JSON.stringify({
         [section.name]: {
@@ -377,7 +342,6 @@ export async function handle_GET_uncertainty(rid, storage, res, model, system_lo
   }
   res.flush();
 }
-
 export async function handle_GET_groups(rid, storage, res, model, system_lore, zid, modelVersion) {
   const section = {
     name: 'groups',
@@ -386,7 +350,6 @@ export async function handle_GET_groups(rid, storage, res, model, system_lore, z
       return (v.comment_extremity ?? 0) > 1;
     }
   };
-
   const cachedResponse = await storage?.queryItemsByRidSectionModel(`${rid}#${section.name}#${model}`);
   const structured_comments = await getCommentsAsXML(zid, section.filter);
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
@@ -405,11 +368,8 @@ export async function handle_GET_groups(rid, storage, res, model, system_lore, z
     json.polisAnalysisPrompt.children[json.polisAnalysisPrompt.children.length - 1].data.content = {
       structured_comments
     };
-
     const prompt_xml = js2xmlparser.parse('polis-comments-and-group-demographics', json);
-
     const resp = await getModelResponse(model, system_lore, prompt_xml, modelVersion);
-
     const reportItem = {
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
@@ -417,9 +377,7 @@ export async function handle_GET_groups(rid, storage, res, model, system_lore, z
       model,
       errors: structured_comments?.trim().length === 0 ? 'NO_CONTENT_AFTER_FILTER' : undefined
     };
-
     storage?.putItem(reportItem);
-
     res.write(
       `${JSON.stringify({
         [section.name]: {
@@ -432,11 +390,9 @@ export async function handle_GET_groups(rid, storage, res, model, system_lore, z
   }
   res.flush();
 }
-
 export async function handle_GET_topics(rid, storage, res, model, system_lore, zid, modelVersion) {
   let topics;
   const cachedTopics = await storage?.queryItemsByRidSectionModel(`${rid}#topics`);
-
   if (cachedTopics?.length) {
     topics = cachedTopics[0].report_data;
   } else {
@@ -447,7 +403,6 @@ export async function handle_GET_topics(rid, storage, res, model, system_lore, z
       timestamp: new Date().toISOString(),
       report_data: topics
     };
-
     storage?.putItem(reportItemTopics);
   }
   const sections = topics.map((topic) => ({
@@ -457,7 +412,6 @@ export async function handle_GET_topics(rid, storage, res, model, system_lore, z
       return topic.citations.includes(v.comment_id);
     }
   }));
-
   await Promise.all(
     sections.map(async (section, i) => {
       const cachedResponse = await storage?.queryItemsByRidSectionModel(`${rid}#${section.name}#${model}`);
@@ -484,11 +438,8 @@ export async function handle_GET_topics(rid, storage, res, model, system_lore, z
               json.polisAnalysisPrompt.children[json.polisAnalysisPrompt.children.length - 1].data.content = {
                 structured_comments
               };
-
               const prompt_xml = js2xmlparser.parse('polis-comments-and-group-demographics', json);
-
               const resp = await getModelResponse(model, system_lore, prompt_xml, modelVersion, true);
-
               const reportItem = {
                 rid_section_model: `${rid}#${section.name}#${model}`,
                 timestamp: new Date().toISOString(),
@@ -496,9 +447,7 @@ export async function handle_GET_topics(rid, storage, res, model, system_lore, z
                 report_data: resp,
                 errors: structured_comments?.trim().length === 0 ? 'NO_CONTENT_AFTER_FILTER' : undefined
               };
-
               storage?.putItem(reportItem);
-
               res.write(
                 `${JSON.stringify({
                   [section.name]: {
@@ -521,38 +470,27 @@ export async function handle_GET_topics(rid, storage, res, model, system_lore, z
   logger.debug('all promises completed');
   res.end();
 }
-
 export async function handle_GET_reportNarrative(req, res) {
   const storage = new DynamoStorageService('report_narrative_store', req.query.noCache === 'true');
   await storage.initTable();
-
   const modelParam = req.query.model || 'openai';
   const modelVersionParam = req.query.modelVersion;
-
   res.writeHead(200, {
     'Content-Type': 'text/plain; charset=utf-8',
     'Transfer-Encoding': 'chunked'
   });
   const { rid } = req.p;
-
   res.write('POLIS-PING: AI bootstrap');
-
   res.flush();
-
   const zid = await getZidForRid(rid);
   if (!zid) {
     fail(res, 404, 'polis_error_report_narrative_notfound');
     return;
   }
-
   res.write('POLIS-PING: retrieving system lore');
-
   res.flush();
-
   const system_lore = await fs.readFile('src/report_experimental/system.xml', 'utf8');
-
   res.write('POLIS-PING: retrieving stream');
-
   res.flush();
   try {
     const cachedResponse = await storage?.getAllByReportID(rid);

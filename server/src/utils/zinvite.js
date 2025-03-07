@@ -20,13 +20,12 @@ export function getZinvite(zid, dontUseCache) {
     return conversation_id;
   });
 }
-
-export function getZinvites(zids) {
-  if (!zids.length) {
-    return Promise.resolve(zids);
+export function getZinvites(zidsParam) {
+  if (!zidsParam.length) {
+    return Promise.resolve(zidsParam);
   }
-  const numericZids = _.map(zids, (zid) => Number(zid));
-  const uniqueZids = _.uniq(numericZids);
+  const zidsAsNumbers = _.map(zidsParam, (zid) => Number(zid));
+  const uniqueZids = _.uniq(zidsAsNumbers);
   const uncachedZids = uniqueZids.filter((zid) => !zidToConversationIdCache.get(zid));
   const zidsWithCachedConversationIds = uniqueZids
     .filter((zid) => !!zidToConversationIdCache.get(zid))
@@ -36,9 +35,9 @@ export function getZinvites(zids) {
     }));
   function makeZidToConversationIdMap(arrays) {
     const zid2conversation_id = {};
-    for (const a of arrays) {
-      for (const o of a) {
-        zid2conversation_id[o.zid] = o.zinvite;
+    for (const array of arrays) {
+      for (const item of array) {
+        zid2conversation_id[item.zid] = item.zinvite;
       }
     }
     return zid2conversation_id;

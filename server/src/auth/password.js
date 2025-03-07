@@ -1,5 +1,5 @@
-import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import _ from 'underscore';
 import pg from '../db/pg-query.js';
 function generateHashedPassword(password, callback) {

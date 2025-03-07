@@ -1,25 +1,26 @@
+import crypto from 'node:crypto';
+import http from 'node:http';
 import akismetLib from 'akismet';
+import async from 'async';
 import AWS from 'aws-sdk';
 import badwords from 'badwords/object.js';
+import bcrypt from 'bcryptjs';
 import bluebird from 'bluebird';
-import http from 'http';
-import httpProxy from 'http-proxy';
-import async from 'async';
+import timeout from 'connect-timeout';
 import FB from 'fb';
 import { google } from 'googleapis';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-import OAuth from 'oauth';
-import replaceStream from 'replacestream';
-import responseTime from 'response-time';
-import request from 'request-promise';
-import LruCache from 'lru-cache';
-import timeout from 'connect-timeout';
-import _ from 'underscore';
-import pg from 'pg';
 import { encode } from 'html-entities';
+import httpProxy from 'http-proxy';
+import LruCache from 'lru-cache';
+import OAuth from 'oauth';
+import pg from 'pg';
+import replaceStream from 'replacestream';
+import request from 'request-promise';
+import responseTime from 'response-time';
+import _ from 'underscore';
 import CreateUser from './auth/create-user.js';
 import Password from './auth/password.js';
+import Config from './config.js';
 import dbPgQuery, {
   query as pgQuery,
   query_readOnly as pgQuery_readOnly,
@@ -28,7 +29,6 @@ import dbPgQuery, {
   queryP_readOnly as pgQueryP_readOnly,
   queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty
 } from './db/pg-query.js';
-import Config from './config.js';
 // import pgQuery from './db/pg-query.js';
 import { handle_GET_dataExport, handle_GET_dataExport_results } from './routes/dataExport.js';
 import { handle_GET_reportExport } from './routes/export.js';
@@ -68,14 +68,14 @@ const COOKIES = cookies.COOKIES;
 const COOKIES_TO_CLEAR = cookies.COOKIES_TO_CLEAR;
 import constants from './utils/constants.js';
 const DEFAULTS = constants.DEFAULTS;
-import User from './user.js';
-import Conversation from './conversation.js';
-import Session from './session.js';
 import Comment from './comment.js';
-import Utils from './utils/common.js';
+import Conversation from './conversation.js';
 import SQL from './db/sql.js';
-import logger from './utils/logger.js';
 import emailSenders from './email/senders.js';
+import Session from './session.js';
+import User from './user.js';
+import Utils from './utils/common.js';
+import logger from './utils/logger.js';
 const sendTextEmail = emailSenders.sendTextEmail;
 const sendTextEmailWithBackupOnly = emailSenders.sendTextEmailWithBackupOnly;
 const _resolveWith = (x) => {
@@ -6161,8 +6161,7 @@ Thanks for using Polis!
             });
           });
         });
-      }
-    );
+      });
   }
   function sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, seedUrl) {
     const body = `Conversation created!\n\nYou can find the conversation here:\n${url}\nYou can moderate the conversation here:\n${modUrl}\n\nWe recommend you add 2-3 short statements to start things off. These statements should be easy to agree or disagree with. Here are some examples:\n "I think the proposal is good"\n "This topic matters a lot"\n or "The bike shed should have a metal roof"\n\nYou can add statements here:\n${seedUrl}\n\nFeel free to reply to this email if you have questions.\n\nAdditional info: \nsite_id: "${site_id}"\npage_id: "${page_id}"\n\n`;

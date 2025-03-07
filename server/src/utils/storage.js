@@ -4,10 +4,9 @@ import config from '../config';
 import logger from './logger';
 
 export default class DynamoStorageService {
-  // client;
-  // tableName;
-  // cacheDisabled;
-
+  client;
+  tableName;
+  cacheDisabled;
   constructor(tableName, disableCache) {
     const credentials = {
       accessKeyId: config.awsAccessKeyId,
@@ -23,7 +22,6 @@ export default class DynamoStorageService {
     this.tableName = tableName;
     this.cacheDisabled = disableCache || false;
   }
-
   async initTable() {
     try {
       const describeCmd = new DescribeTableCommand({
@@ -56,24 +54,19 @@ export default class DynamoStorageService {
       }
     }
   }
-
   async putItem(item) {
     const params = {
       TableName: this.tableName,
       Item: item
     };
-
     const command = new PutCommand(params);
-
     try {
       const response = await this.client.send(command);
-      console.log(`item stored successfully: ${response}`);
       return response;
     } catch (error) {
       logger.error(error);
     }
   }
-
   async queryItemsByRidSectionModel(rid_section_model) {
     const params = {
       TableName: this.tableName,
@@ -82,13 +75,10 @@ export default class DynamoStorageService {
         ':rid_section_model': rid_section_model
       }
     };
-
     const command = new QueryCommand(params);
-
     if (this.cacheDisabled) {
       return [];
     }
-
     try {
       const data = await this.client.send(command);
       return data.Items;
@@ -96,7 +86,6 @@ export default class DynamoStorageService {
       logger.error('Error querying items:', error);
     }
   }
-
   async deleteReportItem(rid_section_model, timestamp) {
     const params = {
       TableName: this.tableName,
@@ -105,9 +94,7 @@ export default class DynamoStorageService {
         timestamp: timestamp
       }
     };
-
     const command = new DeleteCommand(params);
-
     try {
       const response = await this.client.send(command);
       logger.info('Item deleted successfully:', response);
@@ -119,7 +106,6 @@ export default class DynamoStorageService {
 
   async deleteAllByReportID(reportIdPrefix) {
     if (!reportIdPrefix) {
-      console.error('reportIdPrefix cannot be empty or null.');
       return;
     }
 
@@ -145,13 +131,10 @@ export default class DynamoStorageService {
 
         if (!itemsToDelete || itemsToDelete.length === 0) {
           if (!lastEvaluatedKey) {
-            console.log(`No items found with report ID prefix: ${reportIdPrefix}`);
           }
           break;
         }
-        console.log(`Found ${itemsToDelete.length} items to delete in this batch.`);
-      } catch (scanError) {
-        console.error('Error scanning for items:', scanError);
+      } catch (_scanError) {
         return;
       }
       const deletePromises = itemsToDelete.map(async (item) => {
@@ -170,17 +153,7 @@ export default class DynamoStorageService {
 
         try {
           await this.client.send(deleteItemCommand);
-          console.log(
-            `Deleted item with rid_section_model: ${rid_section_model}${timestamp ? `, timestamp: ${timestamp}` : ''}`
-          );
-        } catch (deleteError) {
-          console.error(
-            `Error deleting item: rid_section_model: ${rid_section_model}${
-              timestamp ? `, timestamp: ${timestamp}` : ''
-            }`,
-            deleteError
-          );
-        }
+        } catch (_deleteError) {}
       });
 
       await Promise.all(deletePromises);
@@ -189,7 +162,6 @@ export default class DynamoStorageService {
 
   async getAllByReportID(reportIdPrefix) {
     if (!reportIdPrefix) {
-      console.error('reportIdPrefix cannot be empty or null.');
       return [];
     }
 
@@ -208,15 +180,11 @@ export default class DynamoStorageService {
       const items = scanResponse.Items;
 
       if (!items || items.length === 0) {
-        console.log(`No items found with report ID prefix: ${reportIdPrefix}`);
         return [];
       }
 
-      console.log(`Found ${items.length} items with report ID prefix: ${reportIdPrefix}`);
-
       return items;
-    } catch (scanError) {
-      console.error('Error scanning for items:', scanError);
+    } catch (_scanError) {
       return;
     }
   }

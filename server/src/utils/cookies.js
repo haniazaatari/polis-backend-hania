@@ -1,9 +1,9 @@
-import _ from 'underscore';
 import url from 'url';
+import _ from 'underscore';
 import Config from '../config.js';
-import User from '../user.js';
-import logger from './logger.js';
 import Session from '../session.js';
+import User from '../user.js';
+import logger from '../utils/logger.js';
 const COOKIES = {
   COOKIE_TEST: 'ct',
   HAS_EMAIL: 'e',
@@ -31,9 +31,6 @@ function cookieDomain(req) {
   const parsedOrigin = url.parse(origin);
   if (parsedOrigin.hostname === 'localhost') {
     return 'localhost';
-  }
-  if (Config.domainOverride) {
-    return `.${Config.domainOverride}`;
   }
   return `.${Config.getServerHostname()}`;
 }
@@ -101,6 +98,7 @@ function getPermanentCookieAndEnsureItIsSet(req, res) {
     setPermanentCookie(req, res, token);
     return token;
   }
+
   return req.cookies[COOKIES.PERMANENT_COOKIE];
 }
 function clearCookies(req, res) {

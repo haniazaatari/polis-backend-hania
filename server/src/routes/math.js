@@ -1,26 +1,23 @@
 import _ from 'underscore';
-import Config from '../config';
-import { queryP as pgQueryP, query_readOnly as pgQuery_readOnly } from '../db/pg-query';
-import User from '../user';
-import Utils from '../utils/common';
-import fail from '../utils/fail';
-import logger from '../utils/logger';
-import { MPromise } from '../utils/metered';
-import { getBidIndexToPidMapping } from '../utils/participants';
-import { getPca } from '../utils/pca';
-import { getZidForRid } from '../utils/zinvite';
+import Config from '../config.js';
+import { queryP as pgQueryP, query_readOnly as pgQuery_readOnly } from '../db/pg-query.js';
+import User from '../user.js';
+import Utils from '../utils/common.js';
+import fail from '../utils/fail.js';
+import logger from '../utils/logger.js';
+import { MPromise } from '../utils/metered.js';
+import { getBidIndexToPidMapping } from '../utils/participants.js';
+import { getPca } from '../utils/pca.js';
+import { getZidForRid } from '../utils/zinvite.js';
 
 function handle_GET_math_pca(_req, res) {
   res.status(304).end();
 }
 const pcaResultsExistForZid = {};
-
 const getPidPromise = User.getPidPromise;
-
 function handle_GET_math_pca2(req, res) {
   const zid = req.p.zid;
   let math_tick = req.p.math_tick;
-
   const ifNoneMatch = req.p.ifNoneMatch;
   if (ifNoneMatch) {
     if (math_tick !== undefined) {
@@ -49,7 +46,6 @@ function handle_GET_math_pca2(req, res) {
       res.status(304).end();
     }
   }
-
   getPca(zid, math_tick)
     .then((data) => {
       if (data) {
@@ -74,13 +70,11 @@ function handle_GET_math_pca2(req, res) {
       fail(res, 500, err);
     });
 }
-
 function handle_POST_math_update(req, res) {
   const zid = req.p.zid;
   const uid = req.p.uid;
   const math_env = Config.mathEnv;
   const math_update_type = req.p.math_update_type;
-
   Utils.isModerator(zid, uid).then((hasPermission) => {
     if (!hasPermission) {
       return fail(res, 500, 'handle_POST_math_update_permission');
@@ -104,18 +98,15 @@ function handle_POST_math_update(req, res) {
       });
   });
 }
-
 function handle_GET_math_correlationMatrix(req, res) {
   const rid = req.p.rid;
   const math_env = Config.mathEnv;
   const math_tick = req.p.math_tick;
-
   function finishAsPending() {
     res.status(202).json({
       status: 'pending'
     });
   }
-
   function hasCommentSelections() {
     return pgQueryP('select * from report_comment_selections where rid = ($1) and selection = 1;', [rid]).then(
       (rows) => {
@@ -123,7 +114,6 @@ function handle_GET_math_correlationMatrix(req, res) {
       }
     );
   }
-
   const requestExistsPromise = pgQueryP(
     "select * from worker_tasks where task_type = 'generate_report_data' and math_env=($2) " +
       'and task_bucket = ($1) ' +
@@ -131,12 +121,10 @@ function handle_GET_math_correlationMatrix(req, res) {
       'and finished_time is NULL;',
     [rid, math_env, math_tick]
   );
-
   const resultExistsPromise = pgQueryP(
     'select * from math_report_correlationmatrix where rid = ($1) and math_env = ($2) and math_tick >= ($3);',
     [rid, math_env, math_tick]
   );
-
   Promise.all([resultExistsPromise, getZidForRid(rid)])
     .then((a) => {
       const rows = a[0];
@@ -174,7 +162,6 @@ function handle_GET_math_correlationMatrix(req, res) {
       return fail(res, 500, 'polis_err_GET_math_correlationMatrix', err);
     });
 }
-
 function handle_GET_bidToPid(req, res) {
   const zid = req.p.zid;
   const math_tick = req.p.math_tick;
@@ -190,7 +177,6 @@ function handle_GET_bidToPid(req, res) {
     }
   );
 }
-
 function getXids(zid) {
   return new MPromise('getXids', (resolve, reject) => {
     pgQuery_readOnly(
@@ -211,7 +197,6 @@ function getXids(zid) {
 function handle_GET_xids(req, res) {
   const uid = req.p.uid;
   const zid = req.p.zid;
-
   Utils.isOwner(zid, uid).then(
     (owner) => {
       if (owner) {
@@ -244,9 +229,8 @@ function handle_POST_xidWhitelist(req, res) {
   } catch (err) {
     return fail(res, 400, 'polis_err_bad_xid', err);
   }
-
   pgQueryP(`insert into xid_whitelist (xid, owner) values ${entries.join(',')} on conflict do nothing;`, [])
-    .then(() => {
+    .then((_result) => {
       res.status(200).json({});
     })
     .catch((err) => {
@@ -256,7 +240,6 @@ function handle_POST_xidWhitelist(req, res) {
 function getBidsForPids(zid, math_tick, pids) {
   const dataPromise = getBidIndexToPidMapping(zid, math_tick);
   const mathResultsPromise = getPca(zid, math_tick);
-
   return Promise.all([dataPromise, mathResultsPromise]).then((items) => {
     const b2p = items[0].bidToPid || [];
     const mathResults = items[1].asPOJO;
@@ -269,32 +252,26 @@ function getBidsForPids(zid, math_tick, pids) {
           break;
         }
       }
-
       let yourBid = indexToBid[yourBidi];
-
       if (yourBidi >= 0 && _.isUndefined(yourBid)) {
         logger.error('polis_err_math_index_mapping_mismatch', { pid, b2p });
         yourBid = -1;
       }
       return yourBid;
     }
-
     const indexToBid = mathResults['base-clusters'].id;
     const bids = pids.map(findBidForPid);
     const pidToBid = _.object(pids, bids);
     return pidToBid;
   });
 }
-
 function handle_GET_bid(req, res) {
   const uid = req.p.uid;
   const zid = req.p.zid;
   const math_tick = req.p.math_tick;
-
   const dataPromise = getBidIndexToPidMapping(zid, math_tick);
   const pidPromise = getPidPromise(zid, uid);
   const mathResultsPromise = getPca(zid, math_tick);
-
   Promise.all([dataPromise, pidPromise, mathResultsPromise])
     .then(
       (items) => {
@@ -305,9 +282,7 @@ function handle_GET_bid(req, res) {
           fail(res, 500, 'polis_err_get_bid_bad_pid');
           return;
         }
-
         const indexToBid = mathResults['base-clusters'].id;
-
         let yourBidi = -1;
         for (let bidi = 0; bidi < b2p.length; bidi++) {
           const pids = b2p[bidi];
@@ -316,14 +291,11 @@ function handle_GET_bid(req, res) {
             break;
           }
         }
-
         let yourBid = indexToBid[yourBidi];
-
         if (yourBidi >= 0 && _.isUndefined(yourBid)) {
           logger.error('polis_err_math_index_mapping_mismatch', { pid, b2p });
           yourBid = -1;
         }
-
         res.json({
           bid: yourBid
         });
@@ -336,7 +308,6 @@ function handle_GET_bid(req, res) {
       fail(res, 500, 'polis_err_get_bid_misc', err);
     });
 }
-
 export {
   handle_GET_math_pca,
   handle_GET_math_pca2,

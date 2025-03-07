@@ -1,11 +1,9 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import logger from '../../../utils/logger';
+import logger from '../../utils/logger.js';
 
 const genAI = new GoogleGenerativeAI('my_api_key');
-
 async function main() {
   const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-
   const msg = await model.generateContent({
     contents: [
       {
@@ -18,8 +16,6 @@ async function main() {
       temperature: 0
     }
   });
-
   logger.debug(msg.response.text());
 }
-
 main().catch(logger.error);

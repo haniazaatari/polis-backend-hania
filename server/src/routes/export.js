@@ -158,37 +158,26 @@ export async function sendParticipantVotesSummary(zid, res) {
   }
 
   const pca = await getPca(zid);
-
-  // Define the getGroupId function
   function getGroupId(pca, pid) {
     if (!pca || !pca.asPOJO) {
       return undefined;
     }
-
     const pcaData = pca.asPOJO;
-
-    // Check if participant is in the conversation
     const inConv = pcaData['in-conv'];
     if (!inConv || !Array.isArray(inConv) || !inConv.includes(pid)) {
       logger.info(`Participant ${pid} not found in in-conv array`);
       return undefined;
     }
-
-    // Get the base clusters and group clusters
     const baseClusters = pcaData['base-clusters'];
     const groupClusters = pcaData['group-clusters'];
-
     if (!baseClusters || !baseClusters.members || !Array.isArray(baseClusters.members)) {
       logger.info('No base clusters found in PCA data');
       return undefined;
     }
-
     if (!groupClusters || !Array.isArray(groupClusters) || groupClusters.length === 0) {
       logger.info('No group clusters found in PCA data');
       return undefined;
     }
-
-    // Step 1: Find which base cluster contains the participant
     let baseClusterId = -1;
     for (let i = 0; i < baseClusters.members.length; i++) {
       const members = baseClusters.members[i];
@@ -197,21 +186,15 @@ export async function sendParticipantVotesSummary(zid, res) {
         break;
       }
     }
-
     if (baseClusterId === -1) {
-      // We couldn't find the participant in any base cluster
       logger.info(`Could not find base cluster for participant ${pid}`);
       return undefined;
     }
-
-    // Step 2: Find which group cluster contains this base cluster
     for (const groupCluster of groupClusters) {
       if (groupCluster.members && Array.isArray(groupCluster.members) && groupCluster.members.includes(baseClusterId)) {
         return groupCluster.id;
       }
     }
-
-    // We couldn't find the participant in any group cluster
     logger.info(`Could not find group cluster for participant ${pid}`);
     return undefined;
   }
@@ -270,15 +253,12 @@ export async function sendParticipantVotesSummary(zid, res) {
     }
   );
 }
-
 export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
   const csvText = [];
-  // Get PCA data to identify groups and get groupVotes
   const pca = await getPca(zid);
   if (!pca?.asPOJO) {
     throw new Error('polis_error_no_pca_data');
   }
-
   const groupClusters = pca.asPOJO['group-clusters'];
   const groupIds = Array.isArray(groupClusters)
     ? groupClusters.map((g) => g.id)
@@ -286,42 +266,28 @@ export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
   const numGroups = groupIds.length;
   const groupVotes = pca.asPOJO['group-votes'];
   const groupAwareConsensus = pca.asPOJO['group-aware-consensus'];
-
   const commentExtremity = pca.asPOJO.pca?.['comment-extremity'] || [];
-
-  // Load comment texts
-  const commentRows = await pg.queryP_readOnly('SELECT tid, txt FROM comments WHERE zid = ($1)', [zid]);
+  const commentRows = await pgQueryP_readOnly('SELECT tid, txt FROM comments WHERE zid = ($1)', [zid]);
   const commentTexts = new Map(commentRows.map((row) => [row.tid, row.txt]));
-
-  // Initialize stats map
   const commentStats = new Map();
-
-  // Create a mapping of tid to extremity index using math tids array
   const tidToExtremityIndex = new Map();
-  const mathTids = pca.asPOJO.tids || []; // Array of tids in same order as extremity values
+  const mathTids = pca.asPOJO.tids || [];
   commentExtremity.forEach((_extremity, index) => {
     const tid = mathTids[index];
     if (tid !== undefined) {
       tidToExtremityIndex.set(tid, index);
     }
   });
-
-  // Process each group's votes
   for (const groupId of groupIds) {
     const groupVoteStats = groupVotes[groupId];
     if (!groupVoteStats?.votes) continue;
-
-    // Process each comment's votes for this group
     for (const [tidStr, votes] of Object.entries(groupVoteStats.votes)) {
       const tid = Number.parseInt(tidStr);
-
-      // Initialize stats for this comment if we haven't seen it before
       if (!commentStats.has(tid)) {
         const groupStats = {};
         for (const gid of groupIds) {
           groupStats[gid] = { votes: 0, agrees: 0, disagrees: 0, passes: 0 };
         }
-
         commentStats.set(tid, {
           tid: tid,
           txt: commentTexts.get(tid) || '',
@@ -332,41 +298,30 @@ export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
           group_stats: groupStats
         });
       }
-
-      // Get the stats object for this comment
       const stats = commentStats.get(tid);
       if (!stats) {
         logger.warn(`Comment stats not found for tid ${tid}`);
         continue;
       }
       const groupStats = stats.group_stats[groupId];
-
-      // Update group stats
       groupStats.agrees = votes.A;
       groupStats.disagrees = votes.D;
-      groupStats.votes = votes.S; // S is the total number of votes
-      groupStats.passes = votes.S - (votes.A + votes.D); // Calculate passes from the sum
+      groupStats.votes = votes.S;
+      groupStats.passes = votes.S - (votes.A + votes.D);
     }
   }
-
-  // Calculate totals for each comment
   for (const stats of commentStats.values()) {
     stats.total_agrees = Object.values(stats.group_stats).reduce((sum, g) => sum + g.agrees, 0);
     stats.total_disagrees = Object.values(stats.group_stats).reduce((sum, g) => sum + g.disagrees, 0);
     stats.total_passes = Object.values(stats.group_stats).reduce((sum, g) => sum + g.passes, 0);
     stats.total_votes = Object.values(stats.group_stats).reduce((sum, g) => sum + g.votes, 0);
   }
-
-  // Format and send CSV
   if (res && http) {
     res.setHeader('content-type', 'text/csv');
   }
-
-  // Create headers
   const headers = ['comment-id', 'comment', 'total-votes', 'total-agrees', 'total-disagrees', 'total-passes'];
-
   for (const groupId of groupIds) {
-    const groupLetter = String.fromCharCode(97 + groupId); // 97 is 'a' in ASCII
+    const groupLetter = String.fromCharCode(97 + groupId);
     headers.push(
       `group-${groupLetter}-votes`,
       `group-${groupLetter}-agrees`,
@@ -379,8 +334,6 @@ export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
   } else {
     csvText.push(headers.join(',') + sep);
   }
-
-  // Write data rows
   for (const stats of commentStats.values()) {
     const row = [
       stats.tid,
@@ -406,9 +359,7 @@ export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
         comment_id: stats.tid,
         num_groups: numGroups
       }) === true;
-
     const rowString = row.join(',') + sep;
-
     if (shouldIncludeRow) {
       if (http && res) {
         res.write(rowString);
@@ -417,7 +368,6 @@ export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
       }
     }
   }
-
   if (http && res) {
     res.end();
   } else {
@@ -481,11 +431,9 @@ export async function handle_GET_reportExport(req, res) {
       case 'participant-votes.csv':
         await sendParticipantVotesSummary(zid, res);
         break;
-
       case 'comment-groups.csv':
         await sendCommentGroupsSummary(zid, res);
         break;
-
       default:
         fail(res, 404, 'polis_error_data_unknown_report');
         break;

@@ -1,22 +1,19 @@
-import { generateHashedPassword } from '../auth/password';
-import Config from '../config';
-import { queryP as pgQueryP, queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query';
-import emailSenders from '../email/senders';
-import Session from '../session';
-import User from '../user';
-import cookies from '../utils/cookies';
-import fail from '../utils/fail';
-import logger from '../utils/logger';
-
+import { generateHashedPassword } from '../auth/password.js';
+import Config from '../config.js';
+import { queryP as pgQueryP, queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query.js';
+import emailSenders from '../email/senders.js';
+import Session from '../session.js';
+import User from '../user.js';
+import cookies from '../utils/cookies.js';
+import fail from '../utils/fail.js';
+import logger from '../utils/logger.js';
 const sendTextEmail = emailSenders.sendTextEmail;
-
 const getUidForPwResetToken = Session.getUidForPwResetToken;
 const clearPwResetToken = Session.clearPwResetToken;
 const getServerNameWithProtocol = Config.getServerNameWithProtocol;
 const setupPwReset = Session.setupPwReset;
 const polisFromAddress = Config.polisFromAddress;
 const getUserInfoForUid = User.getUserInfoForUid;
-
 function sendPasswordResetEmail(uid, pwresettoken, serverName, callback) {
   getUserInfoForUid(uid, (err, userInfo) => {
     if (err) {
@@ -33,7 +30,6 @@ To reset your password, visit this page:
 ${serverName}/pwreset/${pwresettoken}
 
 "Thank you for using Polis`;
-
     sendTextEmail(polisFromAddress, userInfo.email, 'Polis Password Reset', body)
       .then(() => {
         callback?.();
@@ -54,11 +50,9 @@ function getUidByEmail(email) {
     return rows[0].uid;
   });
 }
-
 function handle_POST_auth_password(req, res) {
   const pwresettoken = req.p.pwresettoken;
   const newPassword = req.p.newPassword;
-
   getUidForPwResetToken(pwresettoken, (err, userParams) => {
     if (err) {
       fail(res, 500, "Password Reset failed. Couldn't find matching pwresettoken.", err);
@@ -87,18 +81,13 @@ function handle_POST_auth_password(req, res) {
     );
   });
 }
-
 function handle_POST_auth_pwresettoken(req, res) {
   const email = req.p.email;
-
-  const server = getServerNameWithProtocol(req);
-
+  const server = getServerNameWithProtocol();
   cookies.clearCookies(req, res);
-
   function finish() {
     res.status(200).json('Password reset email sent, please check your email.');
   }
-
   getUidByEmail(email).then(
     (uid) => {
       setupPwReset(uid, (_err, pwresettoken) => {

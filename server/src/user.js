@@ -1,9 +1,9 @@
-import _ from 'underscore';
 import LruCache from 'lru-cache';
-import pg from './db/pg-query.js';
-import { MPromise } from './utils/metered.js';
+import _ from 'underscore';
 import Conversation from './conversation.js';
+import pg from './db/pg-query.js';
 import logger from './utils/logger.js';
+import { MPromise } from './utils/metered.js';
 function getUserInfoForUid(uid, callback) {
   pg.query_readOnly('SELECT email, hname from users where uid = $1', [uid], (err, results) => {
     if (err) {
@@ -229,8 +229,7 @@ export {
   createDummyUser,
   getPid,
   getPidPromise,
-  getPidForParticipant,
-  getSocialInfoForUsers
+  getPidForParticipant
 };
 export default {
   pidCache,

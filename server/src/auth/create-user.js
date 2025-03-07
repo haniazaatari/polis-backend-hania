@@ -1,12 +1,12 @@
 import _ from 'underscore';
-import pg from '../db/pg-query.js';
-import fail from '../utils/fail.js';
 import Config from '../config.js';
-import cookies from '../utils/cookies.js';
+import pg from '../db/pg-query.js';
+import emailSenders from '../email/senders.js';
 import Session from '../session.js';
 import Utils from '../utils/common.js';
+import cookies from '../utils/cookies.js';
+import fail from '../utils/fail.js';
 import Password from './password.js';
-import emailSenders from '../email/senders.js';
 
 const sendTextEmail = emailSenders.sendTextEmail;
 function createUser(req, res) {
@@ -114,8 +114,8 @@ function doSendVerification(req, email) {
       .then((_rows) => sendVerificationEmail(req, email, einvite))
   );
 }
-function sendVerificationEmail(req, email, einvite) {
-  const serverName = Config.getServerNameWithProtocol(req);
+function sendVerificationEmail(_req, email, einvite) {
+  const serverName = Config.getServerNameWithProtocol();
   const body = `Welcome to pol.is!
 
 Click this link to verify your email address:

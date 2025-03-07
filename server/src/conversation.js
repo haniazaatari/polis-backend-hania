@@ -1,7 +1,7 @@
 import LruCache from 'lru-cache';
 import pg from './db/pg-query.js';
-import { MPromise } from './utils/metered.js';
 import logger from './utils/logger.js';
+import { MPromise } from './utils/metered.js';
 function createXidRecord(ownerUid, uid, xid, x_profile_image_url, x_name, x_email) {
   return pg.queryP(
     'insert into xids (owner, uid, xid, x_profile_image_url, x_name, x_email) values ($1, $2, $3, $4, $5, $6) ' +
@@ -79,6 +79,7 @@ function getZidFromConversationId(conversation_id) {
         logger.error(`polis_err_fetching_zid_for_conversation_id ${conversation_id}`, err);
         return reject('polis_err_fetching_zid_for_conversation_id');
       }
+
       const zid = results.rows[0].zid;
       conversationIdToZidCache.set(conversation_id, zid);
       return resolve(zid);

@@ -1,11 +1,11 @@
 import { v2 } from '@google-cloud/translate';
 import _ from 'underscore';
-import pg from './db/pg-query.js';
-import SQL from './db/sql.js';
-import { MPromise } from './utils/metered.js';
-import Utils from './utils/common.js';
 import Config from './config.js';
 import Conversation from './conversation.js';
+import pg from './db/pg-query.js';
+import SQL from './db/sql.js';
+import Utils from './utils/common.js';
+import { MPromise } from './utils/metered.js';
 const { Translate } = v2;
 const useTranslateApi = Config.shouldUseTranslationAPI;
 const translateClient = useTranslateApi ? new Translate() : null;
@@ -204,11 +204,11 @@ function _getCommentsList(o) {
 function getNumberOfCommentsRemaining(zid, pid) {
   return pg.queryP(
     'with ' +
-    'v as (select * from votes_latest_unique where zid = ($1) and pid = ($2)), ' +
-    'c as (select * from get_visible_comments($1)), ' +
-    'remaining as (select count(*) as remaining from c left join v on c.tid = v.tid where v.vote is null), ' +
-    'total as (select count(*) as total from c) ' +
-    'select cast(remaining.remaining as integer), cast(total.total as integer), cast(($2) as integer) as pid from remaining, total;',
+      'v as (select * from votes_latest_unique where zid = ($1) and pid = ($2)), ' +
+      'c as (select * from get_visible_comments($1)), ' +
+      'remaining as (select count(*) as remaining from c left join v on c.tid = v.tid where v.vote is null), ' +
+      'total as (select count(*) as total from c) ' +
+      'select cast(remaining.remaining as integer), cast(total.total as integer), cast(($2) as integer) as pid from remaining, total;',
     [zid, pid]
   );
 }

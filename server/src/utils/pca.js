@@ -18,60 +18,44 @@ export function fetchAndCacheLatestPcaData() {
     const timePassed = Date.now() - lastPrefetchPollStartTime;
     return Math.max(0, 2500 - timePassed);
   }
-
   function pollForLatestPcaData() {
     lastPrefetchPollStartTime = Date.now();
-
     pgQueryP_readOnly('select * from math_main where caching_tick > ($1) order by caching_tick limit 10;', [
       lastPrefetchedMathTick
-    ]).then((rows) => {
-      if (!rows || !rows.length) {
-        logger.info('mathpoll done');
-        setTimeout(fetchAndCacheLatestPcaData, waitTime());
-        return;
-      }
-      const _results = rows
-        .map((row) => {
+    ])
+      .then((rows) => {
+        if (!rows || !rows.length) {
+          logger.info('mathpoll done');
+          setTimeout(pollForLatestPcaData, waitTime());
+          return;
+        }
+        const results = rows.map((row) => {
           const item = row.data;
           if (row.math_tick) {
             item.math_tick = Number(row.math_tick);
           }
-
-          const results = rows.map((row) => {
-            const item = row.data;
-
-            if (row.math_tick) {
-              item.math_tick = Number(row.math_tick);
-            }
-            if (row.caching_tick) {
-              item.caching_tick = Number(row.caching_tick);
-            }
-
-            logger.info('mathpoll updating', {
-              caching_tick: item.caching_tick,
-              zid: row.zid
-            });
-
-            if (item.caching_tick > lastPrefetchedMathTick) {
-              lastPrefetchedMathTick = item.caching_tick;
-            }
-
-            processMathObject(item);
-
-            return updatePcaCache(row.zid, item);
+          if (row.caching_tick) {
+            item.caching_tick = Number(row.caching_tick);
+          }
+          logger.info('mathpoll updating', {
+            caching_tick: item.caching_tick,
+            zid: row.zid
           });
-
-          Promise.all(results).then(() => {
-            setTimeout(pollForLatestPcaData, waitTime());
-          });
-        })
-        .catch((err) => {
-          logger.error('mathpoll error', err);
+          if (item.caching_tick > lastPrefetchedMathTick) {
+            lastPrefetchedMathTick = item.caching_tick;
+          }
+          processMathObject(item);
+          return updatePcaCache(row.zid, item);
+        });
+        Promise.all(results).then(() => {
           setTimeout(pollForLatestPcaData, waitTime());
         });
-    });
+      })
+      .catch((err) => {
+        logger.error('mathpoll error', err);
+        setTimeout(pollForLatestPcaData, waitTime());
+      });
   }
-
   pollForLatestPcaData();
 }
 
@@ -90,6 +74,7 @@ export function getPca(zid, math_tick) {
       });
       return Promise.resolve(undefined);
     }
+
     logger.info('math from cache', { zid, math_tick });
     return Promise.resolve(cached);
   }
@@ -162,7 +147,6 @@ function processMathObject(o) {
     if (!o) {
       return o;
     }
-
     function safeMap(input, mapFn) {
       if (Array.isArray(input)) {
         return input.map(mapFn);
@@ -172,7 +156,6 @@ function processMathObject(o) {
       }
       return [];
     }
-
     const subgroupProperties = [
       'group-clusters',
       'repness',
@@ -190,7 +173,6 @@ function processMathObject(o) {
         }));
       }
     }
-
     return o;
   }
 
@@ -199,7 +181,6 @@ function processMathObject(o) {
       return { id: Number(g.id), val: g };
     });
   }
-
   const propsToConvert = ['repness', 'group-votes', 'subgroup-repness', 'subgroup-votes', 'subgroup-clusters'];
 
   for (const prop of propsToConvert) {
@@ -208,7 +189,6 @@ function processMathObject(o) {
         id: Number(gid),
         val: o[prop][gid]
       }));
-
       if (prop.startsWith('subgroup-')) {
         o[prop].map(remapSubgroupStuff);
       }
@@ -232,9 +212,9 @@ function processMathObject(o) {
     }
     return a.map((g) => {
       const id = g.id;
-      const group = g.val;
-      group.id = id;
-      return group;
+      const gVal = g.val;
+      gVal.id = id;
+      return gVal;
     });
   }
   o.repness = toObj(o.repness);

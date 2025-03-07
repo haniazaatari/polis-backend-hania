@@ -14,9 +14,7 @@ async function parseCsvString(csvString) {
       skip_empty_lines: true,
       relax_column_count: true
     });
-
     parser.on('error', (error) => reject(error));
-
     parser.on('data', (row) => {
       if (row.moderated === -1) {
         return;
@@ -38,14 +36,11 @@ async function parseCsvString(csvString) {
         }
       });
     });
-
     parser.on('end', () => resolve(data));
-
     parser.write(csvString);
     parser.end();
   });
 }
-
 export async function getTopicsFromRID(zId) {
   try {
     if (!config.geminiApiKey) {
@@ -55,7 +50,6 @@ export async function getTopicsFromRID(zId) {
     const modified = resp.split('\n');
     modified[0] =
       'comment-id,comment_text,total-votes,total-agrees,total-disagrees,total-passes,group-a-votes,group-0-agree-count,group-0-disagree-count,group-0-pass-count,group-b-votes,group-1-agree-count,group-1-disagree-count,group-1-pass-count';
-
     const comments = await parseCsvString(modified.join('\n'));
     const topics = await new Sensemaker({
       defaultModel: new GoogleAIModel(config.geminiApiKey, 'gemini-exp-1206')
@@ -63,7 +57,6 @@ export async function getTopicsFromRID(zId) {
     const categorizedComments = await new Sensemaker({
       defaultModel: new GoogleAIModel(config.geminiApiKey, 'gemini-1.5-flash-8b')
     }).categorizeComments(comments, false, topics);
-
     const topics_master_list = new Map();
 
     for (const c of categorizedComments) {

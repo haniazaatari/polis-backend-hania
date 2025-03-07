@@ -1,43 +1,15 @@
-import './src/init.js';
+import * as dotenv from 'dotenv';
+dotenv.config();
+import BluebirdPromise from 'bluebird';
 import express from 'express';
 import morgan from 'morgan';
-import Config from './src/config.js';
-import { handle_GET_conversationUuid } from './src/routes/conversationUuid.js';
-import { handle_GET_xidReport } from './src/routes/export.js';
-import server from './src/server.js';
-import logger from './src/utils/logger.js';
-
-import {
-  assignToP,
-  assignToPCustom,
-  getArrayOfInt,
-  getArrayOfStringNonEmpty,
-  getArrayOfStringNonEmptyLimitLength,
-  getBool,
-  getConversationIdFetchZid,
-  getEmail,
-  getInt,
-  getIntInRange,
-  getNumberInRange,
-  getOptionalStringLimitLength,
-  getPassword,
-  getPasswordWithCreatePasswordRules,
-  getReportIdFetchRid,
-  getStringLimitLength,
-  getUrlLimitLength,
-  moveToBody,
-  need,
-  resolve_pidThing,
-  want,
-  wantCookie,
-  wantHeader
-} from './src/utils/parameter.js';
-
+import Config from './src/config';
+import server from './src/server';
+import logger from './src/utils/logger';
 const app = express();
 app.use(morgan('dev'));
-app.set('trust proxy', 1);
-
-const helpersInitialized = new bluebird.Promise((resolve) => {
+app.set('trust proxy', 'uniquelocal');
+const helpersInitialized = new BluebirdPromise((resolve, _reject) => {
   resolve(server.initializePolisHelpers());
 });
 helpersInitialized.then(
@@ -176,7 +148,31 @@ helpersInitialized.then(
       handle_PUT_reports,
       handle_PUT_users
     } = o;
-
+    const {
+      assignToP,
+      assignToPCustom,
+      getArrayOfInt,
+      getArrayOfStringNonEmpty,
+      getArrayOfStringNonEmptyLimitLength,
+      getBool,
+      getConversationIdFetchZid,
+      getEmail,
+      getInt,
+      getIntInRange,
+      getNumberInRange,
+      getOptionalStringLimitLength,
+      getPassword,
+      getPasswordWithCreatePasswordRules,
+      getReportIdFetchRid,
+      getStringLimitLength,
+      getUrlLimitLength,
+      moveToBody,
+      need,
+      resolve_pidThing,
+      want,
+      wantCookie,
+      wantHeader
+    } = require('./src/utils/parameter');
     app.disable('x-powered-by');
     app.use(middleware_responseTime_start);
     app.use(redirectIfNotHttps);
