@@ -2,6 +2,7 @@
 .google_creds_temp
 .venv/
 .vscode/settings.json
+app.ts
 dist
 logs/
 node_modules/
