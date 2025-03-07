@@ -1,18 +1,16 @@
 import crypto from 'node:crypto';
-import http from 'node:http';
 import akismetLib from 'akismet';
 import async from 'async';
 import AWS from 'aws-sdk';
-import badwords from 'badwords/object.js';
+import badwords from 'badwords/object';
 import bcrypt from 'bcryptjs';
-import bluebird from 'bluebird';
+import { Promise as BluebirdPromise } from 'bluebird';
 import timeout from 'connect-timeout';
 import FB from 'fb';
 import { google } from 'googleapis';
 import { encode } from 'html-entities';
 import httpProxy from 'http-proxy';
 import LruCache from 'lru-cache';
-import OAuth from 'oauth';
 import pg from 'pg';
 import replaceStream from 'replacestream';
 import request from 'request-promise';
@@ -29,7 +27,6 @@ import dbPgQuery, {
   queryP_readOnly as pgQueryP_readOnly,
   queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty
 } from './db/pg-query.js';
-// import pgQuery from './db/pg-query.js';
 import { handle_GET_dataExport, handle_GET_dataExport_results } from './routes/dataExport.js';
 import { handle_GET_reportExport } from './routes/export.js';
 import handle_GET_launchPrep from './routes/launchPrep.js';
@@ -48,15 +45,15 @@ import {
 import handle_DELETE_metadata_answers from './routes/metadataAnswers.js';
 import { handle_POST_auth_password, handle_POST_auth_pwresettoken } from './routes/password.js';
 import { handle_GET_reportNarrative } from './routes/reportNarrative.js';
-import handle_GET_tryCookie from './routes/tryCookie';
+import handle_GET_tryCookie from './routes/tryCookie.js';
 import fail from './utils/fail.js';
-import { METRICS_IN_RAM, MPromise, addInRamMetric } from './utils/metered';
+import { METRICS_IN_RAM, MPromise, addInRamMetric } from './utils/metered.js';
 import { getPidsForGid } from './utils/participants.js';
 import { fetchAndCacheLatestPcaData, getPca } from './utils/pca.js';
 import { getZinvite, getZinvites } from './utils/zinvite.js';
 AWS.config.update({ region: Config.awsRegion });
-const { Promise: BluebirdPromise } = bluebird;
 const devMode = Config.isDevMode;
+const _s3Client = new AWS.S3({ apiVersion: '2006-03-01' });
 const escapeLiteral = pg.Client.prototype.escapeLiteral;
 const doSendVerification = CreateUser.doSendVerification;
 const generateAndRegisterZinvite = CreateUser.generateAndRegisterZinvite;
@@ -93,7 +90,7 @@ function isPolisDev(uid) {
   return polisDevs.indexOf(uid) >= 0;
 }
 const polisFromAddress = Config.polisFromAddress;
-const serverUrl = Config.getServerUrl();
+const serverUrl = Config.getServerNameWithProtocol();
 const akismet = akismetLib.client({
   blog: serverUrl,
   apiKey: Config.akismetAntispamApiKey
@@ -135,7 +132,6 @@ DD.prototype.g = DA.prototype.g = function (k) {
 DD.prototype.s = DA.prototype.s = function (k, v) {
   this.m[k] = v;
 };
-const domainOverride = Config.domainOverride;
 function haltOnTimeout(req, res, next) {
   if (req.timedout) {
     fail(res, 500, 'polis_err_timeout_misc');
@@ -217,6 +213,7 @@ function doXidApiKeyAuth(assigner, apikey, xid, isOptional, req, res, next) {
             if (isOptional) {
               return next();
             }
+
             res.status(403);
             next('polis_err_auth_no_such_xid_for_this_apikey_1');
             return;
@@ -332,13 +329,13 @@ function initializePolisHelpers() {
   }
   function doVotesPost(_uid, pid, conv, tid, voteType, weight, high_priority) {
     const zid = conv?.zid;
-    weight = weight || 0;
-    const weight_x_32767 = Math.trunc(weight * 32767);
+    const effectiveWeight = weight || 0;
+    const weight_x_32767 = Math.trunc(effectiveWeight * 32767);
     return new Promise((resolve, reject) => {
       const query =
         'INSERT INTO votes (pid, zid, tid, vote, weight_x_32767, high_priority, created) VALUES ($1, $2, $3, $4, $5, $6, default) RETURNING *;';
       const params = [pid, zid, tid, voteType, weight_x_32767, high_priority];
-      pgQueryP(query, params, (err, result) => {
+      pgQuery(query, params, (err, result) => {
         if (err) {
           if (isDuplicateKey(err)) {
             reject('polis_err_vote_duplicate');
@@ -372,6 +369,7 @@ function initializePolisHelpers() {
             if (is_whitelisted) {
               return conv;
             }
+
             throw 'polis_err_xid_not_whitelisted';
           });
         }
@@ -426,6 +424,7 @@ function initializePolisHelpers() {
         });
         return res.end();
       }
+
       res.status(400).send('Please use HTTPS when submitting data.');
     }
     return next();
@@ -446,6 +445,7 @@ function initializePolisHelpers() {
             if (isOptional) {
               return onDone();
             }
+
             res.status(403);
             onDone('polis_err_auth_no_such_xid_for_this_apikey_11');
             return;
@@ -578,6 +578,9 @@ function initializePolisHelpers() {
     ''
   ];
   function hasWhitelistMatches(host) {
+    if (devMode) {
+      return true;
+    }
     let hostWithoutProtocol = host;
     if (host.startsWith('http://')) {
       hostWithoutProtocol = host.slice(7);
@@ -598,32 +601,21 @@ function initializePolisHelpers() {
     return false;
   }
   function addCorsHeader(req, res, next) {
-    let host = '';
-    if (domainOverride) {
-      host = `${req.protocol}://${domainOverride}`;
-    } else {
-      host = req.get('Origin') || req.get('Referer') || '';
-    }
-    host = host.replace(/#.*$/, '');
-    const result = /^[^\/]*\/\/[^\/]*/.exec(host);
-    if (result?.[0]) {
-      host = result[0];
-    }
-    const routeIsWhitelistedForAnyDomain = _.some(whitelistedCrossDomainRoutes, (regex) => regex.test(req.path));
-    if (!domainOverride && !hasWhitelistMatches(host) && !routeIsWhitelistedForAnyDomain) {
+    const origin = req.get('Origin') || req.get('Referer') || '';
+    const sanitizedOrigin = origin.replace(/#.*$/, '').match(/^[^\/]*\/\/[^\/]*/)?.[0] || '';
+    const routeIsWhitelistedForAnyDomain = whitelistedCrossDomainRoutes.some((regex) => regex.test(req.path));
+    if (!hasWhitelistMatches(sanitizedOrigin) && !routeIsWhitelistedForAnyDomain) {
       logger.info('not whitelisted', { headers: req.headers, path: req.path });
-      return next(`unauthorized domain: ${host}`);
+      return next(`unauthorized domain: ${sanitizedOrigin}`);
     }
-    if (host === '') {
-      // no-op
-    } else {
-      res.header('Access-Control-Allow-Origin', host);
+    if (sanitizedOrigin) {
+      res.header('Access-Control-Allow-Origin', sanitizedOrigin);
       res.header(
         'Access-Control-Allow-Headers',
         'Cache-Control, Pragma, Origin, Authorization, Content-Type, X-Requested-With'
       );
       res.header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
-      res.header('Access-Control-Allow-Credentials', true);
+      res.header('Access-Control-Allow-Credentials', 'true');
     }
     return next();
   }
@@ -688,7 +680,6 @@ function initializePolisHelpers() {
     };
     setInterval(runExportTest, 6 * 60 * 60 * 1000);
   }
-  const getServerNameWithProtocol = Config.getServerNameWithProtocol;
   function clearCookie(req, res, cookieName) {
     res?.clearCookie?.(cookieName, {
       path: '/',
@@ -774,10 +765,7 @@ function initializePolisHelpers() {
     const hashedPc = hashStringToInt32(pc);
     const uid = req.p.uid || null;
     const durs = req.p.durs.map((dur) => {
-      if (dur === -1) {
-        dur = null;
-      }
-      return dur;
+      return dur === -1 ? null : dur;
     });
     const clientTimestamp = req.p.clientTimestamp;
     const ages = req.p.times.map((t) => clientTimestamp - t);
@@ -1003,14 +991,14 @@ function initializePolisHelpers() {
         logger.error('polis_err_getting_participant_metadata_answers', err);
         return callback(err);
       }
-      qa_results = qa_results.rows;
-      qa_results = _.indexBy(qa_results, 'pmaid');
-      answers = answers.map((pmaid) => {
-        const pmqid = qa_results[pmaid].pmqid;
+      const qaRows = qa_results.rows;
+      const qaByPmaid = _.indexBy(qaRows, 'pmaid');
+      const mappedAnswers = answers.map((pmaid) => {
+        const pmqid = qaByPmaid[pmaid].pmqid;
         return [zid, pid, pmaid, pmqid];
       });
       async.map(
-        answers,
+        mappedAnswers,
         (x, cb) => {
           pgQuery(
             'INSERT INTO participant_metadata_choices (zid, pid, pmaid, pmqid) VALUES ($1,$2,$3,$4);',
@@ -1076,7 +1064,7 @@ function initializePolisHelpers() {
   function populateParticipantLocationRecordIfPossible(zid, uid, pid) {
     getUsersLocationName(uid)
       .then((locationData) => {
-        if (!locationData || !process.env.GOOGLE_API_KEY) {
+        if (!locationData || !Config.googleApiKey) {
           return;
         }
         geoCode(locationData.location)
@@ -1196,6 +1184,7 @@ function initializePolisHelpers() {
       if (pid >= 0) {
         return;
       }
+
       return doJoin();
     }, doJoin);
   }
@@ -1213,9 +1202,11 @@ function initializePolisHelpers() {
   function isConversationOwner(zid, uid, callback) {
     pgQuery_readOnly('SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);', [zid, uid], (err, docs) => {
       if (!docs || !docs.rows || docs.rows.length === 0) {
-        err = err || 1;
+        const error = err || 1;
+        callback?.(error);
+      } else {
+        callback?.(err);
       }
-      callback?.(err);
     });
   }
   function isOwner(zid, uid) {
@@ -1295,9 +1286,9 @@ ${message}`;
     return emailTeam('Polis Bad Problems!!!', body);
   }
   function sendMultipleTextEmails(sender, recipientArray, subject, text) {
-    recipientArray = recipientArray || [];
+    const recipients = recipientArray || [];
     return Promise.all(
-      recipientArray.map((email) => {
+      recipients.map((email) => {
         const promise = sendTextEmail(sender, email, subject, text);
         promise.catch((err) => {
           logger.error('polis_err_failed_to_email_for_user', { email, err });
@@ -1322,8 +1313,8 @@ ${message}`;
   }
   setInterval(trySendingBackupEmailTest, 1000 * 60 * 60 * 23);
   trySendingBackupEmailTest();
-  function sendEinviteEmail(req, email, einvite) {
-    const serverName = getServerNameWithProtocol(req);
+  function sendEinviteEmail(_req, email, einvite) {
+    const serverName = serverUrl;
     const body = `Welcome to pol.is!
 
 Click this link to open your account:
@@ -1372,8 +1363,8 @@ Email verified! You can close this tab or hit the back button.
   }
   const HMAC_SIGNATURE_PARAM_NAME = 'signature';
   function createHmacForQueryParams(path, params) {
-    path = path.replace(/\/$/, '');
-    const s = `${path}?${paramsToStringSortedByName(params)}`;
+    const cleanPath = path.replace(/\/$/, '');
+    const s = `${cleanPath}?${paramsToStringSortedByName(params)}`;
     const hmac = crypto.createHmac('sha1', 'G7f387ylIll8yuskuf2373rNBmcxqWYFfHhdsd78f3uekfs77EOLR8wofw');
     hmac.setEncoding('hex');
     hmac.write(s);
@@ -1468,6 +1459,7 @@ Email verified! You can close this tab or hit the back button.
         if (missing) {
           return reject(new Error(`polis_err_metadata_not_chosen_pmqid_${remainingKeys[0]}`));
         }
+
         return resolve();
       });
     });
@@ -1591,10 +1583,12 @@ Email verified! You can close this tab or hit the back button.
         if (!candidates || !candidates.length) {
           return null;
         }
-        candidates = candidates.map((ptpt) => {
-          ptpt.last_notified = Number(ptpt.last_notified);
-          ptpt.last_interaction = Number(ptpt.last_interaction);
-          return ptpt;
+        const processedCandidates = candidates.map((ptpt) => {
+          return {
+            ...ptpt,
+            last_notified: Number(ptpt.last_notified),
+            last_interaction: Number(ptpt.last_interaction)
+          };
         });
         return Promise.all([getDbTime(), getConversationInfo(zid), getZinvite(zid)]).then((a) => {
           const dbTimeMillis = a[0];
@@ -1602,10 +1596,10 @@ Email verified! You can close this tab or hit the back button.
           const conversation_id = a[2];
           const url = conv.parent_url || `https://pol.is/${conversation_id}`;
           const pid_to_ptpt = {};
-          candidates.forEach((c) => {
+          for (const c of processedCandidates) {
             pid_to_ptpt[c.pid] = c;
-          });
-          return BluebirdPromise.mapSeries(candidates, (item) => {
+          }
+          return BluebirdPromise.mapSeries(processedCandidates, (item, _index, _length) => {
             return getNumberOfCommentsRemaining(item.zid, item.pid).then((rows) => {
               return rows[0];
             });
@@ -1648,9 +1642,9 @@ Email verified! You can close this tab or hit the back button.
               []
             ).then((rows) => {
               const uidToEmail = {};
-              rows.forEach((row) => {
+              for (const row of rows) {
                 uidToEmail[row.uid] = row.subscribe_email;
-              });
+              }
               return BluebirdPromise.each(needNotification, (item, _index, _length) => {
                 const uid = pid_to_ptpt[item.pid].uid;
                 return sendNotificationEmail(uid, url, conversation_id, uidToEmail[uid], item.remaining).then(() => {
@@ -1713,7 +1707,7 @@ Email verified! You can close this tab or hit the back button.
     };
     const path = 'api/v3/notifications/unsubscribe';
     params[HMAC_SIGNATURE_PARAM_NAME] = createHmacForQueryParams(path, params);
-    const server = Config.getServerUrl();
+    const server = serverUrl;
     return `${server}/${path}?${paramsToStringSortedByName(params)}`;
   }
   function createNotificationsSubscribeUrl(conversation_id, email) {
@@ -1723,7 +1717,7 @@ Email verified! You can close this tab or hit the back button.
     };
     const path = 'api/v3/notifications/subscribe';
     params[HMAC_SIGNATURE_PARAM_NAME] = createHmacForQueryParams(path, params);
-    const server = Config.getServerUrl();
+    const server = serverUrl;
     return `${server}/${path}?${paramsToStringSortedByName(params)}`;
   }
   function handle_GET_notifications_subscribe(req, res) {
@@ -1891,6 +1885,7 @@ Email verified! You can close this tab or hit the back button.
             () => o
           );
         }
+
         return o;
       })
       .then((o) => {
@@ -1921,6 +1916,7 @@ Email verified! You can close this tab or hit the back button.
         if (o.zid) {
           return o;
         }
+
         throw new Error('polis_err_missing_invite');
       })
       .then((o) => {
@@ -1948,6 +1944,7 @@ Email verified! You can close this tab or hit the back button.
         if (o.uid) {
           return o;
         }
+
         return createDummyUser().then((uid) =>
           Object.assign(o, {
             uid: uid
@@ -1978,16 +1975,19 @@ Email verified! You can close this tab or hit the back button.
               if (should) {
                 return createXidEntry(o.xid, o.conv.org_id, o.uid).then(() => o);
               }
+
               throw new Error('polis_err_xid_not_whitelisted');
             });
           });
         }
+
         return o;
       })
       .then((o) => {
         if (o.suzinvite) {
           return deleteSuzinvite(o.suzinvite).then(() => o);
         }
+
         return o;
       });
   }
@@ -2063,6 +2063,7 @@ Email verified! You can close this tab or hit the back button.
     if (!fbFriendIds.length) {
       return Promise.resolve();
     }
+
     return pgQueryP(
       `insert into facebook_friends (uid, friend) select ($1), uid from facebook_users where fb_user_id in (${fbFriendIds.join(',')});`,
       [uid]
@@ -2188,6 +2189,7 @@ Email verified! You can close this tab or hit the back button.
           [uid, newWhitelist]
         );
       }
+
       return pgQueryP(
         'update site_domain_whitelist set domain_whitelist = ($2) where site_id = (select site_id from users where uid = ($1));',
         [uid, newWhitelist]
@@ -2592,6 +2594,7 @@ Email verified! You can close this tab or hit the back button.
             if (fb_friends_response) {
               return addFacebookFriends(user.uid, fb_friends_response).then(() => user);
             }
+
             return user;
           },
           (err) => {
@@ -2644,6 +2647,7 @@ Email verified! You can close this tab or hit the back button.
           res.status(403).send('polis_err_reg_fb_verification_email_sent');
           return;
         }
+
         res.status(403).send('polis_err_reg_fb_verification_noemail_unverified');
         return;
       }
@@ -2813,6 +2817,7 @@ Email verified! You can close this tab or hit the back button.
     if (age < 65) {
       return '55-64';
     }
+
     return '65+';
   }
   function getGender(demo) {
@@ -2940,35 +2945,42 @@ Email verified! You can close this tab or hit the back button.
           return pgQueryP('select tid, selection from report_comment_selections where rid = ($1);', [req.p.rid]).then(
             (selections) => {
               const tidToSelection = _.indexBy(selections, 'tid');
-              comments = comments.map((c) => {
-                c.includeInReport = tidToSelection[c.tid] && tidToSelection[c.tid].selection > 0;
-                return c;
+              const commentsWithReportStatus = comments.map((c) => {
+                return {
+                  ...c,
+                  includeInReport: tidToSelection[c.tid] && tidToSelection[c.tid].selection > 0
+                };
               });
-              return comments;
+              return commentsWithReportStatus;
             }
           );
         }
+
         return comments;
       })
       .then((comments) => {
-        comments = comments.map((c) => {
+        const commentsWithSocialInfo = comments.map((c) => {
           const hasTwitter = c.social?.twitter_user_id;
+          const newC = { ...c };
           if (hasTwitter) {
-            c.social.twitter_profile_image_url_https = `${getServerNameWithProtocol(req)}/twitter_image?id=${c.social.twitter_user_id}`;
+            newC.social = {
+              ...c.social,
+              twitter_profile_image_url_https: `${serverUrl}/twitter_image?id=${c.social.twitter_user_id}`
+            };
           }
           const hasFacebook = c.social?.fb_user_id;
           if (hasFacebook) {
             const width = 40;
             const height = 40;
-            c.social.fb_picture = `https://graph.facebook.com/v2.2/${c.social.fb_user_id}/picture?width=${width}&height=${height}`;
+            newC.social.fb_picture = `https://graph.facebook.com/v2.2/${c.social.fb_user_id}/picture?width=${width}&height=${height}`;
           }
-          return c;
+          return newC;
         });
         if (req.p.include_demographics) {
           isModerator(req.p.zid, req.p.uid)
             .then((owner) => {
               if (owner || isReportQuery) {
-                return getDemographicsForVotersOnComments(req.p.zid, comments)
+                return getDemographicsForVotersOnComments(req.p.zid, commentsWithSocialInfo)
                   .then((commentsWithDemographics) => {
                     finishArray(res, commentsWithDemographics);
                   })
@@ -2976,13 +2988,14 @@ Email verified! You can close this tab or hit the back button.
                     fail(res, 500, 'polis_err_get_comments3', err);
                   });
               }
+
               fail(res, 500, 'polis_err_get_comments_permissions');
             })
             .catch((err) => {
               fail(res, 500, 'polis_err_get_comments2', err);
             });
         } else {
-          finishArray(res, comments);
+          finishArray(res, commentsWithSocialInfo);
         }
       })
       .catch((err) => {
@@ -3020,10 +3033,8 @@ Email verified! You can close this tab or hit the back button.
     });
   }
   function sendCommentModerationEmail(_req, uid, zid, unmoderatedCommentCount) {
-    if (_.isUndefined(unmoderatedCommentCount)) {
-      unmoderatedCommentCount = '';
-    }
-    let body = unmoderatedCommentCount;
+    const countDisplay = _.isUndefined(unmoderatedCommentCount) ? '' : unmoderatedCommentCount;
+    let body = countDisplay;
     if (unmoderatedCommentCount === 1) {
       body += ' Statement is waiting for your review here: ';
     } else {
@@ -3035,7 +3046,7 @@ Email verified! You can close this tab or hit the back button.
         return void 0;
       })
       .then((zinvite) => {
-        body += createProdModerationUrl(zinvite);
+        body += createModerationUrl(zinvite);
         body += '\n\nThank you for using Polis.';
         return sendEmailByUid(uid, `Waiting for review (conversation ${zinvite})`, body);
       })
@@ -3043,19 +3054,8 @@ Email verified! You can close this tab or hit the back button.
         logger.error('polis_err_sending_email', err);
       });
   }
-  function createProdModerationUrl(zinvite) {
-    return `https://pol.is/m/${zinvite}`;
-  }
-  function createModerationUrl(req, zinvite) {
-    let server = Config.getServerUrl();
-    if (domainOverride) {
-      server = `${req?.protocol}://${domainOverride}`;
-    }
-    if (req?.headers?.host?.includes('preprod.pol.is')) {
-      server = 'https://preprod.pol.is';
-    }
-    const url = `${server}/m/${zinvite}`;
-    return url;
+  function createModerationUrl(zinvite) {
+    return `${serverUrl}/m/${zinvite}`;
   }
   function moderateComment(zid, tid, active, mod, is_meta) {
     return new Promise((resolve, reject) => {
@@ -3076,8 +3076,8 @@ Email verified! You can close this tab or hit the back button.
   }
   const getComment = Comment.getComment;
   function hasBadWords(txt) {
-    txt = txt.toLowerCase();
-    const tokens = txt.split(' ');
+    const lowerTxt = txt.toLowerCase();
+    const tokens = lowerTxt.split(' ');
     for (let i = 0; i < tokens.length; i++) {
       if (badwords[tokens[i]]) {
         return true;
@@ -3130,6 +3130,7 @@ Email verified! You can close this tab or hit the back button.
           currentPid = pid;
           return Number(pid);
         }
+
         return newPid;
       }
       return Number(pid);
@@ -3168,10 +3169,10 @@ Email verified! You can close this tab or hit the back button.
             return pid;
           }
         }
-        const newPid = await doGetPid();
         if (shouldCreateXidRecord) {
           await createXidRecordByZid(zid, uid, xid, null, null, null);
         }
+        const newPid = await doGetPid();
         return newPid;
       })();
       const commentExistsPromise = commentExists(zid, txt);
@@ -3249,7 +3250,9 @@ Email verified! You can close this tab or hit the back button.
               [zid, conv.owner]
             );
             const uids = users.map((user) => user.uid);
-            uids.forEach((uid) => sendCommentModerationEmail(req, Number(uid), zid, n));
+            for (const uid of uids) {
+              sendCommentModerationEmail(req, Number(uid), zid, n);
+            }
           }
         } catch (err) {
           logger.error('polis_err_getting_modstatus_comment_count', err);
@@ -3450,12 +3453,14 @@ Email verified! You can close this tab or hit the back button.
       if (req.p.conversation_id) {
         return f.apply(null, args);
       }
+
       return Promise.resolve(null);
     }
     function ifConvAndAuth(f, args) {
       if (req.p.uid) {
         return ifConv(f, args);
       }
+
       return Promise.resolve(null);
     }
     const acceptLanguage = req?.headers?.['accept-language'] || req?.headers?.['Accept-Language'] || 'en-US';
@@ -3583,6 +3588,7 @@ Email verified! You can close this tab or hit the back button.
             if (_.isUndefined(req.p.starred)) {
               return;
             }
+
             return addStar(zid, req.p.tid, pid, req.p.starred, createdTime);
           })
           .then(() => getNextComment(zid, pid, [], true, lang))
@@ -3742,10 +3748,10 @@ Email verified! You can close this tab or hit the back button.
     );
   }
   function addStar(zid, tid, pid, starred, created) {
-    starred = starred ? 1 : 0;
+    const starredValue = starred ? 1 : 0;
     let query =
       'INSERT INTO stars (pid, zid, tid, starred, created) VALUES ($1, $2, $3, $4, default) RETURNING created;';
-    const params = [pid, zid, tid, starred];
+    const params = [pid, zid, tid, starredValue];
     if (!_.isUndefined(created)) {
       query = 'INSERT INTO stars (pid, zid, tid, starred, created) VALUES ($1, $2, $3, $4, $5) RETURNING created;';
       params.push(created);
@@ -3823,9 +3829,9 @@ Email verified! You can close this tab or hit the back button.
               },
               {}
             );
-            results.rows.forEach((row) => {
+            for (const row of results.rows) {
               delete questions[row.pmqid];
-            });
+            }
             if (Object.keys(questions).length) {
               reject(new Error(errorcode));
             } else {
@@ -4438,7 +4444,10 @@ Email verified! You can close this tab or hit the back button.
       const convHasMetadata = results[1];
       const requestingUserInfo = results[2];
       const translations = results[3];
-      conv.auth_opt_allow_3rdparty = ifDefinedFirstElseSecond(conv.auth_opt_allow_3rdparty, true);
+      conv.auth_opt_allow_3rdparty = ifDefinedFirstElseSecond(
+        conv.auth_opt_allow_3rdparty,
+        DEFAULTS.auth_opt_allow_3rdparty
+      );
       conv.auth_opt_fb_computed = false;
       conv.auth_opt_tw_computed = false;
       conv.translations = translations;
@@ -4551,11 +4560,11 @@ Email verified! You can close this tab or hit the back button.
                 if (upvotes) {
                   upvotes = _.indexBy(upvotes, 'zid');
                 }
-                data.forEach((conv) => {
+                for (const conv of data) {
                   conv.is_owner = conv.owner === uid;
-                  const root = getServerNameWithProtocol(req);
+                  const root = serverUrl;
                   if (want_mod_url) {
-                    conv.mod_url = createModerationUrl(req, conv.conversation_id);
+                    conv.mod_url = createModerationUrl(conv.conversation_id);
                   }
                   if (want_inbox_item_admin_url) {
                     conv.inbox_item_admin_url = `${root}/iim/${conv.conversation_id}`;
@@ -4592,7 +4601,7 @@ Email verified! You can close this tab or hit the back button.
                   if (conv.context === '') {
                     conv.context = undefined;
                   }
-                });
+                }
                 res.status(200).json(data);
               },
               (err) => {
@@ -4607,8 +4616,8 @@ Email verified! You can close this tab or hit the back button.
     });
   }
   function createReport(zid) {
-    return generateTokenP(20, false).then((report_id) => {
-      report_id = `r${report_id}`;
+    return generateTokenP(20, false).then((token) => {
+      const report_id = `r${token}`;
       return pgQueryP('insert into reports (zid, report_id) values ($1, $2);', [zid, report_id]);
     });
   }
@@ -4640,18 +4649,19 @@ Email verified! You can close this tab or hit the back button.
         const fields = {
           modified: 'now_as_millis()'
         };
-        sql_reports.columns
+        const labelColumns = sql_reports.columns
           .map((c) => {
             return c.name;
           })
           .filter((name) => {
             return name.startsWith('label_');
-          })
-          .forEach((name) => {
-            if (!_.isUndefined(req.p[name])) {
-              fields[name] = req.p[name];
-            }
           });
+
+        for (const name of labelColumns) {
+          if (!_.isUndefined(req.p[name])) {
+            fields[name] = req.p[name];
+          }
+        }
         if (!_.isUndefined(req.p.report_name)) {
           fields.report_name = req.p.report_name;
         }
@@ -4693,22 +4703,25 @@ Email verified! You can close this tab or hit the back button.
     reportsPromise
       .then((reports) => {
         const zids = [];
-        reports = reports.map((report) => {
+        const processedReports = reports.map((report) => {
           zids.push(report.zid);
-          report.rid = undefined;
-          return report;
+          const newReport = { ...report };
+          newReport.rid = undefined;
+          return newReport;
         });
+
         if (zids.length === 0) {
-          return res.json(reports);
+          return res.json(processedReports);
         }
         return pgQueryP(`select * from zinvites where zid in (${zids.join(',')});`, []).then((zinvite_entries) => {
           const zidToZinvite = _.indexBy(zinvite_entries, 'zid');
-          reports = reports.map((report) => {
-            report.conversation_id = zidToZinvite[report.zid || '']?.zinvite;
-            report.zid = undefined;
-            return report;
+          const finalReports = processedReports.map((report) => {
+            const finalReport = { ...report };
+            finalReport.conversation_id = zidToZinvite[report.zid || '']?.zinvite;
+            finalReport.zid = undefined;
+            return finalReport;
           });
-          res.json(reports);
+          res.json(finalReports);
         });
       })
       .catch((err) => {
@@ -4930,7 +4943,7 @@ Email verified! You can close this tab or hit the back button.
       const fullname = results.rows[0].hname;
       pgQuery_readOnly('select * from zinvites where zid = $1', [req.p.zid], (_err, results) => {
         const zinvite = results.rows[0].zinvite;
-        const server = getServerNameWithProtocol(req);
+        const server = serverUrl;
         const createdLink = `${server}/#${req.p.zid}/${zinvite}`;
         const body = `Hi ${fullname},\n\nHere's a link to the conversation you just created. Use it to invite participants to the conversation. Share it by whatever network you prefer - Gmail, Facebook, Twitter, etc., or just post it to your website or blog. Try it now! Click this link to go to your conversation: \n\n${createdLink}\n\nWith gratitude,\n\nThe team at pol.is`;
         return sendTextEmail(polisFromAddress, email, `Link: ${createdLink}`, body)
@@ -4961,7 +4974,6 @@ Email verified! You can close this tab or hit the back button.
     if (req.p.webserver_pass !== Config.webserverPass || req.p.webserver_username !== Config.webserverUsername) {
       return fail(res, 403, 'polis_err_sending_export_link_to_email_auth');
     }
-    const serverUrl = Config.getServerUrl();
     const email = req.p.email;
     const subject = `Polis data export for conversation pol.is/${req.p.conversation_id}`;
     const fromAddress = `Polis Team <${Config.adminEmailDataExport}>`;
@@ -4983,245 +4995,6 @@ Thanks for using Polis!
         fail(res, 500, 'polis_err_sending_export_link_to_email', err);
       });
   }
-  function getTwitterRequestToken(returnUrl) {
-    const oauth = new OAuth.OAuth(
-      'https://api.twitter.com/oauth/request_token',
-      'https://api.twitter.com/oauth/access_token',
-      Config.twitterConsumerKey,
-      Config.twitterConsumerSecret,
-      '1.0A',
-      null,
-      'HMAC-SHA1'
-    );
-    const body = {
-      oauth_callback: returnUrl
-    };
-    return new Promise((resolve, reject) => {
-      oauth.post(
-        'https://api.twitter.com/oauth/request_token',
-        void 0,
-        void 0,
-        body,
-        'multipart/form-data',
-        (err, data, _res) => {
-          if (err) {
-            logger.error('get twitter token failed', err);
-            reject(err);
-          } else {
-            resolve(data);
-          }
-        }
-      );
-    });
-  }
-  function handle_GET_twitterBtn(req, res) {
-    let dest = req.p.dest || '/inbox';
-    dest = encodeURIComponent(getServerNameWithProtocol(req) + dest);
-    const returnUrl = `${getServerNameWithProtocol(req)}/api/v3/twitter_oauth_callback?owner=${req.p.owner}&dest=${dest}`;
-    getTwitterRequestToken(returnUrl)
-      .then((data) => {
-        data += `&callback_url=${dest}`;
-        res.redirect(`https://api.twitter.com/oauth/authenticate?${data}`);
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_twitter_auth_01', err);
-      });
-  }
-  function getTwitterAccessToken(body) {
-    const oauth = new OAuth.OAuth(
-      'https://api.twitter.com/oauth/request_token',
-      'https://api.twitter.com/oauth/access_token',
-      Config.twitterConsumerKey,
-      Config.twitterConsumerSecret,
-      '1.0A',
-      null,
-      'HMAC-SHA1'
-    );
-    return new Promise((resolve, reject) => {
-      oauth.post(
-        'https://api.twitter.com/oauth/access_token',
-        void 0,
-        void 0,
-        body,
-        'multipart/form-data',
-        (err, data, _res) => {
-          if (err) {
-            logger.error('get twitter token failed', err);
-            reject(err);
-          } else {
-            resolve(data);
-          }
-        }
-      );
-    });
-  }
-  const twitterUserInfoCache = new LruCache({
-    max: 10000
-  });
-  function getTwitterUserInfo(o, useCache) {
-    const twitter_user_id = o.twitter_user_id;
-    const twitter_screen_name = o.twitter_screen_name;
-    const params = {};
-    let identifier;
-    if (twitter_user_id) {
-      params.user_id = twitter_user_id;
-      identifier = twitter_user_id;
-    } else if (twitter_screen_name) {
-      params.screen_name = twitter_screen_name;
-      identifier = twitter_screen_name;
-    }
-    const oauth = new OAuth.OAuth(
-      'https://api.twitter.com/oauth/request_token',
-      'https://api.twitter.com/oauth/access_token',
-      Config.twitterConsumerKey,
-      Config.twitterConsumerSecret,
-      '1.0A',
-      null,
-      'HMAC-SHA1'
-    );
-    return new MPromise('getTwitterUserInfo', (resolve, reject) => {
-      const cachedCopy = twitterUserInfoCache.get(identifier);
-      if (useCache && cachedCopy) {
-        return resolve(cachedCopy);
-      }
-      if (suspendedOrPotentiallyProblematicTwitterIds.indexOf(identifier) >= 0) {
-        return reject();
-      }
-      oauth.post(
-        'https://api.twitter.com/1.1/users/lookup.json',
-        void 0,
-        void 0,
-        params,
-        'multipart/form-data',
-        (err, data, _res) => {
-          if (err) {
-            logger.error(`get twitter token failed for identifier: ${identifier}`, err);
-            suspendedOrPotentiallyProblematicTwitterIds.push(identifier);
-            reject(err);
-          } else {
-            twitterUserInfoCache.set(identifier, data);
-            resolve(data);
-          }
-        }
-      );
-    });
-  }
-  const suspendedOrPotentiallyProblematicTwitterIds = [];
-  function getTwitterUserInfoBulk(list_of_twitter_user_id) {
-    list_of_twitter_user_id = list_of_twitter_user_id || [];
-    const oauth = new OAuth.OAuth(
-      'https://api.twitter.com/oauth/request_token',
-      'https://api.twitter.com/oauth/access_token',
-      Config.twitterConsumerKey,
-      Config.twitterConsumerSecret,
-      '1.0A',
-      null,
-      'HMAC-SHA1'
-    );
-    return new Promise((resolve, reject) => {
-      oauth.post(
-        'https://api.twitter.com/1.1/users/lookup.json',
-        void 0,
-        void 0,
-        {
-          user_id: list_of_twitter_user_id.join(',')
-        },
-        'multipart/form-data',
-        (err, data, _res) => {
-          if (err) {
-            logger.error('get twitter token failed', err);
-            list_of_twitter_user_id.forEach((id) => {
-              logger.info(`adding twitter_user_id to suspendedOrPotentiallyProblematicTwitterIds: ${id}`);
-              suspendedOrPotentiallyProblematicTwitterIds.push(id);
-            });
-            reject(err);
-          } else {
-            data = JSON.parse(data);
-            resolve(data);
-          }
-        }
-      );
-    });
-  }
-  function switchToUser(req, res, uid) {
-    return new Promise((resolve, reject) => {
-      startSession(uid, (errSess, token) => {
-        if (errSess) {
-          reject(errSess);
-          return;
-        }
-        addCookies(req, res, token, uid)
-          .then(() => resolve())
-          .catch(() => reject('polis_err_adding_cookies'));
-      });
-    });
-  }
-  function retryFunctionWithPromise(f, numTries) {
-    return new Promise((resolve, reject) => {
-      logger.debug('retryFunctionWithPromise', { numTries });
-      f().then(
-        (x) => {
-          logger.debug('retryFunctionWithPromise RESOLVED');
-          resolve(x);
-        },
-        (err) => {
-          numTries -= 1;
-          if (numTries <= 0) {
-            logger.error('retryFunctionWithPromise REJECTED', err);
-            reject(err);
-          } else {
-            retryFunctionWithPromise(f, numTries).then(resolve, reject);
-          }
-        }
-      );
-    });
-  }
-  function updateSomeTwitterUsers() {
-    return pgQueryP_readOnly(
-      'select uid, twitter_user_id from twitter_users where modified < (now_as_millis() - 30*60*1000) order by modified desc limit 100;'
-    ).then((results) => {
-      let twitter_user_ids = _.pluck(results, 'twitter_user_id');
-      if (results.length === 0) {
-        return [];
-      }
-      twitter_user_ids = _.difference(twitter_user_ids, suspendedOrPotentiallyProblematicTwitterIds);
-      if (twitter_user_ids.length === 0) {
-        return [];
-      }
-      getTwitterUserInfoBulk(twitter_user_ids)
-        .then((info) => {
-          const updateQueries = info.map((u) => {
-            const q =
-              'update twitter_users set ' +
-              'screen_name = ($2),' +
-              'name = ($3),' +
-              'followers_count = ($4),' +
-              'friends_count = ($5),' +
-              'verified = ($6),' +
-              'profile_image_url_https = ($7),' +
-              'location = ($8),' +
-              'modified = now_as_millis() ' +
-              'where twitter_user_id = ($1);';
-            return pgQueryP(q, [
-              u.id,
-              u.screen_name,
-              u.name,
-              u.followers_count,
-              u.friends_count,
-              u.verified,
-              u.profile_image_url_https,
-              u.location
-            ]);
-          });
-          return Promise.all(updateQueries);
-        })
-        .catch((err) => {
-          logger.error(`error updating twitter users: ${twitter_user_ids.join(' ')}`, err);
-        });
-    });
-  }
-  setInterval(updateSomeTwitterUsers, 1 * 60 * 1000);
-  updateSomeTwitterUsers();
   const addParticipant = async (zid, uid) => {
     await pgQueryP('INSERT INTO participants_extended (zid, uid) VALUES ($1, $2);', [zid, uid]);
     return pgQueryP('INSERT INTO participants (pid, zid, uid, created) VALUES (NULL, $1, $2, default) RETURNING *;', [
@@ -5229,132 +5002,6 @@ Thanks for using Polis!
       uid
     ]);
   };
-  function handle_GET_twitter_oauth_callback(req, res) {
-    const uid = req.p.uid;
-    const dest = req.p.dest;
-    function tryGettingTwitterAccessToken() {
-      return getTwitterAccessToken({
-        oauth_verifier: req.p.oauth_verifier,
-        oauth_token: req.p.oauth_token
-      });
-    }
-    retryFunctionWithPromise(tryGettingTwitterAccessToken, 20)
-      .then(
-        (o) => {
-          const pairs = o.split('&');
-          const kv = {};
-          pairs.forEach((pair) => {
-            const pairSplit = pair.split('=');
-            const k = pairSplit[0];
-            const v = pairSplit[1];
-            kv[k] = v;
-          });
-          getTwitterUserInfo(
-            {
-              twitter_user_id: kv.user_id
-            },
-            false
-          )
-            .then(
-              (userStringPayload) => {
-                const u = JSON.parse(userStringPayload)[0];
-                return pgQueryP(
-                  'insert into twitter_users (' +
-                    'uid,' +
-                    'twitter_user_id,' +
-                    'screen_name,' +
-                    'name,' +
-                    'followers_count,' +
-                    'friends_count,' +
-                    'verified,' +
-                    'profile_image_url_https,' +
-                    'location,' +
-                    'response' +
-                    ') VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);',
-                  [
-                    uid,
-                    u.id,
-                    u.screen_name,
-                    u.name,
-                    u.followers_count,
-                    u.friends_count,
-                    u.verified,
-                    u.profile_image_url_https,
-                    u.location,
-                    JSON.stringify(u)
-                  ]
-                ).then(
-                  () => {
-                    pgQueryP('update users set hname = ($2) where uid = ($1) and hname is NULL;', [uid, u.name])
-                      .then(
-                        () => {
-                          u.uid = uid;
-                          res.redirect(dest);
-                        },
-                        (err) => {
-                          fail(res, 500, 'polis_err_twitter_auth_update', err);
-                        }
-                      )
-                      .catch((err) => {
-                        fail(res, 500, 'polis_err_twitter_auth_update_misc', err);
-                      });
-                  },
-                  (err) => {
-                    if (isDuplicateKey(err)) {
-                      Promise.all([
-                        pgQueryP('select * from twitter_users where uid = ($1);', [uid]),
-                        pgQueryP('select * from twitter_users where twitter_user_id = ($1);', [u.id])
-                      ]).then((foo) => {
-                        const recordForUid = foo[0][0];
-                        const recordForTwitterId = foo[1][0];
-                        if (recordForUid && recordForTwitterId) {
-                          if (recordForUid.uid === recordForTwitterId.uid) {
-                            res.redirect(dest);
-                          } else {
-                            switchToUser(req, res, recordForTwitterId.uid)
-                              .then(() => {
-                                res.redirect(dest);
-                              })
-                              .catch((err) => {
-                                fail(res, 500, 'polis_err_twitter_auth_456', err);
-                              });
-                          }
-                        } else if (recordForUid) {
-                          fail(res, 500, 'polis_err_twitter_already_attached', err);
-                        } else if (recordForTwitterId) {
-                          switchToUser(req, res, recordForTwitterId.uid)
-                            .then(() => {
-                              res.redirect(dest);
-                            })
-                            .catch((err) => {
-                              fail(res, 500, 'polis_err_twitter_auth_234', err);
-                            });
-                        } else {
-                          fail(res, 500, 'polis_err_twitter_auth_345');
-                        }
-                      });
-                    } else {
-                      fail(res, 500, 'polis_err_twitter_auth_05', err);
-                    }
-                  }
-                );
-              },
-              (err) => {
-                fail(res, 500, 'polis_err_twitter_auth_041', err);
-              }
-            )
-            .catch((err) => {
-              fail(res, 500, 'polis_err_twitter_auth_04', err);
-            });
-        },
-        (err) => {
-          fail(res, 500, 'polis_err_twitter_auth_gettoken', err);
-        }
-      )
-      .catch((err) => {
-        fail(res, 500, 'polis_err_twitter_auth_misc', err);
-      });
-  }
   function getSocialParticipantsForMod_timed(zid, limit, mod, convOwner) {
     const _start = Date.now();
     return getSocialParticipantsForMod.apply(null, [zid, limit, mod, convOwner]).then((results) => results);
@@ -5500,21 +5147,19 @@ Thanks for using Polis!
   function geoCodeWithGoogleApi(locationString) {
     const googleApiKey = Config.googleApiKey;
     const address = encodeURI(locationString);
-
     if (!googleApiKey) {
       return Promise.reject('polis_err_geocoding_no_api_key');
     }
-
     return new Promise((resolve, reject) => {
       request
         .get(`https://maps.googleapis.com/maps/api/geocode/json?address=${address}&key=${googleApiKey}`)
         .then((response) => {
-          response = JSON.parse(response);
-          if (response.status !== 'OK') {
+          const responseData = JSON.parse(response);
+          if (responseData.status !== 'OK') {
             reject('polis_err_geocoding_failed');
             return;
           }
-          const bestResult = response.results[0];
+          const bestResult = responseData.results[0];
           resolve(bestResult);
         }, reject)
         .catch(reject);
@@ -5529,48 +5174,6 @@ Thanks for using Polis!
         lng: lng
       };
       return o;
-    });
-  }
-  const twitterShareCountCache = LruCache({
-    maxAge: 1000 * 60 * 30,
-    max: 999
-  });
-  function getTwitterShareCountForConversation(conversation_id) {
-    const cached = twitterShareCountCache.get(conversation_id);
-    if (cached) {
-      return Promise.resolve(cached);
-    }
-    const httpUrl = `https://cdn.api.twitter.com/1/urls/count.json?url=http://pol.is/${conversation_id}`;
-    const httpsUrl = `https://cdn.api.twitter.com/1/urls/count.json?url=https://pol.is/${conversation_id}`;
-    return Promise.all([request.get(httpUrl), request.get(httpsUrl)]).then((a) => {
-      const httpResult = a[0];
-      const httpsResult = a[1];
-      const httpCount = JSON.parse(httpResult).count;
-      const httpsCount = JSON.parse(httpsResult).count;
-      if (httpCount > 0 && httpsCount > 0 && httpCount === httpsCount) {
-        logger.warn(
-          'found matching http and https twitter share counts, if this is common, check twitter api to see if it has changed.'
-        );
-      }
-      const count = httpCount + httpsCount;
-      twitterShareCountCache.set(conversation_id, count);
-      return count;
-    });
-  }
-  const fbShareCountCache = LruCache({
-    maxAge: 1000 * 60 * 30,
-    max: 999
-  });
-  function getFacebookShareCountForConversation(conversation_id) {
-    const cached = fbShareCountCache.get(conversation_id);
-    if (cached) {
-      return Promise.resolve(cached);
-    }
-    const url = `http://graph.facebook.com/?id=https://pol.is/${conversation_id}`;
-    return request.get(url).then((result) => {
-      const shares = JSON.parse(result).shares;
-      fbShareCountCache.set(conversation_id, shares);
-      return shares;
     });
   }
   function getParticipantDemographicsForConversation(zid) {
@@ -5914,25 +5517,6 @@ Thanks for using Polis!
       });
     });
   }
-  function handle_GET_twitter_users(req, res) {
-    const uid = req.p.uid;
-    let p;
-    if (uid) {
-      p = pgQueryP_readOnly('select * from twitter_users where uid = ($1);', [uid]);
-    } else if (req.p.twitter_user_id) {
-      p = pgQueryP_readOnly('select * from twitter_users where twitter_user_id = ($1);', [req.p.twitter_user_id]);
-    } else {
-      fail(res, 401, 'polis_err_missing_uid_or_twitter_user_id');
-      return;
-    }
-    p.then((data) => {
-      data = data[0];
-      data.profile_image_url_https = `${getServerNameWithProtocol(req)}/twitter_image?id=${data.twitter_user_id}`;
-      res.status(200).json(data);
-    }).catch((err) => {
-      fail(res, 500, 'polis_err_twitter_user_info_get', err);
-    });
-  }
   function doSendEinvite(req, email) {
     return generateTokenP(30, false).then((einvite) =>
       pgQueryP('insert into einvites (email, einvite) values ($1, $2);', [email, einvite]).then((_rows) =>
@@ -5987,17 +5571,17 @@ Thanks for using Polis!
       }
     );
   }
-  function generateSingleUseUrl(req, conversation_id, suzinvite) {
-    return `${getServerNameWithProtocol(req)}/ot/${conversation_id}/${suzinvite}`;
+  function generateSingleUseUrl(_req, conversation_id, suzinvite) {
+    return `${serverUrl}/ot/${conversation_id}/${suzinvite}`;
   }
-  function buildConversationUrl(req, zinvite) {
-    return `${getServerNameWithProtocol(req)}/${zinvite}`;
+  function buildConversationUrl(_req, zinvite) {
+    return `${serverUrl}/${zinvite}`;
   }
-  function buildConversationDemoUrl(req, zinvite) {
-    return `${getServerNameWithProtocol(req)}/demo/${zinvite}`;
+  function buildConversationDemoUrl(_req, zinvite) {
+    return `${serverUrl}/demo/${zinvite}`;
   }
-  function buildModerationUrl(req, zinvite) {
-    return `${getServerNameWithProtocol(req)}/m/${zinvite}`;
+  function buildModerationUrl(_req, zinvite) {
+    return `${serverUrl}/m/${zinvite}`;
   }
   function buildSeedUrl(req, zinvite) {
     return `${buildModerationUrl(req, zinvite)}/comments/seed`;
@@ -6043,8 +5627,8 @@ Thanks for using Polis!
       }
     );
   }
-  function sendSuzinviteEmail(req, email, conversation_id, suzinvite) {
-    const serverName = getServerNameWithProtocol(req);
+  function sendSuzinviteEmail(_req, email, conversation_id, suzinvite) {
+    const serverName = serverUrl;
     const body = `Welcome to pol.is!\n\nClick this link to open your account:\n\n${serverName}/ot/${conversation_id}/${suzinvite}\n\nThank you for using Polis\n`;
     return sendTextEmail(polisFromAddress, email, 'Join the pol.is conversation!', body);
   }
@@ -6192,6 +5776,7 @@ Thanks for using Polis!
           parent_url: conv.parent_url,
           vis_type: conv.vis_type,
           write_type: conv.write_type,
+          importance_enabled: conv.importance_enabled,
           help_type: conv.help_type,
           socialbtn_type: conv.socialbtn_type,
           bgcolor: conv.bgcolor,
@@ -6260,53 +5845,53 @@ Thanks for using Polis!
       setParentUrlCookie(req, res, req.p.parent_url);
     }
     function appendParams(url) {
-      url += `?site_id=${site_id}&page_id=${page_id}`;
+      let urlWithParams = `${url}?site_id=${site_id}&page_id=${page_id}`;
       if (!_.isUndefined(ucv)) {
-        url += `&ucv=${ucv}`;
+        urlWithParams += `&ucv=${ucv}`;
       }
       if (!_.isUndefined(ucw)) {
-        url += `&ucw=${ucw}`;
+        urlWithParams += `&ucw=${ucw}`;
       }
       if (!_.isUndefined(ucst)) {
-        url += `&ucst=${ucst}`;
+        urlWithParams += `&ucst=${ucst}`;
       }
       if (!_.isUndefined(ucsd)) {
-        url += `&ucsd=${ucsd}`;
+        urlWithParams += `&ucsd=${ucsd}`;
       }
       if (!_.isUndefined(ucsv)) {
-        url += `&ucsv=${ucsv}`;
+        urlWithParams += `&ucsv=${ucsv}`;
       }
       if (!_.isUndefined(ucsf)) {
-        url += `&ucsf=${ucsf}`;
+        urlWithParams += `&ucsf=${ucsf}`;
       }
       if (!_.isUndefined(ui_lang)) {
-        url += `&ui_lang=${ui_lang}`;
+        urlWithParams += `&ui_lang=${ui_lang}`;
       }
       if (!_.isUndefined(ucsh)) {
-        url += `&ucsh=${ucsh}`;
+        urlWithParams += `&ucsh=${ucsh}`;
       }
       if (!_.isUndefined(subscribe_type)) {
-        url += `&subscribe_type=${subscribe_type}`;
+        urlWithParams += `&subscribe_type=${subscribe_type}`;
       }
       if (!_.isUndefined(xid)) {
-        url += `&xid=${xid}`;
+        urlWithParams += `&xid=${xid}`;
       }
       if (!_.isUndefined(x_name)) {
-        url += `&x_name=${encodeURIComponent(x_name)}`;
+        urlWithParams += `&x_name=${encodeURIComponent(x_name)}`;
       }
       if (!_.isUndefined(x_profile_image_url)) {
-        url += `&x_profile_image_url=${encodeURIComponent(x_profile_image_url)}`;
+        urlWithParams += `&x_profile_image_url=${encodeURIComponent(x_profile_image_url)}`;
       }
       if (!_.isUndefined(x_email)) {
-        url += `&x_email=${encodeURIComponent(x_email)}`;
+        urlWithParams += `&x_email=${encodeURIComponent(x_email)}`;
       }
       if (!_.isUndefined(parent_url)) {
-        url += `&parent_url=${encodeURIComponent(parent_url)}`;
+        urlWithParams += `&parent_url=${encodeURIComponent(parent_url)}`;
       }
       if (!_.isUndefined(dwok)) {
-        url += `&dwok=${dwok}`;
+        urlWithParams += `&dwok=${dwok}`;
       }
-      return url;
+      return urlWithParams;
     }
     pgQueryP_readOnly('select * from page_ids where site_id = ($1) and page_id = ($2);', [site_id, page_id])
       .then((rows) => {
@@ -6484,6 +6069,7 @@ Thanks for using Polis!
       });
       return res.end();
     }
+
     return doFetch(req, res);
   }
   function fetchIndexWithoutPreloadData(req, res, port) {
@@ -6502,18 +6088,6 @@ Thanks for using Polis!
     if (match?.length) {
       conversation_id = match[0];
     }
-    setTimeout(() => {
-      if (Config.twitterConsumerKey) {
-        getTwitterShareCountForConversation(conversation_id).catch((err) => {
-          logger.error('polis_err_fetching_twitter_share_count', err);
-        });
-      }
-      if (Config.fbAppId) {
-        getFacebookShareCountForConversation(conversation_id).catch((err) => {
-          logger.error('polis_err_fetching_facebook_share_count', err);
-        });
-      }
-    }, 100);
     doGetConversationPreloadInfo(conversation_id)
       .then((x) => {
         const preloadData = {
@@ -6556,48 +6130,6 @@ Thanks for using Polis!
         fail(res, 500, 'polis_err_fetching_conversation_info', err);
       });
   }
-  function handle_GET_twitter_image(req, res) {
-    getTwitterUserInfo(
-      {
-        twitter_user_id: req.p.id
-      },
-      true
-    )
-      .then((data) => {
-        const parsedData = JSON.parse(data);
-        if (!parsedData || !parsedData.length) {
-          fail(res, 500, 'polis_err_finding_twitter_user_info');
-          return;
-        }
-        const url = parsedData[0].profile_image_url;
-        let finished = false;
-        http
-          .get(url, (twitterResponse) => {
-            if (!finished) {
-              clearTimeout(timeoutHandle);
-              finished = true;
-              res.setHeader('Cache-Control', 'no-transform,public,max-age=18000,s-maxage=18000');
-              twitterResponse.pipe(res);
-            }
-          })
-          .on('error', (err) => {
-            finished = true;
-            fail(res, 500, `polis_err_finding_file ${url}`, err);
-          });
-        const timeoutHandle = setTimeout(() => {
-          if (!finished) {
-            finished = true;
-            res.writeHead(504);
-            res.end('request timed out');
-            logger.debug('twitter_image timeout');
-          }
-        }, 9999);
-      })
-      .catch((err) => {
-        logger.error('polis_err_missing_twitter_image', err);
-        res.status(500).end();
-      });
-  }
   const handle_GET_conditionalIndexFetcher = (() => (req, res) => {
     if (hasAuthToken(req)) {
       return fetchIndexForAdminPage(req, res);
@@ -6605,7 +6137,8 @@ Thanks for using Polis!
     if (!browserSupportsPushState(req)) {
       return fetchIndexForAdminPage(req, res);
     }
-    const url = `${getServerNameWithProtocol(req)}/home`;
+
+    const url = `${serverUrl}/home`;
     res.redirect(url);
   })();
   function middleware_log_request_body(req, _res, next) {
@@ -6650,8 +6183,8 @@ Thanks for using Polis!
   const middleware_responseTime_start = responseTime((req, _res, time) => {
     if (req?.route?.path) {
       const path = req.route.path;
-      time = Math.trunc(time);
-      addInRamMetric(path, time);
+      const truncatedTime = Math.trunc(time);
+      addInRamMetric(path, truncatedTime);
     }
   });
   logger.debug('end initializePolisHelpers');
@@ -6737,10 +6270,6 @@ Thanks for using Polis!
     handle_GET_testConnection,
     handle_GET_testDatabase,
     handle_GET_tryCookie,
-    handle_GET_twitter_image,
-    handle_GET_twitter_oauth_callback,
-    handle_GET_twitter_users,
-    handle_GET_twitterBtn,
     handle_GET_users,
     handle_GET_verification,
     handle_GET_votes,
