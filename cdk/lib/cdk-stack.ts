@@ -316,7 +316,7 @@ EOF`,
     //Scale down alarm
     const mathWorkerCPUAlarmLow = new cloudwatch.Alarm(this, 'MathWorkerCPUAlarmLow', {
       metric: mathWorkerCpuMetric,
-      threshold: 30,
+      threshold: 20,
       evaluationPeriods: 2,
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
