@@ -5,11 +5,13 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
-import * as targets from 'aws-cdk-lib/aws-route53-targets';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -47,6 +49,12 @@ export class CdkStack extends cdk.Stack {
         },
       ]
     });
+
+    const alarmTopic = new sns.Topic(this, 'AlarmTopic', {
+      displayName: 'Polis Application Alarms',
+    });
+
+    alarmTopic.addSubscription(new subscriptions.EmailSubscription('tim@compdemocracy.org'));
 
     const logGroup = new logs.LogGroup(this, 'LogGroup');
 
@@ -252,6 +260,7 @@ EOF`,
       minCapacity: 2,
       maxCapacity: 10,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      healthCheck: autoscaling.HealthCheck.elb({grace: cdk.Duration.minutes(5)})
     });
 
     const asgMathWorker = new autoscaling.AutoScalingGroup(this, 'AsgMathWorker', {
@@ -262,7 +271,82 @@ EOF`,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
       },
+      healthCheck: autoscaling.HealthCheck.ec2({ grace: cdk.Duration.minutes(2) }),
     });
+
+    const webUnhealthyHostAlarm = new logs.MetricFilter(this, 'WebUnhealthyHostAlarm', {
+      logGroup: logGroup,
+      metricNamespace: 'Polis/WebServer',
+      metricName: 'UnhealthyHostCount',
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'Error', 'error'), // Adjust as needed
+      metricValue: '1',
+    }).metric().with({
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(1),
+    }).createAlarm(this, 'WebUnhealthyHostCountAlarm', {
+      threshold: 1,  // Trigger if any unhealthy hosts
+      evaluationPeriods: 1,
+      alarmDescription: 'Alarm if there are any unhealthy web server hosts',
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      actionsEnabled: true,
+    });
+    webUnhealthyHostAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
+
+    const mathWorkerCpuMetric = new cloudwatch.Metric({
+      namespace: 'AWS/EC2',
+      metricName: 'CPUUtilization',
+      dimensionsMap: {
+        AutoScalingGroupName: asgMathWorker.autoScalingGroupName,
+      },
+      statistic: 'Average', // default, config if necessary
+      period: cdk.Duration.minutes(1),
+  });
+
+  //Scale up alarm
+    const mathWorkerCPUAlarmHigh = new cloudwatch.Alarm(this, 'MathWorkerCPUAlarmHigh', {
+      metric: mathWorkerCpuMetric,
+      threshold: 70,
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    mathWorkerCPUAlarmHigh.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
+
+    //Scale down alarm
+    const mathWorkerCPUAlarmLow = new cloudwatch.Alarm(this, 'MathWorkerCPUAlarmLow', {
+      metric: mathWorkerCpuMetric,
+      threshold: 30,
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    mathWorkerCPUAlarmLow.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
+
+    asgMathWorker.scaleToTrackMetric('CpuTracking', {
+      metric: mathWorkerCpuMetric,
+      targetValue: 50,  // Target 50% CPU utilization
+    });
+
+    // Add an alarm for Unhealthy Hosts (Math Worker)
+    const mathUnhealthyHostAlarm = new logs.MetricFilter(this, 'MathUnhealthyHostAlarm', {
+      logGroup: logGroup,
+      metricNamespace: 'Polis/MathWorker',
+      metricName: 'UnhealthyHostCount',
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'Error', 'error'), // Adjust as needed
+      metricValue: '1',
+    }).metric().with({
+      statistic: 'Sum',
+      period: cdk.Duration.minutes(1),
+    }).createAlarm(this, 'MathUnhealthyHostCountAlarm', {
+      threshold: 1,
+      evaluationPeriods: 1,
+      alarmDescription: 'Alarm if there are any unhealthy math worker hosts',
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        actionsEnabled: true,
+    });
+    mathUnhealthyHostAlarm.addAlarmAction(new cw_actions.SnsAction(alarmTopic));
 
     // DEPLOY STUFF
     const application = new codedeploy.ServerApplication(this, 'CodeDeployApplication', {
@@ -283,11 +367,16 @@ EOF`,
     const deploymentGroup = new codedeploy.ServerDeploymentGroup(this, 'DeploymentGroup', {
       application,
       deploymentGroupName: 'PolisDeploymentGroup',
-      autoScalingGroups: [asgWeb, asgMathWorker], // Your ASGs
-      deploymentConfig: codedeploy.ServerDeploymentConfig.ONE_AT_A_TIME, // Or another config
+      autoScalingGroups: [asgWeb, asgMathWorker],
+      deploymentConfig: codedeploy.ServerDeploymentConfig.ONE_AT_A_TIME,
       role: codeDeployRole, // The IAM role for CodeDeploy
       installAgent: true, // Installs the CodeDeploy agent.
-      // we also need configure alarms and auto-rollback here.
+      alarms: [webUnhealthyHostAlarm, mathUnhealthyHostAlarm, mathWorkerCPUAlarmHigh, mathWorkerCPUAlarmLow],
+      autoRollback: {
+        failedDeployment: true,
+        stoppedDeployment: true,
+        deploymentInAlarm: true,
+      },
     });
 
     // Allow traffic from the web ASG to the database
@@ -329,6 +418,11 @@ EOF`,
       certificates: [certificate], // Attach the ACM certificate
       open: true,
       defaultTargetGroups: [webTargetGroup],
+    });
+
+    // Web Server - Target Tracking Scaling based on ALB Request Count
+    const webScalingPolicy = asgWeb.scaleOnRequestCount('WebScalingPolicy', {
+      targetRequestsPerMinute: 600,
     });
 
     const webAppEnvVarsSecret = new secretsmanager.Secret(this, 'WebAppEnvVarsSecret', {
