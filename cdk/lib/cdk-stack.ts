@@ -300,14 +300,14 @@ EOF`,
         AutoScalingGroupName: asgMathWorker.autoScalingGroupName,
       },
       statistic: 'Average', // default, config if necessary
-      period: cdk.Duration.minutes(1),
-  });
+      period: cdk.Duration.minutes(10),
+    });
 
-  //Scale up alarm
+    //Scale up alarm
     const mathWorkerCPUAlarmHigh = new cloudwatch.Alarm(this, 'MathWorkerCPUAlarmHigh', {
       metric: mathWorkerCpuMetric,
       threshold: 70,
-      evaluationPeriods: 2,
+      evaluationPeriods: 3,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
@@ -317,7 +317,7 @@ EOF`,
     const mathWorkerCPUAlarmLow = new cloudwatch.Alarm(this, 'MathWorkerCPUAlarmLow', {
       metric: mathWorkerCpuMetric,
       threshold: .15,
-      evaluationPeriods: 2,
+      evaluationPeriods: 3,
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
@@ -397,7 +397,8 @@ EOF`,
       protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [asgWeb],
       healthCheck: {
-        path: "/api/v3/testConnection"
+        path: "/api/v3/testConnection",
+        interval: cdk.Duration.seconds(300)
       }
     });
 
