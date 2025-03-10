@@ -16,7 +16,7 @@ fi
 
 cd polis
 sudo git config --global --add safe.directory /opt/polis/polis
-sudo git pull
+sudo git reset --hard origin/$GIT_BRANCH && sudo git pull
 
 # --- Fetch pre-configured .env from SSM Parameter Store ---
 PRE_CONFIGURED_ENV=$(aws secretsmanager get-secret-value --secret-id polis-web-app-env-vars --query SecretString --output text --region us-east-1)
