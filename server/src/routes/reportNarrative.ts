@@ -649,11 +649,12 @@ export async function handle_GET_topics(
         // @ts-expect-error function args ignore temp
         const structured_comments = await getCommentsAsXML(zid, section.filter);
         // send cached response first if avalable
-        if (Array.isArray(cachedResponse) &&
+        if (
+          Array.isArray(cachedResponse) &&
           cachedResponse?.length &&
           isFreshData(cachedResponse[0].timestamp)
         ) {
-          await new Promise<void>(resolve => {
+          await new Promise<void>((resolve) => {
             res.write(
               JSON.stringify({
                 [section.name]: {
@@ -668,65 +669,72 @@ export async function handle_GET_topics(
             );
             resolve();
           });
-
         } else {
-          const fileContents = await fs.readFile(section.templatePath, "utf8");
-          const json = await convertXML(fileContents);
-          if (Array.isArray(cachedResponse) && cachedResponse?.length) {
-            storage?.deleteReportItem(
-              cachedResponse[0].rid_section_model,
-              cachedResponse[0].timestamp
-            );
-          }
-          json.polisAnalysisPrompt.children[
-            json.polisAnalysisPrompt.children.length - 1
-          ].data.content = { structured_comments };
+          await new Promise<void>((resolve) => {
+            setTimeout(async () => {
+              const fileContents = await fs.readFile(
+                section.templatePath,
+                "utf8"
+              );
+              const json = await convertXML(fileContents);
+              if (Array.isArray(cachedResponse) && cachedResponse?.length) {
+                storage?.deleteReportItem(
+                  cachedResponse[0].rid_section_model,
+                  cachedResponse[0].timestamp
+                );
+              }
+              json.polisAnalysisPrompt.children[
+                json.polisAnalysisPrompt.children.length - 1
+              ].data.content = { structured_comments };
 
-          const prompt_xml = js2xmlparser.parse(
-            "polis-comments-and-group-demographics",
-            json
-          );
-          
-          const resp = await getModelResponse(
-            model,
-            system_lore,
-            prompt_xml,
-            modelVersion,
-            true
-          );
-          
-          const reportItem = {
-            rid_section_model: `${rid}#${section.name}#${model}`,
-            timestamp: new Date().toISOString(),
-            model,
-            report_data: resp,
-            errors:
-            structured_comments?.trim().length === 0
-            ? "NO_CONTENT_AFTER_FILTER"
-            : undefined,
-          };
-          
-          storage?.putItem(reportItem);
-          
-          res.write(
-            JSON.stringify({
-              [section.name]: {
-                modelResponse: resp,
+              const prompt_xml = js2xmlparser.parse(
+                "polis-comments-and-group-demographics",
+                json
+              );
+
+              const resp = await getModelResponse(
                 model,
+                system_lore,
+                prompt_xml,
+                modelVersion,
+                true
+              );
+
+              const reportItem = {
+                rid_section_model: `${rid}#${section.name}#${model}`,
+                timestamp: new Date().toISOString(),
+                model,
+                report_data: resp,
                 errors:
-                structured_comments?.trim().length === 0
-                ? "NO_CONTENT_AFTER_FILTER"
-                : undefined,
-              },
-            }) + `|||`
-          );
-          // @ts-expect-error flush - calling due to use of compression
-          res.flush();
-          await new Promise((resolve) => setTimeout(resolve, 500 * i));
+                  structured_comments?.trim().length === 0
+                    ? "NO_CONTENT_AFTER_FILTER"
+                    : undefined,
+              };
+
+              storage?.putItem(reportItem);
+
+              res.write(
+                JSON.stringify({
+                  [section.name]: {
+                    modelResponse: resp,
+                    model,
+                    errors:
+                      structured_comments?.trim().length === 0
+                        ? "NO_CONTENT_AFTER_FILTER"
+                        : undefined,
+                  },
+                }) + `|||`
+              );
+              // @ts-expect-error flush - calling due to use of compression
+              res.flush();
+              resolve();
+            }, (model === "gemini" ? 500 : 250) * i);
+          });
         }
         console.log("topic over: ", section.name);
-      })
-    );
+      }
+    )
+  );
   console.log("all promises completed");
   res.end();
 }
