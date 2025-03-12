@@ -116,4 +116,7 @@ function setGoogleApplicationCredentials() {
   }
 }
 
+// biome-ignore lint/suspicious/noConsole: config is processed before logger is ready
+console.log(`Polis Server configured with LOG LEVEL: ${Config.logLevel}`);
+
 export default Config;

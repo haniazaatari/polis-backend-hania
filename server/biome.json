@@ -1,10 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "files": {
-    "ignore": [
-      "dist/",
-      "app.ts"
-    ],
+    "ignore": ["dist/", "app.ts"],
     "ignoreUnknown": false
   },
   "formatter": {
@@ -43,10 +40,7 @@
   },
   "overrides": [
     {
-      "include": [
-        "app.js",
-        "src/**"
-      ],
+      "include": ["app.js", "src/**"],
       "linter": {
         "rules": {
           "suspicious": {

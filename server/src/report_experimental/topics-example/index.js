@@ -3,7 +3,7 @@ import { Sensemaker } from '@tevko/sensemaking-tools/src/sensemaker.js';
 import { VoteTally } from '@tevko/sensemaking-tools/src/types.js';
 import { parse } from 'csv-parse';
 import Config from '../../config.js';
-import { sendCommentGroupsSummary } from '../../routes/export.js';
+import { getCommentGroupsSummary } from '../../services/export/exportService.js';
 import logger from '../../utils/logger.js';
 
 async function parseCsvString(csvString) {
