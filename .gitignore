@@ -1,5 +1,6 @@
 .DS_Store
 .clj-kondo/
+.DS_Store
 .env
 .envrc
 .lsp/
