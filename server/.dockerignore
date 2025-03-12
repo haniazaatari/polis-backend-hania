@@ -1,7 +1,8 @@
 .env
 .git
 .google_creds_temp
-dist
+coverage/
+dist/
 logs/
 node_modules/
 npm-debug.log*

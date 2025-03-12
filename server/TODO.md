@@ -4,7 +4,7 @@
 
 - [ ] Update @google-cloud/translate
 - [ ] Update akismet
-- [ ] Update async
+- [ ] Update or remove async
 - [ ] Update bcryptjs
 - [ ] Update boolean
 - [ ] Update express
@@ -23,7 +23,8 @@
 
 ## Tests
 
-- [ ] HTTP API test suite
+- [x] Set up Jest for testing
+- [x] HTTP API test suite (started)
 - [ ] Test Auth
 - [ ] Test Comment
 - [ ] Test Conversation

@@ -3,6 +3,7 @@
 .venv/
 .vscode/settings.json
 app.ts
+coverage/
 dist
 logs/
 node_modules/

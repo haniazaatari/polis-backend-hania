@@ -21,7 +21,12 @@
     "lint:list": "biome lint 2>&1 | grep 'Users' | sed 's/:.*//' | sed 's|.*/server/||' | sort | uniq",
     "format": "biome format --write",
     "check": "biome check --max-diagnostics=none",
-    "check:fix": "biome check --write --unsafe"
+    "check:fix": "biome check --write --unsafe",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
+    "test:unit": "NODE_OPTIONS=--experimental-vm-modules jest --testPathIgnorePatterns=integration",
+    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern=integration"
   },
   "repository": {
     "type": "git",
@@ -34,7 +39,6 @@
     "@anthropic-ai/tokenizer": "^0.0.4",
     "@aws-sdk/client-dynamodb": "^3.758.0",
     "@aws-sdk/lib-dynamodb": "^3.758.0",
-    "@babel/preset-env": "^7.26.9",
     "@google-cloud/aiplatform": "^3.35.0",
     "@google-cloud/translate": "~1.1.0",
     "@google-cloud/vertexai": "^1.9.3",
@@ -66,19 +70,19 @@
     "mimelib": "^0.3.1",
     "morgan": "^1.10.0",
     "nan": "^2.22.2",
-    "nodemailer-mailgun-transport": "^2.1.5",
     "nodemailer": "^6.10.0",
+    "nodemailer-mailgun-transport": "^2.1.5",
     "oauth": "^0.10.0",
     "openai": "^4.86.2",
     "optimist": "^0.6.1",
     "p3p": "~0.0.2",
+    "pg": "^8.13.3",
     "pg-connection-string": "^2.7.0",
     "pg-native": "^3.2.0",
     "pg-query-stream": "^4.7.3",
-    "pg": "^8.13.3",
     "replacestream": "^4.0.3",
-    "request-promise": "~4.2.6",
     "request": "~2.88.2",
+    "request-promise": "~4.2.6",
     "response-time": "^2.3.3",
     "simple-oauth2": "~0.8.0",
     "simple-xml-to-json": "^1.2.3",
@@ -93,7 +97,9 @@
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^22.13.10",
+    "jest": "^29.7.0",
     "nodemon": "^3.1.9",
+    "supertest": "^7.0.0",
     "typescript": "^5.8.2"
   }
 }
