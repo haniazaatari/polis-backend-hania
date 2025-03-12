@@ -148,9 +148,6 @@ const isFreshData = (timestamp: string) => {
   const now = new Date().getTime();
   const then = new Date(timestamp).getTime();
   const elapsed = Math.abs(now - then);
-  console.log(
-    `timestamp: ${timestamp}, nowTime: ${new Date()}, now: ${now}, then: ${then}, elapsed: ${elapsed}, < 87000000`
-  );
   return (
     elapsed < 87000000 // 24 hours
   );
@@ -334,11 +331,7 @@ export async function handle_GET_groupInformedConsensus(
   // @ts-expect-error function args ignore temp
   const structured_comments = await getCommentsAsXML(zid, section.filter);
   // send cached response first if avalable
-  if (
-    Array.isArray(cachedResponse) &&
-    cachedResponse?.length &&
-    isFreshData(cachedResponse[0].timestamp)
-  ) {
+  if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
       JSON.stringify({
         [section.name]: {
@@ -354,12 +347,6 @@ export async function handle_GET_groupInformedConsensus(
   } else {
     const fileContents = await fs.readFile(section.templatePath, "utf8");
     const json = await convertXML(fileContents);
-    if (Array.isArray(cachedResponse) && cachedResponse?.length) {
-      storage?.deleteReportItem(
-        cachedResponse[0].rid_section_model,
-        cachedResponse[0].timestamp
-      );
-    }
     json.polisAnalysisPrompt.children[
       json.polisAnalysisPrompt.children.length - 1
     ].data.content = { structured_comments };
@@ -428,11 +415,7 @@ export async function handle_GET_uncertainty(
   // @ts-expect-error function args ignore temp
   const structured_comments = await getCommentsAsXML(zid, section.filter);
   // send cached response first if avalable
-  if (
-    Array.isArray(cachedResponse) &&
-    cachedResponse?.length &&
-    isFreshData(cachedResponse[0].timestamp)
-  ) {
+  if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
       JSON.stringify({
         [section.name]: {
@@ -448,12 +431,6 @@ export async function handle_GET_uncertainty(
   } else {
     const fileContents = await fs.readFile(section.templatePath, "utf8");
     const json = await convertXML(fileContents);
-    if (Array.isArray(cachedResponse) && cachedResponse?.length) {
-      storage?.deleteReportItem(
-        cachedResponse[0].rid_section_model,
-        cachedResponse[0].timestamp
-      );
-    }
     json.polisAnalysisPrompt.children[
       json.polisAnalysisPrompt.children.length - 1
     ].data.content = { structured_comments };
@@ -523,11 +500,7 @@ export async function handle_GET_groups(
   // @ts-expect-error function args ignore temp
   const structured_comments = await getCommentsAsXML(zid, section.filter);
   // send cached response first if avalable
-  if (
-    Array.isArray(cachedResponse) &&
-    cachedResponse?.length &&
-    isFreshData(cachedResponse[0].timestamp)
-  ) {
+  if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
       JSON.stringify({
         [section.name]: {
@@ -543,12 +516,6 @@ export async function handle_GET_groups(
   } else {
     const fileContents = await fs.readFile(section.templatePath, "utf8");
     const json = await convertXML(fileContents);
-    if (Array.isArray(cachedResponse) && cachedResponse?.length) {
-      storage?.deleteReportItem(
-        cachedResponse[0].rid_section_model,
-        cachedResponse[0].timestamp
-      );
-    }
     json.polisAnalysisPrompt.children[
       json.polisAnalysisPrompt.children.length - 1
     ].data.content = { structured_comments };
@@ -609,15 +576,9 @@ export async function handle_GET_topics(
     `${rid}#topics`
   );
 
-  if (cachedTopics?.length && isFreshData(cachedTopics[0].timestamp)) {
+  if (cachedTopics?.length) {
     topics = cachedTopics[0].report_data;
   } else {
-    if (cachedTopics?.length) {
-      storage?.deleteReportItem(
-        cachedTopics[0].rid_section_model,
-        cachedTopics[0].timestamp
-      );
-    }
     topics = await getTopicsFromRID(zid);
     const reportItemTopics = {
       rid_section_model: `${rid}#topics`,
@@ -643,8 +604,7 @@ export async function handle_GET_topics(
     sections.map(
       async (
         section: { name: any; templatePath: PathLike | fs.FileHandle },
-        i: number,
-        arr: any
+        i: number
       ) => {
         const cachedResponse = await storage?.queryItemsByRidSectionModel(
           `${rid}#${section.name}#${model}`
@@ -652,11 +612,7 @@ export async function handle_GET_topics(
         // @ts-expect-error function args ignore temp
         const structured_comments = await getCommentsAsXML(zid, section.filter);
         // send cached response first if avalable
-        if (
-          Array.isArray(cachedResponse) &&
-          cachedResponse?.length &&
-          isFreshData(cachedResponse[0].timestamp)
-        ) {
+        if (Array.isArray(cachedResponse) && cachedResponse?.length) {
           await new Promise<void>((resolve) => {
             res.write(
               JSON.stringify({
@@ -680,12 +636,6 @@ export async function handle_GET_topics(
                 "utf8"
               );
               const json = await convertXML(fileContents);
-              if (Array.isArray(cachedResponse) && cachedResponse?.length) {
-                storage?.deleteReportItem(
-                  cachedResponse[0].rid_section_model,
-                  cachedResponse[0].timestamp
-                );
-              }
               json.polisAnalysisPrompt.children[
                 json.polisAnalysisPrompt.children.length - 1
               ].data.content = { structured_comments };
@@ -789,6 +739,16 @@ export async function handle_GET_reportNarrative(
   // @ts-expect-error flush - calling due to use of compression
   res.flush();
   try {
+    const cachedResponse = await storage?.getAllByReportID(rid);
+    if (
+      Array.isArray(cachedResponse) &&
+      cachedResponse?.length &&
+      !isFreshData(cachedResponse[0].timestamp)
+    ) {
+      res.write(`POLIS-PING: pruining cache`);
+      await storage?.deleteAllByReportID(rid);
+      res.write(`POLIS-PING: cache pruined`);
+    }
     const promises = [
       handle_GET_groupInformedConsensus(
         rid,
