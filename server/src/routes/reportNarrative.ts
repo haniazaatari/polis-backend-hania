@@ -148,6 +148,7 @@ const isFreshData = (timestamp: string) => {
   const now = new Date().getTime();
   const then = new Date(timestamp).getTime();
   const elapsed = Math.abs(now - then);
+  console.log(`now: ${now}, then: ${then}, elapsed: ${elapsed}, < 87000000`);
   return (
     elapsed < 87000000 // 24 hours
   );
