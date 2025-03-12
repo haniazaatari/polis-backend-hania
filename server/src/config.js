@@ -1,5 +1,10 @@
 import fs from 'fs';
 import isTrue from 'boolean';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
+
 const devHostname = process.env.API_DEV_HOSTNAME || 'localhost:5000';
 const devMode = isTrue(process.env.DEV_MODE);
 const prodHostname = process.env.API_PROD_HOSTNAME || 'pol.is';
@@ -8,7 +13,11 @@ const shouldUseTranslationAPI = isTrue(process.env.SHOULD_USE_TRANSLATION_API);
 import('source-map-support').then((sourceMapSupport) => {
   sourceMapSupport.install();
 });
-export default {
+
+/**
+ * Configuration settings for the application
+ */
+const Config = {
   isDevMode: devMode,
   serverPort,
   getServerNameWithProtocol: () => {
@@ -41,10 +50,10 @@ export default {
   dynamoDbEndpoint: process.env.DYNAMODB_ENDPOINT || null,
   emailTransportTypes: process.env.EMAIL_TRANSPORT_TYPES || null,
   encryptionPassword: process.env.ENCRYPTION_PASSWORD_00001,
-  fbAppId: process.env.FB_APP_ID || null,
   geminiApiKey: process.env.GEMINI_API_KEY || null,
   googleApiKey: process.env.GOOGLE_API_KEY || null,
   googleJigsawPerspectiveApiKey: process.env.GOOGLE_JIGSAW_PERSPECTIVE_API_KEY || null,
+  openaiApiKey: process.env.OPENAI_API_KEY || null,
   logLevel: process.env.SERVER_LOG_LEVEL,
   logToFile: isTrue(process.env.SERVER_LOG_TO_FILE),
   mailgunApiKey: process.env.MAILGUN_API_KEY || null,
@@ -52,7 +61,6 @@ export default {
   maxReportCacheDuration: Number.parseInt(process.env.MAX_REPORT_CACHE_DURATION || '3600000', 10),
   mathEnv: process.env.MATH_ENV,
   nodeEnv: process.env.NODE_ENV,
-  openaiApiKey: process.env.OPENAI_API_KEY || null,
   polisFromAddress: process.env.POLIS_FROM_ADDRESS,
   readOnlyDatabaseURL: process.env.READ_ONLY_DATABASE_URL || process.env.DATABASE_URL,
   runPeriodicExportTests: isTrue(process.env.RUN_PERIODIC_EXPORT_TESTS),
@@ -66,8 +74,6 @@ export default {
     10
   ),
   staticFilesHost: process.env.STATIC_FILES_HOST,
-  twitterConsumerKey: process.env.TWITTER_CONSUMER_KEY || null,
-  twitterConsumerSecret: process.env.TWITTER_CONSUMER_SECRET || null,
   webserverPass: process.env.WEBSERVER_PASS,
   webserverUsername: process.env.WEBSERVER_USERNAME,
   whitelistItems: [
@@ -81,9 +87,11 @@ export default {
     process.env.DOMAIN_WHITELIST_ITEM_08 || null
   ].filter((item) => item !== null)
 };
+
 function isTrueOrBlank(val) {
   return val === undefined || val === '' || isTrue(val);
 }
+
 function setGoogleApplicationCredentials() {
   if (!shouldUseTranslationAPI) {
     return false;
@@ -107,3 +115,5 @@ function setGoogleApplicationCredentials() {
     return false;
   }
 }
+
+export default Config;

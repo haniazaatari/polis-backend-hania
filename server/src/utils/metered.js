@@ -1,7 +1,8 @@
 import logger from './logger.js';
 export const METRICS_IN_RAM = {};
 const SHOULD_ADD_METRICS_IN_RAM = false;
-export function addInRamMetric(metricName, val) {
+
+function addInRamMetric(metricName, val) {
   if (!SHOULD_ADD_METRICS_IN_RAM) {
     return;
   }
@@ -15,7 +16,8 @@ export function addInRamMetric(metricName, val) {
   METRICS_IN_RAM[metricName].values[index] = val;
   METRICS_IN_RAM[metricName].index = (index + 1) % 1000;
 }
-export function MPromise(name, f) {
+
+function MPromise(name, f) {
   const p = new Promise(f);
   const start = Date.now();
   setTimeout(() => {
@@ -47,4 +49,5 @@ export function MPromise(name, f) {
   });
   return p;
 }
-export default { addInRamMetric, MPromise };
+
+export { addInRamMetric, MPromise };

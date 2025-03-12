@@ -1,10 +1,11 @@
-import { GoogleAIModel } from '@tevko/sensemaking-tools/src/models/aiStudio_model';
-import { Sensemaker } from '@tevko/sensemaking-tools/src/sensemaker';
-import { VoteTally } from '@tevko/sensemaking-tools/src/types';
+import { GoogleAIModel } from '@tevko/sensemaking-tools/src/models/aiStudio_model.js';
+import { Sensemaker } from '@tevko/sensemaking-tools/src/sensemaker.js';
+import { VoteTally } from '@tevko/sensemaking-tools/src/types.js';
 import { parse } from 'csv-parse';
 import Config from '../../config.js';
 import { sendCommentGroupsSummary } from '../../routes/export.js';
 import logger from '../../utils/logger.js';
+
 async function parseCsvString(csvString) {
   return new Promise((resolve, reject) => {
     const data = [];
@@ -40,12 +41,13 @@ async function parseCsvString(csvString) {
     parser.end();
   });
 }
+
 export async function getTopicsFromRID(zId) {
   try {
     if (!Config.geminiApiKey) {
       throw new Error('polis_err_gemini_api_key_not_set');
     }
-    const resp = await sendCommentGroupsSummary(zId, undefined, false);
+    const resp = await getCommentGroupsSummary(zId);
     const modified = resp.split('\n');
     modified[0] =
       'comment-id,comment_text,total-votes,total-agrees,total-disagrees,total-passes,group-a-votes,group-0-agree-count,group-0-disagree-count,group-0-pass-count,group-b-votes,group-1-agree-count,group-1-disagree-count,group-1-pass-count';

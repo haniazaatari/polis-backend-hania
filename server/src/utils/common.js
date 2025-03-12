@@ -2,14 +2,8 @@ import akismetLib from 'akismet';
 import pg from 'pg';
 import _ from 'underscore';
 import Config from '../config.js';
-import Conversation from '../conversation.js';
-import {
-  queryP as pgQueryP,
-  queryP_readOnly as pgQueryP_readOnly,
-  query_readOnly as pgQuery_readOnly
-} from '../db/pg-query.js';
+import { queryP as pgQueryP } from '../db/pg-query.js';
 import logger from '../utils/logger.js';
-import { MPromise } from './metered.js';
 
 const serverUrl = Config.getServerNameWithProtocol();
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
@@ -17,6 +11,7 @@ const akismet = akismetLib.client({
   blog: serverUrl,
   apiKey: Config.akismetAntispamApiKey
 });
+
 akismet.verifyKey((_err, verified) => {
   if (verified) {
     logger.debug('Akismet: API key successfully verified.');
@@ -24,20 +19,11 @@ akismet.verifyKey((_err, verified) => {
     logger.debug('Akismet: Unable to verify API key.');
   }
 });
-function isSpam(o) {
-  return new MPromise('isSpam', (resolve, reject) => {
-    akismet.checkSpam(o, (err, spam) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(spam);
-      }
-    });
-  });
-}
+
 function isPolisDev(uid) {
   return polisDevs.indexOf(uid) >= 0;
 }
+
 function strToHex(str) {
   let hex;
   let i;
@@ -48,6 +34,7 @@ function strToHex(str) {
   }
   return result;
 }
+
 function hexToStr(hexString) {
   let j;
   const hexes = hexString.match(/.{1,4}/g) || [];
@@ -57,43 +44,7 @@ function hexToStr(hexString) {
   }
   return str;
 }
-const polisTypes = {
-  reactions: {
-    push: 1,
-    pull: -1,
-    see: 0,
-    pass: 0
-  },
-  staractions: {
-    unstar: 0,
-    star: 1
-  },
-  mod: {
-    ban: -1,
-    unmoderated: 0,
-    ok: 1
-  }
-};
-polisTypes.reactionValues = _.values(polisTypes.reactions);
-polisTypes.starValues = _.values(polisTypes.staractions);
-function isConversationOwner(zid, uid, callback) {
-  pgQuery_readOnly('SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);', [zid, uid], (err, docs) => {
-    let resultError = err;
-    if (!docs || !docs.rows || docs.rows.length === 0) {
-      resultError = resultError || 1;
-    }
-    callback?.(resultError);
-  });
-}
-function isModerator(zid, uid) {
-  if (isPolisDev(uid)) {
-    return Promise.resolve(true);
-  }
-  return pgQueryP_readOnly(
-    'select count(*) from conversations where owner in (select uid from users where site_id = (select site_id from users where uid = ($2))) and zid = ($1);',
-    [zid, uid]
-  ).then((rows) => rows[0].count >= 1);
-}
+
 function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) {
   return pgQueryP(
     "insert into worker_tasks (math_env, task_data, task_type, task_bucket) values ($1, $2, 'generate_export_data', $3);",
@@ -109,10 +60,9 @@ function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) 
     ]
   );
 }
-function isOwner(zid, uid) {
-  return Conversation.getConversationInfo(zid).then((info) => info.owner === uid);
-}
+
 const escapeLiteral = pg.Client.prototype.escapeLiteral;
+
 function isDuplicateKey(err) {
   const isdup =
     err.code === 23505 ||
@@ -122,29 +72,45 @@ function isDuplicateKey(err) {
     err.messagePrimary?.includes('duplicate key value');
   return isdup;
 }
+
+/**
+ * Return the first value if it's defined, otherwise return the second value
+ * @param {*} first - First value to check
+ * @param {*} second - Fallback value
+ * @returns {*} - First value if defined, otherwise second value
+ */
+function ifDefinedFirstElseSecond(first, second) {
+  return _.isUndefined(first) ? second : first;
+}
+
+/**
+ * Removes properties with null or undefined values from an object
+ * @param {Object} obj - The object to clean
+ * @returns {Object} - The cleaned object
+ */
+function removeNullOrUndefinedProperties(obj) {
+  // Iterate over each property in the object
+  for (const key in obj) {
+    // Get the value of the current property
+    const value = obj[key];
+
+    // If the value is null or undefined, delete the property
+    if (value === null || value === undefined) {
+      delete obj[key];
+    }
+  }
+
+  // Return the cleaned object
+  return obj;
+}
+
 export {
   strToHex,
   hexToStr,
-  polisTypes,
-  isConversationOwner,
-  isModerator,
   isPolisDev,
-  isSpam,
   doAddDataExportTask,
-  isOwner,
   escapeLiteral,
-  isDuplicateKey
-};
-export default {
-  strToHex,
-  hexToStr,
-  polisTypes,
-  isConversationOwner,
-  isModerator,
-  isPolisDev,
-  isSpam,
-  doAddDataExportTask,
-  isOwner,
-  escapeLiteral,
-  isDuplicateKey
+  isDuplicateKey,
+  ifDefinedFirstElseSecond,
+  removeNullOrUndefinedProperties
 };

@@ -1,38 +1,70 @@
-import { createLogger, format, transports } from 'winston';
+import winston from 'winston';
 import Config from '../config.js';
-const logLevel = Config.logLevel || 'warn';
-const logToFile = Config.logToFile;
-const consoleTransport = new transports.Console({
-  format: format.combine(format.colorize(), format.simple()),
+
+// Get log level from config or use default
+const logLevel = Config.logLevel || 'info';
+const logToFile = Config.logToFile || false;
+
+// Define colors for each level
+const colors = {
+  error: 'red',
+  warn: 'yellow',
+  info: 'green',
+  http: 'magenta',
+  debug: 'white'
+};
+
+// Add colors to winston
+winston.addColors(colors);
+
+// Define console transport with colorization
+const consoleTransport = new winston.transports.Console({
+  format: winston.format.combine(winston.format.colorize(), winston.format.simple()),
   level: logLevel
 });
-const logger = createLogger({
+
+// Define the format for file logs
+const fileFormat = winston.format.combine(
+  winston.format.timestamp({
+    format: 'YYYY-MM-DD HH:mm:ss Z'
+  }),
+  winston.format.errors({ stack: true }),
+  winston.format.json()
+);
+
+// Create the logger with appropriate transports
+const logger = winston.createLogger({
   level: logLevel,
   exitOnError: false,
-  format: format.combine(
-    format.timestamp({
-      format: 'YYYY-MM-DD HH:mm:ss Z'
-    }),
-    format.errors({ stack: true }),
-    format.json()
-  ),
+  format: fileFormat,
   defaultMeta: { service: 'polis-api-server' },
   transports: [consoleTransport]
 });
+
+// Add file transports if configured to log to file
 if (logToFile) {
   logger.configure({
     transports: [
-      new transports.File({
+      new winston.transports.File({
         filename: './logs/error.log',
         level: 'error'
       }),
-      new transports.File({
+      new winston.transports.File({
         filename: './logs/combined.log'
       }),
       consoleTransport
     ],
-    exceptionHandlers: [new transports.File({ filename: './logs/exceptions.log' })],
-    rejectionHandlers: [new transports.File({ filename: './logs/rejections.log' })]
+    exceptionHandlers: [
+      new winston.transports.File({
+        filename: './logs/exceptions.log'
+      })
+    ],
+    rejectionHandlers: [
+      new winston.transports.File({
+        filename: './logs/rejections.log'
+      })
+    ]
   });
 }
+
 export default logger;

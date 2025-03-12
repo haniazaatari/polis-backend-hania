@@ -25,7 +25,7 @@ export function fetchAndCacheLatestPcaData() {
     ])
       .then((rows) => {
         if (!rows || !rows.length) {
-          logger.info('mathpoll done');
+          logger.debug('mathpoll done');
           setTimeout(pollForLatestPcaData, waitTime());
           return;
         }
@@ -37,7 +37,7 @@ export function fetchAndCacheLatestPcaData() {
           if (row.caching_tick) {
             item.caching_tick = Number(row.caching_tick);
           }
-          logger.info('mathpoll updating', {
+          logger.debug('mathpoll updating', {
             caching_tick: item.caching_tick,
             zid: row.zid
           });
@@ -67,7 +67,7 @@ export function getPca(zid, math_tick) {
   const cachedPOJO = cached?.asPOJO;
   if (cachedPOJO) {
     if (cachedPOJO.math_tick <= (math_tick || 0)) {
-      logger.info('math was cached but not new', {
+      logger.debug('math was cached but not new', {
         zid,
         cached_math_tick: cachedPOJO.math_tick,
         query_math_tick: math_tick
@@ -75,11 +75,10 @@ export function getPca(zid, math_tick) {
       return Promise.resolve(undefined);
     }
 
-    logger.info('math from cache', { zid, math_tick });
+    logger.debug('math from cache', { zid, math_tick });
     return Promise.resolve(cached);
   }
-
-  logger.info('mathpoll cache miss', { zid, math_tick });
+  logger.debug('mathpoll cache miss', { zid, math_tick });
   const queryStart = Date.now();
   return pgQueryP_readOnly('select * from math_main where zid = ($1) and math_env = ($2);', [zid, Config.mathEnv]).then(
     (rows) => {
@@ -88,7 +87,7 @@ export function getPca(zid, math_tick) {
       addInRamMetric('pcaGetQuery', queryDuration);
 
       if (!rows || !rows.length) {
-        logger.info('mathpoll related; after cache miss, unable to find data for', {
+        logger.debug('mathpoll related; after cache miss, unable to find data for', {
           zid,
           math_tick,
           math_env: Config.mathEnv
@@ -101,13 +100,13 @@ export function getPca(zid, math_tick) {
       }
 
       if (item.math_tick <= (math_tick || 0)) {
-        logger.info('after cache miss, unable to find newer item', {
+        logger.debug('after cache miss, unable to find newer item', {
           zid,
           math_tick
         });
         return undefined;
       }
-      logger.info('after cache miss, found item, adding to cache', {
+      logger.debug('after cache miss, found item, adding to cache', {
         zid,
         math_tick
       });
@@ -175,8 +174,7 @@ function processMathObject(o) {
     }
     return o;
   }
-
-  if (_.isArray(o['group-clusters'])) {
+  if (Array.isArray(o['group-clusters'])) {
     o['group-clusters'] = o['group-clusters'].map((g) => {
       return { id: Number(g.id), val: g };
     });
@@ -184,7 +182,7 @@ function processMathObject(o) {
   const propsToConvert = ['repness', 'group-votes', 'subgroup-repness', 'subgroup-votes', 'subgroup-clusters'];
 
   for (const prop of propsToConvert) {
-    if (!_.isArray(o[prop])) {
+    if (!Array.isArray(o[prop])) {
       o[prop] = _.keys(o[prop]).map((gid) => ({
         id: Number(gid),
         val: o[prop][gid]

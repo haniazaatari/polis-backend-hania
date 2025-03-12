@@ -1,33 +1,34 @@
 import LruCache from 'lru-cache';
 import _ from 'underscore';
 import { isUri } from 'valid-url';
-import Conversation from '../conversation.js';
-import pg from '../db/pg-query.js';
-import User from '../user.js';
-import fail from './fail.js';
+import * as pg from '../db/pg-query.js';
+import { getParticipantId } from '../repositories/participant/participantRepository.js';
+import { getZidFromConversationId } from '../services/conversation/conversationService.js';
 import logger from './logger.js';
 import { MPromise } from './metered.js';
-function moveToBody(req, _res, next) {
-  if (req.query) {
-    req.body = req.body || {};
-    Object.assign(req.body, req.query);
-  }
-  if (req.params) {
-    req.body = req.body || {};
-    Object.assign(req.body, req.params);
-  }
-  req.p = req.p || {};
-  next();
-}
+import { fail } from './responseHandlers.js';
+
 function need(name, parserWhichReturnsPromise, assigner) {
-  return buildCallback({
-    name: name,
-    extractor: extractFromBody,
-    parserWhichReturnsPromise: parserWhichReturnsPromise,
-    assigner: assigner,
-    required: true
-  });
+  return (req, res, next) => {
+    const bodyHasParam = req.body && !_.isUndefined(req.body[name]);
+    const queryHasParam = req.query && !_.isUndefined(req.query[name]);
+    const paramsHasParam = req.params && !_.isUndefined(req.params[name]);
+    if (!bodyHasParam && !queryHasParam && !paramsHasParam) {
+      fail(res, 400, 'polis_err_param_missing', { param: name });
+      return;
+    }
+    const paramValue = bodyHasParam ? req.body[name] : queryHasParam ? req.query[name] : req.params[name];
+    return parserWhichReturnsPromise(paramValue)
+      .then((parsed) => {
+        assigner(req, name, parsed);
+        next();
+      })
+      .catch((err) => {
+        fail(res, 400, 'polis_err_param_parse_failed', { param: name, err: err });
+      });
+  };
 }
+
 function want(name, parserWhichReturnsPromise, assigner, defaultVal) {
   return buildCallback({
     name: name,
@@ -38,6 +39,7 @@ function want(name, parserWhichReturnsPromise, assigner, defaultVal) {
     defaultVal: defaultVal
   });
 }
+
 function needCookie(name, parserWhichReturnsPromise, assigner) {
   return buildCallback({
     name: name,
@@ -47,6 +49,7 @@ function needCookie(name, parserWhichReturnsPromise, assigner) {
     required: true
   });
 }
+
 function wantCookie(name, parserWhichReturnsPromise, assigner, defaultVal) {
   return buildCallback({
     name: name,
@@ -57,6 +60,7 @@ function wantCookie(name, parserWhichReturnsPromise, assigner, defaultVal) {
     defaultVal: defaultVal
   });
 }
+
 function needHeader(name, parserWhichReturnsPromise, assigner, defaultVal) {
   return buildCallback({
     name: name,
@@ -67,6 +71,7 @@ function needHeader(name, parserWhichReturnsPromise, assigner, defaultVal) {
     defaultVal: defaultVal
   });
 }
+
 function wantHeader(name, parserWhichReturnsPromise, assigner, defaultVal) {
   return buildCallback({
     name: name,
@@ -77,24 +82,28 @@ function wantHeader(name, parserWhichReturnsPromise, assigner, defaultVal) {
     defaultVal: defaultVal
   });
 }
+
 function extractFromBody(req, name) {
   if (!req.body) {
     return void 0;
   }
   return req.body[name];
 }
+
 function extractFromCookie(req, name) {
   if (!req.cookies) {
     return void 0;
   }
   return req.cookies[name];
 }
+
 function extractFromHeader(req, name) {
   if (!req.headers) {
     return void 0;
   }
   return req.headers[name.toLowerCase()];
 }
+
 function buildCallback(config) {
   const name = config.name;
   const parserWhichReturnsPromise = config.parserWhichReturnsPromise;
@@ -142,9 +151,11 @@ function buildCallback(config) {
     }
   };
 }
+
 function isEmail(s) {
   return typeof s === 'string' && s.length < 999 && s.indexOf('@') > 0;
 }
+
 function getEmail(s) {
   return new Promise((resolve, reject) => {
     if (!isEmail(s)) {
@@ -153,6 +164,7 @@ function getEmail(s) {
     resolve(s);
   });
 }
+
 function getPassword(s) {
   return new Promise((resolve, reject) => {
     if (typeof s !== 'string' || s.length > 999 || s.length === 0) {
@@ -161,6 +173,7 @@ function getPassword(s) {
     resolve(s);
   });
 }
+
 function getPasswordWithCreatePasswordRules(s) {
   return getPassword(s).then((s) => {
     if (typeof s !== 'string' || s.length < 6) {
@@ -169,6 +182,7 @@ function getPasswordWithCreatePasswordRules(s) {
     return s;
   });
 }
+
 function getOptionalStringLimitLength(limit) {
   return (s) =>
     new Promise((resolve, reject) => {
@@ -179,6 +193,7 @@ function getOptionalStringLimitLength(limit) {
       resolve(trimmedS);
     });
 }
+
 function getStringLimitLength(minLength, maxLength) {
   const effectiveMin = _.isUndefined(maxLength) ? 1 : minLength;
   const effectiveMax = _.isUndefined(maxLength) ? minLength : maxLength;
@@ -198,6 +213,7 @@ function getStringLimitLength(minLength, maxLength) {
       resolve(trimmedS);
     });
 }
+
 function getUrlLimitLength(limit) {
   return (s) => {
     getStringLimitLength(limit)(s).then(
@@ -212,6 +228,7 @@ function getUrlLimitLength(limit) {
     );
   };
 }
+
 function getInt(s) {
   return new Promise((resolve, reject) => {
     if (_.isNumber(s) && s >> 0 === s) {
@@ -224,6 +241,7 @@ function getInt(s) {
     resolve(x);
   });
 }
+
 function getBool(s) {
   return new Promise((resolve, reject) => {
     const type = typeof s;
@@ -246,6 +264,7 @@ function getBool(s) {
     reject('polis_fail_parse_boolean');
   });
 }
+
 function getIntInRange(min, max) {
   return (s) =>
     getInt(s).then((x) => {
@@ -255,12 +274,13 @@ function getIntInRange(min, max) {
       return x;
     });
 }
+
 const reportIdToRidCache = new LruCache({
   max: 1000
 });
-const getZidFromConversationId = Conversation.getZidFromConversationId;
+
 function getRidFromReportId(report_id) {
-  return new MPromise('getRidFromReportId', (resolve, reject) => {
+  return MPromise('getRidFromReportId', (resolve, reject) => {
     const cachedRid = reportIdToRidCache.get(report_id);
     if (cachedRid) {
       resolve(cachedRid);
@@ -281,16 +301,21 @@ function getRidFromReportId(report_id) {
     });
   });
 }
+
 const parseConversationId = getStringLimitLength(1, 100);
+
 function getConversationIdFetchZid(s) {
   return parseConversationId(s).then((conversation_id) =>
     getZidFromConversationId(conversation_id).then((zid) => Number(zid))
   );
 }
+
 const parseReportId = getStringLimitLength(1, 100);
+
 function getReportIdFetchRid(s) {
   return parseReportId(s).then((report_id) => getRidFromReportId(report_id).then((rid) => Number(rid)));
 }
+
 function getNumber(s) {
   return new Promise((resolve, reject) => {
     if (_.isNumber(s)) {
@@ -303,6 +328,7 @@ function getNumber(s) {
     resolve(x);
   });
 }
+
 function getNumberInRange(min, max) {
   return (s) =>
     getNumber(s).then((x) => {
@@ -312,32 +338,36 @@ function getNumberInRange(min, max) {
       return x;
     });
 }
+
 function getArrayOfString(a, _maxStrings, _maxLength) {
   return new Promise((resolve, reject) => {
     let result;
     if (_.isString(a)) {
       result = a.split(',');
     }
-    if (!_.isArray(result)) {
+    if (!Array.isArray(result)) {
       return reject('polis_fail_parse_int_array');
     }
     resolve(result);
   });
 }
+
 function getArrayOfStringNonEmpty(a, _maxStrings, _maxLength) {
   if (!a || !a.length) {
     return Promise.reject('polis_fail_parse_string_array_empty');
   }
   return getArrayOfString(a);
 }
+
 function getArrayOfStringNonEmptyLimitLength(maxStrings, maxLength) {
   const effectiveMaxStrings = maxStrings || 999999999;
   return (a) => getArrayOfStringNonEmpty(a, effectiveMaxStrings, maxLength);
 }
+
 function getArrayOfInt(a) {
   const arrayToProcess = _.isString(a) ? a.split(',') : a;
 
-  if (!_.isArray(arrayToProcess)) {
+  if (!Array.isArray(arrayToProcess)) {
     return Promise.reject('polis_fail_parse_int_array');
   }
 
@@ -347,6 +377,7 @@ function getArrayOfInt(a) {
 
   return Promise.resolve(arrayToProcess.map(integer));
 }
+
 function assignToP(req, name, x) {
   req.p = req.p || {};
   if (!_.isUndefined(req.p[name])) {
@@ -354,11 +385,13 @@ function assignToP(req, name, x) {
   }
   req.p[name] = x;
 }
+
 function assignToPCustom(name) {
   return (req, _ignoredName, x) => {
     assignToP(req, name, x);
   };
 }
+
 function resolve_pidThing(pidThingStringName, assigner, loggingString) {
   const effectiveLoggingString = _.isUndefined(loggingString) ? '' : loggingString;
 
@@ -370,7 +403,7 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
     }
     const existingValue = extractFromBody(req, pidThingStringName) || extractFromCookie(req, pidThingStringName);
     if (existingValue === 'mypid' && req?.p?.zid && req.p.uid) {
-      User.getPidPromise(req.p.zid, req.p.uid)
+      getParticipantId(req.p.zid, req.p.uid)
         .then((pid) => {
           if (pid >= 0) {
             assigner(req, pidThingStringName, pid);
@@ -398,10 +431,23 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
     }
   };
 }
+
+/**
+ * Convert params object to a sorted string for HMAC generation
+ * @param {Object} params - The parameters to convert
+ * @returns {string} - The sorted string representation
+ */
+function paramsToStringSortedByName(params) {
+  const pairs = _.pairs(params).sort((a, b) => a[0] > b[0]);
+  const pairsList = pairs.map((pair) => pair.join('='));
+  return pairsList.join('&');
+}
+
 export {
   assignToP,
   assignToPCustom,
   getArrayOfInt,
+  getArrayOfString,
   getArrayOfStringNonEmpty,
   getArrayOfStringNonEmptyLimitLength,
   getBool,
@@ -409,6 +455,7 @@ export {
   getEmail,
   getInt,
   getIntInRange,
+  getNumber,
   getNumberInRange,
   getOptionalStringLimitLength,
   getPassword,
@@ -416,37 +463,10 @@ export {
   getReportIdFetchRid,
   getStringLimitLength,
   getUrlLimitLength,
-  moveToBody,
   need,
   needCookie,
   needHeader,
-  resolve_pidThing,
-  want,
-  wantCookie,
-  wantHeader
-};
-export default {
-  assignToP,
-  assignToPCustom,
-  getArrayOfInt,
-  getArrayOfStringNonEmpty,
-  getArrayOfStringNonEmptyLimitLength,
-  getBool,
-  getConversationIdFetchZid,
-  getEmail,
-  getInt,
-  getIntInRange,
-  getNumberInRange,
-  getOptionalStringLimitLength,
-  getPassword,
-  getPasswordWithCreatePasswordRules,
-  getReportIdFetchRid,
-  getStringLimitLength,
-  getUrlLimitLength,
-  moveToBody,
-  need,
-  needCookie,
-  needHeader,
+  paramsToStringSortedByName,
   resolve_pidThing,
   want,
   wantCookie,

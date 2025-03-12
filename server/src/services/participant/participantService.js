@@ -1,0 +1,331 @@
+/**
+ * Participant Service
+ * Handles business logic for participants
+ */
+import Config from '../../config.js';
+import { queryP_readOnly } from '../../db/pg-query.js';
+import { recordPermanentCookieZidJoin } from '../../repositories/cookie/permanentCookieRepository.js';
+import {
+  addExtendedParticipantInfo,
+  createParticipant,
+  getParticipantByUid,
+  getParticipantId,
+  tryToJoinConversation,
+  userHasAnsweredZeQuestions
+} from '../../repositories/participant/participantRepository.js';
+import { createXidEntry, isXidWhitelisted, xidExists } from '../../repositories/xid/xidRepository.js';
+import { COOKIES } from '../../services/auth/constants.js';
+import logger from '../../utils/logger.js';
+import { fail } from '../../utils/responseHandlers.js';
+import { startSessionAndAddCookies } from '../auth/sessionService.js';
+import { getConversationInfo } from '../conversation/conversationService.js';
+import { deleteSuzinvite, getSUZinviteInfo } from '../invite/inviteService.js';
+import { createDummyUser, getUserInfoForUid2 } from '../user/userService.js';
+import { encrypt } from '../utils/encryptionService.js';
+
+/**
+ * Get a participant by conversation ID and user ID
+ * @param {number} zid - Conversation ID
+ * @param {number} uid - User ID
+ * @returns {Promise<Object|null>} - Participant object or null if not found
+ */
+async function getParticipant(zid, uid) {
+  return getParticipantByUid(zid, uid);
+}
+
+/**
+ * Join a conversation
+ * @param {number} zid - Conversation ID
+ * @param {number} uid - User ID
+ * @param {Object} info - Additional information
+ * @param {Object} answers - Answers to participant metadata questions
+ * @returns {Promise<Object>} - Participant object
+ */
+async function joinConversation(zid, uid, info, answers) {
+  try {
+    // Try to get participant ID first
+    const existingPid = await getParticipantId(zid, uid);
+
+    // If participant already exists, return early
+    if (existingPid >= 0) {
+      return { pid: existingPid };
+    }
+
+    // If not, try to join with retry logic
+    let result;
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (attempts < maxAttempts) {
+      try {
+        result = await tryToJoinConversation(zid, uid, info, answers);
+        break; // Success, exit the loop
+      } catch (err) {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          throw err; // Rethrow if we've exhausted all attempts
+        }
+        // Small delay before retry
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+    return result;
+  } catch (err) {
+    logger.error('Error joining conversation', { error: err, zid, uid });
+    throw err;
+  }
+}
+
+/**
+ * Add a participant and their metadata to a conversation
+ * @param {number} zid - Conversation ID
+ * @param {number} uid - User ID
+ * @param {Object} req - Express request object
+ * @param {string} permanent_cookie - Permanent cookie
+ * @returns {Promise<Object>} - The inserted participant
+ */
+async function addParticipantAndMetadata(zid, uid, req, permanent_cookie) {
+  try {
+    const info = {};
+
+    // Extract parent URL and referrer
+    const parent_url = req?.cookies?.[COOKIES.PARENT_URL] || req?.p?.parent_url;
+    const referer = req?.cookies[COOKIES.PARENT_REFERRER] || req?.headers?.referer || req?.headers?.referrer;
+
+    if (parent_url) {
+      info.parent_url = parent_url;
+    }
+
+    if (referer) {
+      info.referrer = referer;
+    }
+
+    // Handle IP address for web server
+    if (Config.applicationName === 'PolisWebServer') {
+      const x_forwarded_for = req?.headers?.['x-forwarded-for'];
+      let ip = null;
+
+      if (x_forwarded_for) {
+        let ips = x_forwarded_for;
+        ips = ips?.split(', ');
+        ip = ips.length && ips[0];
+        info.encrypted_ip_address = encrypt(ip);
+        info.encrypted_x_forwarded_for = encrypt(x_forwarded_for);
+      }
+    }
+
+    // Add permanent cookie and origin
+    if (permanent_cookie) {
+      info.permanent_cookie = permanent_cookie;
+    }
+
+    if (req?.headers?.origin) {
+      info.origin = req?.headers?.origin;
+    }
+
+    // Create participant and add extended info
+    const participant = await createParticipant(zid, uid);
+
+    // Add extended info if needed
+    if (Object.keys(info).length > 0) {
+      await addExtendedParticipantInfo(zid, uid, info);
+    }
+
+    return participant;
+  } catch (error) {
+    logger.error('Error adding participant and metadata', { error, zid, uid });
+    throw error;
+  }
+}
+
+/**
+ * Join a conversation with a ZID or single-use invite
+ * @param {Object} options - Options object
+ * @param {Object} [options.answers] - Answers to participant metadata questions
+ * @param {boolean} [options.existingAuth] - Whether the user is already authenticated
+ * @param {string} [options.suzinvite] - Single-use zid invite token
+ * @param {string} [options.permanentCookieToken] - Permanent cookie token
+ * @param {number} [options.uid] - User ID
+ * @param {number} [options.zid] - Conversation ID
+ * @param {string} [options.referrer] - Referrer URL
+ * @param {string} [options.parent_url] - Parent URL
+ * @param {string} [options.xid] - External ID
+ * @returns {Promise<Object>} - Object containing uid, pid, zid, and other info
+ */
+async function joinWithZidOrSuzinvite(options) {
+  try {
+    // Step 1: Get conversation info from suzinvite or zid
+    let o = { ...options };
+
+    if (o.suzinvite) {
+      const suzinviteInfo = await getSUZinviteInfo(o.suzinvite);
+      o = { ...o, ...suzinviteInfo };
+    } else if (!o.zid) {
+      throw new Error('polis_err_missing_invite');
+    }
+
+    // Step 2: Get conversation info
+    logger.info('joinWithZidOrSuzinvite convinfo begin');
+    const conv = await getConversationInfo(o.zid);
+    logger.info('joinWithZidOrSuzinvite convinfo done');
+    o.conv = conv;
+
+    // Step 3: Get user info if uid is provided
+    logger.info('joinWithZidOrSuzinvite userinfo begin');
+    if (o.uid) {
+      logger.info('joinWithZidOrSuzinvite userinfo with uid');
+      const user = await getUserInfoForUid2(o.uid);
+      logger.info('joinWithZidOrSuzinvite userinfo done');
+      o.user = user;
+    } else {
+      logger.info('joinWithZidOrSuzinvite userinfo no uid');
+    }
+
+    // Step 4: Create dummy user if no uid is provided
+    if (!o.uid) {
+      const uid = await createDummyUser();
+      o.uid = uid;
+    }
+
+    // Step 5: Check if user has answered required questions
+    await userHasAnsweredZeQuestions(o.zid, o.answers);
+
+    // Step 6: Join the conversation
+    const info = {};
+    if (o.referrer) {
+      info.referrer = o.referrer;
+    }
+    if (o.parent_url) {
+      info.parent_url = o.parent_url;
+    }
+
+    const ptpt = await joinConversation(o.zid, o.uid, info, o.answers);
+    o = { ...o, ...ptpt };
+
+    // Step 7: Handle XID if provided
+    if (o.xid) {
+      const exists = await xidExists(o.xid, o.conv.org_id, o.uid);
+
+      if (!exists) {
+        const shouldCreateXidEntry = o.conv.use_xid_whitelist ? await isXidWhitelisted(o.conv.owner, o.xid) : true;
+
+        if (shouldCreateXidEntry) {
+          await createXidEntry(o.xid, o.conv.org_id, o.uid);
+        } else {
+          throw new Error('polis_err_xid_not_whitelisted');
+        }
+      }
+    }
+
+    // Step 8: Delete suzinvite if used
+    if (o.suzinvite) {
+      await deleteSuzinvite(o.suzinvite);
+    }
+
+    return {
+      uid: o.uid,
+      pid: o.pid,
+      zid: o.zid,
+      existingAuth: options.existingAuth,
+      permanentCookieToken: options.permanentCookieToken
+    };
+  } catch (error) {
+    logger.error('Error in joinWithZidOrSuzinvite', { error });
+    throw error;
+  }
+}
+
+/**
+ * Handle POST request to join with invite
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @returns {Promise<void>}
+ */
+async function handlePostJoinWithInvite(req, res) {
+  try {
+    const result = await joinWithZidOrSuzinvite({
+      answers: req.p.answers,
+      existingAuth: !!req.p.uid,
+      suzinvite: req.p.suzinvite,
+      permanentCookieToken: req.p.permanentCookieToken,
+      uid: req.p.uid,
+      zid: req.p.zid,
+      referrer: req.p.referrer,
+      parent_url: req.p.parent_url
+    });
+
+    const uid = result.uid;
+    logger.info(`startSessionAndAddCookies ${uid} existing ${result.existingAuth}`);
+
+    // Start session if user is not already authenticated
+    if (!result.existingAuth) {
+      await startSessionAndAddCookies(uid, res);
+    }
+
+    // Record permanent cookie zid join if provided
+    if (result.permanentCookieToken) {
+      try {
+        await recordPermanentCookieZidJoin(result.permanentCookieToken, result.zid);
+      } catch (error) {
+        logger.error('Error recording permanent cookie zid join', { error });
+        // Continue even if this fails
+      }
+    }
+
+    // Send response
+    res.status(200).json({
+      pid: result.pid,
+      uid: req.p.uid
+    });
+  } catch (err) {
+    if (err?.message?.match(/polis_err_need_full_user/)) {
+      fail(res, 403, err.message, err);
+    } else if (err?.message) {
+      fail(res, 500, err.message, err);
+    } else if (err) {
+      fail(res, 500, 'polis_err_joinWithZidOrSuzinvite', err);
+    } else {
+      fail(res, 500, 'polis_err_joinWithZidOrSuzinvite');
+    }
+  }
+}
+
+/**
+ * Query participants by metadata
+ * @param {number} zid - Conversation ID
+ * @param {Array<number>} pmaids - Participant metadata answer IDs
+ * @returns {Promise<Array<number>>} - Array of participant IDs
+ */
+async function queryParticipantsByMetadata(zid, pmaids) {
+  try {
+    const query = `
+      SELECT pid FROM participants 
+      WHERE zid = ($1) 
+      AND pid NOT IN (
+        SELECT pid FROM participant_metadata_choices 
+        WHERE alive = TRUE 
+        AND pmaid IN (
+          SELECT pmaid FROM participant_metadata_answers 
+          WHERE alive = TRUE 
+          AND zid = ($2) 
+          AND pmaid NOT IN (${pmaids.join(',')})
+        )
+      )
+    `;
+
+    const result = await queryP_readOnly(query, [zid, zid]);
+    return result.map((row) => row.pid);
+  } catch (err) {
+    logger.error('Error querying participants by metadata', { error: err, zid, pmaids });
+    throw err;
+  }
+}
+
+export {
+  getParticipant,
+  joinConversation,
+  addParticipantAndMetadata,
+  joinWithZidOrSuzinvite,
+  handlePostJoinWithInvite,
+  queryParticipantsByMetadata
+};

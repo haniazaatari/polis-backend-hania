@@ -1,10 +1,13 @@
-import { Pool } from 'pg';
-import { parse as parsePgConnectionString } from 'pg-connection-string';
+import pg from 'pg';
+import pgConnectionString from 'pg-connection-string';
 import QueryStream from 'pg-query-stream';
-import { isFunction, isString, isUndefined } from 'underscore';
+import _ from 'underscore';
 import Config from '../config.js';
 import logger from '../utils/logger.js';
 import { MPromise } from '../utils/metered.js';
+
+const { Pool } = pg;
+const { parse: parsePgConnectionString } = pgConnectionString;
 const usingReplica = Config.databaseURL !== Config.readOnlyDatabaseURL;
 const poolSize = Config.isDevMode ? 2 : usingReplica ? 3 : 12;
 const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), {
@@ -40,10 +43,10 @@ const readPool = new Pool(readsPgConnection);
 function queryImpl(pool, queryString, ...args) {
   let params;
   let callback;
-  if (isFunction(args[1])) {
+  if (_.isFunction(args[1])) {
     params = args[0];
     callback = args[1];
-  } else if (isFunction(args[0])) {
+  } else if (_.isFunction(args[0])) {
     params = [];
     callback = args[0];
   } else {
@@ -80,7 +83,7 @@ function query_readOnly(queryString, ...args) {
   return queryImpl(readPool, queryString, ...args);
 }
 function queryP_impl(pool, queryString, params) {
-  if (!isString(queryString)) {
+  if (!_.isString(queryString)) {
     return Promise.reject('query_was_not_string');
   }
   return new Promise((resolve, reject) => {
@@ -112,10 +115,10 @@ function queryP_readOnly_wRetryIfEmpty(queryString, ...args) {
 }
 function queryP_metered_impl(isReadOnly, name, queryString, params) {
   const f = isReadOnly ? queryP_readOnly : queryP;
-  if (isUndefined(name) || isUndefined(queryString) || isUndefined(params)) {
+  if (_.isUndefined(name) || _.isUndefined(queryString) || _.isUndefined(params)) {
     throw new Error('polis_err_queryP_metered_impl missing params');
   }
-  return new MPromise(name, (resolve, reject) => {
+  return MPromise(name, (resolve, reject) => {
     f(queryString, params).then(resolve, reject);
   });
 }
@@ -154,15 +157,9 @@ export {
   queryP_metered_readOnly,
   queryP_readOnly,
   queryP_readOnly_wRetryIfEmpty,
-  stream_queryP_readOnly
-};
-export default {
-  query,
-  query_readOnly,
-  queryP,
-  queryP_metered,
-  queryP_metered_readOnly,
-  queryP_readOnly,
-  queryP_readOnly_wRetryIfEmpty,
-  stream_queryP_readOnly
+  stream_queryP_readOnly,
+  queryP as pgQueryP,
+  queryP_readOnly as pgQueryP_readOnly,
+  queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty,
+  stream_queryP_readOnly as stream_pgQueryP_readOnly
 };

@@ -5,62 +5,81 @@
 - [ ] Update @google-cloud/translate
 - [ ] Update akismet
 - [ ] Update async
+- [ ] Update bcryptjs
 - [ ] Update boolean
 - [ ] Update express
-- [ ] Update fb
+- [x] Remove fb
 - [ ] Update lru-cache
 - [ ] Update simple-oauth2
 - [ ] Update AWS-SDK to v3
-- [ ] Remove lodash
+- [x] Remove lodash
 - [ ] Remove underscore
-- [ ] Remove bluebird
+- [x] Remove bluebird
 - [ ] Remove request
 - [ ] Somehow remove "punycode" (aws-sdk, request-promise, request)
 - [ ] consider axios or native fetch over request/request-promise
+- [x] Liquidate server.js
+- [ ] Move app.js into src/
 
 ## Tests
 
-- [ ] Set up "external" API tests
-- [ ] Maybe mock PostgreSQL
-- [ ] Consider Test Fixtures data
-- [ ] Mock the Math service
-- [ ] Performance tests
+- [ ] HTTP API test suite
+- [ ] Test Auth
+- [ ] Test Comment
+- [ ] Test Conversation
+- [ ] Test Cookie
+- [ ] Test Data Export
+- [ ] Test Email
+- [ ] Test LaunchPrep
+- [ ] Test Math
+- [ ] Test Metadata
+- [ ] Test Moderation
+- [ ] Test Participant
+- [ ] Test Password
+- [ ] Test Report
+- [ ] Test Narrative Report
+- [ ] Test Subscription
+- [ ] Test User
+- [ ] Test Vote
+- [ ] Test Zinvite
+- [ ] Test Static File Fetching
+- [ ] Test Middleware
 
 ## Database
 
-- [ ] Create migrations for (re)building the whole database
+- [x] Create migrations for (re)building the whole database
 - [ ] Create a schema with TypeORM or similar
-- [ ] Upgrade to PostgreSQL 14
-- [ ] Upgrade to PostgreSQL 17
+- [x] Upgrade to PostgreSQL 14
+- [x] Upgrade to PostgreSQL 16
 
 ## Modular Code
 
-- [ ] Populate the "routes" directory
-- [ ] Break up the "server" file
-- [ ] Normalize the imports and exports
-- [ ] Isolate DB concerns
-- [ ] Isolate 3rd party API concerns
-- [ ] Isolate "Math" concerns
-- [ ] Isolate "Email" concerns
-- [ ] Isolate any render concerns
+- [x] Populate the "routes" directory
+- [x] Break up the "server" file
+- [x] Normalize the imports and exports
+- [x] Isolate DB concerns
+- [x] Isolate 3rd party API concerns
+- [x] Isolate "Math" concerns
+- [x] Isolate "Email" concerns
+- [x] Isolate Static File concerns
 
 ## Code Hygiene
 
 - [ ] Remove dead code
-- [ ] replace all console statements with logger
+- [x] replace all console statements with logger
 - [ ] Remove, Normalize, (or add) Comments
 - [ ] Update callback chains with async/await
 - [ ] Update and improve analytics
-- [ ] Update and improve logging
+- [x] Update and improve logging
 - [ ] Normalize the error handling
 - [ ] Identify and refactor "hacks"
-- [ ] Swtich from eslint+prettier to biomejs
-- [ ] Fix all linting errors
+- [x] Swtich from eslint+prettier to biomejs
+- [x] Fix all linting errors
+- [ ] Convert to TypeScript
 
 ## Express
 
 - [ ] Upgrade to 4.x
 - [ ] Upgrade to 5.x
 - [ ] Update and improve middleware
-- [ ] Update and improve routing
-- [ ] Update and improve error handling
+- [x] Update and improve routing
