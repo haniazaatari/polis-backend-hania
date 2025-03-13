@@ -88,7 +88,7 @@ async function authenticateUser(req) {
     }
 
     // Check for session token in cookies
-    const token = req.cookies?.token;
+    const token = req.cookies?.[COOKIES.TOKEN];
     if (token) {
       authResult = await authenticateWithCookie(token, req);
       if (authResult?.uid) {

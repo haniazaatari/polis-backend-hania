@@ -309,9 +309,24 @@ async function handleGetCommentsTranslations(req, res) {
   try {
     const zid = req.p.zid;
     const tid = req.p.tid;
-    const firstTwoCharsOfLang = req.p.lang?.substr(0, 2);
+
+    // If no language is specified, return empty array
+    if (!req.p.lang) {
+      logger.warn(`Translation requested without specifying language: zid=${zid}, tid=${tid}`);
+      res.status(200).json([]);
+      return;
+    }
+
+    const firstTwoCharsOfLang = req.p.lang.substr(0, 2);
 
     const comment = await getComment(zid, tid);
+
+    // If comment doesn't exist, return empty array
+    if (!comment) {
+      logger.warn(`Translation requested for non-existent comment: zid=${zid}, tid=${tid}`);
+      res.status(200).json([]);
+      return;
+    }
 
     // Check for existing translations
     const existingTranslations = await pgQueryP_readOnly(

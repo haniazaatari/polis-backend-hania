@@ -19,7 +19,7 @@ export function writeDefaultHead(_req, res, next) {
 export function redirectIfNotHttps(req, res, next) {
   const devMode = Config.isDevMode;
 
-  if (devMode || req.path === '/api/v3/testConnection') {
+  if (devMode || req.path === '/api/v3/testConnection' || req.path === '/api/v3/testDatabase') {
     return next();
   }
 

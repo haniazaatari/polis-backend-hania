@@ -3,9 +3,9 @@
  * Handles HTTP requests related to users
  */
 import _ from 'underscore';
+import { isPolisDev } from '../db/authorization.js';
 import * as inviteService from '../services/invite/inviteService.js';
 import * as userService from '../services/user/userService.js';
-import { isPolisDev } from '../utils/common.js';
 import logger from '../utils/logger.js';
 import { fail } from '../utils/responseHandlers.js';
 

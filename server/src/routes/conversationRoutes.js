@@ -32,7 +32,7 @@ router.get(
   '/conversations',
   moveToBody,
   authOptional(assignToP),
-  want('zid', getConversationIdFetchZid, assignToPCustom('zid')),
+  want('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
   want('uid', getInt, assignToP),
   want('course_invite', getBool, assignToP),
   want('course_id', getInt, assignToP),
@@ -114,7 +114,6 @@ router.put(
   moveToBody,
   auth(assignToP),
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
-  need('conversation_id', getStringLimitLength(1, 1000), assignToP),
   want('is_active', getBool, assignToP),
   want('is_anon', getBool, assignToP),
   want('is_draft', getBool, assignToP, false),
@@ -164,10 +163,6 @@ router.post(
   want('conversation_id', getStringLimitLength(6, 300), assignToP, ''),
   want('is_data_open', getBool, assignToP, false),
   want('ownerXid', getStringLimitLength(1, 999), assignToP),
-  want('auth_needed_to_vote', getBool, assignToP),
-  want('auth_needed_to_write', getBool, assignToP),
-  want('auth_opt_allow_3rdparty', getBool, assignToP),
-  want('send_created_email', getBool, assignToP, false),
   handleCreateConversation
 );
 

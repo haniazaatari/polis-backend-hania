@@ -56,13 +56,19 @@ async function getZidFromConversationId(conversationId) {
   }
 
   try {
+    logger.debug(`Looking up ZID for conversation ID: ${conversationId}`);
     const results = await pg.queryP_readOnly('SELECT zid FROM zinvites WHERE zinvite = ($1);', [conversationId]);
+    logger.debug(`Results: ${JSON.stringify(results)}`);
 
-    if (!results || !results.length) {
+    // Check if the results array is empty
+    if (!results || results.length === 0) {
+      logger.error(`No results found for conversation ID: ${conversationId}`);
       throw new Error('polis_err_fetching_zid_for_conversation_id');
     }
 
+    // The results are an array of objects
     const zid = results[0].zid;
+    logger.debug(`Found ZID ${zid} for conversation ID: ${conversationId}`);
     conversationIdToZidCache.set(conversationId, zid);
     return zid;
   } catch (error) {
@@ -93,10 +99,27 @@ async function registerZinvite(zid, zinvite) {
  * @returns {Promise<Object>} - Updated conversation
  */
 async function updateConversation(zid, fields) {
-  const query = sql_conversations.update(fields).where(sql_conversations.zid.equals(zid)).returning('*');
+  try {
+    // Only proceed with update if there are fields to update
+    if (Object.keys(fields).length === 0) {
+      // If no fields to update, fetch and return the current conversation
+      const currentConversation = await getConversationByZid(zid);
+      return currentConversation;
+    }
 
-  const result = await pg.queryP(query.toString());
-  return result.rows[0];
+    const query = sql_conversations.update(fields).where(sql_conversations.zid.equals(zid)).returning('*');
+    const result = await pg.queryP(query.toString());
+
+    // Check if result is empty array
+    if (!result || result.length === 0) {
+      throw new Error(`Conversation with zid ${zid} not found or could not be updated`);
+    }
+
+    return result[0];
+  } catch (error) {
+    logger.error('Error updating conversation', { error, zid, fields });
+    throw error;
+  }
 }
 
 /**
@@ -122,12 +145,12 @@ async function getParticipantInfo(uid, includeAllConversationsIAmIn) {
     let isSiteAdmin = {};
 
     if (uid && includeAllConversationsIAmIn) {
-      const results = await pg.queryP_readOnly('SELECT zid, is_mod FROM participants WHERE uid = ($1);', [uid]);
+      const results = await pg.queryP_readOnly('SELECT zid, mod FROM participants WHERE uid = ($1);', [uid]);
 
       if (results?.length) {
         participantInOrSiteAdminOf = results.map((p) => p.zid);
         isSiteAdmin = results.reduce((o, p) => {
-          o[p.zid] = p.is_mod;
+          o[p.zid] = p.mod;
           return o;
         }, {});
       }
@@ -149,54 +172,77 @@ async function getParticipantInfo(uid, includeAllConversationsIAmIn) {
  * @returns {Promise<Array>} - Array of conversations
  */
 async function getConversations(options) {
-  let query = sql_conversations.select(sql_conversations.star());
-  let isRootsQuery = false;
-  let orClauses;
+  try {
+    let query = sql_conversations.select(sql_conversations.star());
+    let isRootsQuery = false;
+    let orClauses;
 
-  // Build WHERE clauses
-  if (!_.isUndefined(options.context)) {
-    if (options.context === '/') {
-      orClauses = sql_conversations.is_public.equals(true);
-      isRootsQuery = true;
+    logger.debug('Building getConversations query with options', options);
+
+    // Build WHERE clauses
+    if (!_.isUndefined(options.context)) {
+      if (options.context === '/') {
+        orClauses = sql_conversations.is_public.equals(true);
+        isRootsQuery = true;
+      } else {
+        orClauses = sql_conversations.context.equals(options.context);
+      }
     } else {
-      orClauses = sql_conversations.context.equals(options.context);
+      orClauses = sql_conversations.owner.equals(options.uid);
+      if (options.participantInOrSiteAdminOf?.length) {
+        orClauses = orClauses.or(sql_conversations.zid.in(options.participantInOrSiteAdminOf));
+      }
     }
-  } else {
-    orClauses = sql_conversations.owner.equals(options.uid);
-    if (options.participantInOrSiteAdminOf?.length) {
-      orClauses = orClauses.or(sql_conversations.zid.in(options.participantInOrSiteAdminOf));
+
+    query = query.where(orClauses);
+
+    // Add additional filters
+    if (!_.isUndefined(options.courseInvite)) {
+      query = query.and(sql_conversations.course_id.equals(options.courseId));
     }
+
+    if (!_.isUndefined(options.isActive)) {
+      query = query.and(sql_conversations.is_active.equals(options.isActive));
+    }
+
+    if (!_.isUndefined(options.isDraft)) {
+      query = query.and(sql_conversations.is_draft.equals(options.isDraft));
+    }
+
+    if (!_.isUndefined(options.zid)) {
+      query = query.and(sql_conversations.zid.equals(options.zid));
+    }
+
+    if (isRootsQuery) {
+      query = query.and(sql_conversations.context.isNotNull());
+    }
+
+    // Order and limit
+    query = query.order(sql_conversations.created.descending);
+    query = query.limit(options.limit || 999);
+
+    const queryString = query.toString();
+    logger.debug('Final SQL query for getConversations', { query: queryString });
+
+    try {
+      const result = await pg.queryP_readOnly(queryString);
+      logger.debug('Query result for getConversations', {
+        count: Array.isArray(result) ? result.length : 0
+      });
+
+      return result || [];
+    } catch (sqlError) {
+      logger.error('SQL error in getConversations', {
+        error: sqlError,
+        query: queryString,
+        options
+      });
+      throw sqlError;
+    }
+  } catch (error) {
+    logger.error('Error in getConversations repository', error);
+    throw error;
   }
-
-  query = query.where(orClauses);
-
-  // Add additional filters
-  if (!_.isUndefined(options.courseInvite)) {
-    query = query.and(sql_conversations.course_id.equals(options.courseId));
-  }
-
-  if (!_.isUndefined(options.isActive)) {
-    query = query.and(sql_conversations.is_active.equals(options.isActive));
-  }
-
-  if (!_.isUndefined(options.isDraft)) {
-    query = query.and(sql_conversations.is_draft.equals(options.isDraft));
-  }
-
-  if (!_.isUndefined(options.zid)) {
-    query = query.and(sql_conversations.zid.equals(options.zid));
-  }
-
-  if (isRootsQuery) {
-    query = query.and(sql_conversations.context.isNotNull());
-  }
-
-  // Order and limit
-  query = query.order(sql_conversations.created.descending);
-  query = query.limit(options.limit || 999);
-
-  const result = await pg.queryP_readOnly(query.toString());
-  return result.rows || [];
 }
 
 /**
@@ -214,12 +260,12 @@ async function verifyMetadataAnswersExistForEachQuestion(zid) {
   );
 
   // If no questions found, resolve successfully
-  if (!questionsResult || !questionsResult.rows || !questionsResult.rows.length) {
+  if (!questionsResult || questionsResult.length === 0) {
     return;
   }
 
   // Extract question IDs
-  const pmqids = questionsResult.rows.map((row) => Number(row.pmqid));
+  const pmqids = questionsResult.map((row) => Number(row.pmqid));
 
   // Query for answers that match these question IDs
   const answersResult = await pg.queryP_readOnly(
@@ -228,7 +274,7 @@ async function verifyMetadataAnswersExistForEachQuestion(zid) {
   );
 
   // If no answers found at all, throw error
-  if (!answersResult || !answersResult.rows || !answersResult.rows.length) {
+  if (!answersResult || answersResult.length === 0) {
     throw new Error(errorcode);
   }
 
@@ -239,7 +285,7 @@ async function verifyMetadataAnswersExistForEachQuestion(zid) {
   }
 
   // Remove questions that have answers
-  for (const row of answersResult.rows) {
+  for (const row of answersResult) {
     delete questions[row.pmqid];
   }
 

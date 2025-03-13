@@ -17,9 +17,9 @@ export function initializeAkismet() {
 
   akismet.verifyKey((_err, verified) => {
     if (verified) {
-      logger.debug('Akismet: API key successfully verified.');
+      logger.silly('Akismet: API key successfully verified.');
     } else {
-      logger.debug('Akismet: Unable to verify API key.');
+      logger.silly('Akismet: Unable to verify API key.');
     }
   });
 

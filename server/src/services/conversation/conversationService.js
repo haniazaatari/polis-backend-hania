@@ -3,6 +3,7 @@ import Config from '../../config.js';
 import { queryP_readOnly } from '../../db/pg-query.js';
 import { sendCreatedLinkToEmail } from '../../email/specialized.js';
 import * as conversationRepository from '../../repositories/conversation/conversationRepository.js';
+import * as participantRepository from '../../repositories/participant/participantRepository.js';
 import { ifDefinedFirstElseSecond } from '../../utils/common.js';
 import { DEFAULTS } from '../../utils/constants.js';
 import logger from '../../utils/logger.js';
@@ -131,46 +132,80 @@ async function sendCreatedEmail(uid, zid) {
  * @returns {Promise<Array>} - Array of conversations
  */
 async function getConversations(options, req) {
-  // Get conversations from repository
-  const participantInfo = await conversationRepository.getParticipantInfo(
-    options.uid,
-    options.includeAllConversationsIAmIn
-  );
+  try {
+    // Get conversations from repository
+    logger.debug('Getting participant info', {
+      uid: options.uid,
+      includeAll: options.includeAllConversationsIAmIn,
+      allOptions: options
+    });
 
-  const participantInOrSiteAdminOf = participantInfo.participantInOrSiteAdminOf;
-  const isSiteAdmin = participantInfo.isSiteAdmin;
+    const participantInfo = await conversationRepository.getParticipantInfo(
+      options.uid,
+      options.includeAllConversationsIAmIn
+    );
 
-  // Build query options
-  const queryOptions = {
-    uid: options.uid,
-    zid: options.zid,
-    context: options.context,
-    courseInvite: options.courseInvite,
-    courseId: options.courseId,
-    isActive: options.isActive,
-    isDraft: options.isDraft,
-    participantInOrSiteAdminOf,
-    limit: options.limit || 999
-  };
+    logger.debug('Participant info result', participantInfo);
 
-  // Get conversations from repository
-  const conversations = await conversationRepository.getConversations(queryOptions);
+    const participantInOrSiteAdminOf = participantInfo.participantInOrSiteAdminOf;
+    const isSiteAdmin = participantInfo.isSiteAdmin;
 
-  // Process conversations
-  const processedConversations = await processConversations(conversations, {
-    uid: options.uid,
-    xid: options.xid,
-    wantModUrl: options.wantModUrl,
-    wantUpvoted: options.wantUpvoted,
-    wantInboxItemAdminUrl: options.wantInboxItemAdminUrl,
-    wantInboxItemParticipantUrl: options.wantInboxItemParticipantUrl,
-    wantInboxItemAdminHtml: options.wantInboxItemAdminHtml,
-    wantInboxItemParticipantHtml: options.wantInboxItemParticipantHtml,
-    isSiteAdmin,
-    req
-  });
+    // Build query options
+    const queryOptions = {
+      uid: options.uid,
+      zid: options.zid,
+      context: options.context,
+      courseInvite: options.courseInvite,
+      courseId: options.courseId,
+      isActive: options.isActive,
+      isDraft: options.isDraft,
+      participantInOrSiteAdminOf,
+      limit: options.limit || 999
+    };
 
-  return processedConversations;
+    logger.debug('Query options for getConversations', queryOptions);
+
+    // Get conversations from repository
+    const conversations = await conversationRepository.getConversations(queryOptions);
+
+    logger.debug('Raw conversations result', {
+      count: conversations.length,
+      conversations: conversations.map((c) => ({
+        zid: c.zid,
+        owner: c.owner,
+        created: c.created
+      }))
+    });
+
+    if (!conversations || conversations.length === 0) {
+      logger.debug('No conversations found, returning empty array');
+      return [];
+    }
+
+    // Process conversations
+    const processedConversations = await processConversations(conversations, {
+      uid: options.uid,
+      xid: options.xid,
+      wantModUrl: options.wantModUrl,
+      wantUpvoted: options.wantUpvoted,
+      wantInboxItemAdminUrl: options.wantInboxItemAdminUrl,
+      wantInboxItemParticipantUrl: options.wantInboxItemParticipantUrl,
+      wantInboxItemAdminHtml: options.wantInboxItemAdminHtml,
+      wantInboxItemParticipantHtml: options.wantInboxItemParticipantHtml,
+      isSiteAdmin,
+      req
+    });
+
+    logger.debug('Final processed conversations', {
+      count: processedConversations.length,
+      sample: processedConversations[0]
+    });
+
+    return processedConversations;
+  } catch (error) {
+    logger.error('Error in getConversations service', error);
+    throw error;
+  }
 }
 
 /**
@@ -180,89 +215,112 @@ async function getConversations(options, req) {
  * @returns {Promise<Array>} - Processed conversations
  */
 async function processConversations(conversations, options) {
-  // Add conversation IDs
-  const conversationsWithIds = await urlService.addConversationIds(conversations);
+  try {
+    logger.debug('Processing conversations', {
+      count: conversations.length,
+      sampleZid: conversations[0]?.zid,
+      options
+    });
 
-  // Get single-use URLs if needed
-  let suurlData = null;
-  if (options.xid) {
-    const suurls = await Promise.all(
-      conversationsWithIds.map((conv) => urlService.createOneSuzinvite(options.xid, conv.zid, conv.owner))
-    );
-    suurlData = _.indexBy(suurls, 'zid');
+    // Add conversation IDs
+    const conversationsWithIds = await urlService.addConversationIds(conversations);
+
+    logger.debug('Added conversation IDs', {
+      count: conversationsWithIds.length,
+      sampleConversation: conversationsWithIds[0]
+    });
+
+    // Get single-use URLs if needed
+    let suurlData = null;
+    if (options.xid) {
+      const suurls = await Promise.all(
+        conversationsWithIds.map((conv) => urlService.createOneSuzinvite(options.xid, conv.zid, conv.owner))
+      );
+      suurlData = _.indexBy(suurls, 'zid');
+    }
+
+    // Get upvotes if needed
+    let upvotes = null;
+    if (options.uid && options.wantUpvoted) {
+      const upvoteResults = await getUpvotesForUser(options.uid);
+      upvotes = _.indexBy(upvoteResults, 'zid');
+    }
+
+    // Process each conversation
+    const processedConversations = conversationsWithIds.map((conv) => {
+      // Add owner flag
+      conv.is_owner = conv.owner === options.uid;
+
+      // Add URLs if needed
+      if (options.wantModUrl) {
+        conv.mod_url = urlService.createModerationUrl(conv.conversation_id);
+      }
+
+      if (options.wantInboxItemAdminUrl) {
+        conv.inbox_item_admin_url = `${serverUrl}/iim/${conv.conversation_id}`;
+      }
+
+      if (options.wantInboxItemParticipantUrl) {
+        conv.inbox_item_participant_url = `${serverUrl}/iip/${conv.conversation_id}`;
+      }
+
+      if (options.wantInboxItemAdminHtml) {
+        conv.inbox_item_admin_html = `<a href='${serverUrl}/${conv.conversation_id}'>${conv.topic || conv.created}</a> <a href='${serverUrl}/m/${conv.conversation_id}'>moderate</a>`;
+        conv.inbox_item_admin_html_escaped = conv.inbox_item_admin_html.replace(/'/g, "\\'");
+      }
+
+      if (options.wantInboxItemParticipantHtml) {
+        conv.inbox_item_participant_html = `<a href='${serverUrl}/${conv.conversation_id}'>${conv.topic || conv.created}</a>`;
+        conv.inbox_item_participant_html_escaped = conv.inbox_item_participant_html?.replace(/'/g, "\\'");
+      }
+
+      // Add URL
+      if (suurlData) {
+        conv.url = suurlData[conv.zid || '']?.suurl;
+      } else {
+        conv.url = urlService.buildConversationUrl(conv.conversation_id);
+      }
+
+      // Add upvoted flag
+      if (upvotes?.[conv.zid || '']) {
+        conv.upvoted = true;
+      }
+
+      // Format dates
+      conv.created = Number(conv.created);
+      conv.modified = Number(conv.modified);
+
+      // Set default topic if needed
+      if (_.isUndefined(conv.topic) || conv.topic === '') {
+        conv.topic = new Date(conv.created).toUTCString();
+      }
+
+      // Add moderator flag
+      conv.is_mod = conv.is_owner || options.isSiteAdmin[conv.zid || ''];
+
+      // Remove unnecessary fields
+      conv.zid = undefined;
+      conv.is_anon = undefined;
+      conv.is_draft = undefined;
+      conv.is_public = undefined;
+
+      if (conv.context === '') {
+        conv.context = undefined;
+      }
+
+      return conv;
+    });
+
+    logger.debug('Processed conversations', {
+      count: processedConversations.length,
+      sampleProcessed: processedConversations[0]
+    });
+
+    return processedConversations;
+  } catch (error) {
+    logger.error('Error in processConversations', error);
+    throw error;
   }
-
-  // Get upvotes if needed
-  let upvotes = null;
-  if (options.uid && options.wantUpvoted) {
-    const upvoteResults = await getUpvotesForUser(options.uid);
-    upvotes = _.indexBy(upvoteResults, 'zid');
-  }
-
-  // Process each conversation
-  return conversationsWithIds.map((conv) => {
-    // Add owner flag
-    conv.is_owner = conv.owner === options.uid;
-
-    // Add URLs if needed
-    if (options.wantModUrl) {
-      conv.mod_url = urlService.createModerationUrl(conv.conversation_id);
-    }
-
-    if (options.wantInboxItemAdminUrl) {
-      conv.inbox_item_admin_url = `${serverUrl}/iim/${conv.conversation_id}`;
-    }
-
-    if (options.wantInboxItemParticipantUrl) {
-      conv.inbox_item_participant_url = `${serverUrl}/iip/${conv.conversation_id}`;
-    }
-
-    if (options.wantInboxItemAdminHtml) {
-      conv.inbox_item_admin_html = `<a href='${serverUrl}/${conv.conversation_id}'>${conv.topic || conv.created}</a> <a href='${serverUrl}/m/${conv.conversation_id}'>moderate</a>`;
-      conv.inbox_item_admin_html_escaped = conv.inbox_item_admin_html.replace(/'/g, "\\'");
-    }
-
-    if (options.wantInboxItemParticipantHtml) {
-      conv.inbox_item_participant_html = `<a href='${serverUrl}/${conv.conversation_id}'>${conv.topic || conv.created}</a>`;
-      conv.inbox_item_participant_html_escaped = conv.inbox_item_admin_html?.replace(/'/g, "\\'");
-    }
-
-    // Add URL
-    if (suurlData) {
-      conv.url = suurlData[conv.zid || '']?.suurl;
-    } else {
-      conv.url = urlService.buildConversationUrl(conv.conversation_id);
-    }
-
-    // Add upvoted flag
-    if (upvotes?.[conv.zid || '']) {
-      conv.upvoted = true;
-    }
-
-    // Format dates
-    conv.created = Number(conv.created);
-    conv.modified = Number(conv.modified);
-
-    // Set default topic if needed
-    if (_.isUndefined(conv.topic) || conv.topic === '') {
-      conv.topic = new Date(conv.created).toUTCString();
-    }
-
-    // Add moderator flag
-    conv.is_mod = conv.is_owner || options.isSiteAdmin[conv.zid || ''];
-
-    // Remove unnecessary fields
-    conv.zid = undefined;
-    conv.is_anon = undefined;
-    conv.is_draft = undefined;
-    conv.is_public = undefined;
-
-    if (conv.context === '') {
-      conv.context = undefined;
-    }
-
-    return conv;
-  });
 }
 
 /**
@@ -492,21 +550,6 @@ async function getConversationPreloadInfo(conversationId) {
 }
 
 /**
- * Check if a user is allowed to create conversations
- * @param {number} _uid - User ID (unused)
- * @returns {Promise<boolean>} - Whether the user is allowed to create conversations
- */
-async function isUserAllowedToCreateConversations(_uid) {
-  try {
-    // In the current implementation, all users are allowed to create conversations
-    return true;
-  } catch (error) {
-    logger.error('Error checking if user is allowed to create conversations', error);
-    throw error;
-  }
-}
-
-/**
  * Create a new conversation
  * @param {Object} conversationData - Conversation data
  * @param {string} requestedConversationId - Requested conversation ID (optional)
@@ -530,6 +573,19 @@ async function createConversation(conversationData, requestedConversationId, gen
       zinvite = requestedConversationId;
     } else {
       zinvite = await generateAndRegisterZinvite(zid, generateShortUrl);
+    }
+
+    // Add the owner as a participant
+    try {
+      await participantRepository.createParticipant(zid, conversationData.owner);
+      logger.debug('Added owner as participant', { zid, owner: conversationData.owner });
+    } catch (participantError) {
+      logger.error('Error adding owner as participant', {
+        error: participantError,
+        zid,
+        owner: conversationData.owner
+      });
+      // Continue even if there's an error adding the participant
     }
 
     // Build conversation URL
@@ -577,12 +633,6 @@ async function initializeImplicitConversation(site_id, page_id, options) {
 
     const uid = siteOwner.uid;
     const generateShortUrl = false;
-
-    // Check if user is allowed to create conversations
-    const isAllowed = await isUserAllowedToCreateConversations(uid);
-    if (!isAllowed) {
-      throw new Error('polis_err_user_not_allowed');
-    }
 
     // Prepare conversation data
     const conversationData = {
@@ -793,11 +843,32 @@ async function getOneConversation(zid, uid, lang) {
   }
 }
 
+/**
+ * Get course ID from a course invite code
+ * @param {string} courseInvite - The course invite code
+ * @returns {Promise<Object>} - Object containing the course_id
+ */
+async function getCourseIdFromInvite(courseInvite) {
+  try {
+    const result = await queryP_readOnly('select course_id from courses where course_invite = ($1);', [courseInvite]);
+
+    if (!result || !result.length) {
+      throw new Error('polis_err_course_not_found');
+    }
+
+    return result[0];
+  } catch (err) {
+    logger.error('Error getting course ID from invite', { error: err, courseInvite });
+    throw err;
+  }
+}
+
 export {
   appendImplicitConversationParams,
   createConversation,
   generateAndRegisterZinvite,
   getConversationHasMetadata,
+  getCourseIdFromInvite,
   getConversationInfo,
   getConversationInfoByConversationId,
   getConversationPreloadInfo,
@@ -810,7 +881,6 @@ export {
   getPageId,
   getZidFromConversationId,
   initializeImplicitConversation,
-  isUserAllowedToCreateConversations,
   processConversations,
   sendCreatedEmail,
   setConversationActive,

@@ -1,4 +1,16 @@
+import Config from '../config.js';
 import { pgQueryP_readOnly } from './pg-query.js';
+
+const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
+
+/**
+ * Check if a user is a developer (admin)
+ * @param {number} uid - The user ID
+ * @returns {boolean} - True if the user is a developer
+ */
+function isPolisDev(uid) {
+  return polisDevs.indexOf(uid) >= 0;
+}
 
 /**
  * Check if a user is a moderator for a conversation at the database level
@@ -11,15 +23,20 @@ async function isModerator(zid, uid) {
     return false;
   }
 
-  const rows = await pgQueryP_readOnly('SELECT * FROM conversations WHERE zid = $1 AND owner = $2;', [zid, uid]);
-
-  if (rows?.length) {
+  // Check if user is a developer (admin)
+  const isDevUser = isPolisDev(uid);
+  if (isDevUser) {
     return true;
   }
 
-  const moderatorRows = await pgQueryP_readOnly('SELECT * FROM moderators WHERE zid = $1 AND uid = $2;', [zid, uid]);
+  // Check if the user is from the same site as the conversation owner
+  // This replicates the original query logic
+  const rows = await pgQueryP_readOnly(
+    'SELECT COUNT(*) FROM conversations WHERE owner IN (SELECT uid FROM users WHERE site_id = (SELECT site_id FROM users WHERE uid = $2)) AND zid = $1;',
+    [zid, uid]
+  );
 
-  return moderatorRows?.length > 0;
+  return rows[0].count >= 1;
 }
 
-export { isModerator };
+export { isModerator, isPolisDev };

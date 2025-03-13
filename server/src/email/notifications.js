@@ -1,11 +1,11 @@
 import { encode } from 'html-entities';
 import _ from 'underscore';
 import Config from '../config.js';
+import { isPolisDev } from '../db/authorization.js';
 import * as pg from '../db/pg-query.js';
 import { getNumberOfCommentsRemaining } from '../services/comment/commentService.js';
 import { getConversationInfo } from '../services/conversation/conversationService.js';
 import { getZinvite } from '../services/zinvite/zinviteService.js';
-import { isPolisDev } from '../utils/common.js';
 import { HMAC_SIGNATURE_PARAM_NAME, createHmacForQueryParams } from '../utils/hmac.js';
 import logger from '../utils/logger.js';
 import { paramsToStringSortedByName } from '../utils/parameter.js';

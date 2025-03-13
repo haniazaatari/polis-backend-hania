@@ -4,6 +4,7 @@ import logger from '../../utils/logger.js';
 import { getPca } from '../../utils/pca.js';
 import { getConversationInfo } from '../conversation/conversationService.js';
 import { isTranslationEnabled, translateString } from '../translation/translationService.js';
+import { pgQueryP_readOnly } from '../../db/pg-query.js';
 
 /**
  * Get a comment by ID
@@ -219,45 +220,65 @@ function selectProbabilistically(comments, priorities, _nTotal, _nRemaining) {
  * Get the next prioritized comment for a participant
  * @param {number} zid - Conversation ID
  * @param {number} pid - Participant ID
- * @param {Array} withoutTids - Comment IDs to exclude
- * @param {boolean} include_social - Include social information
- * @returns {Promise<Object|null>} - Next comment or null if none available
+ * @param {Array} withoutTids - Array of comment IDs to exclude
+ * @param {boolean} include_social - Whether to include social data
+ * @returns {Promise<Object|null>} - The next comment or null if no more comments
  */
 async function getNextPrioritizedComment(zid, pid, withoutTids, include_social) {
-  const params = {
-    zid: zid,
-    not_voted_by_pid: pid,
-    include_social: include_social
-  };
-
-  if (!_.isUndefined(withoutTids) && withoutTids.length) {
-    params.withoutTids = withoutTids;
-  }
-
+    const params = {
+      zid: zid,
+      not_voted_by_pid: pid,
+      include_social: include_social
+    };
+    
+    if (!_.isUndefined(withoutTids) && withoutTids.length) {
+      params.withoutTids = withoutTids;
+    }
+    
   try {
     const [comments, math, numberOfCommentsRemainingRows] = await Promise.all([
       getCommentsList(params),
       getPca(zid, 0),
       getNumberOfCommentsRemaining(zid, pid)
     ]);
-
+    
     logger.debug('getNextPrioritizedComment intermediate results:', {
       zid,
       pid,
       numberOfCommentsRemainingRows
     });
-
+    
     if (!comments || !comments.length) {
       return null;
     }
-
+    
+    // Handle case when no rows returned or row data is incomplete
     if (!numberOfCommentsRemainingRows || !numberOfCommentsRemainingRows.length) {
+      // Check if there are any comments at all by directly querying
+      const commentCount = await pgQueryP_readOnly(
+        'SELECT COUNT(*) as count FROM comments WHERE zid = $1 AND not deleted',
+        [zid]
+      );
+      
+      if (commentCount?.length && Number.parseInt(commentCount[0].count, 10) <= 1) {
+        // There's only one or zero comments in the conversation
+        logger.info(`Only ${commentCount[0].count} comment(s) in conversation ${zid}. No 'next' comment available.`);
+        return null;
+      }
+      
+      // Throw original style error but with more context
       throw new Error(`polis_err_getNumberOfCommentsRemaining_${zid}_${pid}`);
     }
-
+    
     const commentPriorities = math ? math.asPOJO['comment-priorities'] || {} : {};
     const nTotal = Number(numberOfCommentsRemainingRows[0].total);
     const nRemaining = Number(numberOfCommentsRemainingRows[0].remaining);
+    
+    // If there are no comments remaining, return null without error
+    if (nRemaining <= 0) {
+      return null;
+    }
+    
     const c = selectProbabilistically(comments, commentPriorities, nTotal, nRemaining);
     c.remaining = nRemaining;
     c.total = nTotal;
@@ -269,18 +290,24 @@ async function getNextPrioritizedComment(zid, pid, withoutTids, include_social) 
 }
 
 /**
- * Get the next comment for a participant, with translations if needed
+ * Get the next comment for a participant
  * @param {number} zid - Conversation ID
  * @param {number} pid - Participant ID
- * @param {Array} withoutTids - Comment IDs to exclude
- * @param {boolean} include_social - Include social information
+ * @param {Array} withoutTids - Array of comment IDs to exclude
+ * @param {boolean} include_social - Whether to include social data
  * @param {string} lang - Language code
- * @returns {Promise<Object|null>} - Next comment or null if none available
+ * @returns {Promise<Object|null>} - The next comment or null if no more comments
  */
 async function getNextComment(zid, pid, withoutTids, include_social, lang) {
   try {
     const c = await getNextPrioritizedComment(zid, pid, withoutTids, include_social);
+    
+    // If no comment found, return null
+    if (!c) {
+      return null;
+    }
 
+    // Add translations if language specified
     if (lang && c) {
       const firstTwoCharsOfLang = lang.substr(0, 2);
       const translations = await commentRepository.getCommentTranslations(zid, c.tid);

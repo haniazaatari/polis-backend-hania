@@ -1,7 +1,8 @@
 import { isModerator } from '../../db/authorization.js';
+import { isPolisDev } from '../../db/authorization.js';
 import * as conversationRepository from '../../repositories/conversation/conversationRepository.js';
 import * as participantModerationRepository from '../../repositories/participant/participantModerationRepository.js';
-import { isPolisDev, removeNullOrUndefinedProperties } from '../../utils/common.js';
+import { removeNullOrUndefinedProperties } from '../../utils/common.js';
 import logger from '../../utils/logger.js';
 import { pullXInfoIntoSubObjects } from '../../utils/participants.js';
 

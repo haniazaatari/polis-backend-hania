@@ -6,7 +6,7 @@ import { queryP as pgQueryP } from '../db/pg-query.js';
 import logger from '../utils/logger.js';
 
 const serverUrl = Config.getServerNameWithProtocol();
-const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
+
 const akismet = akismetLib.client({
   blog: serverUrl,
   apiKey: Config.akismetAntispamApiKey
@@ -14,15 +14,11 @@ const akismet = akismetLib.client({
 
 akismet.verifyKey((_err, verified) => {
   if (verified) {
-    logger.debug('Akismet: API key successfully verified.');
+    logger.silly('Akismet: API key successfully verified.');
   } else {
-    logger.debug('Akismet: Unable to verify API key.');
+    logger.silly('Akismet: Unable to verify API key.');
   }
 });
-
-function isPolisDev(uid) {
-  return polisDevs.indexOf(uid) >= 0;
-}
 
 function strToHex(str) {
   let hex;
@@ -107,7 +103,6 @@ function removeNullOrUndefinedProperties(obj) {
 export {
   strToHex,
   hexToStr,
-  isPolisDev,
   doAddDataExportTask,
   escapeLiteral,
   isDuplicateKey,

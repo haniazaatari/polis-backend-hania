@@ -98,6 +98,38 @@ async function handleUpdateConversation(req, res) {
  */
 async function handleGetConversations(req, res) {
   try {
+    // If course_invite is provided, get the course_id
+    if (req.p.course_invite) {
+      try {
+        const courseResult = await conversationService.getCourseIdFromInvite(req.p.course_invite);
+        req.p.course_id = courseResult.course_id;
+      } catch (err) {
+        logger.error('Error getting course id from invite', err);
+        // Continue without course_id if lookup fails
+      }
+    }
+
+    // Check authentication
+    if (!req.p.uid && !req.p.context) {
+      return fail(res, 403, 'polis_err_need_auth');
+    }
+
+    // If zid is provided, get a single conversation
+    if (req.p.zid) {
+      try {
+        // Get language from cookies if available
+        const lang = cookieService.getLanguage(req.cookies, req.headers);
+        const conversation = await conversationService.getOneConversation(req.p.zid, req.p.uid, lang);
+
+        // Return the single conversation response
+        return res.status(200).json(conversation);
+      } catch (err) {
+        logger.error('Error getting single conversation', err);
+        return fail(res, 500, 'polis_err_get_conversations_2', err);
+      }
+    }
+
+    // Otherwise, get multiple conversations
     const options = {
       uid: req.p.uid,
       zid: req.p.zid,
@@ -117,9 +149,19 @@ async function handleGetConversations(req, res) {
       limit: req.p.limit
     };
 
+    // Log the options to help debug
+    logger.debug('Conversation options:', {
+      uid: options.uid,
+      zid: options.zid,
+      cookies: req.cookies,
+      headers: req.headers,
+      p: req.p
+    });
+
     const conversations = await conversationService.getConversations(options, req);
     res.status(200).json(conversations);
   } catch (err) {
+    logger.error('Error getting conversations', err);
     fail(res, 500, 'polis_err_get_conversations', err);
   }
 }
@@ -298,17 +340,6 @@ async function handleGetIimConversation(req, res) {
  */
 async function handleCreateConversation(req, res) {
   try {
-    // Check if user is allowed to create conversations
-    const isAllowed = await conversationService.isUserAllowedToCreateConversations(req.p.uid);
-    if (!isAllowed) {
-      return fail(
-        res,
-        403,
-        'polis_err_add_conversation_not_enabled',
-        new Error('polis_err_add_conversation_not_enabled')
-      );
-    }
-
     // Prepare conversation data
     const conversationData = {
       owner: req.p.uid,
@@ -325,7 +356,6 @@ async function handleCreateConversation(req, res) {
       strict_moderation: req.p.strict_moderation,
       context: req.p.context || null,
       owner_sees_participation_stats: !!req.p.owner_sees_participation_stats,
-      ownerXid: req.p.ownerXid,
       // Add auth fields with defaults
       auth_needed_to_vote:
         req.p.auth_needed_to_vote !== undefined ? req.p.auth_needed_to_vote : DEFAULTS.auth_needed_to_vote,
@@ -341,11 +371,6 @@ async function handleCreateConversation(req, res) {
       req.p.conversation_id,
       req.p.short_url
     );
-
-    // Send created email if requested
-    if (req.p.send_created_email) {
-      await conversationService.sendCreatedEmail(req.p.uid, result.zid);
-    }
 
     // Return success with URL and ZID
     res.status(200).json({
