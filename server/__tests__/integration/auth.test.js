@@ -1,15 +1,13 @@
-import { describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
 import dotenv from 'dotenv';
 import request from 'supertest';
+import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 dotenv.config();
 
 const API_PORT = process.env.API_SERVER_PORT || 5000;
 const API_URL = process.env.API_URL || `http://localhost:${API_PORT}`;
 const API_PREFIX = '/api/v3';
-
-// Increase timeout for this test suite
-jest.setTimeout(5000);
 
 // Helper to generate random test data
 function generateTestUser() {
@@ -26,9 +24,23 @@ function generateTestUser() {
 describe('Authentication', () => {
   // Store cookies between tests for auth flow
   let authCookies = [];
+  let client = null;
 
   // Store test user data for register-login flow
   const testUser = generateTestUser();
+
+  // Start a transaction before each test
+  beforeEach(async () => {
+    client = await startTransaction();
+  });
+
+  // Rollback the transaction after each test
+  afterEach(async () => {
+    if (client) {
+      await rollbackTransaction(client);
+      client = null;
+    }
+  });
 
   // Helper to extract cookies from response
   function extractCookiesFromResponse(response) {
@@ -151,8 +163,6 @@ describe('Authentication', () => {
   describe('Register-Login Flow', () => {
     it('should register a new user and then login with the same credentials', async () => {
       // Step 1: Register a new user
-      console.log('Test user:', testUser);
-
       const registerResponse = await request(API_URL).post(`${API_PREFIX}/auth/new`).send({
         email: testUser.email,
         password: testUser.password,
@@ -160,8 +170,6 @@ describe('Authentication', () => {
         hname: testUser.hname,
         gatekeeperTosPrivacy: true
       });
-
-      console.log('Registration response:', registerResponse.status, registerResponse.body);
 
       expect(registerResponse.status).toBe(200);
       expect(registerResponse.body).toHaveProperty('uid');
@@ -176,8 +184,6 @@ describe('Authentication', () => {
         password: testUser.password
       });
 
-      console.log('Login response:', loginResponse.status, loginResponse.body);
-
       // This is the key test - if login works immediately after registration
       expect(loginResponse.status).toBe(200);
       expect(loginResponse.body).toHaveProperty('uid', testUser.uid);
@@ -191,12 +197,6 @@ describe('Authentication', () => {
 
   describe('Complete Auth Flow', () => {
     it('should access a protected resource with valid auth', async () => {
-      // Skip this test if we don't have auth cookies
-      if (authCookies.length === 0) {
-        console.log('Skipping protected resource test - no auth cookies');
-        return;
-      }
-
       // Using /users/me as a protected endpoint that requires auth
       const req = request(API_URL).get(`${API_PREFIX}/users/me`).set('Content-Type', 'application/json');
 
@@ -204,7 +204,6 @@ describe('Authentication', () => {
       attachCookiesToRequest(req);
 
       const response = await req;
-      console.log('Protected resource response:', response.status);
 
       // The actual status code will depend on the endpoint
       // Just checking that we don't get a 401/403
@@ -212,12 +211,6 @@ describe('Authentication', () => {
     });
 
     it('should successfully log out', async () => {
-      // Skip this test if we don't have auth cookies
-      if (authCookies.length === 0) {
-        console.log('Skipping logout test - no auth cookies');
-        return;
-      }
-
       const req = request(API_URL)
         .post(`${API_PREFIX}/auth/deregister`)
         .set('Content-Type', 'application/json')
