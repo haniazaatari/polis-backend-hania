@@ -25,7 +25,7 @@ export function fetchAndCacheLatestPcaData() {
     ])
       .then((rows) => {
         if (!rows || !rows.length) {
-          logger.debug('mathpoll done');
+          logger.silly('mathpoll done');
           setTimeout(pollForLatestPcaData, waitTime());
           return;
         }
@@ -37,7 +37,7 @@ export function fetchAndCacheLatestPcaData() {
           if (row.caching_tick) {
             item.caching_tick = Number(row.caching_tick);
           }
-          logger.debug('mathpoll updating', {
+          logger.silly('mathpoll updating', {
             caching_tick: item.caching_tick,
             zid: row.zid
           });
@@ -67,7 +67,7 @@ export function getPca(zid, math_tick) {
   const cachedPOJO = cached?.asPOJO;
   if (cachedPOJO) {
     if (cachedPOJO.math_tick <= (math_tick || 0)) {
-      logger.debug('math was cached but not new', {
+      logger.silly('math was cached but not new', {
         zid,
         cached_math_tick: cachedPOJO.math_tick,
         query_math_tick: math_tick
@@ -75,10 +75,10 @@ export function getPca(zid, math_tick) {
       return Promise.resolve(undefined);
     }
 
-    logger.debug('math from cache', { zid, math_tick });
+    logger.silly('math from cache', { zid, math_tick });
     return Promise.resolve(cached);
   }
-  logger.debug('mathpoll cache miss', { zid, math_tick });
+  logger.silly('mathpoll cache miss', { zid, math_tick });
   const queryStart = Date.now();
   return pgQueryP_readOnly('select * from math_main where zid = ($1) and math_env = ($2);', [zid, Config.mathEnv]).then(
     (rows) => {
@@ -87,7 +87,7 @@ export function getPca(zid, math_tick) {
       addInRamMetric('pcaGetQuery', queryDuration);
 
       if (!rows || !rows.length) {
-        logger.debug('mathpoll related; after cache miss, unable to find data for', {
+        logger.silly('mathpoll related; after cache miss, unable to find data for', {
           zid,
           math_tick,
           math_env: Config.mathEnv
@@ -100,13 +100,13 @@ export function getPca(zid, math_tick) {
       }
 
       if (item.math_tick <= (math_tick || 0)) {
-        logger.debug('after cache miss, unable to find newer item', {
+        logger.silly('after cache miss, unable to find newer item', {
           zid,
           math_tick
         });
         return undefined;
       }
-      logger.debug('after cache miss, found item, adding to cache', {
+      logger.silly('after cache miss, found item, adding to cache', {
         zid,
         math_tick
       });

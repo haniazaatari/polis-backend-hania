@@ -22,11 +22,9 @@
     "format": "biome format --write",
     "check": "biome check --max-diagnostics=none",
     "check:fix": "biome check --write --unsafe",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
-    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
-    "test:unit": "NODE_OPTIONS=--experimental-vm-modules jest --testPathIgnorePatterns=integration",
-    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest --testPathPattern=integration"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles --forceExit",
+    "test:unit": "npm test -- --testPathIgnorePatterns=integration",
+    "test:integration": "npm test -- --testPathPattern=integration"
   },
   "repository": {
     "type": "git",

@@ -57,8 +57,12 @@
     },
     {
       "include": ["__tests__/**"],
-      "javascript": {
-        "globals": ["describe", "it", "test", "expect", "beforeEach", "afterEach", "beforeAll", "afterAll", "jest"]
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUndeclaredDependencies": "off"
+          }
+        }
       }
     }
   ],

@@ -111,14 +111,38 @@ function buildCallback(config) {
   const required = config.required;
   const defaultVal = config.defaultVal;
   const extractor = config.extractor;
+
   if (typeof assigner !== 'function') {
     throw new Error('bad arg for assigner');
   }
   if (typeof parserWhichReturnsPromise !== 'function') {
     throw new Error('bad arg for parserWhichReturnsPromise');
   }
+
   return (req, res, next) => {
+    logger.debug(`Parameter middleware for ${name}:`, {
+      body: req.body,
+      headers: req.headers,
+      method: req.method
+    });
+
     const val = extractor(req, name);
+    logger.debug(`Extracted value for ${name}:`, {
+      value: val,
+      type: typeof val,
+      body_type: typeof req.body
+    });
+
+    // Initialize req.p if it doesn't exist
+    req.p = req.p || {};
+
+    // Handle explicit null values for non-required parameters
+    if (val === null && !required) {
+      logger.debug(`Setting null value for ${name}`);
+      assigner(req, name, null);
+      return next();
+    }
+
     if (!_.isUndefined(val) && !_.isNull(val)) {
       parserWhichReturnsPromise(val)
         .then(
@@ -135,12 +159,17 @@ function buildCallback(config) {
           }
         )
         .catch((err) => {
+          logger.error(`Unexpected error parsing ${name}:`, err);
           fail(res, 400, 'polis_err_misc', err);
           return;
         });
     } else if (!required) {
+      logger.debug(`Using default value for ${name}:`, defaultVal);
       if (typeof defaultVal !== 'undefined') {
         assigner(req, name, defaultVal);
+      } else {
+        // For non-required parameters with no default, explicitly set undefined
+        assigner(req, name, undefined);
       }
       next();
     } else {

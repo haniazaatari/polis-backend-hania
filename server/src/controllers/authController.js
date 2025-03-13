@@ -187,26 +187,41 @@ async function deregister(req, res) {
   try {
     const token = req.cookies[COOKIES.TOKEN];
 
-    // Clear cookies
+    // Validate req.p exists before using it
+    if (!req.p) {
+      logger.error('req.p is undefined in deregister');
+      return fail(res, 500, 'parameter middleware failed');
+    }
+
+    // Clear cookies first
     clearCookies(req, res);
 
-    // If no token, just return success
+    // If no token, handle based on showPage
     if (!token) {
       if (!req.p.showPage) {
         return res.status(200).end();
       }
-      return;
+      // If showPage is set but no token, return 401
+      return res.status(401).json({ error: 'polis_err_auth_token_not_supplied' });
     }
 
-    // End the session
-    await endSession(token);
+    try {
+      // End the session
+      await endSession(token);
+    } catch (sessionError) {
+      logger.error('Failed to end session:', sessionError);
+      return fail(res, 500, "couldn't end session", sessionError);
+    }
 
-    // Return success
+    // Return success if no showPage
     if (!req.p.showPage) {
+      res.status(200).end();
+    } else {
+      // If showPage is set, return 200 since we successfully logged out
       res.status(200).end();
     }
   } catch (error) {
-    logger.error('Error in deregister controller', error);
+    logger.error('Error in deregister controller:', error);
     fail(res, 500, "couldn't end session", error);
   }
 }

@@ -243,7 +243,7 @@ function doNotificationBatch() {
  * Start the notification processing loop
  */
 function doNotificationLoop() {
-  logger.debug('doNotificationLoop');
+  logger.silly('doNotificationLoop');
   doNotificationBatch().then(() => {
     setTimeout(doNotificationLoop, 10000);
   });
