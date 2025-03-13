@@ -48,7 +48,7 @@ const Config = {
   databaseSSL: isTrue(process.env.DATABASE_SSL),
   databaseURL: process.env.DATABASE_URL,
   dynamoDbEndpoint: process.env.DYNAMODB_ENDPOINT || null,
-  emailTransportTypes: process.env.EMAIL_TRANSPORT_TYPES || null,
+  emailTransportTypes: process.env.EMAIL_TRANSPORT_TYPES || 'maildev',
   encryptionPassword: process.env.ENCRYPTION_PASSWORD_00001,
   geminiApiKey: process.env.GEMINI_API_KEY || null,
   googleApiKey: process.env.GOOGLE_API_KEY || null,

@@ -24,7 +24,9 @@
 
 - Code has been rewritten in JavaScript from original TypeScript, with lots of restructuring.
 - See RESTRUCTURING.md for more details on that effort.
-- The original TypeScript "source of truth" can be inspected in the git branch `edge`.
+- The original JavaScript "source of truth" can be found in the legacy/ folder (There Be Dragons!).
+- A copy of the db schema can be found in the legacy/schema.sql file.
+- The majority of the functionality is preserved, but we intentionally removed twitter and facebook integration.
 
 ## Testing
 
