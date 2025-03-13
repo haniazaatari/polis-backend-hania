@@ -19,12 +19,31 @@ async function login(req, res) {
   try {
     const { email, password } = req.p;
 
+    logger.debug('Login attempt:', { email, passwordLength: password?.length });
+
+    // Get user by email first to log the UID
+    const user = await getUserByEmail(email);
+    if (user) {
+      logger.debug(`Found user for email ${email}: uid=${user.uid}`);
+    } else {
+      logger.debug(`No user found for email ${email}`);
+    }
+
     // Authenticate user
     const result = await authenticateWithCredentials(email, password);
 
-    if (result.success) {
+    logger.debug('Authentication result:', {
+      success: result.success,
+      isAuthenticated: result.isAuthenticated,
+      hasUid: !!result.uid,
+      error: result.error
+    });
+
+    if (result.success || result.isAuthenticated) {
       // Start session and add cookies
+      logger.debug(`Starting session for user ${result.uid}`);
       await startSessionAndAddCookies(result.uid, res);
+      logger.debug(`Session started for user ${result.uid}`);
 
       // Return user info
       res.status(200).json({
@@ -33,6 +52,7 @@ async function login(req, res) {
         hname: result.hname
       });
     } else {
+      logger.debug(`Login failed: ${result.error}`);
       fail(res, 401, 'polis_err_login_invalid_credentials');
     }
   } catch (error) {
@@ -121,9 +141,11 @@ async function register(req, res) {
     // Generate and store password hash
     logger.debug('Generating password hash...');
     const hashedPassword = await generateHashedPassword(password);
-    logger.debug('Storing password hash...');
+    logger.debug(`Generated password hash for user ${user.uid}: ${hashedPassword.substring(0, 10)}...`);
+
+    logger.debug('Storing password hash in auth repository...');
     await storePasswordHash(user.uid, hashedPassword);
-    logger.debug('Password hash stored');
+    logger.debug('Password hash stored in auth repository');
 
     // Start session
     logger.debug('Creating session...');

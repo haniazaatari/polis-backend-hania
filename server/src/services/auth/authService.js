@@ -1,8 +1,9 @@
+import * as authRepository from '../../repositories/auth/authRepository.js';
 import * as userRepository from '../../repositories/user/userRepository.js';
 import logger from '../../utils/logger.js';
 import * as conversationService from '../conversation/conversationService.js';
-import { getUidForApiKey } from '../user/userService.js';
 import * as userService from '../user/userService.js';
+import { getUidForApiKey } from '../user/userService.js';
 import { COOKIES } from './constants.js';
 import { verifyPassword } from './passwordService.js';
 import { getUserIdForToken } from './tokenService.js';
@@ -120,31 +121,40 @@ async function authenticateUser(req) {
  */
 async function authenticateWithCredentials(email, password) {
   try {
+    logger.debug(`Authenticating with credentials for email: ${email}`);
+
     // Get user by email
     const user = await userRepository.getUserByEmail(email);
     if (!user) {
-      return { isAuthenticated: false, error: 'user_not_found' };
+      logger.debug(`Authentication failed: user not found for email ${email}`);
+      return { success: false, error: 'user_not_found' };
     }
 
-    // Check if user is verified
-    if (!user.is_verified) {
-      return { isAuthenticated: false, error: 'user_not_verified' };
-    }
+    logger.debug(`Found user for email ${email}: uid=${user.uid}`);
 
-    // Get password hash
-    const hashedPassword = await userRepository.getPasswordHash(user.uid);
+    // Get password hash from auth repository (jianiuevyew table)
+    logger.debug(`Getting password hash from auth repository for user ${user.uid}`);
+    const hashedPassword = await authRepository.getPasswordHash(user.uid);
+
     if (!hashedPassword) {
-      return { isAuthenticated: false, error: 'password_not_set' };
+      logger.debug(`No password hash found for user ${user.uid}`);
+      return { success: false, error: 'password_not_set' };
     }
+
+    logger.debug(`Found password hash for user ${user.uid}, verifying password`);
 
     // Verify password
     const isPasswordValid = await verifyPassword(password, hashedPassword);
     if (!isPasswordValid) {
-      return { isAuthenticated: false, error: 'invalid_password' };
+      logger.debug(`Authentication failed: invalid password for user ${user.uid}`);
+      return { success: false, error: 'invalid_password' };
     }
 
     // Authentication successful
+    logger.debug(`Authentication successful for user ${user.uid}`);
+
     return {
+      success: true,
       isAuthenticated: true,
       uid: user.uid,
       email: user.email,

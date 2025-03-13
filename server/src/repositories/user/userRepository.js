@@ -84,40 +84,6 @@ async function createDummyUser() {
 }
 
 /**
- * Update user password
- * @param {number} uid - The user ID
- * @param {string} pwhash - The new hashed password
- * @returns {Promise<Object>} - The updated user
- */
-async function updatePassword(uid, pwhash) {
-  const results = await queryP('UPDATE users SET pwhash = ($1) WHERE uid = ($2) RETURNING *;', [pwhash, uid]);
-
-  return results[0];
-}
-
-/**
- * Get password hash for user
- * @param {number} uid - The user ID
- * @returns {Promise<string|null>} - The password hash or null if not found
- */
-async function getPasswordHash(uid) {
-  const results = await queryP_readOnly('SELECT pwhash FROM users WHERE uid = ($1);', [uid]);
-
-  return results.length ? results[0].pwhash : null;
-}
-
-/**
- * Mark a user as verified
- * @param {number} uid - The user ID
- * @returns {Promise<Object>} - The updated user
- */
-async function markUserAsVerified(uid) {
-  const results = await queryP('UPDATE users SET email_verified = TRUE WHERE uid = ($1) RETURNING *;', [uid]);
-
-  return results[0];
-}
-
-/**
  * Update a user's information
  * @param {number} uid - The user ID
  * @param {Object} fields - Fields to update
@@ -128,13 +94,4 @@ async function updateUser(uid, fields) {
   return queryP(q.toString(), []);
 }
 
-export {
-  getUserByEmail,
-  getUserById,
-  createUser,
-  createDummyUser,
-  updatePassword,
-  getPasswordHash,
-  markUserAsVerified,
-  updateUser
-};
+export { getUserByEmail, getUserById, createUser, createDummyUser, updateUser };

@@ -40,6 +40,17 @@ COPY . .
 
 CMD ["npm", "run", "dev"]
 
+# Define the debug build
+
+FROM base AS debug
+
+ENV NODE_ENV=development
+
+RUN npm ci --production=false
+
+COPY . .
+
+CMD ["npm", "run", "debug"]
 
 # Define the production build
 

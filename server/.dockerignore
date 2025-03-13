@@ -3,6 +3,7 @@
 .google_creds_temp
 coverage/
 dist/
+legacy/
 logs/
 node_modules/
 npm-debug.log*

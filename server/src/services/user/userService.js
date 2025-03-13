@@ -2,7 +2,7 @@ import * as pg from '../../db/pg-query.js';
 import * as userRepository from '../../repositories/user/userRepository.js';
 import * as xidRepository from '../../repositories/xid/xidRepository.js';
 import logger from '../../utils/logger.js';
-import { generateHashedPassword } from '../auth/passwordService.js';
+import { generateHashedPassword, updatePassword } from '../auth/passwordService.js';
 import * as tokenService from '../auth/tokenService.js';
 import * as emailService from '../email/emailService.js';
 
@@ -95,11 +95,8 @@ async function resetPassword(token, password) {
       return { success: false, error: 'polis_err_reset_invalid_token' };
     }
 
-    // Hash new password
-    const pwhash = await generateHashedPassword(password);
-
-    // Update password
-    await userRepository.updatePassword(uid, pwhash);
+    // Update password using passwordService
+    await updatePassword(uid, password);
 
     // Clear token
     await tokenService.clearPasswordResetToken(token);
@@ -108,20 +105,6 @@ async function resetPassword(token, password) {
   } catch (error) {
     logger.error('Error resetting password', error);
     return { success: false, error: 'polis_err_reset_failed' };
-  }
-}
-
-/**
- * Mark a user as verified
- * @param {number} uid - The user ID
- * @returns {Promise<Object>} - The updated user
- */
-async function markUserAsVerified(uid) {
-  try {
-    return await userRepository.markUserAsVerified(uid);
-  } catch (error) {
-    logger.error('Error marking user as verified', error);
-    throw error;
   }
 }
 
@@ -301,7 +284,6 @@ async function updateUser(uid, fields) {
 export {
   createUser,
   resetPassword,
-  markUserAsVerified,
   getUserInfoForUid2,
   getUser,
   getUserByEmail,

@@ -34,3 +34,14 @@
 - Test suite assumes the database is running locally and accessible at `localhost:5432`.
 - Some tests are EXPECTED TO FAIL, because the restructuring is not yet validated.
 - Tests should focus on API surface area, and use the database itself to validate as needed.
+- Server logs can be viewed with `docker compose logs`.
+
+## Bugs
+
+Bugs are to be expected as a result of the restructuring as well as carryover from the legacy codebase.
+Perceived bugs (ie test failures) may be the result of one or more of the following:
+
+- The test is expected to fail as part of the restructuring effort.
+- The test is failing because of a new bug introduced as part of the restructuring effort.
+- The test is failing because of a bug in the legacy codebase, and the bug has not yet been fixed in the restructured code.
+- Incorrect test setup or assumptions.

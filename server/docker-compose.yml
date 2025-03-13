@@ -2,7 +2,7 @@ services:
   polis-server:
     build:
       context: .
-      target: dev
+      target: debug
       args:
         NODE_ENV: development
     volumes:
