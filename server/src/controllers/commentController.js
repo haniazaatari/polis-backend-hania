@@ -189,6 +189,24 @@ async function handlePostComments(req, res) {
           createdTime = voteResult.vote.created;
         }
       } catch (err) {
+        if (err === 'polis_err_param_pid_invalid' || err === 'polis_err_param_tid_invalid') {
+          logger.error('Vote on comment create failed with invalid parameters', {
+            error: err,
+            uid,
+            pid: finalPid,
+            zid,
+            tid
+          });
+        } else {
+          logger.error('Error creating vote on comment', {
+            error: err,
+            uid,
+            pid: finalPid,
+            zid,
+            tid,
+            vote
+          });
+        }
         fail(res, 500, 'polis_err_vote_on_create', err);
         return;
       }

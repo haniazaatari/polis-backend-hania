@@ -58,11 +58,18 @@ async function handleGetParticipationInit(req, res) {
       acceptLanguage
     };
 
+    logger.debug('Calling getParticipationInit with params:', JSON.stringify(params, null, 2));
+
     // Get participation initialization data
     const result = await getParticipationInit(params);
     res.status(200).json(result);
   } catch (err) {
-    logger.error('Error in handleGetParticipationInit', { error: err });
+    logger.error('Error in handleGetParticipationInit', {
+      error: err,
+      message: err.message,
+      stack: err.stack,
+      params: JSON.stringify(req.p)
+    });
     fail(res, 500, 'polis_err_get_participationInit', err);
   }
 }

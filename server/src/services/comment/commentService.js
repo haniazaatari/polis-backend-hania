@@ -4,7 +4,6 @@ import logger from '../../utils/logger.js';
 import { getPca } from '../../utils/pca.js';
 import { getConversationInfo } from '../conversation/conversationService.js';
 import { isTranslationEnabled, translateString } from '../translation/translationService.js';
-import { pgQueryP_readOnly } from '../../db/pg-query.js';
 
 /**
  * Get a comment by ID
@@ -225,60 +224,48 @@ function selectProbabilistically(comments, priorities, _nTotal, _nRemaining) {
  * @returns {Promise<Object|null>} - The next comment or null if no more comments
  */
 async function getNextPrioritizedComment(zid, pid, withoutTids, include_social) {
-    const params = {
-      zid: zid,
-      not_voted_by_pid: pid,
-      include_social: include_social
-    };
-    
-    if (!_.isUndefined(withoutTids) && withoutTids.length) {
-      params.withoutTids = withoutTids;
-    }
-    
+  const params = {
+    zid: zid,
+    not_voted_by_pid: pid,
+    include_social: include_social
+  };
+
+  if (!_.isUndefined(withoutTids) && withoutTids.length) {
+    params.withoutTids = withoutTids;
+  }
+
   try {
+    // Handle cases where pid is invalid:
+    // - undefined or null (not provided)
+    // - negative (invalid values)
+    if (pid === null || pid === undefined || pid < 0) {
+      logger.debug(`getNextPrioritizedComment: pid is ${pid}, returning null`);
+      return null;
+    }
+
     const [comments, math, numberOfCommentsRemainingRows] = await Promise.all([
       getCommentsList(params),
       getPca(zid, 0),
       getNumberOfCommentsRemaining(zid, pid)
     ]);
-    
-    logger.debug('getNextPrioritizedComment intermediate results:', {
-      zid,
-      pid,
-      numberOfCommentsRemainingRows
-    });
-    
+
     if (!comments || !comments.length) {
       return null;
     }
-    
-    // Handle case when no rows returned or row data is incomplete
+
     if (!numberOfCommentsRemainingRows || !numberOfCommentsRemainingRows.length) {
-      // Check if there are any comments at all by directly querying
-      const commentCount = await pgQueryP_readOnly(
-        'SELECT COUNT(*) as count FROM comments WHERE zid = $1 AND not deleted',
-        [zid]
-      );
-      
-      if (commentCount?.length && Number.parseInt(commentCount[0].count, 10) <= 1) {
-        // There's only one or zero comments in the conversation
-        logger.info(`Only ${commentCount[0].count} comment(s) in conversation ${zid}. No 'next' comment available.`);
-        return null;
-      }
-      
-      // Throw original style error but with more context
       throw new Error(`polis_err_getNumberOfCommentsRemaining_${zid}_${pid}`);
     }
-    
+
     const commentPriorities = math ? math.asPOJO['comment-priorities'] || {} : {};
     const nTotal = Number(numberOfCommentsRemainingRows[0].total);
     const nRemaining = Number(numberOfCommentsRemainingRows[0].remaining);
-    
+
     // If there are no comments remaining, return null without error
     if (nRemaining <= 0) {
       return null;
     }
-    
+
     const c = selectProbabilistically(comments, commentPriorities, nTotal, nRemaining);
     c.remaining = nRemaining;
     c.total = nTotal;
@@ -301,7 +288,7 @@ async function getNextPrioritizedComment(zid, pid, withoutTids, include_social) 
 async function getNextComment(zid, pid, withoutTids, include_social, lang) {
   try {
     const c = await getNextPrioritizedComment(zid, pid, withoutTids, include_social);
-    
+
     // If no comment found, return null
     if (!c) {
       return null;

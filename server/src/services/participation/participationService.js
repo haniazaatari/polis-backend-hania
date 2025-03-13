@@ -104,6 +104,7 @@ async function getParticipationInit(params) {
   try {
     logger.info('getParticipationInit');
     const { zid, uid, pid, xid, owner_uid, conversation_id, lang } = params;
+    logger.debug(`getParticipationInit params: ${JSON.stringify(params)}`);
 
     // Helper functions to conditionally execute promises
     function ifConv(f, args) {
@@ -121,49 +122,69 @@ async function getParticipationInit(params) {
     }
 
     // Get all necessary data in parallel
-    const [user, ptpt, nextComment, conversation, votes, pca, famous] = await Promise.all([
-      getUser(uid, zid, xid, owner_uid),
-      ifConvAndAuth(getParticipant, [zid, uid]),
-      ifConv(getNextComment, [zid, pid, [], true, lang]),
-      ifConv(getOneConversation, [zid, uid, lang]),
-      ifConv(getVotesForSingleParticipant, [params]),
-      ifConv(getPca, [zid, -1]),
-      ifConv(doFamousQuery, [params])
-    ]);
+    try {
+      const [user, ptpt, nextComment, conversation, votes, pca, famous] = await Promise.all([
+        getUser(uid, zid, xid, owner_uid),
+        ifConvAndAuth(getParticipant, [zid, uid]),
+        ifConv(getNextComment, [zid, pid, [], true, lang]),
+        ifConv(getOneConversation, [zid, uid, lang]),
+        ifConv(getVotesForSingleParticipant, [params]),
+        ifConv(getPca, [zid, -1]),
+        ifConv(doFamousQuery, [params])
+      ]);
 
-    // Construct the response object
-    const result = {
-      user,
-      ptpt,
-      nextComment: nextComment || {},
-      conversation,
-      votes: votes || [],
-      pca: pca ? (pca.asJSON ? pca.asJSON : null) : null,
-      famous,
-      acceptLanguage: params.acceptLanguage
-    };
+      // Construct the response object
+      const result = {
+        user,
+        ptpt,
+        nextComment: nextComment || {},
+        conversation,
+        votes: votes || [],
+        pca: pca ? (pca.asJSON ? pca.asJSON : null) : null,
+        famous,
+        acceptLanguage: params.acceptLanguage
+      };
 
-    // Clean up sensitive or unnecessary data
-    if (result.conversation) {
-      result.conversation.zid = undefined;
-      result.conversation.conversation_id = conversation_id;
+      // If no conversation_id was provided, set conversation to undefined instead of null
+      // to match legacy behavior expected by tests
+      if (!conversation_id) {
+        result.conversation = undefined;
+      }
+      // Clean up sensitive or unnecessary data
+      else if (result.conversation) {
+        result.conversation.zid = undefined;
+        result.conversation.conversation_id = conversation_id;
+      }
+
+      if (result.ptpt) {
+        result.ptpt.zid = undefined;
+      }
+
+      for (let i = 0; i < result.votes.length; i++) {
+        result.votes[i].zid = undefined;
+      }
+
+      if (!_.isUndefined(pid)) {
+        result.nextComment.currentPid = pid;
+      }
+
+      return result;
+    } catch (err) {
+      logger.error('Error in Promise.all for getParticipationInit', {
+        error: err,
+        message: err.message,
+        stack: err.stack,
+        params: JSON.stringify(params)
+      });
+      throw err;
     }
-
-    if (result.ptpt) {
-      result.ptpt.zid = undefined;
-    }
-
-    for (let i = 0; i < result.votes.length; i++) {
-      result.votes[i].zid = undefined;
-    }
-
-    if (!_.isUndefined(pid)) {
-      result.nextComment.currentPid = pid;
-    }
-
-    return result;
   } catch (err) {
-    logger.error('Error getting participation init data', { error: err, params });
+    logger.error('Error getting participation init data', {
+      error: err,
+      message: err.message,
+      stack: err.stack,
+      params: JSON.stringify(params)
+    });
     throw err;
   }
 }

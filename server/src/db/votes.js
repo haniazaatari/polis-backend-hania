@@ -58,6 +58,15 @@ async function doVotesPost(_uid, pid, conv, tid, vote, weight, high_priority) {
  */
 async function votesPost(uid, pid, zid, tid, xid, vote, weight, high_priority) {
   try {
+    // Validate required parameters
+    if (pid === undefined || pid === null || pid < 0) {
+      throw 'polis_err_param_pid_invalid';
+    }
+
+    if (tid === undefined || tid === null || tid < 0) {
+      throw 'polis_err_param_tid_invalid';
+    }
+
     // Check if the conversation exists and is active
     const rows = await query_readOnly('SELECT * FROM conversations WHERE zid = ($1);', [zid]);
 
@@ -83,18 +92,6 @@ async function votesPost(uid, pid, zid, tid, xid, vote, weight, high_priority) {
     // Insert the vote
     return doVotesPost(uid, pid, conv, tid, vote, weight, high_priority);
   } catch (err) {
-    // Re-throw specific error codes
-    if (
-      typeof err === 'string' &&
-      (err === 'polis_err_unknown_conversation' ||
-        err === 'polis_err_conversation_is_closed' ||
-        err === 'polis_err_xid_not_whitelisted' ||
-        err === 'polis_err_vote_duplicate' ||
-        err === 'polis_err_vote_other')
-    ) {
-      throw err;
-    }
-
     logger.error('Error in votesPost', { uid, pid, zid, tid, vote, error: err });
     throw err;
   }

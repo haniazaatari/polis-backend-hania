@@ -41,7 +41,7 @@ function setCookie(req, res, name, value, options) {
   const parsedOrigin = url.parse(origin);
   opts.secure = parsedOrigin.protocol === 'https:';
   opts.domain = cookieDomain(req);
-
+  logger.debug(`setCookie name: ${name}, value: ${value}, opts: ${JSON.stringify(opts)}`);
   res.cookie(name, value, opts);
 }
 
@@ -163,9 +163,9 @@ async function addCookies(req, res, token, uid) {
  * Gets the permanent cookie and ensures it is set
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
- * @returns {Promise<string>} - The permanent cookie token
+ * @returns {string} - The permanent cookie token
  */
-async function getPermanentCookieAndEnsureItIsSet(req, res) {
+function getPermanentCookieAndEnsureItIsSet(req, res) {
   if (!req.cookies[COOKIES.PERMANENT_COOKIE]) {
     const token = generateSessionToken();
     setPermanentCookie(req, res, token);

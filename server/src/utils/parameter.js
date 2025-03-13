@@ -120,18 +120,7 @@ function buildCallback(config) {
   }
 
   return (req, res, next) => {
-    logger.debug(`Parameter middleware for ${name}:`, {
-      body: req.body,
-      headers: req.headers,
-      method: req.method
-    });
-
     const val = extractor(req, name);
-    logger.debug(`Extracted value for ${name}:`, {
-      value: val,
-      type: typeof val,
-      body_type: typeof req.body
-    });
 
     // Initialize req.p if it doesn't exist
     req.p = req.p || {};
@@ -164,7 +153,6 @@ function buildCallback(config) {
           return;
         });
     } else if (!required) {
-      logger.debug(`Using default value for ${name}:`, defaultVal);
       if (typeof defaultVal !== 'undefined') {
         assigner(req, name, defaultVal);
       } else {
@@ -426,6 +414,7 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
 
   logger.debug(`resolve_pidThing ${effectiveLoggingString}`);
   return (req, res, next) => {
+    logger.debug(`resolve_pidThing req.p: ${JSON.stringify(req.p)}`);
     if (!req.p) {
       fail(res, 500, 'polis_err_this_middleware_should_be_after_auth_and_zid');
       next('polis_err_this_middleware_should_be_after_auth_and_zid');
@@ -444,11 +433,14 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
           next(err);
         });
     } else if (existingValue === 'mypid') {
+      logger.debug('resolve_pidThing existingValue is mypid');
       next();
     } else if (!_.isUndefined(existingValue)) {
       getInt(existingValue)
         .then((pidNumber) => {
-          assigner(req, pidThingStringName, pidNumber);
+          if (pidNumber >= 0) {
+            assigner(req, pidThingStringName, pidNumber);
+          }
           next();
         })
         .catch((err) => {
@@ -456,6 +448,7 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
           next(err);
         });
     } else {
+      logger.warn('resolve_pidThing no existing value or mypid');
       next();
     }
   };

@@ -161,7 +161,8 @@ async function doFamousQuery(p) {
     return pidToData;
   } catch (err) {
     logger.error('Error in doFamousQuery', err);
-    throw err;
+    // Return empty object on error instead of throwing
+    return {};
   }
 }
 
@@ -192,7 +193,7 @@ function submitVote(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
  * @returns {Promise<Array>} - Array of votes
  */
 function getVotesForSingleParticipant(p) {
-  // Early return if pid is undefined, matching original behavior
+  // Early return if pid is undefined, matching legacy behavior
   if (_.isUndefined(p.pid)) {
     return Promise.resolve([]);
   }
