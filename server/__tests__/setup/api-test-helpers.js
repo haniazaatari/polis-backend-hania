@@ -1,3 +1,4 @@
+import http from 'http';
 import { expect } from '@jest/globals';
 import dotenv from 'dotenv';
 /**
@@ -12,11 +13,67 @@ console.log('process.env.API_SERVER_PORT', process.env.API_SERVER_PORT);
 
 // API constants - export these for use in test files
 const API_PORT = process.env.API_SERVER_PORT || 5000;
-const API_URL = `http://localhost:${API_PORT}`;
+const API_URL = process.env.API_URL || `http://localhost:${API_PORT}`;
 const API_PREFIX = '/api/v3';
 
-console.log('API_URL', API_URL);
-console.log('API_PORT', API_PORT);
+/**
+ * Helper function to make HTTP requests that can handle both JSON and text responses
+ * This is needed because the legacy server sometimes sends text responses with JSON content-type
+ */
+async function makeRequest(method, path, data = null, cookies = null) {
+  const options = {
+    hostname: 'localhost',
+    port: API_PORT,
+    path: `${API_PREFIX}${path}`,
+    method: method.toUpperCase(),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  };
+
+  // Add cookies if provided
+  if (cookies && cookies.length > 0) {
+    const cookieValues = cookies.map((cookie) => {
+      const [cookieValue] = cookie.split(';');
+      return cookieValue;
+    });
+    options.headers.Cookie = cookieValues.join('; ');
+  }
+
+  return new Promise((resolve, reject) => {
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        // Try to parse as JSON first, fall back to text if that fails
+        let body = data;
+        try {
+          body = JSON.parse(data);
+        } catch (e) {
+          // Keep as text if JSON parsing fails
+        }
+        resolve({
+          status: res.statusCode,
+          headers: res.headers,
+          body,
+          text: data
+        });
+      });
+    });
+
+    req.on('error', (error) => {
+      reject(error);
+    });
+
+    if (data) {
+      req.write(JSON.stringify(data));
+    }
+    req.end();
+  });
+}
+
 /**
  * Helper to generate random test user data
  * @returns {Object} Random user data for registration
@@ -412,20 +469,21 @@ async function getMyVotes(authToken, conversationZinvite) {
 // Export API constants along with helper functions
 export {
   API_PORT,
-  API_URL,
   API_PREFIX,
-  generateTestUser,
-  generateRandomXid,
+  API_URL,
   attachAuthToken,
-  wait,
-  retryRequest,
-  createTestConversation,
   createTestComment,
-  initializeAnonymousParticipant,
-  registerAndLoginUser,
+  createTestConversation,
+  generateRandomXid,
+  generateTestUser,
+  getMyVotes,
   getParticipantId,
+  getVotes,
+  initializeAnonymousParticipant,
+  makeRequest,
+  registerAndLoginUser,
+  retryRequest,
   submitVote,
   submitVoteWithParticipant,
-  getVotes,
-  getMyVotes
+  wait
 };

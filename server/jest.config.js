@@ -9,7 +9,7 @@ export default {
   coverageDirectory: 'coverage',
   collectCoverageFrom: ['app.js', 'src/**/*.js', '!src/**/*.test.js', '!**/node_modules/**'],
   coverageReporters: ['lcov', 'clover'],
-  detectOpenHandles: true,
+  // detectOpenHandles: true,
   forceExit: true,
   verbose: true,
   setupFilesAfterEnv: ['./__tests__/setup/jest.setup.js'],

@@ -22,12 +22,14 @@ services:
 
   legacy-server:
     image: polis-server:legacy
+    restart: unless-stopped
     ports:
       - "5002:5002"
     depends_on:
       - polis-db
     env_file:
       - legacy.env
+    command: ["npm", "run", "dev"]
     networks:
       - polis-net
 

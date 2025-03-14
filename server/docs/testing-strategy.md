@@ -9,6 +9,14 @@ This document outlines the recommended hybrid testing strategy for migrating fro
 - Quickly identify and document legacy server behaviors and quirks.
 - Clearly document intentional deviations from legacy behavior.
 
+## Legacy Server Quirks
+
+When testing against the legacy server, be aware of these known quirks:
+
+- **Response Format Inconsistency**: The legacy server sometimes sends plain text responses with `content-type: application/json`. Our test helpers handle this by attempting JSON parsing first, then falling back to raw text.
+- **Error Response Format**: Error responses are often plain text error codes (e.g., `polis_err_param_missing_password`) rather than structured JSON objects.
+- **Deregister Endpoint Timeout**: The `/auth/deregister` endpoint may timeout when called with a `showPage` parameter but no auth token. This case is currently skipped in tests.
+
 ## Recommended Workflow (Hybrid Approach)
 
 ### Step 1: Write Initial Tests Against Modular Server
@@ -20,6 +28,7 @@ This document outlines the recommended hybrid testing strategy for migrating fro
 
 - As soon as a test passes against the modular server, immediately run it against the legacy server.
 - Quickly identify and document any differences in behavior.
+- Use appropriate test helpers (like `makeRequest`) to handle legacy server quirks.
 
 ### Step 3: Explicitly Handle Differences
 
@@ -53,4 +62,4 @@ For each difference identified between modular and legacy servers, explicitly de
 
 ## Final Goal
 
-The final goal is a robust, comprehensive API test suite that passes consistently against both the modular and legacy servers, enabling a confident and smooth transition to the modular server in production.
+The final goal is a robust, comprehensive API test suite that passes consistently against both the modular and legacy servers, enabling a confident and smooth transition to the modular server in production. 
