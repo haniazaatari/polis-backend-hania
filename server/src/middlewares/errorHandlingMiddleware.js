@@ -24,11 +24,11 @@ export function setupUncaughtExceptionHandler() {
   process.on('uncaughtException', (err) => {
     if (err?.code?.startsWith('23') && err?.constraint) {
       // Handle database constraint violations and other PostgreSQL errors
-      logger.error('Uncaught PostgreSQL error:', { 
-        code: err.code, 
+      logger.error('Uncaught PostgreSQL error:', {
+        code: err.code,
         constraint: err.constraint,
         message: err.message,
-        detail: err.detail 
+        detail: err.detail
       });
       // Don't crash the server for database constraint errors
     } else {
@@ -64,11 +64,11 @@ export function errorMiddleware(err, req, res, next) {
     method: req.method,
     ip: req.ip
   });
-  
+
   // Send appropriate status code based on error type
   if (err.status) {
     res.status(err.status).json({ error: err.message || 'Internal server error' });
   } else {
     res.status(500).json({ error: 'Internal server error' });
   }
-} 
+}

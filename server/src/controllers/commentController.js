@@ -1,9 +1,7 @@
 import _ from 'underscore';
 import Config from '../config.js';
 import { isModerator } from '../db/authorization.js';
-import { getNumberOfCommentsWithModerationStatus } from '../db/comments.js';
-import { getComments } from '../db/comments.js';
-import { addNoMoreCommentsRecord } from '../db/comments.js';
+import { addNoMoreCommentsRecord, getComments, getNumberOfCommentsWithModerationStatus } from '../db/comments.js';
 import {
   updateConversationModifiedTime,
   updateLastInteractionTimeForConversation,

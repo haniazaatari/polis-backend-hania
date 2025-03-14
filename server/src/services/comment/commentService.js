@@ -50,6 +50,7 @@ async function getComments(options) {
       if (options.modIn !== undefined) {
         strictModeration = conversation.strict_moderation;
       }
+      logger.debug('getComments: strictModeration', strictModeration);
 
       // Get comments for moderation
       comments = await commentRepository.getCommentsForModeration({
@@ -64,6 +65,8 @@ async function getComments(options) {
         prioritize_seed: conversation.prioritize_seed
       });
     }
+
+    logger.debug(`getComments: found ${comments.length} comments`);
 
     // Select and format columns
     const cols = ['txt', 'tid', 'created', 'uid', 'quote_src_url', 'anon', 'is_seed', 'is_meta', 'lang', 'pid'];
