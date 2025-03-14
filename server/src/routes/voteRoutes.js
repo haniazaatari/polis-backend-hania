@@ -77,7 +77,9 @@ router.post(
   need('vote', getIntInRange(-1, 1), assignToP),
   want('starred', getBool, assignToP),
   want('high_priority', getBool, assignToP, false),
-  resolve_pidThing('pid', assignToP, 'post:votes'),
+  // TODO: Try to use resolve_pidThing to handle diverse pid placements
+  // resolve_pidThing('pid', assignToP, 'post:votes'),
+  need('pid', getInt, assignToP),
   want('xid', getStringLimitLength(1, 999), assignToP),
   want('lang', getStringLimitLength(1, 10), assignToP),
   handleCreateVote

@@ -36,3 +36,11 @@ export { getParticipantIdMiddleware } from './participantMiddleware.js';
 
 // Utility middlewares
 export { asyncMiddleware } from './utilityMiddleware.js';
+
+// Error handling middlewares
+export { 
+  errorMiddleware, 
+  initializeErrorHandlers, 
+  setupUnhandledRejectionHandler, 
+  setupUncaughtExceptionHandler 
+} from './errorHandlingMiddleware.js';

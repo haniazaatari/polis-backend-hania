@@ -123,6 +123,24 @@ async function addParticipantAndMetadata(zid, uid, req, permanent_cookie) {
       info.origin = req?.headers?.origin;
     }
 
+    // First check if participant already exists
+    try {
+      const existingParticipant = await getParticipant(zid, uid);
+      if (existingParticipant && existingParticipant.length > 0) {
+        logger.debug('Participant already exists, using existing participant', { zid, uid });
+
+        // Add extended info if needed
+        if (Object.keys(info).length > 0) {
+          await addExtendedParticipantInfo(zid, uid, info);
+        }
+
+        return existingParticipant;
+      }
+    } catch (err) {
+      // If the participant doesn't exist, continue with creation
+      logger.debug('Existing participant not found, creating new one', { zid, uid });
+    }
+
     // Create participant and add extended info
     const participant = await createParticipant(zid, uid);
 
@@ -133,6 +151,19 @@ async function addParticipantAndMetadata(zid, uid, req, permanent_cookie) {
 
     return participant;
   } catch (error) {
+    // Special handling for unique constraint violation
+    if (error.code === '23505' && error.constraint === 'participants_zid_uid_key') {
+      logger.debug('Participant already exists (caught unique constraint)', { zid, uid });
+      try {
+        // Retry getting the existing participant
+        const existingParticipant = await getParticipant(zid, uid);
+        return existingParticipant;
+      } catch (getErr) {
+        logger.error('Error getting existing participant after constraint violation', { error: getErr, zid, uid });
+        throw error; // Re-throw the original error if we can't get the existing participant
+      }
+    }
+
     logger.error('Error adding participant and metadata', { error, zid, uid });
     throw error;
   }

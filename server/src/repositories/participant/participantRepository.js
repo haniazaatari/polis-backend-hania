@@ -179,6 +179,24 @@ async function createParticipant(zid, uid) {
     const result = await queryP('INSERT INTO participants (zid, uid) VALUES ($1, $2) RETURNING *;', [zid, uid]);
     return result[0];
   } catch (error) {
+    // Handle unique constraint violation
+    if (error.code === '23505' && error.constraint === 'participants_zid_uid_key') {
+      logger.debug('Constraint violation in createParticipant, fetching existing participant', { zid, uid });
+      // Get the existing participant instead
+      try {
+        const existingResult = await queryP('SELECT * FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid]);
+        if (existingResult && existingResult.length > 0) {
+          return existingResult[0];
+        }
+      } catch (getError) {
+        logger.error('Error fetching existing participant after constraint violation', { error: getError, zid, uid });
+      }
+
+      // If we can't get the existing participant, create a minimal one for safety
+      return { zid, uid, pid: -1 };
+    }
+
+    // Log and rethrow for other errors
     logger.error('Error creating participant', { error, zid, uid });
     throw error;
   }
@@ -197,21 +215,41 @@ async function addExtendedParticipantInfo(zid, uid, info) {
   }
 
   try {
-    const infoFields = [];
-    const infoValues = [];
-    let paramNum = 3;
+    // First get the existing participant to get the pid
+    const existingParticipant = await queryP('SELECT * FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid]);
 
-    for (const key in info) {
-      infoFields.push(`${key} = ($${paramNum})`);
-      infoValues.push(info[key]);
-      paramNum++;
+    if (!existingParticipant || !existingParticipant.length) {
+      logger.warn('Cannot add extended info - participant not found', { zid, uid });
+      return;
     }
 
-    await queryP(`UPDATE participants SET ${infoFields.join(', ')} WHERE zid = ($1) AND uid = ($2);`, [
-      zid,
-      uid,
-      ...infoValues
-    ]);
+    // These are the fields that exist in the participants table (not participants_extended)
+    // Using individual updates to avoid SQL syntax errors from invalid column names
+    const validFields = [
+      'parent_url',
+      'referrer',
+      'encrypted_ip_address',
+      'encrypted_x_forwarded_for',
+      'permanent_cookie',
+      'origin'
+    ];
+
+    for (const key of validFields) {
+      if (info[key] !== undefined) {
+        try {
+          // Use a separate query for each field to avoid syntax errors if one field doesn't exist
+          await queryP(`UPDATE participants SET ${key} = $1 WHERE zid = $2 AND uid = $3;`, [info[key], zid, uid]);
+        } catch (fieldError) {
+          // Log but continue trying other fields - don't throw for one field error
+          logger.warn(`Could not update field "${key}" for participant`, {
+            zid,
+            uid,
+            error: fieldError,
+            errorCode: fieldError.code
+          });
+        }
+      }
+    }
   } catch (error) {
     logger.error('Error adding extended participant info', { error, zid, uid });
     // Don't rethrow - the legacy code doesn't propagate this error

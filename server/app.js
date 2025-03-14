@@ -7,6 +7,8 @@ import { initializeApplication } from './src/initialization.js';
 import {
   addCorsHeader,
   checkIfOptions,
+  errorMiddleware,
+  initializeErrorHandlers,
   logMiddlewareErrors,
   logRequestBody,
   redirectIfNotHttps,
@@ -19,6 +21,9 @@ import staticRoutes from './src/routes/staticRoutes.js';
 import logger from './src/utils/logger.js';
 
 const app = express();
+
+// Initialize global error handlers
+initializeErrorHandlers();
 
 app.use(morgan('dev'));
 app.use(bodyParser.json());
@@ -51,6 +56,9 @@ app.use('/api/v3', apiRoutes);
 app.use('/', rootRoutes);
 // Mount all static routes
 app.use('/', staticRoutes);
+
+// Express error handler - must be added after all routes
+app.use(errorMiddleware);
 
 app.listen(Config.serverPort);
 logger.info(`started on port ${Config.serverPort}`);

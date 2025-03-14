@@ -720,7 +720,7 @@ async function getConversationHasMetadata(zid) {
  * Get translations for a conversation
  * @param {number} zid - Conversation ID
  * @param {string} lang - Language code
- * @returns {Promise<Object>} - Translations
+ * @returns {Promise<Object[]>} - Array of translations
  */
 async function getConversationTranslations(zid, lang) {
   const firstTwoCharsOfLang = lang.substring(0, 2);
@@ -731,13 +731,13 @@ async function getConversationTranslations(zid, lang) {
     ]);
 
     if (!rows || !rows.length) {
-      return null;
+      return [];
     }
 
-    return rows[0];
+    return rows;
   } catch (err) {
     logger.error('Error getting conversation translations', { error: err, zid, lang });
-    return null;
+    return [];
   }
 }
 

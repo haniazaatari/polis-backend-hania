@@ -43,15 +43,33 @@ const readPool = new Pool(readsPgConnection);
 function queryImpl(pool, queryString, ...args) {
   let params;
   let callback;
-  if (_.isFunction(args[1])) {
+
+  // Handle different argument patterns
+  if (args.length === 0) {
+    // No parameters, no callback
+    params = [];
+    callback = null;
+  } else if (args.length === 1) {
+    if (_.isFunction(args[0])) {
+      // Only callback
+      params = [];
+      callback = args[0];
+    } else {
+      // Only parameters, no callback
+      params = args[0];
+      callback = null;
+    }
+  } else if (args.length === 2) {
+    // Both parameters and callback
     params = args[0];
     callback = args[1];
-  } else if (_.isFunction(args[0])) {
-    params = [];
-    callback = args[0];
+    if (!_.isFunction(callback)) {
+      throw 'unexpected db query syntax: second argument must be a callback';
+    }
   } else {
-    throw 'unexpected db query syntax';
+    throw 'unexpected db query syntax: too many arguments';
   }
+
   return new Promise((resolve, reject) => {
     pool.connect((err, client, release) => {
       if (err) {
@@ -60,8 +78,37 @@ function queryImpl(pool, queryString, ...args) {
         logger.error('pg_connect_pool_fail', err);
         return reject(err);
       }
+
+      // Enhanced debug logging to troubleshoot query issues
+      logger.silly('Executing SQL query:', {
+        query: queryString,
+        params: JSON.stringify(params || []),
+        paramTypes: Array.isArray(params) ? params.map((p) => typeof p) : [],
+        paramValues: Array.isArray(params)
+          ? params.map((p) => (p !== null && typeof p === 'object' ? JSON.stringify(p) : String(p)))
+          : []
+      });
+
       client.query(queryString, params, (err, results) => {
         if (err) {
+          // Enhanced error logging for SQL errors
+          logger.error('PostgreSQL query error:', {
+            error: err.message,
+            code: err.code,
+            detail: err.detail,
+            hint: err.hint,
+            position: err.position,
+            internalPosition: err.internalPosition,
+            internalQuery: err.internalQuery,
+            where: err.where,
+            schema: err.schema,
+            table: err.table,
+            column: err.column,
+            dataType: err.dataType,
+            constraint: err.constraint,
+            query: queryString,
+            params: JSON.stringify(params || [])
+          });
           release(err);
           if (callback) callback(err);
           return reject(err);

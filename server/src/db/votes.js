@@ -11,37 +11,101 @@ import { queryP, query_readOnly } from './pg-query.js';
  * @param {number} tid - Comment ID
  * @param {number} vote - Vote value (-1, 0, 1)
  * @param {number} weight - Vote weight
- * @param {boolean} high_priority - Whether the vote is high priority
+ * @param {boolean} high_priority - Whether the vote is high priority (not used in the schema)
  * @returns {Promise<Object>} - The vote result
  */
 async function doVotesPost(_uid, pid, conv, tid, vote, weight, high_priority) {
-  return new Promise((resolve, reject) => {
-    const zid = conv?.zid;
+  // Define these variables outside the try/catch so they can be accessed in the catch block
+  let query = '';
+  let params = [];
+
+  try {
+    if (!conv || !conv.zid) {
+      throw new Error('polis_err_missing_conversation');
+    }
+
+    // Validate pid - it can be 0 (which is falsy in JavaScript) but not undefined/null
+    if (pid === undefined || pid === null || pid < 0) {
+      throw new Error('polis_err_missing_pid');
+    }
+
+    const zid = conv.zid;
     const effectiveWeight = weight || 0;
     const weight_x_32767 = Math.trunc(effectiveWeight * 32767);
 
-    const query =
-      'INSERT INTO votes (pid, zid, tid, vote, weight_x_32767, high_priority, created) VALUES ($1, $2, $3, $4, $5, $6, default) RETURNING *;';
-    const params = [pid, zid, tid, vote, weight_x_32767, high_priority];
-
-    queryP(query, params, (err, result) => {
-      if (err) {
-        if (isDuplicateKey(err)) {
-          reject('polis_err_vote_duplicate');
-        } else {
-          logger.error('polis_err_vote_other', err);
-          reject('polis_err_vote_other');
-        }
-        return;
-      }
-
-      const vote = result.rows[0];
-      resolve({
-        conv: conv,
-        vote: vote
-      });
+    // Log the parameters for debugging
+    logger.debug('doVotesPost parameters', {
+      pid,
+      zid,
+      tid,
+      vote,
+      weight_x_32767,
+      high_priority,
+      pidType: typeof pid,
+      zidType: typeof zid,
+      tidType: typeof tid,
+      voteType: typeof vote,
+      pidValue: pid !== null && pid !== undefined ? String(pid) : 'null/undefined',
+      zidValue: zid !== null && zid !== undefined ? String(zid) : 'null/undefined',
+      tidValue: tid !== null && tid !== undefined ? String(tid) : 'null/undefined',
+      voteValue: vote !== null && vote !== undefined ? String(vote) : 'null/undefined'
     });
-  });
+
+    // Note: The votes table schema has zid, pid, tid, vote, weight_x_32767, created, and high_priority columns
+    query =
+      'INSERT INTO votes (pid, zid, tid, vote, weight_x_32767, created, high_priority) VALUES ($1, $2, $3, $4, $5, default, $6) RETURNING *;';
+
+    // Important: Pass the parameters as an array to queryP
+    params = [pid, zid, tid, vote, weight_x_32767, !!high_priority];
+
+    // Log the query and parameters
+    logger.debug('doVotesPost query', {
+      query,
+      params,
+      paramsJSON: JSON.stringify(params),
+      paramsDetail: params.map((p, i) => `$${i + 1}=${p} (${typeof p})`)
+    });
+
+    // Execute the query and get the result - pass params as a single array argument
+    const rows = await queryP(query, params);
+
+    if (!rows || !rows.length) {
+      throw new Error('polis_err_voting_failed_no_result');
+    }
+
+    const voteResult = rows[0];
+    return {
+      conv: conv,
+      vote: voteResult
+    };
+  } catch (err) {
+    if (isDuplicateKey(err)) {
+      throw new Error('polis_err_vote_duplicate');
+    }
+
+    // Log the full error details
+    logger.error('polis_err_vote_other', {
+      error: err,
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      position: err.position,
+      detail: err.detail,
+      hint: err.hint,
+      internalPosition: err.internalPosition,
+      internalQuery: err.internalQuery,
+      where: err.where,
+      schema: err.schema,
+      table: err.table,
+      column: err.column,
+      dataType: err.dataType,
+      constraint: err.constraint,
+      query: query,
+      params: JSON.stringify(params)
+    });
+
+    throw new Error('polis_err_vote_other');
+  }
 }
 
 /**
@@ -60,39 +124,47 @@ async function votesPost(uid, pid, zid, tid, xid, vote, weight, high_priority) {
   try {
     // Validate required parameters
     if (pid === undefined || pid === null || pid < 0) {
-      throw 'polis_err_param_pid_invalid';
+      throw new Error('polis_err_param_pid_invalid');
     }
 
     if (tid === undefined || tid === null || tid < 0) {
-      throw 'polis_err_param_tid_invalid';
+      throw new Error('polis_err_param_tid_invalid');
+    }
+
+    if (zid === undefined || zid === null) {
+      throw new Error('polis_err_missing_zid');
     }
 
     // Check if the conversation exists and is active
     const rows = await query_readOnly('SELECT * FROM conversations WHERE zid = ($1);', [zid]);
 
     if (!rows || !rows.length) {
-      throw 'polis_err_unknown_conversation';
+      throw new Error('polis_err_unknown_conversation');
     }
 
     const conv = rows[0];
 
     if (!conv.is_active) {
-      throw 'polis_err_conversation_is_closed';
+      throw new Error('polis_err_conversation_is_closed');
     }
 
     // Check if the XID is whitelisted if required
-    if (conv.use_xid_whitelist) {
+    if (conv.use_xid_whitelist && xid) {
       const is_whitelisted = await isXidWhitelisted(conv.owner, xid);
 
       if (!is_whitelisted) {
-        throw 'polis_err_xid_not_whitelisted';
+        throw new Error('polis_err_xid_not_whitelisted');
       }
     }
 
     // Insert the vote
-    return doVotesPost(uid, pid, conv, tid, vote, weight, high_priority);
+    return await doVotesPost(uid, pid, conv, tid, vote, weight, high_priority);
   } catch (err) {
     logger.error('Error in votesPost', { uid, pid, zid, tid, vote, error: err });
+    // Ensure we're always throwing Error objects, not strings
+    if (typeof err === 'string') {
+      throw new Error(err);
+    }
     throw err;
   }
 }

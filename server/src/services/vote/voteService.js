@@ -191,9 +191,9 @@ async function doFamousQuery(p) {
  * @param {boolean} high_priority - Whether the vote is high priority
  * @returns {Promise<Object>} - Vote result
  */
-function submitVote(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
+async function submitVote(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
   try {
-    return votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority);
+    return await votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority);
   } catch (err) {
     logger.error('Error submitting vote', { uid, pid, zid, tid, voteType, error: err });
     throw err;
@@ -242,18 +242,38 @@ async function processVote(voteParams, req, permanent_cookie) {
   let pid = initialPid;
   if (_.isUndefined(pid)) {
     try {
-      const rows = await addParticipantAndMetadata(zid, uid, req, permanent_cookie);
-      pid = rows[0].pid;
+      const result = await addParticipantAndMetadata(zid, uid, req, permanent_cookie);
+      // Handle both array and single object returns
+      if (Array.isArray(result)) {
+        pid = result[0]?.pid;
+      } else if (result && typeof result === 'object') {
+        pid = result.pid;
+      }
     } catch (err) {
       logger.error('Error adding participant and metadata', err);
       // Continue to the next check
     }
   }
 
-  // Second pid check - use addParticipant if pid is still undefined
-  if (_.isUndefined(pid)) {
-    const rows = await addParticipant(zid, uid);
-    pid = rows[0].pid;
+  // Second pid check - use addParticipant if pid is still undefined or invalid
+  if (_.isUndefined(pid) || pid < 0) {
+    try {
+      const rows = await addParticipant(zid, uid);
+      if (Array.isArray(rows) && rows.length > 0) {
+        pid = rows[0].pid;
+      } else if (rows && typeof rows === 'object') {
+        pid = rows.pid;
+      }
+    } catch (err) {
+      logger.error('Error adding participant as fallback', err);
+      throw new Error('polis_err_adding_participant');
+    }
+  }
+
+  // Final check to ensure we have a valid pid
+  if (_.isUndefined(pid) || pid < 0) {
+    logger.error('Failed to obtain a valid participant ID', { uid, zid });
+    throw new Error('polis_err_invalid_pid');
   }
 
   // Submit the vote

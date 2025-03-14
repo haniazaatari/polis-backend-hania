@@ -420,11 +420,15 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
       next('polis_err_this_middleware_should_be_after_auth_and_zid');
     }
     const existingValue = extractFromBody(req, pidThingStringName) || extractFromCookie(req, pidThingStringName);
+    logger.debug(`resolve_pidThing existingValue: ${existingValue}, type: ${typeof existingValue}`);
+
     if (existingValue === 'mypid' && req?.p?.zid && req.p.uid) {
       getParticipantId(req.p.zid, req.p.uid)
         .then((pid) => {
+          logger.debug(`resolve_pidThing got pid from getParticipantId: ${pid}`);
           if (pid >= 0) {
             assigner(req, pidThingStringName, pid);
+            logger.debug(`resolve_pidThing assigned pid: ${pid}`);
           }
           next();
         })
@@ -438,12 +442,18 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
     } else if (!_.isUndefined(existingValue)) {
       getInt(existingValue)
         .then((pidNumber) => {
+          logger.debug(`resolve_pidThing got pidNumber from getInt: ${pidNumber}, type: ${typeof pidNumber}`);
+          // Important: pidNumber can be 0, which is a valid pid but falsy in JavaScript
           if (pidNumber >= 0) {
             assigner(req, pidThingStringName, pidNumber);
+            logger.debug(`resolve_pidThing assigned pidNumber: ${pidNumber}`);
+          } else {
+            logger.debug(`resolve_pidThing pidNumber < 0: ${pidNumber}`);
           }
           next();
         })
         .catch((err) => {
+          logger.error(`resolve_pidThing getInt error: ${err}`);
           fail(res, 500, 'polis_err_pid_error', err);
           next(err);
         });

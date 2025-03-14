@@ -140,6 +140,15 @@ async function getBidsForPids(zid, math_tick, pids) {
   ]);
 
   const b2p = dataMapping.bidToPid || [];
+
+  if (!mathResults || typeof mathResults !== 'object' || mathResults === null || !('asPOJO' in mathResults)) {
+    logger.debug(`No PCA data available for zid ${zid}, returning empty bids mapping`);
+    return _.object(
+      pids,
+      pids.map(() => -1)
+    );
+  }
+
   const indexToBid = mathResults.asPOJO['base-clusters'].id;
 
   function findBidForPid(pid) {

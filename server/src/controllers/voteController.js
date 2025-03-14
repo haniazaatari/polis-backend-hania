@@ -59,6 +59,7 @@ export const handleCreateVote = async (req, res) => {
   const uid = req.p.uid;
   const zid = req.p.zid;
   const pid = req.p.pid;
+  const tid = req.p.tid;
   const lang = req.p.lang;
   const token = req.cookies[COOKIES.TOKEN];
   const apiToken = req?.headers?.authorization || '';
@@ -67,6 +68,20 @@ export const handleCreateVote = async (req, res) => {
   // Check authentication
   if (!uid && !token && !apiToken && !xPolisHeaderToken) {
     return fail(res, 403, 'polis_err_vote_noauth');
+  }
+
+  // Validate required parameters
+  if (!zid) {
+    return fail(res, 400, 'polis_err_missing_zid');
+  }
+
+  if (tid === undefined || tid === null) {
+    return fail(res, 400, 'polis_err_missing_tid');
+  }
+
+  // We allow pid to be 0 (valid participant ID)
+  if (pid === undefined || pid === null || pid < 0) {
+    return fail(res, 400, 'polis_err_missing_pid');
   }
 
   try {
@@ -78,7 +93,7 @@ export const handleCreateVote = async (req, res) => {
       uid,
       pid,
       zid,
-      tid: req.p.tid,
+      tid,
       xid: req.p.xid,
       vote: req.p.vote,
       weight: req.p.weight,
@@ -90,14 +105,19 @@ export const handleCreateVote = async (req, res) => {
     const result = await processVote(voteParams, req, permanent_cookie);
     finishOne(res, result);
   } catch (err) {
-    if (err === 'polis_err_vote_duplicate') {
+    // Handle both string errors and Error objects
+    const errorMessage = err?.message || err;
+
+    if (errorMessage === 'polis_err_vote_duplicate') {
       fail(res, 406, 'polis_err_vote_duplicate', err);
-    } else if (err === 'polis_err_conversation_is_closed') {
+    } else if (errorMessage === 'polis_err_conversation_is_closed') {
       fail(res, 403, 'polis_err_conversation_is_closed', err);
-    } else if (err === 'polis_err_post_votes_social_needed') {
+    } else if (errorMessage === 'polis_err_post_votes_social_needed') {
       fail(res, 403, 'polis_err_post_votes_social_needed', err);
-    } else if (err === 'polis_err_xid_not_whitelisted') {
+    } else if (errorMessage === 'polis_err_xid_not_whitelisted') {
       fail(res, 403, 'polis_err_xid_not_whitelisted', err);
+    } else if (errorMessage === 'polis_err_param_pid_invalid') {
+      fail(res, 400, 'polis_err_param_pid_invalid', err);
     } else {
       fail(res, 500, 'polis_err_vote', err);
     }
