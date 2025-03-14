@@ -9,6 +9,58 @@ This document outlines the recommended hybrid testing strategy for migrating fro
 - Quickly identify and document legacy server behaviors and quirks.
 - Clearly document intentional deviations from legacy behavior.
 
+## Migration Strategy
+
+The planned migration path involves multiple phases:
+
+1. **Feature Parity Phase** (`/api/v3`):
+   - Achieve complete feature parity with legacy server
+   - Maintain strict compatibility with existing clients
+   - Pass all integration tests against both servers
+   - Document all quirks and behaviors that must be preserved
+
+2. **Side-by-Side Deployment**:
+   - Deploy modular server alongside legacy server
+   - Legacy server continues handling `/api/v3` requests
+   - Modular server can handle both `/api/v3` and `/api/v4` requests
+   - Allows for gradual client migration with minimal risk
+
+3. **Modernization Phase** (`/api/v4`):
+   - Introduce improvements and modern API design patterns
+   - Clean up historical quirks and inconsistencies
+   - Provide better error handling and response formats
+   - Document migration path for clients moving from v3 to v4
+
+4. **Client Migration**:
+   - Clients can migrate to v4 at their own pace
+   - Legacy server remains available until all clients have migrated
+   - Eventually deprecate and remove legacy server
+
+This approach minimizes risk by:
+
+- Ensuring no disruption to existing clients
+- Providing a clear path for improvements
+- Allowing gradual migration at client's pace
+- Maintaining system stability throughout transition
+
+## Legacy Client Compatibility
+
+**IMPORTANT**: This project has multiple legacy clients in production that depend on specific API contracts. While our test suite is designed to be flexible in handling both legacy and new server responses, we must ensure we don't break these existing contracts.
+
+Key considerations:
+
+- Response formats must remain compatible with what legacy clients expect
+- Status codes should match legacy behavior unless explicitly documented otherwise
+- Error messages and formats should maintain backward compatibility
+- Test flexibility (accepting multiple status codes/formats) should not mask breaking changes
+
+Future improvements to consider:
+
+- Dedicated test suites for verifying legacy client compatibility
+- Explicit documentation of required response formats for each endpoint
+- Contract tests specifically targeting legacy client requirements
+- Clear separation between legacy compatibility tests and new server behavior tests
+
 ## Legacy Server Quirks
 
 When testing against the legacy server, be aware of these known quirks:
