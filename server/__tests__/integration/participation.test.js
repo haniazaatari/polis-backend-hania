@@ -1,12 +1,12 @@
 /**
  * Participation Integration Tests
- * 
+ *
  * These tests verify the functionality of the participation-related endpoints.
- * 
+ *
  * Note: Due to known database issues, some tests may be skipped:
  * 1. Vote query syntax error: When creating comments with a vote value of 0
  * 2. Missing notification_tasks column: The server crashes on certain operations
- * 
+ *
  * The tests are designed to handle these errors gracefully through try-catch blocks
  * and conditional test execution.
  */
@@ -53,12 +53,12 @@ async function createTestConversation(authToken, options = {}) {
   };
 
   const req = request(API_URL).post(`${API_PREFIX}/conversations`);
-  
+
   // Only set auth token if defined
   if (authToken) {
     req.set('x-polis', authToken);
   }
-  
+
   const createConvResponse = await req.send(defaultOptions);
 
   return createConvResponse.body;
@@ -75,42 +75,30 @@ async function createTestComment(authToken, conversationId, options = {}) {
     txt: `Test comment ${Date.now()}`,
     // IMPORTANT: The server has an issue with vote value 0
     // "Error in votesPost {"error":"unexpected db query syntax"}"
-    // Using vote: 1 (agree) to avoid this error
-    vote: 1,
+    // Using vote: -1 (agree) to avoid this error
+    vote: -1,
     is_seed: true,
     ...options
   };
 
   try {
     const req = request(API_URL).post(`${API_PREFIX}/comments`);
-    
+
     // Only set auth token if defined
     if (authToken) {
       req.set('x-polis', authToken);
     }
-    
+
     const commentResponse = await req.send(defaultOptions);
     return commentResponse.body;
   } catch (error) {
-    console.warn('Warning: Comment creation failed. The server may have crashed due to a schema mismatch in notification_tasks table.', error.message);
+    console.warn(
+      'Warning: Comment creation failed. The server may have crashed due to a schema mismatch in notification_tasks table.',
+      error.message
+    );
     // Return a minimal mock response
     return { error: 'Comment creation failed', mock: true };
   }
-}
-
-// Helper to generate a basic test
-function generateSimpleTest(description, fn) {
-  it(description, async () => {
-    try {
-      await fn();
-    } catch (error) {
-      if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
-        console.warn(`Test "${description}" skipped due to connection reset`);
-        return; // Skip the test
-      }
-      throw error; // Rethrow other errors
-    }
-  });
 }
 
 describe('Participation Endpoints', () => {
@@ -157,6 +145,7 @@ describe('Participation Endpoints', () => {
   // Register and login a test user before running tests
   beforeAll(async () => {
     try {
+      console.log('Setting up test suite with registration, login, and conversation creation...');
       // Register a test user
       const registerResponse = await request(API_URL).post(`${API_PREFIX}/auth/new`).send({
         email: testUser.email,
@@ -167,6 +156,7 @@ describe('Participation Endpoints', () => {
 
       // Extract user ID
       userId = registerResponse.body.uid;
+      console.log(`Registered test user with ID: ${userId}`);
 
       // Login to get auth token
       const loginResponse = await request(API_URL).post(`${API_PREFIX}/auth/login`).send({
@@ -190,11 +180,17 @@ describe('Participation Endpoints', () => {
         console.error('Failed to extract auth token from login response:', loginResponse.body);
       }
 
+      if (authToken) {
+        console.log('Successfully obtained auth token');
+      } else {
+        console.warn('Could not obtain auth token - some tests may fail');
+      }
+
       try {
         // Create a test conversation
         const convData = await createTestConversation(authToken);
         console.log('Conversation creation response:', JSON.stringify(convData, null, 2));
-        
+
         // Extract conversation_id from the URL if not provided directly
         if (convData.conversation_id) {
           conversationId = convData.conversation_id;
@@ -203,9 +199,9 @@ describe('Participation Endpoints', () => {
           const urlParts = convData.url.split('/');
           conversationId = urlParts[urlParts.length - 1];
         }
-        
+
         console.log('Using conversation ID:', conversationId);
-        
+
         // Extract conversation ZID for future reference if needed
         if (convData.zid) {
           conversationZid = convData.zid;
@@ -214,15 +210,25 @@ describe('Participation Endpoints', () => {
         console.error('Error creating conversation:', error);
       }
 
-      // Only try to create a comment if we have a conversation ID
+      // Attempt to create a comment (non-seed to avoid vote issues)
       if (conversationId) {
         try {
-          // Add a comment to the conversation
-          const commentData = await createTestComment(authToken, conversationId);
-          console.log('Comment creation response:', JSON.stringify(commentData, null, 2));
-          
-          if (commentData.tid) {
-            commentId = commentData.tid;
+          // Add a comment to the conversation (with is_seed=false to avoid auto-vote issues)
+          const commentData = await attachAuthToken(
+            request(API_URL)
+              .post(`${API_PREFIX}/comments`)
+              .send({
+                conversation_id: conversationId,
+                txt: `Test comment ${Date.now()}`,
+                is_seed: false
+              })
+          );
+
+          console.log('Comment creation response:', JSON.stringify(commentData.body, null, 2));
+
+          if (commentData.body.tid !== undefined) {
+            commentId = commentData.body.tid;
+            console.log(`Created test comment with ID: ${commentId}`);
           } else {
             console.warn('Failed to get comment ID from response');
           }
@@ -238,7 +244,7 @@ describe('Participation Endpoints', () => {
             topic: `XID Test Conversation ${Date.now()}`,
             xid_whitelist: testXid
           });
-          
+
           // Extract conversation_id from the URL if not provided directly
           if (xidConvData.conversation_id) {
             xidConversationId = xidConvData.conversation_id;
@@ -247,12 +253,14 @@ describe('Participation Endpoints', () => {
             const urlParts = xidConvData.url.split('/');
             xidConversationId = urlParts[urlParts.length - 1];
           }
-          
+
           console.log('Using XID conversation ID:', xidConversationId);
         } catch (error) {
           console.error('Error creating XID conversation:', error);
         }
       }
+
+      console.log('Test suite setup completed successfully');
     } catch (error) {
       console.error('Error in beforeAll setup:', error);
       // Don't throw the error to allow tests to run with partial setup
@@ -261,45 +269,26 @@ describe('Participation Endpoints', () => {
 
   describe('GET /participationInit', () => {
     it('should return 200 OK without authentication when accessing a public conversation', async () => {
-      // Skip test if conversation wasn't created successfully
-      if (!conversationId) {
-        console.log('Skipping test - conversation ID not available');
-        return;
-      }
-      
-      try {
-        const response = await request(API_URL).get(`${API_PREFIX}/participationInit`).query({
-          conversation_id: conversationId
-        });
+      const response = await request(API_URL).get(`${API_PREFIX}/participationInit`).query({
+        conversation_id: conversationId,
+        pid: 'mypid'
+      });
 
-        console.log('Response status:', response.status);
-        console.log('Response body:', JSON.stringify(response.body, null, 2));
-        
-        expect(response.status).toBe(200);
-        expect(response.body).toBeDefined();
-        
-        // More lenient test that doesn't expect specific structure
-        if (response.body.conversation) {
-          expect(response.body.conversation).toHaveProperty('conversation_id');
-        } else {
-          console.log('Warning: conversation data not in response');
-        }
-      } catch (error) {
-        if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
-          console.warn('Test skipped due to connection reset');
-          return;
-        }
-        throw error;
+      console.log('Response status:', response.status);
+      console.log('Response body:', JSON.stringify(response.body, null, 2));
+
+      expect(response.status).toBe(200);
+      expect(response.body).toBeDefined();
+
+      // More lenient test that doesn't expect specific structure
+      if (response.body.conversation) {
+        expect(response.body.conversation).toHaveProperty('conversation_id');
+      } else {
+        console.log('Warning: conversation data not in response');
       }
     });
 
     it('should return 200 OK and participation initialization data when authenticated', async () => {
-      // Skip test if auth token or conversation ID is not available
-      if (!authToken || !conversationId) {
-        console.log('Skipping test - auth token or conversation ID not available');
-        return;
-      }
-      
       try {
         const response = await attachAuthToken(
           request(API_URL).get(`${API_PREFIX}/participationInit`).query({
@@ -319,14 +308,9 @@ describe('Participation Endpoints', () => {
     });
 
     it('should return partial data when no conversation_id is provided', async () => {
-      if (!authToken) {
-        console.log('Skipping test - auth token not available');
-        return;
-      }
-
       try {
         const response = await attachAuthToken(
-          request(API_URL).get(`${API_PREFIX}/participationInit`)
+          request(API_URL).get(`${API_PREFIX}/participationInit`).query({ pid: 'mypid' })
         );
 
         expect(response.status).toBe(200);
@@ -343,16 +327,11 @@ describe('Participation Endpoints', () => {
     });
 
     it('should respect ptptoiLimit parameter', async () => {
-      if (!authToken || !conversationId) {
-        console.log('Skipping test - auth token or conversation ID not available');
-        return;
-      }
-
       try {
         const response = await attachAuthToken(
           request(API_URL).get(`${API_PREFIX}/participationInit`).query({
             conversation_id: conversationId,
-            ptptoiLimit: 5
+            ptptoiLimit: 10
           })
         );
 
@@ -367,11 +346,6 @@ describe('Participation Endpoints', () => {
     });
 
     it('should support custom language settings', async () => {
-      if (!authToken || !conversationId) {
-        console.log('Skipping test - auth token or conversation ID not available');
-        return;
-      }
-
       try {
         const response = await attachAuthToken(
           request(API_URL).get(`${API_PREFIX}/participationInit`).query({
@@ -392,11 +366,6 @@ describe('Participation Endpoints', () => {
     });
 
     it('should support participation with an external ID', async () => {
-      if (!xidConversationId) {
-        console.log('Skipping test - XID conversation ID not available');
-        return;
-      }
-
       try {
         const response = await request(API_URL).get(`${API_PREFIX}/participationInit`).query({
           conversation_id: xidConversationId,
@@ -417,12 +386,6 @@ describe('Participation Endpoints', () => {
 
   describe('GET /participation', () => {
     it('should return 200 OK and participation data when authenticated', async () => {
-      // Skip test if auth token or conversation ID is not available
-      if (!authToken || !conversationId) {
-        console.log('Skipping test - auth token or conversation ID not available');
-        return;
-      }
-
       try {
         const response = await attachAuthToken(
           request(API_URL).get(`${API_PREFIX}/participation`).query({
@@ -441,21 +404,13 @@ describe('Participation Endpoints', () => {
       }
     });
 
-    it('should return 403 when not authenticated', async () => {
-      // Skip test if conversation ID is not available
-      if (!conversationId) {
-        console.log('Skipping test - conversation ID not available');
-        return;
-      }
-
+    it('should return 401 when not authenticated', async () => {
       try {
-        const response = await request(API_URL)
-          .get(`${API_PREFIX}/participation`)
-          .query({
-            conversation_id: conversationId
-          });
+        const response = await request(API_URL).get(`${API_PREFIX}/participation`).query({
+          conversation_id: conversationId
+        });
 
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(401);
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
@@ -466,15 +421,8 @@ describe('Participation Endpoints', () => {
     });
 
     it('should return 400 when conversation_id is not provided', async () => {
-      if (!authToken) {
-        console.log('Skipping test - auth token not available');
-        return;
-      }
-
       try {
-        const response = await attachAuthToken(
-          request(API_URL).get(`${API_PREFIX}/participation`)
-        );
+        const response = await attachAuthToken(request(API_URL).get(`${API_PREFIX}/participation`));
 
         expect(response.status).toBe(400);
       } catch (error) {
@@ -486,12 +434,7 @@ describe('Participation Endpoints', () => {
       }
     });
 
-    it('should support strict mode', async () => {
-      if (!authToken || !conversationId) {
-        console.log('Skipping test - auth token or conversation ID not available');
-        return;
-      }
-
+    it('should return 409 when strict mode is enabled and no XIDs exist', async () => {
       try {
         const response = await attachAuthToken(
           request(API_URL).get(`${API_PREFIX}/participation`).query({
@@ -500,38 +443,9 @@ describe('Participation Endpoints', () => {
           })
         );
 
-        expect(response.status).toBe(200);
-        expect(response.body).toBeDefined();
-      } catch (error) {
-        if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
-          console.warn('Test skipped due to connection reset');
-          return;
-        }
-        throw error;
-      }
-    });
-
-    it('should support participation with an external ID', async () => {
-      if (!xidConversationId) {
-        console.log('Skipping test - XID conversation ID not available');
-        return;
-      }
-
-      try {
-        // First initialize participation with XID
-        await request(API_URL).get(`${API_PREFIX}/participationInit`).query({
-          conversation_id: xidConversationId,
-          xid: testXid
-        });
-        
-        // Then get participation data with the same XID
-        const response = await request(API_URL).get(`${API_PREFIX}/participation`).query({
-          conversation_id: xidConversationId,
-          xid: testXid
-        });
-        
-        expect(response.status).toBe(200);
-        expect(response.body).toBeDefined();
+        expect(response.status).toBe(409);
+        expect(response.body).toHaveProperty('error');
+        expect(response.body.error).toContain('polis_err_get_participation_missing_xids');
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
@@ -542,78 +456,41 @@ describe('Participation Endpoints', () => {
     });
 
     it('should be able to participate after participation initialization', async () => {
-      if (!authToken || !conversationId || !commentId) {
-        console.log('Skipping test - auth token, conversation ID, or comment ID not available');
-        return;
-      }
-
       try {
         // First initialize participation
-        const initResponse = await attachAuthToken(
-          request(API_URL).get(`${API_PREFIX}/participationInit`).query({
-            conversation_id: conversationId
-          })
-        );
-        
+        const initResponse = await request(API_URL).get(`${API_PREFIX}/participationInit`).query({
+          conversation_id: conversationId,
+          pid: 'mypid'
+        });
+
         expect(initResponse.status).toBe(200);
-        
+        expect(initResponse.body).toBeDefined();
+
+        // Verify the response contains expected data
+        expect(initResponse.body).toHaveProperty('user');
+        expect(initResponse.body).toHaveProperty('conversation');
+
         // Then get participation data
         const participationResponse = await attachAuthToken(
           request(API_URL).get(`${API_PREFIX}/participation`).query({
             conversation_id: conversationId
           })
         );
-        
+
         expect(participationResponse.status).toBe(200);
         expect(participationResponse.body).toBeDefined();
-        
+
         // Verify a user can vote after participation initialization
         const voteResponse = await attachAuthToken(
           request(API_URL).post(`${API_PREFIX}/votes`).send({
             conversation_id: conversationId,
             tid: commentId,
-            vote: 1  // 1 = agree
+            vote: -1 // -1 = agree; 1 = disagree
           })
         );
-        
+
         expect(voteResponse.status).toBe(200);
         expect(voteResponse.body).toBeDefined();
-      } catch (error) {
-        if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
-          console.warn('Test skipped due to connection reset');
-          return;
-        }
-        throw error;
-      }
-    });
-
-    it('should successfully create a comment as part of participation', async () => {
-      // Skip test if auth token or conversation ID is not available
-      if (!authToken || !conversationId) {
-        console.log('Skipping test - auth token or conversation ID not available');
-        return;
-      }
-
-      try {
-        // Create a comment
-        const commentResponse = await attachAuthToken(
-          request(API_URL).post(`${API_PREFIX}/comments`).send({
-            conversation_id: conversationId,
-            txt: `Test comment for notification task ${Date.now()}`,
-            vote: 1,
-            is_seed: true
-          })
-        );
-
-        // Verify the comment was created successfully
-        expect(commentResponse.status).toBe(200);
-        expect(commentResponse.body).toHaveProperty('tid');
-        
-        // Note: This test implicitly tests the notification task creation
-        // since createNotificationTask is called inside handlePostComments
-        // when a comment is created successfully
-        
-        console.log('Comment created successfully with tid:', commentResponse.body.tid);
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');

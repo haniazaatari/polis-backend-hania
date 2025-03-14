@@ -47,3 +47,12 @@ Perceived bugs (ie test failures) may be the result of one or more of the follow
 - The test is failing because of a new bug introduced as part of the restructuring effort.
 - The test is failing because of a bug in the legacy codebase, and the bug has not yet been fixed in the restructured code.
 - Incorrect test setup or assumptions.
+
+## Docker
+
+- Typically I'm running the server, the postgres db, and the 'math' engine in docker compose.
+- Logs can be viewed with `docker compose logs`.
+- The server is run on port 5001 to avoid conflict with MacOS services.
+- The database "polis-dev" is available at `localhost:5432`, credentials are `postgres:postgres`.
+- The sever is typically run with `npm run debug` and will restart via nodemon as changes are made.
+- You can run `docker compose down` to stop the containers, and `docker compose up -d` to restart them.

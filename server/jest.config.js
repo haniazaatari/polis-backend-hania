@@ -10,5 +10,6 @@ export default {
   collectCoverageFrom: ['app.js', 'src/**/*.js', '!src/**/*.test.js', '!**/node_modules/**'],
   coverageReporters: ['lcov', 'clover'],
   verbose: true,
-  setupFilesAfterEnv: ['./__tests__/setup/jest.setup.js']
+  setupFilesAfterEnv: ['./__tests__/setup/jest.setup.js'],
+  reporters: ['default', './__tests__/setup/custom-jest-reporter.js']
 };

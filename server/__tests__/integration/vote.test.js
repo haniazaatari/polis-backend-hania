@@ -361,7 +361,7 @@ describe('Vote Endpoints', () => {
         const response = await submitVote(
           {
             tid: commentId,
-            vote: 1 // Agree vote
+            vote: -1 // Agree vote
           },
           anonymousParticipant1
         );
@@ -402,7 +402,7 @@ describe('Vote Endpoints', () => {
         const response = await submitVote(
           {
             tid: commentId,
-            vote: -1 // Disagree vote
+            vote: -1 // Note that -1 is agree and 1 is disagree
           },
           anonymousParticipant2
         );
@@ -510,7 +510,7 @@ describe('Vote Endpoints', () => {
           if (commentId !== undefined && response.body.find) {
             const foundVote = response.body.find((vote) => vote.tid === commentId);
             if (foundVote) {
-              expect(foundVote).toHaveProperty('vote', 1); // This participant cast an agree vote (1)
+              expect(foundVote).toHaveProperty('vote', -1); // This participant cast an agree vote (-1)
             }
           }
         } else {

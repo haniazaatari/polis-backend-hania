@@ -1,170 +1,130 @@
-# Testing in Polis
+# Testing Guide
 
-This directory contains tests for the Polis server. We have both unit tests and integration tests.
+This directory contains the test suite for the Polis server. The tests are organized by type (unit, integration, e2e) and use Jest as the test runner.
 
-## Test Structure
+## Getting Started
 
-- `__tests__/unit/` - Unit tests for individual functions and modules
-- `__tests__/integration/` - Integration tests that test the entire API
-- `__tests__/setup/` - Test setup and helper utilities
+To run the tests, you'll need:
 
-## Database Testing Helpers
-
-We use a transaction-based approach for database testing, which provides several benefits:
-
-1. Tests run in isolated transactions that are rolled back after each test
-2. No need for complex cleanup logic
-3. Tests run faster since database state is reset via rollback
-4. Multiple tests can run in parallel without interfering with each other
-
-### How to Use Transaction-Based Testing
-
-Here's an example of how to use transaction-based testing in your test file:
-
-```javascript
-import { afterAll, afterEach, beforeEach, describe, expect, it } from '@jest/globals';
-import { startTransaction, rollbackTransaction, closePool } from '../setup/db-test-helpers.js';
-
-describe('My Test Suite', () => {
-  let client = null;
-
-  // Start a transaction before each test
-  beforeEach(async () => {
-    client = await startTransaction();
-  });
-
-  // Rollback the transaction after each test
-  afterEach(async () => {
-    if (client) {
-      await rollbackTransaction(client);
-      client = null;
-    }
-  });
-
-  // Close connection pool after all tests
-  afterAll(async () => {
-    await closePool();
-  });
-
-  it('should perform a database operation in isolation', async () => {
-    // Test code here
-    // Any database changes will be rolled back after the test
-  });
-});
-```
-
-### Additional Database Helpers
-
-The `db-test-helpers.js` module provides additional utilities:
-
-- `cleanTables(tableNames)`: Clean specific tables
-- `cleanAllTables()`: Clean all tables in the correct order
-- `cleanupTestUsers(emailPattern)`: Clean up test users and associated data
-
-### Transaction Limitations
-
-Be aware that transactions have some limitations:
-
-1. DDL statements (like CREATE TABLE) will implicitly commit the transaction
-2. Some operations like sequence updates might persist across rollbacks
-3. Connections to external services aren't covered by database transactions
+- A local PostgreSQL database for testing
+- Node.js and npm installed
 
 ## Running Tests
 
-To run all tests:
+### All Tests
 
-```
+```bash
 npm test
 ```
 
-To run only unit tests:
+### Unit Tests Only
 
-```
+```bash
 npm run test:unit
 ```
 
-To run only integration tests:
+### Integration Tests Only
 
-```
+```bash
 npm run test:integration
 ```
 
-To run a specific test file:
+### Run Specific Tests
 
+```bash
+# Run tests in a specific file
+npm test -- __tests__/integration/participation.test.js
+
+# Run tests that match a specific name
+npm test -- -t "should do something specific"
 ```
-npm test -- path/to/test.js
+
+## Database Setup for Tests
+
+The tests require a clean database state to run successfully. There are several ways to manage this:
+
+### Option 1: Reset Database Before Running Tests
+
+This will completely reset your database, dropping and recreating it with a fresh schema:
+
+```bash
+# Reset the database immediately
+npm run db:reset
+
+# Run tests with a database reset first
+RESET_DB_BEFORE_TESTS=true npm test
 ```
 
-## Writing Tests
+⚠️ **WARNING**: The `db:reset` script will delete ALL data in the database specified by `DATABASE_URL`.
 
-### Unit Tests
+### Option 2: Use Transaction Isolation
 
-Unit tests should test individual components in isolation. Use mocks for dependencies.
-
-Example:
+Tests can use transaction isolation to avoid affecting each other. This is the default approach in most tests:
 
 ```javascript
-import { someFunction } from '../src/utils/someUtil.js';
+import { startTransaction, rollbackTransaction } from '../setup/db-test-helpers.js';
 
-jest.mock('../src/services/someService.js');
-
-describe('someFunction', () => {
-  it('should do something', () => {
-    // Test implementation
+describe('My test suite', () => {
+  let client;
+  
+  beforeEach(async () => {
+    client = await startTransaction();
   });
+  
+  afterEach(async () => {
+    await rollbackTransaction(client);
+  });
+  
+  // Tests here will run in isolation
 });
 ```
 
-### Integration Tests
+### Option 3: Table Cleanup
 
-Integration tests should test the API endpoints as they would be used by clients.
-
-Example:
+You can selectively clean tables before or after tests:
 
 ```javascript
-import request from 'supertest';
-import dotenv from 'dotenv';
+import { cleanTables } from '../setup/db-test-helpers.js';
 
-// Load environment variables from .env file
-dotenv.config();
-
-// Use the API_SERVER_PORT from the environment
-const API_PORT = process.env.API_SERVER_PORT || 5000;
-const API_URL = process.env.API_URL || `http://localhost:${API_PORT}`;
-
-describe('API Endpoint', () => {
-  it('should return expected data', async () => {
-    const response = await request(API_URL).get('/some-endpoint');
-    expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty('expectedProperty');
-  });
+beforeAll(async () => {
+  await cleanTables(['participants', 'comments', 'votes']);
 });
 ```
 
-## Key Test Files
+## Test Safety Features
 
-### Participation Tests
+The test environment includes several safety features:
 
-The `__tests__/integration/participation.test.js` file tests the participation endpoints:
+1. **Production Database Prevention**: Tests will not run against production databases (URLs containing 'amazonaws', 'prod', etc.)
+2. **Transaction Isolation**: Most tests run in transactions that roll back after completion
+3. **Table Cleaning**: Helpers for cleaning specific tables
 
-- `GET /participationInit`: Initializes participation for a conversation
-- `GET /participation`: Retrieves participation data for a conversation
+## Troubleshooting Common Issues
 
-These tests cover both authenticated and unauthenticated access, parameter validation, and support for external identifiers (XIDs). They also test the full participation flow from initialization to voting.
+### Participant Creation Issues
 
-The participation tests provide reusable helper functions that can be useful for other tests:
+If tests fail with duplicate participant errors, try:
 
-- `generateRandomXid()`: Creates random external IDs for testing
-- `createTestConversation()`: Creates a test conversation with customizable options
-- `createTestComment()`: Creates a test comment in a conversation
+```bash
+npm run db:reset
+```
 
-You can see the full list of tests and helpers in the `__tests__/integration/README.md` file.
+### Database Connection Errors
 
-## Known Database Issues
+Check that:
 
-When running tests, you may encounter database-related issues that cause connection resets (ECONNRESET errors). These issues include:
+1. Your PostgreSQL server is running
+2. Your DATABASE_URL environment variable is correct
+3. Database and schema exist (you can use `npm run db:reset` to create them)
 
-1. Vote query syntax errors when creating comments
-2. Schema mismatches in tables like `notification_tasks`
+### Test Timeouts
 
-These issues can cause the server to crash during tests. The test suite is designed to handle these errors gracefully, but you may see tests being skipped. For more details, see the `__tests__/integration/README.md` file.
+If tests timeout, try:
+
+1. Increase the timeout in individual tests:
+
+   ```javascript
+   jest.setTimeout(60000); // Set timeout to 60 seconds
+   ```
+
+2. Check for any blocking async operations that might not be resolving
