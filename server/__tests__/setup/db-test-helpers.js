@@ -29,9 +29,6 @@ function preventProductionDatabaseTesting() {
       process.exit(1);
     }
   }
-
-  // Safety check passed, print confirmation
-  console.log('\x1b[32m%s\x1b[0m', '✅ Database safety check passed - not a production database');
 }
 
 // Run the security check immediately
@@ -95,7 +92,6 @@ export async function cleanTables(tableNames) {
       if (!EXCLUDE_TABLES.includes(tableName)) {
         try {
           await client.query(`TRUNCATE TABLE ${tableName} CASCADE`);
-          console.log(`Truncated table: ${tableName}`);
         } catch (err) {
           console.warn(`Failed to truncate table ${tableName}: ${err.message}`);
         }
@@ -131,11 +127,9 @@ export async function cleanupTestUsers(emailPattern = 'test.user.%@example.com')
     const testUsers = await client.query('SELECT uid FROM users WHERE email LIKE $1', [emailPattern]);
 
     if (testUsers.rows.length === 0) {
-      console.log('No test users found to clean up');
       return;
     }
 
-    console.log(`Found ${testUsers.rows.length} test users to clean up`);
     const uids = testUsers.rows.map((row) => row.uid);
 
     // Get conversations owned by these users
@@ -143,8 +137,6 @@ export async function cleanupTestUsers(emailPattern = 'test.user.%@example.com')
     const zids = conversations.rows.map((row) => row.zid);
 
     if (zids.length > 0) {
-      console.log(`Found ${zids.length} conversations to clean up`);
-
       // Clean up in proper order (dependent tables first)
       const tablesToClean = [
         { name: 'comments', keyColumn: 'zid', values: zids },
@@ -171,8 +163,6 @@ export async function cleanupTestUsers(emailPattern = 'test.user.%@example.com')
     ];
 
     await cleanDataByKeys(client, userTablesToClean);
-
-    console.log('Cleanup completed successfully');
   } catch (err) {
     console.error('General error during test user cleanup:', err);
   } finally {
@@ -193,7 +183,6 @@ async function cleanDataByKeys(client, tablesToClean) {
       if (table.values.length > 0) {
         const query = `DELETE FROM ${table.name} WHERE ${table.keyColumn} IN (${table.values.join(',')})`;
         await client.query(query);
-        console.log(`Deleted data from ${table.name}`);
       }
 
       await client.query('COMMIT');
@@ -232,7 +221,6 @@ export async function rollbackTransaction(client) {
  */
 export async function closePool() {
   await pool.end();
-  console.log('Database pool closed');
 }
 
 export default {

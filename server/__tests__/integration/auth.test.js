@@ -1,25 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
 import dotenv from 'dotenv';
 import request from 'supertest';
+import { API_PREFIX, API_URL, attachAuthToken, generateTestUser } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 dotenv.config();
-
-const API_PORT = process.env.API_SERVER_PORT || 5000;
-const API_URL = process.env.API_URL || `http://localhost:${API_PORT}`;
-const API_PREFIX = '/api/v3';
-
-// Helper to generate random test data
-function generateTestUser() {
-  const timestamp = Date.now();
-  const randomSuffix = Math.floor(Math.random() * 10000);
-
-  return {
-    email: `test.user.${timestamp}.${randomSuffix}@example.com`,
-    password: `TestPassword${randomSuffix}!`,
-    hname: `Test User ${timestamp}`
-  };
-}
 
 describe('Authentication', () => {
   // Store cookies between tests for auth flow
@@ -47,13 +32,9 @@ describe('Authentication', () => {
     return response.headers['set-cookie'] || [];
   }
 
-  // Helper to attach cookies to request
+  // Helper to attach cookies to request (using shared helper now)
   function attachCookiesToRequest(req) {
-    authCookies.forEach((cookie) => {
-      const [cookieValue] = cookie.split(';');
-      req.set('Cookie', cookieValue);
-    });
-    return req;
+    return attachAuthToken(req, authCookies);
   }
 
   describe('Login Endpoint', () => {

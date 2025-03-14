@@ -124,7 +124,7 @@ If tests timeout, try:
 1. Increase the timeout in individual tests:
 
    ```javascript
-   jest.setTimeout(60000); // Set timeout to 60 seconds
+   jest.setTimeout(20000); // Set timeout to 20 seconds
    ```
 
 2. Check for any blocking async operations that might not be resolving

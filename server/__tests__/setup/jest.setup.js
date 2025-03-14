@@ -56,7 +56,7 @@ async function resetDatabase() {
 preventProductionDatabaseTesting();
 
 // Increase timeout for all tests
-jest.setTimeout(30000);
+jest.setTimeout(3000);
 
 // Setup global hooks
 beforeAll(async () => {
@@ -79,8 +79,6 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  console.log('Global teardown: Cleaning up test environment');
-
   // Close database connection
   await dbHelpers.closePool();
 });

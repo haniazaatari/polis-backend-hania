@@ -23,7 +23,7 @@
     "check": "biome check --max-diagnostics=none",
     "check:fix": "biome check --write --unsafe",
     "db:reset": "node bin/db-reset.js",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles --forceExit",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "test:unit": "npm test -- --testPathIgnorePatterns=integration",
     "test:integration": "npm test -- --testPathPattern=integration"
   },

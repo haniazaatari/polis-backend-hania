@@ -1,25 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
 import dotenv from 'dotenv';
 import request from 'supertest';
+import { API_PREFIX, API_URL, attachAuthToken, generateTestUser } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 dotenv.config();
-
-const API_PORT = process.env.API_SERVER_PORT || 5000;
-const API_URL = process.env.API_URL || `http://localhost:${API_PORT}`;
-const API_PREFIX = '/api/v3';
-
-// Helper to generate random test data
-function generateTestUser() {
-  const timestamp = Date.now();
-  const randomSuffix = Math.floor(Math.random() * 10000);
-
-  return {
-    email: `test.user.${timestamp}.${randomSuffix}@example.com`,
-    password: `TestPassword${randomSuffix}!`,
-    hname: `Test User ${timestamp}`
-  };
-}
 
 describe('Conversation Endpoints', () => {
   // Store auth token between tests
@@ -45,15 +30,6 @@ describe('Conversation Endpoints', () => {
     }
   });
 
-  // Helper function to attach auth token to a request
-  const attachAuthToken = (request) => {
-    if (authToken) {
-      request.set('x-polis', authToken);
-    } else {
-    }
-    return request;
-  };
-
   // Register and login a test user before running tests
   beforeAll(async () => {
     try {
@@ -77,15 +53,11 @@ describe('Conversation Endpoints', () => {
       // Extract auth token from response headers or cookies
       if (loginResponse.headers['x-polis']) {
         authToken = loginResponse.headers['x-polis'];
-      } else if (loginResponse.body.token) {
+      } else if (loginResponse.body?.token) {
         authToken = loginResponse.body.token;
       } else if (loginResponse.headers['set-cookie']) {
-        // Try to extract token from cookies
-        const cookies = loginResponse.headers['set-cookie'];
-        const tokenCookie = cookies.find((cookie) => cookie.startsWith('token2='));
-        if (tokenCookie) {
-          authToken = tokenCookie.split('=')[1].split(';')[0];
-        }
+        // Store the entire cookie array
+        authToken = loginResponse.headers['set-cookie'];
       }
     } catch (error) {
       console.error('Error in beforeAll:', error);
@@ -94,7 +66,7 @@ describe('Conversation Endpoints', () => {
 
   describe('POST /conversations', () => {
     it('should create a new conversation', async () => {
-      const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/conversations`)).send({
+      const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/conversations`), authToken).send({
         topic: `Test Conversation ${Date.now()}`,
         description: `Test Description ${Date.now()}`
       });
@@ -114,7 +86,10 @@ describe('Conversation Endpoints', () => {
 
   describe('GET /conversations', () => {
     it('should retrieve user conversations', async () => {
-      const response = await attachAuthToken(request(API_URL).get(`${API_PREFIX}/conversations?uid=${userId}`));
+      const response = await attachAuthToken(
+        request(API_URL).get(`${API_PREFIX}/conversations?uid=${userId}`),
+        authToken
+      );
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
@@ -130,7 +105,8 @@ describe('Conversation Endpoints', () => {
   describe('GET /conversationStats', () => {
     it('should retrieve conversation stats if conversation exists', async () => {
       const response = await attachAuthToken(
-        request(API_URL).get(`${API_PREFIX}/conversationStats?conversation_id=${conversationZinvite}`)
+        request(API_URL).get(`${API_PREFIX}/conversationStats?conversation_id=${conversationZinvite}`),
+        authToken
       );
 
       expect(response.status).toBe(200);
@@ -148,7 +124,9 @@ describe('Conversation Endpoints', () => {
         uid: userId
       };
 
-      const response = await attachAuthToken(request(API_URL).put(`${API_PREFIX}/conversations`)).send(updateData);
+      const response = await attachAuthToken(request(API_URL).put(`${API_PREFIX}/conversations`), authToken).send(
+        updateData
+      );
 
       expect(response.status).toBe(200);
     });
@@ -156,9 +134,11 @@ describe('Conversation Endpoints', () => {
 
   describe('POST /conversation/close', () => {
     it('should close a conversation', async () => {
-      const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/conversation/close`)).send({
-        conversation_id: conversationZinvite
-      });
+      const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/conversation/close`), authToken).send(
+        {
+          conversation_id: conversationZinvite
+        }
+      );
 
       expect(response.status).toBe(200);
     });
@@ -166,7 +146,10 @@ describe('Conversation Endpoints', () => {
 
   describe('POST /conversation/reopen', () => {
     it('should reopen a closed conversation', async () => {
-      const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/conversation/reopen`)).send({
+      const response = await attachAuthToken(
+        request(API_URL).post(`${API_PREFIX}/conversation/reopen`),
+        authToken
+      ).send({
         conversation_id: conversationZinvite
       });
 
