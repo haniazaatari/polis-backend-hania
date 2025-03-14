@@ -60,15 +60,31 @@ async function handleGetParticipationInit(req, res) {
 
     logger.debug('Calling getParticipationInit with params:', JSON.stringify(params, null, 2));
 
-    // Get participation initialization data
-    const result = await getParticipationInit(params);
-    res.status(200).json(result);
+    try {
+      // Get participation initialization data
+      const result = await getParticipationInit(params);
+      res.status(200).json(result);
+    } catch (err) {
+      logger.error('Error in getParticipationInit service call', {
+        error: err,
+        message: err.message,
+        stack: err.stack,
+        params: JSON.stringify(params, null, 2)
+      });
+
+      // Provide more specific error handling
+      if (err.message?.includes('unexpected db query syntax')) {
+        fail(res, 500, 'polis_err_db_query_syntax', 'Database query syntax error');
+      } else {
+        fail(res, 500, 'polis_err_get_participationInit', err);
+      }
+    }
   } catch (err) {
     logger.error('Error in handleGetParticipationInit', {
       error: err,
       message: err.message,
       stack: err.stack,
-      params: JSON.stringify(req.p)
+      params: JSON.stringify(req.p, null, 2)
     });
     fail(res, 500, 'polis_err_get_participationInit', err);
   }

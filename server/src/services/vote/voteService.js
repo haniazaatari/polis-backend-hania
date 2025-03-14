@@ -60,6 +60,7 @@ async function getAuthorUidsOfFeaturedComments(zid) {
     const pcaResult = await getPca(zid, 0);
 
     if (!pcaResult || typeof pcaResult !== 'object' || pcaResult === null || !('asPOJO' in pcaResult)) {
+      logger.debug(`No PCA data available for zid ${zid}, returning empty array of featured comments`);
       return [];
     }
 
@@ -71,26 +72,38 @@ async function getAuthorUidsOfFeaturedComments(zid) {
     const consensusTids = _.union(_.pluck(pcaData.consensus.agree, 'tid'), _.pluck(pcaData.consensus.disagree, 'tid'));
 
     let groupTids = [];
-    for (const gid in pcaData.repness) {
-      const commentData = pcaData.repness[gid];
-      groupTids = _.union(groupTids, _.pluck(commentData, 'tid'));
+    if (pcaData.repness) {
+      for (const gid in pcaData.repness) {
+        const commentData = pcaData.repness[gid] || [];
+        groupTids = _.union(groupTids, _.pluck(commentData, 'tid'));
+      }
     }
 
     let featuredTids = _.union(consensusTids, groupTids);
+
+    // Filter out any undefined, null, or non-numeric values
+    featuredTids = featuredTids.filter((tid) => tid !== undefined && tid !== null && !Number.isNaN(Number(tid)));
+
     featuredTids.sort();
     featuredTids = _.uniq(featuredTids);
 
     if (featuredTids.length === 0) {
+      logger.debug(`No featured tids found for zid ${zid}, returning empty array`);
       return [];
     }
 
-    const q = `with authors as (select distinct(uid) from comments where zid = ($1) and tid in (${featuredTids.join(',')}) order by uid) select authors.uid from authors union select authors.uid from authors inner join xids on xids.uid = authors.uid order by uid;`;
-    const comments = await pgQueryP(q, [zid]);
+    try {
+      const q = `with authors as (select distinct(uid) from comments where zid = ($1) and tid in (${featuredTids.join(',')}) order by uid) select authors.uid from authors union select authors.uid from authors inner join xids on xids.uid = authors.uid order by uid;`;
+      const comments = await pgQueryP(q, [zid]);
 
-    let uids = _.pluck(comments, 'uid');
-    uids = _.uniq(uids);
+      let uids = _.pluck(comments, 'uid');
+      uids = _.uniq(uids);
 
-    return uids;
+      return uids;
+    } catch (err) {
+      logger.error(`SQL error getting author UIDs for zid ${zid}`, err);
+      return [];
+    }
   } catch (err) {
     logger.error('Error getting author UIDs of featured comments', err);
     return [];
@@ -194,7 +207,7 @@ function submitVote(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
  */
 function getVotesForSingleParticipant(p) {
   // Early return if pid is undefined, matching legacy behavior
-  if (_.isUndefined(p.pid)) {
+  if (p.pid === undefined) {
     return Promise.resolve([]);
   }
 
@@ -203,11 +216,12 @@ function getVotesForSingleParticipant(p) {
     .select(sql_votes_latest_unique.star())
     .where(sql_votes_latest_unique.zid.equals(p.zid));
 
-  if (!_.isUndefined(p.pid)) {
+  // Use explicit undefined check instead of truthy check to handle pid=0 correctly
+  if (p.pid !== undefined) {
     q = q.where(sql_votes_latest_unique.pid.equals(p.pid));
   }
 
-  if (!_.isUndefined(p.tid)) {
+  if (p.tid !== undefined) {
     q = q.where(sql_votes_latest_unique.tid.equals(p.tid));
   }
 

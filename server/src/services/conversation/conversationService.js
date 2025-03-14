@@ -3,7 +3,6 @@ import Config from '../../config.js';
 import { queryP_readOnly } from '../../db/pg-query.js';
 import { sendCreatedLinkToEmail } from '../../email/specialized.js';
 import * as conversationRepository from '../../repositories/conversation/conversationRepository.js';
-import * as participantRepository from '../../repositories/participant/participantRepository.js';
 import { ifDefinedFirstElseSecond } from '../../utils/common.js';
 import { DEFAULTS } from '../../utils/constants.js';
 import logger from '../../utils/logger.js';
@@ -573,19 +572,6 @@ async function createConversation(conversationData, requestedConversationId, gen
       zinvite = requestedConversationId;
     } else {
       zinvite = await generateAndRegisterZinvite(zid, generateShortUrl);
-    }
-
-    // Add the owner as a participant
-    try {
-      await participantRepository.createParticipant(zid, conversationData.owner);
-      logger.debug('Added owner as participant', { zid, owner: conversationData.owner });
-    } catch (participantError) {
-      logger.error('Error adding owner as participant', {
-        error: participantError,
-        zid,
-        owner: conversationData.owner
-      });
-      // Continue even if there's an error adding the participant
     }
 
     // Build conversation URL
