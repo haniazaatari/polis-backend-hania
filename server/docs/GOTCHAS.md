@@ -145,6 +145,86 @@ Error handling is inconsistent throughout the codebase:
 
 **Solution:** Add your own detailed logging when debugging, particularly around database operations.
 
+## Legacy Server Stability Issues
+
+### Process Hanging and Resource Leaks
+
+The legacy server has several stability issues that can affect development and testing:
+
+**Gotcha:** The server process often leaves open handles and connections, causing:
+
+- Tests to hang indefinitely
+- Node process to not exit cleanly
+- Resource leaks in development
+- Difficulty identifying which endpoints are causing hangs
+
+**Solution:**
+
+- Use `--detectOpenHandles` flag with Jest to identify problematic tests
+- Set appropriate timeouts in test configurations
+- Monitor process resources during development
+- Implement proper cleanup in `afterAll` and `afterEach` blocks
+
+### Endpoint Timeouts and Hanging Requests
+
+The legacy server has issues with certain endpoints that may hang indefinitely:
+
+**Gotcha:**
+
+- Some endpoints never return a response
+- Others may take an extremely long time to respond
+- Certain operations (like closing conversations) consistently hang
+- Test timeouts may need to be much longer than expected
+- Resource cleanup might not happen properly when requests hang
+
+**Solution:**
+
+- Implement request timeouts in test helpers
+- Use circuit breakers for known problematic endpoints
+- Consider skipping tests for endpoints known to hang
+- Document timeout values that work reliably
+- Implement cleanup even when requests fail
+- Known problematic endpoints:
+  - `/conversation/close` - Often hangs indefinitely
+  - `/auth/deregister` - May timeout with certain parameters
+  - Add others as they are discovered
+
+### Response Format Reliability
+
+The legacy server's response handling is inconsistent and can be misleading:
+
+**Gotcha:**
+
+- Content-Type headers don't always match the actual response format
+- Some endpoints return text/plain for JSON responses
+- Error responses mix formats between structured JSON and plain text
+- Status codes may not follow REST conventions
+
+**Solution:**
+
+- Always use the test helpers that handle format detection
+- Don't rely solely on Content-Type headers
+- Implement robust response parsing that can handle both formats
+- Document endpoint-specific response format quirks
+
+### Dead Code and Deprecated Endpoints
+
+The codebase contains endpoints that may no longer be functional or used in production:
+
+**Gotcha:**
+
+- Some endpoints exist in code but are broken or non-functional
+- Documentation may reference endpoints that are no longer supported
+- Error handling might be incomplete for deprecated paths
+- Test failures might indicate dead code rather than bugs
+
+**Solution:**
+
+- Verify endpoint usage in production before extensive debugging
+- Document known dead code paths
+- Consider adding deprecation notices in responses
+- Maintain a list of known-broken endpoints
+
 ## Testing Considerations
 
 ### Database Reset Between Tests
@@ -162,3 +242,21 @@ Some tests expect the API to be running, while others mock it.
 **Gotcha:** Changes to the API can break tests in non-obvious ways.
 
 **Solution:** Check if the test is using a real or mocked API before making changes that might affect it.
+
+### Shared Test State
+
+The test suites sometimes share state variables (users, cookies, etc.) between different test suites.
+
+**Gotcha:** When running multiple test suites together, shared state can cause tests to interfere with each other. For example:
+
+- One test suite might create a user that another suite tries to create
+- Authentication tokens might persist between suites
+- Database records created in one suite might affect assertions in another
+
+**Solution:**
+
+- Each test suite should maintain its own isolated state variables
+- Generate unique test data for each suite (e.g., unique email addresses)
+- Clear authentication tokens and cookies after each test
+- Use database transactions to roll back changes after each test
+- If you must share state, document it clearly and consider the implications for test ordering

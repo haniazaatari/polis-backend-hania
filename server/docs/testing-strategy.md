@@ -16,6 +16,26 @@ When testing against the legacy server, be aware of these known quirks:
 - **Response Format Inconsistency**: The legacy server sometimes sends plain text responses with `content-type: application/json`. Our test helpers handle this by attempting JSON parsing first, then falling back to raw text.
 - **Error Response Format**: Error responses are often plain text error codes (e.g., `polis_err_param_missing_password`) rather than structured JSON objects.
 - **Deregister Endpoint Timeout**: The `/auth/deregister` endpoint may timeout when called with a `showPage` parameter but no auth token. This case is currently skipped in tests.
+- **Server Stability Issues**:
+  - The server frequently crashes or hangs due to unhandled errors
+  - Node process may leave open handles, requiring `--detectOpenHandles` in tests
+  - Some endpoints may timeout unexpectedly under load
+  - Consider using shorter test timeouts to catch hanging endpoints early
+- **Dead Code Paths**:
+  - Some endpoints may be broken or non-functional despite being present in the codebase
+  - These endpoints might have been deprecated in production but not removed
+  - When encountering unexpected failures, verify if the endpoint is actually used in production
+- **Test Reliability**:
+  - Tests against the legacy server may be flaky due to these issues
+  - Consider running critical tests multiple times
+  - Add appropriate error handling and retries in test helpers
+  - Document any endpoints that consistently fail or timeout
+- **Endpoint Timeouts**:
+  - Some endpoints may hang indefinitely without responding
+  - The `/conversation/close` endpoint is known to hang frequently
+  - Consider implementing circuit breakers or timeouts in test helpers
+  - Some endpoints may require multiple attempts with delays between them
+  - Document timeout values that work reliably for each endpoint
 
 ## Recommended Workflow (Hybrid Approach)
 
@@ -59,6 +79,19 @@ For each difference identified between modular and legacy servers, explicitly de
 - **Early Legacy Validation**: Catch legacy quirks early, reducing surprises later.
 - **Maintain Readability**: Leverage the modular server's readability and debuggability.
 - **Clear Documentation**: Explicitly document intentional deviations, improving clarity and communication.
+
+## Test Isolation Best Practices
+
+### State Management
+
+- **Isolate Test Suite State**: Each test suite should maintain its own state variables (users, cookies, etc.) to prevent interference between suites.
+- **Use Unique Test Data**: Generate unique test data (e.g., email addresses) for each test suite to prevent conflicts in concurrent or sequential test runs.
+- **Clear State After Tests**: Always clear any stored state (cookies, tokens, etc.) after tests complete to prevent leakage into subsequent tests.
+
+### Database Transactions
+
+- **Use Transaction Boundaries**: Wrap each test in a database transaction that gets rolled back after the test completes.
+- **Reset Shared Resources**: If tests modify shared resources, ensure they are reset to a known state after each test.
 
 ## Final Goal
 

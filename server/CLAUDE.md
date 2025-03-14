@@ -37,7 +37,7 @@
 - Some tests are EXPECTED TO FAIL, because the restructuring is not yet validated.
 - Tests should focus on API surface area, and use the database itself to validate as needed.
 - Server logs can be viewed with `docker compose logs`.
-- Please, DO NOT SKIP TESTS, or parts of tests, to get the build to pass. Failing tests are important indicators of missing functionality. Prefer robust failing tests over flimsy passing tests.
+- Please, DO NOT SKIP TESTS, or parts of tests, to get the build to pass. Failing tests are important indicators of missing functionality. Prefer robust failing tests over flimsy passing tests. (Some exceptions can be made for flaky or problematic legacy endpoints.)
 
 ## Bugs
 

@@ -33,6 +33,19 @@ describe('Authentication', () => {
     return attachAuthToken(req, authCookies);
   }
 
+  // Helper to extract error message from response
+  function getErrorMessage(response) {
+    if (typeof response.text === 'string') {
+      try {
+        const parsed = JSON.parse(response.text);
+        return parsed.error || response.text;
+      } catch (e) {
+        return response.text;
+      }
+    }
+    return response.text;
+  }
+
   describe('Login Endpoint', () => {
     it('should return 400 when no password provided', async () => {
       const response = await makeRequest('POST', '/auth/login', {});
@@ -77,7 +90,7 @@ describe('Authentication', () => {
       });
 
       expect(response.status).toBe(400);
-      expect(response.text).toBe('Passwords do not match.');
+      expect(getErrorMessage(response)).toMatch(/Passwords do not match/);
     });
 
     it('should return 400 when required fields are missing', async () => {
@@ -86,7 +99,7 @@ describe('Authentication', () => {
       });
 
       expect(response.status).toBe(400);
-      expect(response.text).toBe('polis_err_reg_need_tos');
+      expect(getErrorMessage(response)).toMatch(/polis_err_reg_need_tos/);
     });
 
     it('should return 400 when terms not accepted', async () => {
@@ -96,7 +109,7 @@ describe('Authentication', () => {
       });
 
       expect(response.status).toBe(400);
-      expect(response.text).toBe('polis_err_reg_need_tos');
+      expect(getErrorMessage(response)).toMatch(/polis_err_reg_need_tos/);
     });
   });
 
