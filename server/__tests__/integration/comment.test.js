@@ -160,7 +160,7 @@ describe('Comment Endpoints', () => {
       if (response.body.length === 0) {
         console.warn('Warning: No comments were returned for the conversation');
         // Skip the expectation if we have no comments to check
-        return;
+        // return;
       }
 
       // If we created a comment, it should be in the list

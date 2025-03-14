@@ -301,7 +301,7 @@ describe('Participation Endpoints', () => {
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
-          return;
+          // return;
         }
         throw error;
       }
@@ -320,7 +320,7 @@ describe('Participation Endpoints', () => {
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
-          return;
+          // return;
         }
         throw error;
       }
@@ -339,7 +339,7 @@ describe('Participation Endpoints', () => {
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
-          return;
+          // return;
         }
         throw error;
       }
@@ -359,7 +359,7 @@ describe('Participation Endpoints', () => {
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
-          return;
+          // return;
         }
         throw error;
       }
@@ -377,7 +377,7 @@ describe('Participation Endpoints', () => {
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
-          return;
+          // return;
         }
         throw error;
       }
@@ -398,7 +398,7 @@ describe('Participation Endpoints', () => {
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
-          return;
+          // return;
         }
         throw error;
       }
@@ -414,7 +414,7 @@ describe('Participation Endpoints', () => {
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
-          return;
+          // return;
         }
         throw error;
       }
@@ -428,7 +428,7 @@ describe('Participation Endpoints', () => {
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
-          return;
+          // return;
         }
         throw error;
       }
@@ -449,7 +449,7 @@ describe('Participation Endpoints', () => {
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
-          return;
+          // return;
         }
         throw error;
       }
@@ -470,7 +470,34 @@ describe('Participation Endpoints', () => {
         expect(initResponse.body).toHaveProperty('user');
         expect(initResponse.body).toHaveProperty('conversation');
 
-        // Then get participation data
+        // Log the init response to see what's available
+        console.log('Init response user:', JSON.stringify(initResponse.body.user, null, 2));
+
+        // Get the pid from the init response
+        let pid = initResponse.body.user?.pid;
+
+        if (pid === undefined) {
+          // If we can't find pid in the user object, try to get the participant ID directly
+          const pidResponse = await attachAuthToken(
+            request(API_URL).get(`${API_PREFIX}/participants`).query({
+              conversation_id: conversationId
+            })
+          );
+
+          if (pidResponse.status === 200 && pidResponse.body) {
+            pid = pidResponse.body.pid;
+            console.log('Got pid from participants API:', pid);
+          }
+        }
+
+        // If we still don't have a valid pid, default to 1 (not 0)
+        if (pid === undefined || pid === null) {
+          pid = 1;
+        }
+
+        console.log('Using participant ID for vote:', pid);
+
+        // Then get participation data (this is just to verify access, we don't need the data)
         const participationResponse = await attachAuthToken(
           request(API_URL).get(`${API_PREFIX}/participation`).query({
             conversation_id: conversationId
@@ -480,21 +507,28 @@ describe('Participation Endpoints', () => {
         expect(participationResponse.status).toBe(200);
         expect(participationResponse.body).toBeDefined();
 
+        // Prepare the vote request data
+        const voteData = {
+          conversation_id: conversationId,
+          tid: commentId,
+          vote: -1, // -1 = agree; 1 = disagree
+          pid: pid // Use the pid we retrieved from the API
+        };
+
+        console.log('Sending vote request with data:', JSON.stringify(voteData, null, 2));
+
         // Verify a user can vote after participation initialization
-        const voteResponse = await attachAuthToken(
-          request(API_URL).post(`${API_PREFIX}/votes`).send({
-            conversation_id: conversationId,
-            tid: commentId,
-            vote: -1 // -1 = agree; 1 = disagree
-          })
-        );
+        const voteResponse = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/votes`).send(voteData));
+
+        console.log('Vote response status:', voteResponse.status);
+        console.log('Vote response body:', JSON.stringify(voteResponse.body, null, 2));
 
         expect(voteResponse.status).toBe(200);
         expect(voteResponse.body).toBeDefined();
       } catch (error) {
         if (error.code === 'ECONNRESET' || error.message?.includes('socket hang up')) {
           console.warn('Test skipped due to connection reset');
-          return;
+          // return;
         }
         throw error;
       }

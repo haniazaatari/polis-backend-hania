@@ -1,10 +1,10 @@
+import { exec } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { promisify } from 'util';
 import { afterAll, beforeAll, jest } from '@jest/globals';
 import dotenv from 'dotenv';
 import dbHelpers from './db-test-helpers.js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 // Setup dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -34,15 +34,15 @@ function preventProductionDatabaseTesting() {
  */
 async function resetDatabase() {
   console.log('\n🔄 Resetting database before tests...');
-  
+
   try {
     const resetScript = path.join(__dirname, '..', '..', 'bin', 'db-reset.js');
-    const { stdout, stderr } = await execAsync(`node ${resetScript}`, { 
-      env: { ...process.env, SKIP_CONFIRM: 'true' } 
+    const { stdout, stderr } = await execAsync(`node ${resetScript}`, {
+      env: { ...process.env, SKIP_CONFIRM: 'true' }
     });
-    
+
     console.log('\n✅ Database reset complete!');
-    
+
     if (stderr) {
       console.error('stderr:', stderr);
     }
