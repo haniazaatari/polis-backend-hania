@@ -1,5 +1,4 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
-import dotenv from 'dotenv';
 import request from 'supertest';
 import {
   API_PREFIX,
@@ -11,8 +10,6 @@ import {
   wait
 } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
-
-dotenv.config();
 
 describe('Vote Endpoints', () => {
   // Store auth data between tests

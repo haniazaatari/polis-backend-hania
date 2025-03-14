@@ -25,9 +25,9 @@
 
 - [x] Set up Jest for testing
 - [x] HTTP API test suite (started)
-- [ ] Test Auth
-- [ ] Test Comment
-- [ ] Test Conversation
+- [x] Test Auth
+- [x] Test Comment
+- [x] Test Conversation
 - [ ] Test Cookie
 - [ ] Test Data Export
 - [ ] Test Email
@@ -35,13 +35,14 @@
 - [ ] Test Math
 - [ ] Test Metadata
 - [ ] Test Moderation
+- [x] Test Participation
 - [ ] Test Participant
 - [ ] Test Password
 - [ ] Test Report
 - [ ] Test Narrative Report
 - [ ] Test Subscription
 - [ ] Test User
-- [ ] Test Vote
+- [x] Test Vote
 - [ ] Test Zinvite
 - [ ] Test Static File Fetching
 - [ ] Test Middleware
@@ -52,6 +53,7 @@
 - [ ] Create a schema with TypeORM or similar
 - [x] Upgrade to PostgreSQL 14
 - [x] Upgrade to PostgreSQL 16
+- [ ] Distinguish between test and dev databases
 
 ## Modular Code
 

@@ -1,11 +1,5 @@
-import dotenv from 'dotenv';
 import request from 'supertest';
-
-dotenv.config();
-
-const API_PORT = process.env.API_SERVER_PORT || 5000;
-const API_URL = process.env.API_URL || `http://localhost:${API_PORT}`;
-const API_PREFIX = '/api/v3';
+import { API_PREFIX, API_URL } from '../setup/api-test-helpers.js';
 
 async function testAuth() {
   try {

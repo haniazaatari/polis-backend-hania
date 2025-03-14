@@ -1,5 +1,4 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
-import dotenv from 'dotenv';
 import request from 'supertest';
 import {
   API_PREFIX,
@@ -10,8 +9,6 @@ import {
   generateTestUser
 } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
-
-dotenv.config();
 
 describe('Comment Endpoints', () => {
   // Store auth data and ids between tests

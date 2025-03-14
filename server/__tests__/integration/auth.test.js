@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
-import dotenv from 'dotenv';
 import request from 'supertest';
 import { API_PREFIX, API_URL, attachAuthToken, generateTestUser } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
-
-dotenv.config();
 
 describe('Authentication', () => {
   // Store cookies between tests for auth flow

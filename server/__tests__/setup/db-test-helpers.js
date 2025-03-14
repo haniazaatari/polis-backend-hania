@@ -2,7 +2,8 @@ import DBMigrate from 'db-migrate';
 import dotenv from 'dotenv';
 import pg from 'pg';
 
-dotenv.config();
+// Load environment variables from .env file but don't override command-line vars
+dotenv.config({ override: false });
 
 /**
  * SECURITY CHECK: Prevent running tests against production databases

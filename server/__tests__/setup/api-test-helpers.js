@@ -5,13 +5,18 @@ import dotenv from 'dotenv';
  */
 import request from 'supertest';
 
-dotenv.config();
+// Use { override: false } to prevent dotenv from overriding command-line env vars
+dotenv.config({ override: false });
+
+console.log('process.env.API_SERVER_PORT', process.env.API_SERVER_PORT);
 
 // API constants - export these for use in test files
 const API_PORT = process.env.API_SERVER_PORT || 5000;
-const API_URL = process.env.API_URL || `http://localhost:${API_PORT}`;
+const API_URL = `http://localhost:${API_PORT}`;
 const API_PREFIX = '/api/v3';
 
+console.log('API_URL', API_URL);
+console.log('API_PORT', API_PORT);
 /**
  * Helper to generate random test user data
  * @returns {Object} Random user data for registration

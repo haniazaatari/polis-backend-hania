@@ -23,7 +23,7 @@ services:
   legacy-server:
     image: polis-server:legacy
     ports:
-      - "5002:5000"
+      - "5002:5002"
     depends_on:
       - polis-db
     env_file:

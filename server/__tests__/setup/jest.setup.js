@@ -11,7 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const execAsync = promisify(exec);
 
-dotenv.config();
+// Load environment variables from .env file but don't override command-line vars
+dotenv.config({ override: false });
 
 /**
  * Secondary safety check to prevent tests from running against production databases

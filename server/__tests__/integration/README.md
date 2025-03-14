@@ -19,6 +19,7 @@ To maintain consistency and reduce duplication, all test files use shared helper
 
 ### API Constants
 
+- `API_PORT` - The port for the API (defaults to 5000)
 - `API_URL` - The base URL for the API (defaults to localhost with port from env or 5000)
 - `API_PREFIX` - The API version prefix ('/api/v3')
 
