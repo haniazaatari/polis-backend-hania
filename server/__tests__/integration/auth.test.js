@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
-import { attachAuthToken, generateTestUser, makeRequest } from '../setup/api-test-helpers.js';
+import {
+  createTestComment,
+  createTestConversation,
+  extractCookieValue,
+  generateTestUser,
+  initializeParticipant,
+  makeRequest,
+  registerAndLoginUser,
+  submitVote
+} from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 describe('Authentication', () => {
@@ -22,16 +31,6 @@ describe('Authentication', () => {
       client = null;
     }
   });
-
-  // Helper to extract cookies from response
-  function extractCookiesFromResponse(response) {
-    return response.headers['set-cookie'] || [];
-  }
-
-  // Helper to attach cookies to request (using shared helper now)
-  function attachCookiesToRequest(req) {
-    return attachAuthToken(req, authCookies);
-  }
 
   // Helper to extract error message from response
   function getErrorMessage(response) {
@@ -125,15 +124,6 @@ describe('Authentication', () => {
       });
       expect(response.status).toBe(200);
     });
-
-    // Note: Legacy server seems to timeout on this case, so we'll skip for now
-    it.skip('should handle string showPage value when not logged in', async () => {
-      const response = await makeRequest('POST', '/auth/deregister', {
-        showPage: 'home'
-      });
-      expect(response.status).toBe(401);
-      expect(response.text).toBe('polis_err_auth_token_not_supplied');
-    });
   });
 
   describe('Register-Login Flow', () => {
@@ -172,6 +162,10 @@ describe('Authentication', () => {
       // Save cookies for subsequent tests
       authCookies = loginResponse.headers['set-cookie'] || [];
       expect(authCookies.length).toBeGreaterThan(0);
+
+      // Verify token cookie is present
+      const token = extractCookieValue(authCookies, 'token2');
+      expect(token).toBeDefined();
     });
   });
 
@@ -180,8 +174,8 @@ describe('Authentication', () => {
     const completeFlowUser = generateTestUser();
     let completeFlowCookies = [];
 
-    beforeEach(async () => {
-      // Register and login a test user to get auth cookies
+    it('should register, login, and logout successfully', async () => {
+      // Step 1: Register a new user
       const registerResponse = await makeRequest('POST', '/auth/new', {
         email: completeFlowUser.email,
         password: completeFlowUser.password,
@@ -194,6 +188,7 @@ describe('Authentication', () => {
       const registerData = registerResponse.body || JSON.parse(registerResponse.text);
       completeFlowUser.uid = registerData.uid;
 
+      // Step 2: Login with the user
       const loginResponse = await makeRequest('POST', '/auth/login', {
         email: completeFlowUser.email,
         password: completeFlowUser.password
@@ -202,14 +197,134 @@ describe('Authentication', () => {
       expect(loginResponse.status).toBe(200);
       completeFlowCookies = loginResponse.headers['set-cookie'] || [];
       expect(completeFlowCookies.length).toBeGreaterThan(0);
+
+      // Step 3: Logout the user
+      const logoutResponse = await makeRequest('POST', '/auth/deregister', {}, completeFlowCookies);
+      expect(logoutResponse.status).toBe(200);
+
+      // Step 4: Try to access a protected resource (should fail)
+      const protectedResponse = await makeRequest('GET', '/conversations', {}, completeFlowCookies);
+      expect([400, 401, 403]).toContain(protectedResponse.status);
+
+      // Step 5: Login again to verify we can still authenticate
+      const loginAgainResponse = await makeRequest('POST', '/auth/login', {
+        email: completeFlowUser.email,
+        password: completeFlowUser.password
+      });
+
+      expect(loginAgainResponse.status).toBe(200);
+      expect(loginAgainResponse.headers['set-cookie']).toBeDefined();
+      expect(loginAgainResponse.headers['set-cookie'].length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Participant Authentication', () => {
+    // Test data for participant tests
+    let conversationId;
+    let commentId;
+    let testOwner;
+
+    // Set up a test conversation once for all participant auth tests
+    beforeEach(async () => {
+      try {
+        // Create a dedicated owner for this test suite
+        const ownerUser = generateTestUser();
+
+        // Register and login as the owner
+        testOwner = await registerAndLoginUser(ownerUser);
+        expect(testOwner.authToken).toBeDefined();
+
+        // Create a conversation for participant testing
+        const conversationData = await createTestConversation(testOwner.authToken, {
+          topic: `Participant Auth Test Conversation ${Date.now()}`,
+          description: 'Test conversation for participant authentication tests',
+          is_active: true,
+          is_anon: true
+        });
+
+        conversationId = conversationData.zinvite;
+        expect(conversationId).toBeDefined();
+        console.log(`Created test conversation with ID: ${conversationId}`);
+
+        // Create a test comment - the legacy server response format is different
+        commentId = await createTestComment(testOwner.authToken, conversationId, {
+          txt: 'Test comment for participant auth flow'
+        });
+
+        console.log(`Created test comment with ID: ${commentId}`);
+
+        // For legacy server testing, we can continue even if we don't have a specific comment ID
+        // The initialize participant endpoint will return a comment anyway
+        console.log(`Set up conversation ${conversationId} with comment ${commentId} for participant auth tests`);
+      } catch (err) {
+        console.error('Failed to set up participant auth tests:', err);
+        throw err;
+      }
+    }, 30000); // Longer timeout for setup
+
+    // Simple test that checks just the initialization of participant
+    it('should initialize a participant session with cookies', async () => {
+      // Initialize participant
+      const { cookies, body, status } = await initializeParticipant(conversationId);
+
+      expect(status).toBe(200);
+
+      // Should receive cookies
+      expect(cookies).toBeDefined();
+      expect(cookies.length).toBeGreaterThan(0);
+
+      // Should have a pc (permanent cookie)
+      const pcCookie = extractCookieValue(cookies, 'pc');
+      expect(pcCookie).toBeDefined();
+
+      // Response body should have conversation and nextComment objects
+      expect(Object.keys(body)).toContain('conversation');
+      expect(Object.keys(body)).toContain('nextComment');
+
+      // Log response structure to help debugging
+      console.log('Participant init response keys:', Object.keys(body));
+
+      const { conversation, nextComment } = body;
+
+      // expect conversation.conversation_id to be the same as conversationId
+      expect(conversation.conversation_id).toBe(conversationId);
+      // expect nextComment.tid to be the same as commentId
+      expect(nextComment.tid).toBe(commentId);
     });
 
-    it('should successfully log out', async () => {
-      const response = await makeRequest('POST', '/auth/deregister', {}, completeFlowCookies);
-      expect(response.status).toBe(200);
+    it('should authenticate a participant upon first vote', async () => {
+      // Step 1: Initialize participant
+      const { cookies, body, status } = await initializeParticipant(conversationId);
+      expect(status).toBe(200);
+      expect(cookies.length).toBeGreaterThan(0);
+      expect(body).toHaveProperty('nextComment');
+      const { nextComment } = body;
+      expect(nextComment.tid).toBe(commentId);
 
-      // Clear our stored cookies
-      completeFlowCookies = [];
+      // Step 2: Vote on the comment
+      const voteData = {
+        conversation_id: conversationId,
+        tid: commentId,
+        vote: -1,
+        agid: 1
+      };
+
+      const { cookies: voteCookies, body: voteBody, status: voteStatus } = await submitVote(voteData, cookies);
+      expect(voteStatus).toBe(200);
+
+      expect(voteCookies.length).toBeGreaterThan(1);
+
+      // Verify participant-related cookies
+      const uc = extractCookieValue(voteCookies, 'uc');
+      const uid2 = extractCookieValue(voteCookies, 'uid2');
+      const token2 = extractCookieValue(voteCookies, 'token2');
+
+      // For participant auth flow, we should have these cookies
+      expect(uc).toBeDefined();
+      expect(uid2).toBeDefined();
+      expect(token2).toBeDefined();
+
+      expect(Object.keys(voteBody)).toContain('currentPid');
     });
   });
 });

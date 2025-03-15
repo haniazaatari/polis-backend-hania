@@ -233,14 +233,14 @@ async function createTestConversation(authToken, options = {}) {
 
   // Extract conversation zinvite from URL (needed for API calls)
   const url = response.body.url;
-  const conversationZinvite = url.split('/').pop();
+  const zinvite = url.split('/').pop();
 
   // Handle both legacy and new response formats
   const zid = response.body.zid || response.body.conversation_id;
 
   return {
     zid,
-    zinvite: conversationZinvite
+    zinvite: zinvite
   };
 }
 
@@ -279,65 +279,86 @@ async function createTestComment(authToken, conversationId, options = {}) {
 }
 
 /**
- * Helper to initialize an anonymous participant
+ * Improved helper to initialize an anonymous participant with better cookie handling
  * @param {string} conversationId - Conversation zinvite
- * @returns {Promise<Object>} Participant data with pid and cookies
+ * @returns {Promise<Object>} Participant data with cookies, body, and status
  */
-async function initializeAnonymousParticipant(conversationId) {
+async function initializeParticipant(conversationId) {
   const response = await makeRequestWithTimeout(
     'GET',
-    `/participationInit?conversation_id=${conversationId}`,
+    `/participationInit?conversation_id=${conversationId}&pid=mypid&lang=acceptLang`,
     null,
     null,
     { timeout: 5000 }
   );
 
-  let pid = null;
-
-  // Check for pid in various response formats
-  if (response.body?.ptpt?.pid !== undefined) {
-    pid = response.body.ptpt.pid;
-  } else if (response.body?.user?.pid !== undefined) {
-    pid = response.body.user.pid;
-  }
-  // Try to parse the response text if it's JSON and not already parsed
-  else if (typeof response.text === 'string') {
-    try {
-      const parsedResponse = JSON.parse(response.text);
-      if (parsedResponse?.pid !== undefined) {
-        pid = parsedResponse.pid;
-      } else if (parsedResponse?.user?.pid !== undefined) {
-        pid = parsedResponse.user.pid;
-      }
-    } catch (err) {
-      // Parsing failed, continue with other methods
-    }
+  if (response.status !== 200) {
+    console.error('Failed to initialize participant - status:', response.status);
+    console.error('Response body:', response.body || response.text);
+    throw new Error(`Failed to initialize anonymous participant. Status: ${response.status}`);
   }
 
-  if (pid === null && pid !== 0) {
-    // For legacy server, if ptpt is null but nextComment exists, use pid from nextComment
-    if (response.body?.nextComment?.pid !== undefined) {
-      pid = response.body.nextComment.pid;
-    } else {
-      console.error('Failed to extract pid from participation init response');
-      console.error('Response body:', JSON.stringify(response.body, null, 2));
-      console.error('Response status:', response.status);
-      throw new Error('Failed to initialize anonymous participant');
-    }
-  }
-
-  // Store cookies for authentication
+  // Extract cookies - critical for participant authentication
   const cookies = response.headers['set-cookie'] || [];
 
-  // Generate agid for vote submission if needed
-  const timestamp = Date.now();
-  const randomId = Math.floor(Math.random() * 1000000);
-  const agid = `anon_${timestamp}_${randomId}`;
+  return {
+    cookies,
+    body: response.body,
+    status: response.status
+  };
+}
+
+/**
+ * Helper function to extract a specific cookie value from a cookie array
+ * @param {Array} cookies - Array of cookies from response
+ * @param {string} cookieName - Name of the cookie to extract
+ * @returns {string|null} Cookie value or null if not found
+ */
+function extractCookieValue(cookies, cookieName) {
+  if (!cookies || !Array.isArray(cookies) || cookies.length === 0) {
+    return null;
+  }
+
+  for (const cookie of cookies) {
+    if (cookie.startsWith(`${cookieName}=`)) {
+      return cookie.split(`${cookieName}=`)[1].split(';')[0];
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Initialize a participant with an XID for embedded use cases
+ * @param {string} conversationId - Conversation zinvite
+ * @param {string} xid - External ID (generated or provided)
+ * @returns {Promise<Object>} Participant data including cookies, body, and status
+ */
+async function initializeParticipantWithXid(conversationId, xid = null) {
+  // Generate XID if not provided
+  const participantXid = xid || generateRandomXid();
+
+  const response = await makeRequestWithTimeout(
+    'GET',
+    `/participationInit?conversation_id=${conversationId}&xid=${participantXid}&pid=mypid&lang=acceptLang`,
+    null,
+    null,
+    { timeout: 5000 }
+  );
+
+  if (response.status !== 200) {
+    console.error('Failed to initialize participant with XID - status:', response.status);
+    console.error('Response body:', response.body || response.text);
+    throw new Error(`Failed to initialize participant with XID. Status: ${response.status}`);
+  }
+
+  // Extract cookies
+  const cookies = response.headers['set-cookie'] || [];
 
   return {
-    pid,
     cookies,
-    agid
+    body: response.body,
+    status: response.status
   };
 }
 
@@ -406,75 +427,16 @@ async function getParticipantId(authToken, conversationId) {
 }
 
 /**
- * Submits a vote for a comment using participant data
- * @param {Object} voteData - Vote data including tid, vote, and conversation_id
- * @param {Object} participantData - Participant data including cookies and pid
- * @returns {Promise<Object>} - Response from the vote API
- */
-async function submitVoteWithParticipant(voteData, participantData) {
-  const votePayload = {
-    ...voteData
-  };
-
-  // Add participant ID if available
-  if (participantData.pid) {
-    votePayload.pid = participantData.pid;
-  }
-
-  // Add anonymous group ID if available
-  if (participantData.agid) {
-    votePayload.agid = participantData.agid;
-  }
-
-  // Submit the vote with participant cookies
-  const req = request(API_URL).post(`${API_PREFIX}/votes`).set('Accept', 'application/json');
-  return attachAuthToken(req, participantData.cookies).send(votePayload);
-}
-
-/**
- * Submits a vote for a comment
- * @param {Object} authToken - Authentication token for the request
- * @param {number} commentId - ID of the comment to vote on
- * @param {string} conversationZinvite - Conversation invite code
- * @param {number} vote - Vote value (-1 for agree, 1 for disagree, 0 for pass)
- * @param {number} [pid] - Optional participant ID (if known)
- * @returns {Promise<Object>} - Response from the vote API
- */
-async function submitVote(authToken, commentId, conversationZinvite, vote, pid = null) {
-  try {
-    // Create vote payload
-    const voteData = {
-      tid: commentId,
-      vote: vote, // -1 for agree, 1 for disagree, 0 for pass
-      conversation_id: conversationZinvite
-    };
-
-    // Add pid if provided
-    if (pid !== null) {
-      voteData.pid = pid;
-    }
-
-    // Submit the vote
-    const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/votes`), authToken).send(voteData);
-
-    return response;
-  } catch (error) {
-    console.error('Error submitting vote:', error.message);
-    throw error;
-  }
-}
-
-/**
  * Retrieves votes for a conversation
  * @param {Object} authToken - Authentication token for the request
- * @param {string} conversationZinvite - Conversation invite code
+ * @param {string} zinvite - Conversation invite code
  * @returns {Promise<Array>} - Array of votes
  */
-async function getVotes(authToken, conversationZinvite) {
+async function getVotes(authToken, zinvite) {
   try {
     // Get votes for the conversation
     const response = await attachAuthToken(
-      request(API_URL).get(`${API_PREFIX}/votes?conversation_id=${conversationZinvite}`),
+      request(API_URL).get(`${API_PREFIX}/votes?conversation_id=${zinvite}`),
       authToken
     );
 
@@ -492,14 +454,14 @@ async function getVotes(authToken, conversationZinvite) {
 /**
  * Retrieves votes for the current participant in a conversation
  * @param {Object} authToken - Authentication token for the request
- * @param {string} conversationZinvite - Conversation invite code
+ * @param {string} zinvite - Conversation invite code
  * @returns {Promise<Array>} - Array of votes
  */
-async function getMyVotes(authToken, conversationZinvite) {
+async function getMyVotes(authToken, zinvite) {
   try {
     // Get votes for the participant
     const response = await attachAuthToken(
-      request(API_URL).get(`${API_PREFIX}/votes/me?conversation_id=${conversationZinvite}`),
+      request(API_URL).get(`${API_PREFIX}/votes/me?conversation_id=${zinvite}`),
       authToken
     );
 
@@ -520,6 +482,52 @@ async function getMyVotes(authToken, conversationZinvite) {
   }
 }
 
+/**
+ * Submits a vote for a comment
+ * @param {Object} authToken - Authentication token for the request
+ * @param {number} commentId - ID of the comment to vote on
+ * @param {string} zinvite - Conversation invite code
+ * @param {number} vote - Vote value (-1 for agree, 1 for disagree, 0 for pass)
+ * @param {number} [pid] - Optional participant ID (if known)
+ * @returns {Promise<Object>} - Response from the vote API
+ */
+async function submitVote(options, authToken) {
+  // Error if options does not have tid or conversation_id
+  // NOTE: 0 is a valid value for tid or conversation_id
+  if (options.tid === undefined || options.conversation_id === undefined) {
+    console.log('Options:', JSON.stringify(options, null, 2));
+    throw new Error('Options must have tid or conversation_id');
+  }
+
+  try {
+    // Create vote payload
+    const voteData = Object.assign(
+      {
+        agid: 1, // Always include agid=1 for consistency
+        high_priority: false,
+        lang: 'en',
+        pid: 'mypid',
+        vote: 0
+      },
+      options
+    );
+
+    // Submit the vote
+    const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/votes`), authToken).send(voteData);
+
+    const cookies = response.headers['set-cookie'] || [];
+
+    return {
+      cookies,
+      body: response.body,
+      status: response.status
+    };
+  } catch (error) {
+    console.error('Error submitting vote:', error.message);
+    throw error;
+  }
+}
+
 // Export API constants along with helper functions
 export {
   API_PORT,
@@ -528,17 +536,18 @@ export {
   attachAuthToken,
   createTestComment,
   createTestConversation,
+  extractCookieValue,
   generateRandomXid,
   generateTestUser,
   getMyVotes,
   getParticipantId,
   getVotes,
-  initializeAnonymousParticipant,
+  initializeParticipant,
+  initializeParticipantWithXid,
   makeRequest,
   makeRequestWithTimeout,
   registerAndLoginUser,
   retryRequest,
   submitVote,
-  submitVoteWithParticipant,
   wait
 };
