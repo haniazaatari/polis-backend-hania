@@ -60,6 +60,12 @@ services:
       - WEBSERVER_PASS=${WEBSERVER_PASS}
     networks:
       - "polis-net"
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+        reservations:
+          memory: 4g
 
   postgres:
     image: docker.io/compdem/polis-postgres:${TAG:-dev}
