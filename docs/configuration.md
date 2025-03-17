@@ -77,6 +77,10 @@ If you are deploying to a custom domain (not `pol.is`) then you need to update b
 - **`DATABASE_URL`** should be the combination of above values, `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}/${POSTGRES_DB}`
 - **`POSTGRES_DOCKER`** Set to `false` if using a postgres database outside of docker. Defaults to `true`. Read by Makefile.
 
+#### DynamoDB
+
+- **`DYNAMODB_ENDPOINT`** (optional) DynamoDB endpoint. If not set, the default AWS SDK endpoint will be used.
+
 ### Docker Concerns
 
 - **`TAG`** used by **`COMPOSE_PROJECT_NAME`** below. Defaults to `dev`.
@@ -126,7 +130,6 @@ If you are deploying to a custom domain (not `pol.is`) then you need to update b
 (All are optional, and omitting them will disable the related feature.)
 
 - **`AKISMET_ANTISPAM_API_KEY`** Comment spam detection and filtering.
-- **`AWS_REGION`** Used for S3 data import/export.
 - **`ENABLE_TWITTER_WIDGETS`** set to `true` to enable twitter widgets on the client-admin authentication pages.
 - **`FB_APP_ID`** Must register with Facebook to get an ID to enable Facebook App connectivity.
 - **`GA_TRACKING_ID`** For using Google Analytics on client pages.
@@ -134,7 +137,11 @@ If you are deploying to a custom domain (not `pol.is`) then you need to update b
 - **`GOOGLE_CREDS_STRINGIFIED`** Alternative to **`GOOGLE_CREDENTIALS_BASE64`** (See below).
 - **`MAILGUN_API_KEY`**, **`MAILGUN_DOMAIN`** If using Mailgun as an email transport.
 - **`TWITTER_CONSUMER_KEY`**, **`TWITTER_CONSUMER_SECRET`** For Twitter integration.
-- **`AWS_ACCESS_KEY_ID`**, **`AWS_SECRET_ACCESS_KEY`** If using Amazon SES as an email transport.
+- **`AWS_REGION`** Used for some data import/export.
+- **`AWS_ACCESS_KEY_ID`**, **`AWS_SECRET_ACCESS_KEY`** Useful for AWS SDK operations.
+- **`ANTHROPIC_API_KEY`** For using Anthropic as a generative AI model.
+- **`GEMINI_API_KEY`** For using Gemini as a generative AI model.
+- **`OPENAI_API_KEY`** For using OpenAI as a generative AI model.
 
 ### Deprecated
 

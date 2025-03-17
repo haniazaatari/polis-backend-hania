@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { Response } from "express";
 import fail from "../utils/fail";
 import { getZidForRid } from "../utils/zinvite";
@@ -18,7 +17,10 @@ import { sendCommentGroupsSummary } from "./export";
 import { getTopicsFromRID } from "../report_experimental/topics-example";
 import DynamoStorageService from "../utils/storage";
 import { PathLike } from "fs";
+import config from "../config";
+import logger from "../utils/logger";
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const js2xmlparser = require("js2xmlparser");
 
 interface PolisRecord {
@@ -109,11 +111,11 @@ export class PolisConverter {
   }
 }
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const anthropic = config.anthropicApiKey ? new Anthropic({
+  apiKey: config.anthropicApiKey,
+}) : null;
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY as string);
+const genAI = config.geminiApiKey ? new GoogleGenerativeAI(config.geminiApiKey) : null;
 
 const getCommentsAsXML = async (
   id: number,
@@ -130,12 +132,11 @@ const getCommentsAsXML = async (
   try {
     const resp = await sendCommentGroupsSummary(id, undefined, false, filter);
     const xml = PolisConverter.convertToXml(resp as string);
-    // eslint-disable-next-line no-console
     if (xml.trim().length === 0)
-      console.error("No data has been returned by sendCommentGroupsSummary");
+      logger.error("No data has been returned by sendCommentGroupsSummary");
     return xml;
   } catch (e) {
-    console.error("Error in getCommentsAsXML:", e);
+    logger.error("Error in getCommentsAsXML:", e);
     throw e; // Re-throw instead of returning empty string
   }
 };
@@ -148,9 +149,7 @@ const isFreshData = (timestamp: string) => {
   const now = new Date().getTime();
   const then = new Date(timestamp).getTime();
   const elapsed = Math.abs(now - then);
-  return (
-    elapsed < 87000000 // 24 hours
-  );
+  return elapsed < config.maxReportCacheDuration;
 };
 
 const getModelResponse = async (
@@ -183,7 +182,7 @@ const getModelResponse = async (
         ]
       }`;
     }
-    const gemeniModel = genAI.getGenerativeModel({
+    const gemeniModel = genAI?.getGenerativeModel({
       // model: "gemini-1.5-pro-002",
       model: modelVersion || "gemini-2.0-pro-exp-02-05",
       generationConfig: {
@@ -231,15 +230,23 @@ const getModelResponse = async (
       ],
       systemInstruction: system_lore,
     };
-    const openai = new OpenAI();
+    const openai = config.openaiApiKey ? new OpenAI({
+      apiKey: config.openaiApiKey,
+    }) : null;
 
     switch (model) {
       case "gemini": {
+        if (!gemeniModel) {
+          throw new Error("polis_err_gemini_api_key_not_set");
+        }
         const respGem = await gemeniModel.generateContent(gemeniModelprompt);
         const result = await respGem.response.text();
         return result;
       }
       case "claude": {
+        if (!anthropic) {
+          throw new Error("polis_err_anthropic_api_key_not_set");
+        }
         const responseClaude = await anthropic.messages.create({
           model: modelVersion || "claude-3-7-sonnet-20250219",
           max_tokens: 3000,
@@ -260,6 +267,9 @@ const getModelResponse = async (
         return `{${responseClaude?.content[0]?.text}`;
       }
       case "openai": {
+        if (!openai) {
+          throw new Error("polis_err_openai_api_key_not_set");
+        }
         const responseOpenAI = await openai.chat.completions.create({
           model: modelVersion || "gpt-4o",
           messages: [
@@ -273,7 +283,7 @@ const getModelResponse = async (
         return "";
     }
   } catch (error) {
-    console.error("ERROR IN GETMODELRESPONSE", error);
+    logger.error("ERROR IN GETMODELRESPONSE", error);
     return `{
       "id": "polis_narrative_error_message",
       "title": "Narrative Error Message",
@@ -684,11 +694,11 @@ export async function handle_GET_topics(
             }, (model === "gemini" ? 500 : 250) * i);
           });
         }
-        console.log("topic over: ", section.name);
+        logger.debug(`topic over: ${section.name}`);
       }
     )
   );
-  console.log("all promises completed");
+  logger.debug("all promises completed");
   res.end();
 }
 
@@ -696,14 +706,12 @@ export async function handle_GET_reportNarrative(
   req: { p: { rid: string }; query: QueryParams },
   res: Response
 ) {
-  let storage;
-  if (process.env.AWS_REGION && process.env.AWS_REGION?.trim().length > 0) {
-    storage = new DynamoStorageService(
-      process.env.AWS_REGION,
-      "report_narrative_store",
-      req.query.noCache === "true"
-    );
-  }
+  const storage = new DynamoStorageService(
+    "report_narrative_store",
+    req.query.noCache === "true"
+  );
+  await storage.initTable();
+
   const modelParam = req.query.model || "openai";
   const modelVersionParam = req.query.modelVersion;
 
@@ -791,7 +799,7 @@ export async function handle_GET_reportNarrative(
   } catch (err) {
     // @ts-expect-error flush - calling due to use of compression
     res.flush();
-    console.log(err);
+    logger.error(err);
     const msg =
       err instanceof Error && err.message && err.message.startsWith("polis_")
         ? err.message

@@ -1901,7 +1901,7 @@ Feel free to reply to this email if you need help.`;
       // Type '[unknown, unknown]' is not assignable to type '{ location: any; source: any; }'.ts(2345)
       // @ts-ignore
       .then(function (locationData: { location: any; source: any }) {
-        if (!locationData || !process.env.GOOGLE_API_KEY) {
+        if (!locationData || !Config.googleApiKey) {
           return;
         }
         geoCode(locationData.location)
@@ -9661,8 +9661,12 @@ Thanks for using Polis!
   }
 
   function geoCodeWithGoogleApi(locationString: string) {
-    let googleApiKey = process.env.GOOGLE_API_KEY;
+    let googleApiKey = Config.googleApiKey;
     let address = encodeURI(locationString);
+
+    if (!googleApiKey) {
+      return Promise.reject("polis_err_geocoding_no_api_key");
+    }
 
     return new Promise(function (
       resolve: (arg0: any) => void,

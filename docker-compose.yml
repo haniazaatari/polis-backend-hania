@@ -116,6 +116,18 @@ services:
     networks:
       - "polis-net"
 
+  dynamodb:
+    image: amazon/dynamodb-local
+    container_name: polis-dynamodb
+    ports:
+      - "8000:8000"
+    networks:
+      - "polis-net"
+    # Running DynamoDB in memory for ephemeral storage (no persistence)
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    labels:
+      polis_tag: ${TAG:-dev}
+
 networks:
   polis-net:
 
