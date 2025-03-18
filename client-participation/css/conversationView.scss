@@ -4,12 +4,14 @@ body {
   min-height: 300px; // if we're slow to load while in an iframe, we want to indicate that something will appear (TODO spinner)
 }
 
-.top-comments-item, .divisive-comments-item {
+.top-comments-item,
+.divisive-comments-item {
   list-style: none;
   text-align: start;
 }
 
-.top-comments-list, .divisive-comments-list {
+.top-comments-list,
+.divisive-comments-list {
   padding-inline-start: 20px;
 }
 
@@ -22,6 +24,7 @@ body {
   position: relative;
   padding: 10px;
 }
+
 .weight-radio {
   position: absolute;
   left: 0px;
@@ -49,17 +52,21 @@ body {
 p {
   margin: 0 0 10px;
 }
+
 img {
   vertical-align: middle;
 }
+
 img {
   border: 0;
 }
+
 .Btn-alt {
   background-color: #e3e4e5;
   color: #3498db;
   letter-spacing: 0.05em;
 }
+
 .Btn-small {
   padding: 0.4em 1em;
   border-radius: 4px;
@@ -82,9 +89,17 @@ img {
 }
 
 @-webkit-keyframes pulse {
-  from { background-color: rgba(0,0,0,0);  }
-  10% { background-color: rgb(202, 227, 255); }
-  to { background-color: rgba(0,0,0,0);  }
+  from {
+    background-color: rgba(0, 0, 0, 0);
+  }
+
+  10% {
+    background-color: rgb(202, 227, 255);
+  }
+
+  to {
+    background-color: rgba(0, 0, 0, 0);
+  }
 }
 
 .pulseEffect {
@@ -95,7 +110,6 @@ img {
 
 .filledStar {
   color: #FEE577;
-  // text-shadow: 1px 1px 2px #AB732B;
 }
 
 .emptyStar {
@@ -123,39 +137,8 @@ img {
   margin-inline-start: 20px;
 }
 
-
-// .helpArrow {
-//   fill: #6FBAFF;
-// }
-// .helpArrowLine {
-//   fill: none;
-//   stroke: #6FBAFF;
-//   stroke-width: 2px;
-// }
-
-// #helpTextBox {
-
-//   margin-inline-start:auto;
-//   margin-inline-end:auto;
-//   max-width:70%;
-//   min-width: 280px;
-//   text-align: center;
-//   background-color: rgb(235, 235, 235);
-//   /*position: relative;*/
-//   /*top: -5px;*/
-//   border-radius: 3px;
-//   border-style: solid;
-//   font-size: 18px;
-//   /* color: white; */
-//   /* text-align: center; */
-//   padding: 10px;
-//   border-width: 1px;
-//   border-color: #333;
-// }
-
 .affix {
   position: fixed;
-  // top: 200px;
 }
 
 .lightPanel {
@@ -163,17 +146,21 @@ img {
   border: solid 1px lightgray;
   border-radius: 5px;
 }
+
 .darkPanel {
   background-color: $panel-color;
 }
+
 .darkPanelBorderTop {
   border-top: 1px solid lightgray;
 }
+
 .darkPanelBorderBottom {
   border-bottom: 1px solid lightgray;
 }
 
-#agreeButton, #disagreeButton {
+#agreeButton,
+#disagreeButton {
   border-inline-end: 0px
 }
 
@@ -186,9 +173,10 @@ img {
   border-radius: 0 0 8px 0;
 }
 
-#agreeButton, #disagreeButton, #passButton {
+#agreeButton,
+#disagreeButton,
+#passButton {
   border-bottom: 0;
-  // background: #fafafa;
   -webkit-font-smoothing: antialiased;
 
   // prevent clipped right edge and extra padding on left edge on mobile
@@ -205,37 +193,37 @@ img {
 }
 
 .groupButton {
-    color: rgb(0,0,0);
-    text-shadow: 0px 1px 0px rgba(255,255,255,0.59);
-    font-size: 12px;
-    display: inline;
-    position: relative;
-    margin: 0px 1px 0px 1px;
-    width: auto;
-    height: auto;
-    background: #ececec;
-    padding: 6px 10px 6px 10px;
-    outline: none;
-    border: 1px solid #d8d8d8;
-    border-bottom: 1px solid #ccc;
-    border-radius: 3px;
-    cursor: pointer;
+  color: rgb(0, 0, 0);
+  text-shadow: 0px 1px 0px rgba(255, 255, 255, 0.59);
+  font-size: 12px;
+  display: inline;
+  position: relative;
+  margin: 0px 1px 0px 1px;
+  width: auto;
+  height: auto;
+  background: #ececec;
+  padding: 6px 10px 6px 10px;
+  outline: none;
+  border: 1px solid #d8d8d8;
+  border-bottom: 1px solid #ccc;
+  border-radius: 3px;
+  cursor: pointer;
 }
 
 .groupButton:hover {
-    background: #D2D2D2;
+  background: #D2D2D2;
 }
 
 .selectedGroupButton {
-    color: rgb(0,0,0);
-    background: #D2D2D2;
-    text-shadow: 0px 1px 0px rgba(255,255,255,0.53);
-    border: 1px solid #d2d2d2;
-    border-bottom: 1px solid #d8d8d8;
-    -webkit-box-shadow: 0px 1px 0px rgba(255,255,255,0.58), inset 0px 1px 6px rgba(0,0,0,0.07), inset 0px -14px 13px rgba(255,255,255,0.20);
-    -moz-box-shadow: 0px 1px 0px rgba(255,255,255,0.58), inset 0px 1px 6px rgba(0,0,0,0.07), inset 0px -14px 13px rgba(255,255,255,0.20);
-    -o-box-shadow: 0px 1px 0px rgba(255,255,255,0.58), inset 0px 1px 6px rgba(0,0,0,0.07), inset 0px -14px 13px rgba(255,255,255,0.20);
-    box-shadow: 0px 1px 0px rgba(255,255,255,0.58), inset 0px 1px 6px rgba(0,0,0,0.07), inset 0px -14px 13px rgba(255,255,255,0.20);
+  color: rgb(0, 0, 0);
+  background: #D2D2D2;
+  text-shadow: 0px 1px 0px rgba(255, 255, 255, 0.53);
+  border: 1px solid #d2d2d2;
+  border-bottom: 1px solid #d8d8d8;
+  -webkit-box-shadow: 0px 1px 0px rgba(255, 255, 255, 0.58), inset 0px 1px 6px rgba(0, 0, 0, 0.07), inset 0px -14px 13px rgba(255, 255, 255, 0.20);
+  -moz-box-shadow: 0px 1px 0px rgba(255, 255, 255, 0.58), inset 0px 1px 6px rgba(0, 0, 0, 0.07), inset 0px -14px 13px rgba(255, 255, 255, 0.20);
+  -o-box-shadow: 0px 1px 0px rgba(255, 255, 255, 0.58), inset 0px 1px 6px rgba(0, 0, 0, 0.07), inset 0px -14px 13px rgba(255, 255, 255, 0.20);
+  box-shadow: 0px 1px 0px rgba(255, 255, 255, 0.58), inset 0px 1px 6px rgba(0, 0, 0, 0.07), inset 0px -14px 13px rgba(255, 255, 255, 0.20);
 }
 
 
@@ -252,6 +240,7 @@ img {
   // set this independently of the overall font size, since they're difficult to get right.
   font-size: 16px;
 }
+
 .control {
   // set this independently of the overall font size, since they're difficult to get right.
   font-size: 16px;
@@ -273,7 +262,7 @@ img {
 }
 
 .moderateButton {
-  background-color: rgb(230,230,230);
+  background-color: rgb(230, 230, 230);
   margin-inline-end: 20px;
   border-radius: 3px;
   font-weight: 500;
@@ -281,9 +270,11 @@ img {
 }
 
 .moderateButton:hover {
-  -ms-transform: scale(1.12,1.12); /* IE 9 */
-  -webkit-transform: scale(1.12,1.12); /* Safari */
-  transform: scale(1.12,1.12);
+  -ms-transform: scale(1.12, 1.12);
+  /* IE 9 */
+  -webkit-transform: scale(1.12, 1.12);
+  /* Safari */
+  transform: scale(1.12, 1.12);
 
 }
 
@@ -301,26 +292,30 @@ img {
   color: white;
 }
 
-.reactionButton{
+.reactionButton {
   cursor: pointer;
   transition: all .2s ease-in-out;
-  color: rgb(0,0,0);
-  border-color: rgba(0,0,0,0);
-  background-color: rgba(0,0,0,0);
+  color: rgb(0, 0, 0);
+  border-color: rgba(0, 0, 0, 0);
+  background-color: rgba(0, 0, 0, 0);
   text-decoration: none;
   font-size: 14px;
   font-family: "Helvetica Neue", Helvetica, sans-serif;
   text-rendering: optimizeLegibility;
 }
-.reactionButton:hover{
-  -ms-transform: scale(1.12,1.12); /* IE 9 */
-  -webkit-transform: scale(1.12,1.12); /* Safari */
-  transform: scale(1.12,1.12);
+
+.reactionButton:hover {
+  -ms-transform: scale(1.12, 1.12);
+  /* IE 9 */
+  -webkit-transform: scale(1.12, 1.12);
+  /* Safari */
+  transform: scale(1.12, 1.12);
 }
 
 #visualization_div {
   width: 100%;
 }
+
 .vis_container {
   margin: 0px;
   // max-width: 900px;
@@ -346,21 +341,28 @@ img {
   cursor: pointer;
   text-decoration: underline;
 }
-.popover_helper_class:hover{
+
+.popover_helper_class:hover {
   color: #7f8c8d;
 }
 
 svg {
   border: none;
-  display: block; /* prevent weird margins under vis */
+  display: block;
+  /* prevent weird margins under vis */
 }
 
 .flexbox {
-  display: -webkit-box;      /* OLD - iOS 6-, Safari 3.1-6 */
-  display: -moz-box;         /* OLD - Firefox 19- (buggy but mostly works) */
-  display: -ms-flexbox;      /* TWEENER - IE 10 */
-  display: -webkit-flex;     /* NEW - Chrome */
-  display: flex;             /* NEW, Spec - Opera 12.1, Firefox 20+ */
+  display: -webkit-box;
+  /* OLD - iOS 6-, Safari 3.1-6 */
+  display: -moz-box;
+  /* OLD - Firefox 19- (buggy but mostly works) */
+  display: -ms-flexbox;
+  /* TWEENER - IE 10 */
+  display: -webkit-flex;
+  /* NEW - Chrome */
+  display: flex;
+  /* NEW, Spec - Opera 12.1, Firefox 20+ */
 }
 
 .flex-wrap {
@@ -404,6 +406,7 @@ svg {
   -ms-align-items: flex-end;
   align-items: flex-end;
 }
+
 .align-items-flex-start {
   -webkit-align-items: flex-start;
   -moz-align-items: flex-start;
@@ -476,38 +479,41 @@ svg {
 
 /* Comment Shower */
 
-.nav-tabs > li.active {
-  background-color: rgba(0,0,0,0) !important;
+.nav-tabs>li.active {
+  background-color: rgba(0, 0, 0, 0) !important;
   border-bottom: 4px solid rgb(13, 121, 192);
 }
 
 
-.nav-tabs > li > a, .nav-tabs > li > a:hover, .nav-tabs > li > a:focus {
+.nav-tabs>li>a,
+.nav-tabs>li>a:hover,
+.nav-tabs>li>a:focus {
   color: #777;
 }
 
 
-.nav-tabs > li.active > a, .nav-tabs > li.active > a:hover, .nav-tabs > li.active > a:focus {
-  background-color: rgba(0,0,0,0) !important;
+.nav-tabs>li.active>a,
+.nav-tabs>li.active>a:hover,
+.nav-tabs>li.active>a:focus {
+  background-color: rgba(0, 0, 0, 0) !important;
   color: #0a77bf;
 }
 
-#comment_shower p, #comment_shower h3 {
-   font-weight: normal;
-   line-height: normal;
-   // background-color: $panel-color;
-   // border-radius: 10px;
+#comment_shower p,
+#comment_shower h3 {
+  font-weight: normal;
+  line-height: normal;
 }
 
 /* Comment Input Form */
 
-#comment_form_textarea{
-    white-space: pre-wrap;
-    resize: none;
+#comment_form_textarea {
+  white-space: pre-wrap;
+  resize: none;
 }
 
 .margin_bottom_20 {
-    margin-bottom: 20px;
+  margin-bottom: 20px;
 }
 
 .gray_out {
@@ -527,7 +533,7 @@ svg {
 }
 
 .vote-histogram-bar:hover {
-    fill: red !important;
+  fill: red !important;
 }
 
 .query_results_div {
@@ -537,15 +543,15 @@ svg {
 .query_results {
   margin-inline-start: 0px;
   list-style: none;
-  padding-inline-start:0px;
+  padding-inline-start: 0px;
 }
 
 .query_result_item {
-    min-height: 50px;
-    padding: 0px 10px 0px 10px;
-    background-color: rgba(255,255,255,0.7);
-    margin-inline-end: 10px;
-    cursor: hand;
+  min-height: 50px;
+  padding: 0px 10px 0px 10px;
+  background-color: rgba(255, 255, 255, 0.7);
+  margin-inline-end: 10px;
+  cursor: hand;
 }
 
 .active_result_item {
@@ -556,32 +562,19 @@ svg {
 .floating-side-panel-gradients {
   background: #fafafa;
   background: -moz-linear-gradient(top, #fafafa 0%, #FFFFFF 99%);
-  background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#fafafa), color-stop(99%,#FFFFFF));
-  background: -webkit-linear-gradient(top, #fafafa 0%,#FFFFFF 99%);
-  background: -o-linear-gradient(top, #fafafa 0%,#FFFFFF 99%);
-  background: -ms-linear-gradient(top, #fafafa 0%,#FFFFFF 99%);
-  background: linear-gradient(to bottom, #fafafa 0%,#FFFFFF 99%);
+  background: -webkit-gradient(linear, left top, left bottom, color-stop(0%, #fafafa), color-stop(99%, #FFFFFF));
+  background: -webkit-linear-gradient(top, #fafafa 0%, #FFFFFF 99%);
+  background: -o-linear-gradient(top, #fafafa 0%, #FFFFFF 99%);
+  background: -ms-linear-gradient(top, #fafafa 0%, #FFFFFF 99%);
+  background: linear-gradient(to bottom, #fafafa 0%, #FFFFFF 99%);
 }
-
-// .hover {
-//   background-color: $color_selected_comment;
-// }
 
 .a {
   color: $color_agree;
 }
+
 .d {
   color: $color_disagree;
-}
-
-
-
-.write-pane {
-  // background-color: white;
-  // border-style: solid;
-  // border-width: 0px;
-  // border-top-width: 1px;
-  // border-color: lightgray;
 }
 
 // override bootstrap's negative margin on xs
@@ -594,28 +587,20 @@ svg {
   font-size: 30px;
   margin: 20px;
 }
-.participationCount {
-  // float: inline-end;
-}
+
 .writingTipsParent {
   display: block;
 }
-#carousel, #carouselForGroup {
+
+#carousel,
+#carouselForGroup {
   overflow: hidden;
 }
-
-// .owl-wrapper-outer, .owl-controls {
-//   margin-top: 20px !important;
-//   margin-bottom: 20px !important;
-// }
 
 
 .analyze-group-member-container {
   position: relative;
-  // top: -130px;
-  // padding-inline-start: 20px;
   left: 10%;
-  // text-align: center
 }
 
 .analyze-group-member {
@@ -639,131 +624,15 @@ svg {
   top: -2px;
 }
 
-.analyze-group-member-others p {
-
-}
-
 .HRule {
   border-bottom: solid 2px #eee;
 }
 
-.majority-tab {
-  // // margin-top: 20px;
-  // border-radius: 10px 10px 10px 10px;
-  // border: 3px;
-  // border-top: 1px;
-  // border-inline-start: 1px;
-  // border-style:solid;
-  // border-color: lightgray;
-  // // background-color: white;
-}
-
-  .fa-twitter {
-    color: #55ACEE;
-  }
-
-  .fa-facebook {
-    color: #3b5998;
-  }
-
-.facebookButton, .twitterButton {
-  cursor: pointer;
-  border: 0px;
-  color: white;
-  font-family: $sans-font;
-  font-weight: 300;
-  padding: 8px 12px;
-  border-radius: 5px;
-  font-size: 14px;
-
-  i {
-    font-size: 24px;
-    color: white;
-    position: relative;
-    top: 4px;
-  }
-}
-
-.twitterButton {
-  background-color: #55ACEE;
-}
-
-.facebookButton {
-  margin-inline-end: 10px;
-  background-color: #3b5998;
-}
-
-.facebookCaveatText {
-  font-size: 14px;
-  list-style: none;
-  margin-inline-start: 0px;
-  width: 65%;
-}
-
-.socialButtonText {
-  vertical-align: middle;
-  display: inline-block;
-  line-height: 24px;
-  position: relative;
-  top: -2px;
-}
-
-#fbNotNowBtn {
-  border-bottom: 1px solid gray;
-  padding-bottom: 2px;
-}
-
-#fbNotNowBtn:hover {
-  color: $hover-color;
-  border-bottom: 1px solid $hover-color;
-}
-
-.twitterShareButton {
-    cursor: pointer;
-    border: 0px;
-    color: white;
-    font-family: $sans-font;
-    font-weight: 500;
-    padding: 2px 6px;
-    border-radius: 2px;
-    background-color: #55ACEE;
-    font-size: 12px;
-    position: relative;
-}
-
-.twitterShareButton i {
-  font-size: 16px;
-  position: relative;
-  top: 2px;
-  color: white;
-}
-
-.facebookShareButton {
-  cursor: pointer;
-  border: 0px;
-  color: white;
-  font-family: $sans-font;
-  font-weight: 500;
-  padding: 2px 6px;
-  border-radius: 2px;
-  background-color: #3b5998;
-  font-size: 12px;
-  position: relative;
-
-}
-
-.facebookShareButton i {
-  font-size: 16px;
-  position: relative;
-  top: 2px
-}
-
 .arrow_box {
-  // text-align: center;
   position: relative;
   top: 0px;
   background: #ffffff;
-  border: 1px solid rgb(155,155,155);
+  border: 1px solid rgb(155, 155, 155);
   display: inline;
   margin: 0px 10px 0px 5px;
   padding: 2px 5px;
@@ -771,7 +640,8 @@ svg {
   font-size: 12px;
 }
 
-.arrow_box:after, .arrow_box:before {
+.arrow_box:after,
+.arrow_box:before {
   right: 100%;
   top: 50%;
   border: solid transparent;
@@ -788,6 +658,7 @@ svg {
   border-bottom: 4px solid transparent;
   margin-top: -4px;
 }
+
 .arrow_box:before {
   border-top: 5px solid transparent;
   border-inline-end: 6.5px solid #9b9b9b;
@@ -820,9 +691,10 @@ svg {
 
 @media (max-width: 380px) {
 
-  .nav-tabs > li > a {
+  .nav-tabs>li>a {
     font-size: 14px;
   }
+
   #loginButtonInTabsBar {
     font-size: 14px !important; // !important since there are inline styles
   }
@@ -845,45 +717,23 @@ svg {
     display: auto;
   }
 
-
-  .write-pane {
-  //   border-inline-end: 3px solid lightgrey;
-  //   border-bottom: 3px solid lightgrey;
-  //   border-inline-start: 1px solid lightgrey;
-  // // padding-bottom: 48px;
-  //   border-bottom-right-radius: 10px;
-  //   border-bottom-left-radius: 10px;
-  //   border-top-right-radius: 10px;
-  //   border-top-left-radius: 10px;
-  }
-
 }
 
-  .nav-tabs > li > a:hover {
-    background-color: rgba(0,0,0,0);
-    color: black;
-  }
+.nav-tabs>li>a:hover {
+  background-color: rgba(0, 0, 0, 0);
+  color: black;
+}
 
 
 /* Large desktop */
-@media (min-width: 1200px) {
-
-}
+@media (min-width: 1200px) {}
 
 /* LITTLE TABLET to BIG TABLET and DESKTOP */
-@media (min-width: 1024px) and (max-width: 1199px) {
-  #agreeButton, #disagreeButton, #passButton, #trashButton {
-    // padding: 10px 10px;
-  }
-}
+@media (min-width: 1024px) and (max-width: 1199px) {}
 
 
 /* BIG PHONE to LITTLE tablet */
 @media only screen and (min-width : 768px) and (max-width : 1024px) {
-
-  #comment_shower {
-    //margin-top: 20px;
-  }
   .dropdown-menu {
     inset-inline-end: 0;
     inset-inline-start: auto;
@@ -897,41 +747,33 @@ svg {
   }
 
   // Prevent bootstrap tabs from wrapping
-  #commentViewTab, #commentFormTab, #majorityTab {
+  #commentViewTab,
+  #commentFormTab,
+  #majorityTab {
     padding: 10px 10px; // overriding from 10px 15px
   }
 }
 
 /* BIG PHONE and down */
 @media only screen and (max-width : 568px) {
-  body{
+  body {
     margin: 0px;
   }
 
-  .voteMoreText {
-    // the vote more screen looks funny at the bottom of the page. There's nothing else to do but vote, so people should just get it.
-    // display: none;
-  }
-
-  #comment_shower {
-    // margin-top: 20px;
-  }
-  .nav-tabs > li > a {
+  .nav-tabs>li>a {
     padding-inline-start: 12px !important;
     padding-inline-end: 12px !important;
   }
+
   .dropdown-menu {
     inset-inline-end: 0;
     inset-inline-start: auto;
   }
+
   #groupStats {
     display: none;
   }
 
-
-  .polis-tab {
-    // font-size:10px; // not needed since we're hiding the analyze tab, which makes space for the other tabs
-  }
   #vis_sibling_bottom {
     margin-inline-start: auto;
   }

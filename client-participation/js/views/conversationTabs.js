@@ -1,9 +1,7 @@
 // Copyright (C) 2012-present, The Authors. This program is free software: you can redistribute it and/or  modify it under the terms of the GNU Affero General Public License, version 3, as published by the Free Software Foundation. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details. You should have received a copy of the GNU Affero General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// var ConversationStatsHeader = require('../views/conversation-stats-header');
 var eb = require("../eventBus");
 var Handlebones = require("handlebones");
-var PolisFacebookUtils = require('../util/facebookButton');
 var template = require("../templates/conversationTabs.handlebars");
 var display = require("../util/display");
 var Utils = require("../util/utils");
@@ -22,39 +20,39 @@ module.exports = Handlebones.ModelView.extend({
   INFOPANE_TAB: "infoPaneTab",
   from: {},
 
-  gotoTab: function(id) {
+  gotoTab: function (id) {
     this.currentTab = id;
     this.$("#" + id).click();
   },
-  gotoVoteTab: function() {
+  gotoVoteTab: function () {
     this.gotoTab(this.VOTE_TAB);
     this.stopPulsingVoteTab();
   },
-  gotoWriteTab: function() {
+  gotoWriteTab: function () {
     this.gotoTab(this.WRITE_TAB);
     this.stopPulsingVoteTab();
   },
-  gotoAnalyzeTab: function() {
+  gotoAnalyzeTab: function () {
     this.gotoTab(this.MAJORITY_TAB);
     this.maybeStartPulsingVoteTab();
   },
-  gotoGroupTab: function() {
+  gotoGroupTab: function () {
     this.gotoTab(this.GROUP_TAB);
     this.maybeStartPulsingVoteTab();
   },
-  gotoLegendTab: function() {
+  gotoLegendTab: function () {
     this.gotoTab(this.LEGEND_TAB);
     this.maybeStartPulsingVoteTab();
   },
-  gotoInfoPaneTab: function() {
+  gotoInfoPaneTab: function () {
     this.gotoTab(this.INFOPANE_TAB);
   },
-  hideLegend: function() {
+  hideLegend: function () {
     if (this.onLegendTab()) {
       this.gotoVoteTab(); // TODO should probably to to most recent tab
     }
   },
-  toggleLegend: function() {
+  toggleLegend: function () {
     if (this.onLegendTab()) {
       this.hideLegend();
     } else {
@@ -62,7 +60,7 @@ module.exports = Handlebones.ModelView.extend({
     }
   },
 
-  context: function() {
+  context: function () {
     var c = _.extend({}, Handlebones.ModelView.prototype.context.apply(this, arguments));
     if (this.currentTab === this.VOTE_TAB) {
       c.voteActive = true;
@@ -88,10 +86,8 @@ module.exports = Handlebones.ModelView.extend({
     }
     c.logoutDest = window.location.pathname + window.location.hash;
     c.use_background_content_class = display.xs();
-    c.hasFacebook = userObject.hasFacebook;
-    c.hasTwitter = userObject.hasTwitter;
     c.dropdownLabel = userObject.hname || "Login";
-    c.showLogout = userObject.hasTwitter || userObject.hasFacebook || userObject.email;
+    c.showLogout = userObject.email;
     c.smallMenu = true; // don't show full name, etc as menu's button, just polis icon and caret
     c.showMajorityTab = this.showMajorityTab;
     c.selfUrl = null;
@@ -101,34 +97,28 @@ module.exports = Handlebones.ModelView.extend({
     return c;
   },
 
-  onAnalyzeTabClick: function() {
+  onAnalyzeTabClick: function () {
     this.maybeStartPulsingVoteTab();
   },
 
-  onWriteTabClick: function() {
+  onWriteTabClick: function () {
     this.stopPulsingVoteTab();
   },
-  onVoteTabClick: function() {
+  onVoteTabClick: function () {
     this.stopPulsingVoteTab();
   },
-  onInfoPaneTabClick: function() {
+  onInfoPaneTabClick: function () {
     //
   },
   events: {
-    "click #fbConnectBtn": "fbConnectBtn",
-    "click #twitterConnectBtn": "twitterConnectBtn",
-    "click #fbLoginBtn": "fbConnectBtn", // NOTE: may want a separate handler/API
-    "click #twitterLoginBtn": "twitterConnectBtn", // NOTE: may want a separate handler/API
     "click #majorityTab": "onAnalyzeTabClick",
     "click #commentFormTab": "onWriteTabClick",
     "click #commentViewTab": "onVoteTabClick",
     "click #infoPaneTab": "onInfoPaneTabClick",
     // Before shown
-    "show.bs.tab": function(e) {
+    "show.bs.tab": function (e) {
       var to = e.target;
       var from = e.relatedTarget;
-      // console.log("to", to.id);
-      // console.log("from", from.id);
       this.currentTab = to.id;
       if (to && to.id === this.WRITE_TAB) {
         this.trigger("beforeshow:write");
@@ -165,17 +155,9 @@ module.exports = Handlebones.ModelView.extend({
         this.trigger("beforeshow:vote");
       }
     },
-    // these aren't working
-    // "hide.bs.tab": function(e) {
-    //   debugger;
-    // },
-    // "hidden.bs.tab": function(e) {
-    //   debugger;
-    // },
     // After shown
-    "shown.bs.tab": function(e) {
+    "shown.bs.tab": function (e) {
       var to = e.target;
-      // e.relatedTarget // previous tab
       if (to && to.id === this.MAJORITY_TAB) {
         this.trigger("aftershow:majority");
         eb.trigger("aftershow:majority");
@@ -196,74 +178,49 @@ module.exports = Handlebones.ModelView.extend({
         // all other tabs cause pulsing
         this.maybeStartPulsingVoteTab();
       }
-      // console.log("setting from", to);
-      // this.from = to;
     }
   },
 
-  showTabLabels: function() {
+  showTabLabels: function () {
     this.model.set("showTabs", true);
   },
-  hideTabLabels: function() {
+  hideTabLabels: function () {
     this.model.set("showTabs", false);
   },
-  hideGroupHeader: function() {
+  hideGroupHeader: function () {
     this.model.set("showGroupHeader", false);
   },
-  showGroupHeader: function() {
+  showGroupHeader: function () {
     this.model.set("showGroupHeader", true);
   },
-  onAnalyzeTab: function() {
+  onAnalyzeTab: function () {
     return this.MAJORITY_TAB === this.currentTab;
   },
-  onVoteTab: function() {
+  onVoteTab: function () {
     return this.VOTE_TAB === this.currentTab;
   },
-  onGroupTab: function() {
+  onGroupTab: function () {
     return this.GROUP_TAB === this.currentTab;
   },
-  onLegendTab: function() {
+  onLegendTab: function () {
     return this.LEGEND_TAB === this.currentTab;
   },
-
-  fbConnectBtn: function() {
-    PolisFacebookUtils.connect().then(function() {
-      // that.model.set("response", "fbdone");
-      location.reload();
-    }, function(err) {
-      // alert("facebook error");
-    });
-  },
-
-  twitterConnectBtn: function() {
-    // window.top.postMessage("twitterConnectBegin", "*");
-
-
-    // open a new window where the twitter auth screen will show.
-    // that window will redirect back to a simple page that calls window.opener.twitterStatus("ok")
-    var params = 'location=0,status=0,width=800,height=400';
-    window.open(document.location.origin + "/api/v3/twitterBtn?dest=/twitterAuthReturn", 'twitterWindow', params);
-
-
-    // var dest = window.location.pathname + window.location.hash;
-    // window.location = "/api/v3/twitterBtn?dest=" + dest;
-  },
-  stopPulsingVoteTab: function() {
+  stopPulsingVoteTab: function () {
     this.$("#voteTab").removeClass("pulseEffect");
   },
-  maybeStartPulsingVoteTab: function() {
+  maybeStartPulsingVoteTab: function () {
     if (this.serverClient.unvotedCommentsExist()) {
       // setTimeout is a workaround since the classes seem to get cleared, probably by Boostrap Tabs code.
-      setTimeout(function() {
+      setTimeout(function () {
         $("#voteTab").addClass("pulseEffect");
       }, 100);
     }
   },
-  initialize: function(options) {
+  initialize: function (options) {
     Handlebones.ModelView.prototype.initialize.apply(this, arguments);
     var that = this;
 
-    eb.on(eb.visShown, function() {
+    eb.on(eb.visShown, function () {
       $("#majorityTab").fadeIn();
       that.showMajorityTab = true;
     });
@@ -271,20 +228,13 @@ module.exports = Handlebones.ModelView.extend({
     if (options.openToWriteTab) {
 
       // TODO ugly flash, fix later
-      setTimeout(function() {
+      setTimeout(function () {
         that.gotoTab(that.WRITE_TAB);
       });
     }
-    // else if (options.openToAnalyzeTab) {
-
-    //   // TODO ugly flash, fix later
-    //   // setTimeout(function() {
-    //     that.gotoAnalyzeTab();
-    //   // },1000);
-    // }
     this.serverClient = options.serverClient;
 
-    eb.on("clusterClicked", function(gid) {
+    eb.on("clusterClicked", function (gid) {
       if (gid >= 0) {
         that.maybeStartPulsingVoteTab();
       } else {

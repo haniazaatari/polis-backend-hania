@@ -5,20 +5,14 @@ var template = require("../templates/profilePicView.handlebars");
 var Utils = require("../util/utils");
 
 
-module.exports =  Handlebones.ModelView.extend({
+module.exports = Handlebones.ModelView.extend({
   name: "profile-pic-view",
   tagName: "span",
   template: template,
 
-  context: function() {
+  context: function () {
     var ctx = _.extend({}, Handlebones.ModelView.prototype.context.apply(this, arguments));
     ctx.pic = Utils.getAnonPicUrl();
-    if (ctx.hasFacebook) {
-      ctx.pic = ctx.facebook.fb_picture;
-    }
-    if (ctx.hasTwitter) {
-      ctx.pic = ctx.twitter.profile_image_url_https;
-    }
     if (ctx.hasXid) {
       ctx.pic = ctx.xInfo.x_profile_image_url;
     }
@@ -28,7 +22,7 @@ module.exports =  Handlebones.ModelView.extend({
     return ctx;
   },
 
-  initialize: function(options) {
+  initialize: function (options) {
     Handlebones.ModelView.prototype.initialize.apply(this, arguments);
     this.model = options.model;
   }

@@ -19,37 +19,37 @@ class GraphComment extends React.Component {
   }
   render() {
     return (
-      <g transform={ "translate(" +
+      <g transform={"translate(" +
         this.props.pt.x +
         ", " +
         this.props.pt.y +
         ")"}>
-          <rect
-            height="20"
-            width="20"
-            x={this.getRectX()}
-            y={-13}
-            fill={this.props.isSelected ? "#0090ff" : "none"}
-            rx="3"
-            ry="3"
-            strokeWidth="2"
-            strokeDasharray={"4, 7, 10, 9, 10, 7, 12, 9, 100"}
-            stroke={"none"} />
-          <text
-            onMouseEnter={this.props.handleCommentHover(this.props.pt)}
-            onMouseLeave={this.props.handleCommentHover(this.props.pt)}
-            style={{
-              fill: this.props.isSelected ? "white" : "black",
-              cursor: "pointer",
-              display: "block",
-              fontFamily: "Helvetica, sans-serif",
-              fontSize: 10,
-              fontWeight: this.props.isSelected ? 700 : 500,
-            }}>
-            {/*this.props.formatTid(this.props.pt.tid)*/}
-            {this.props.pt.tid}
-          </text>
-        </g>
+        <rect
+          height="20"
+          width="20"
+          x={this.getRectX()}
+          y={-13}
+          fill={this.props.isSelected ? "#0090ff" : "none"}
+          rx="3"
+          ry="3"
+          strokeWidth="2"
+          strokeDasharray={"4, 7, 10, 9, 10, 7, 12, 9, 100"}
+          stroke={"none"} />
+        <text
+          onMouseEnter={this.props.handleCommentHover(this.props.pt)}
+          onMouseLeave={this.props.handleCommentHover(this.props.pt)}
+          style={{
+            fill: this.props.isSelected ? "white" : "black",
+            cursor: "pointer",
+            display: "block",
+            fontFamily: "Helvetica, sans-serif",
+            fontSize: 10,
+            fontWeight: this.props.isSelected ? 700 : 500,
+          }}>
+          {/*this.props.formatTid(this.props.pt.tid)*/}
+          {this.props.pt.tid}
+        </text>
+      </g>
     )
   }
 }
@@ -101,7 +101,7 @@ class GraphComments extends React.Component {
       )
     })
   }
-  render () {
+  render() {
     return (
       <g id="vis2_comments">
         {this.props.commentsPoints ? this.drawComments() : null}
@@ -109,16 +109,6 @@ class GraphComments extends React.Component {
     );
   }
 }
-
-  // transform={`translate(${globals.side / 2},${globals.side / 2})`}>
-
-  // <circle
-  //     r={4}
-  //     stroke={"blue"}
-  //     fill={"rgba(0,0,0,0)"}
-  //     key={9999999}
-  //     cx={xx(0*xScaleup)}
-  //     cy={yy(0*yScaleup)}/>
 
 
 export default GraphComments;

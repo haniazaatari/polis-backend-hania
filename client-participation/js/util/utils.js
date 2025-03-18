@@ -2,25 +2,13 @@
 
 var _ = require("lodash");
 var anonPicBase64 = require("../images/anon_profile");
-var PolisStorage = require("./polisStorage");
-
-var millisPerDay = 1000 * 60 * 60 * 24;
-
-function millisSinceJoin() {
-  return Date.now() - PolisStorage.userCreated();
-}
-
-function daysSinceJoin() {
-  console.log('daysSinceJoin', millisSinceJoin(), millisPerDay);
-  return (millisSinceJoin() / millisPerDay) >> 0;
-}
 
 function mapObj(o, f) {
   var out = {};
 
-  var ff = _.isFunction(f) ? function(val, key) {
+  var ff = _.isFunction(f) ? function (val, key) {
     out[key] = f(val, key);
-  } : function(val, key) {
+  } : function (val, key) {
     out[key] = o[key];
   };
   _.each(o, ff);
@@ -32,10 +20,6 @@ function are_cookies_enabled() {
   if (("" + document.cookie).length > 0) {
     return true;
   }
-  // var cookieEnabled = (navigator.cookieEnabled) ? true : false;
-
-  // if (typeof navigator.cookieEnabled == "undefined" && !cookieEnabled)
-  // {
 
   // create a temporary cookie
   var soon = new Date(Date.now() + 1000).toUTCString();
@@ -48,7 +32,6 @@ function are_cookies_enabled() {
   // clear the cookie
   document.cookie = teststring + "=; expires=" + (new Date(0)).toUTCString();
 
-  // }
   return cookieEnabled;
 }
 
@@ -116,11 +99,7 @@ function encodeParams(o) {
 }
 
 function isInIframe() {
-  /*eslint-disable */
-  /* jshint ignore:start */
   return window.top != window;
-  /* jshint ignore:end */
-  /*eslint-enable */
 }
 
 // http://www.html5rocks.com/en/tutorials/pagevisibility/intro/
@@ -153,10 +132,6 @@ function isHidden() {
 }
 
 function shouldFocusOnTextareaWhenWritePaneShown() {
-  // Not when we're embedded in an iframe.
-  //  it ends up stealing focus and causing the parent to scroll to our iframe.
-  //  (this happens where there are no comments to vote on, and we show the write tab first)
-  // return !isInIframe();
   return false;
 }
 
@@ -167,7 +142,7 @@ function parseQueryParams(queryString) {
 
 function toQueryParamString(o) {
   var pairs = _.pairs(o);
-  pairs = _.map(pairs, function(pair) {
+  pairs = _.map(pairs, function (pair) {
     return pair[0] + '=' + encodeURIComponent(pair[1]);
   });
   return pairs.join("&");
@@ -237,11 +212,11 @@ function evenlySample(items, maxSample) {
 }
 
 function getBestTranslation(translations, lang) {
-  var firstTwoOfLang = lang.substr(0,2);
-  var matchingLang = _.filter(translations, function(t) {
+  var firstTwoOfLang = lang.substr(0, 2);
+  var matchingLang = _.filter(translations, function (t) {
     return t.lang.indexOf(firstTwoOfLang) === 0;
   });
-  matchingLang.sort(function(a, b) {
+  matchingLang.sort(function (a, b) {
     if (a.lang !== b.lang) {
       // prefer exact language match
       if (a.lang === lang) {
@@ -267,15 +242,15 @@ function uiLanguage() {
   var params = parseQueryParams(window.location.search);
   var lang = params.ui_lang;
   if (_.isUndefined(lang)) {
-    return window.preload.acceptLanguage && window.preload.acceptLanguage.substr(0,2) || null;
+    return window.preload.acceptLanguage && window.preload.acceptLanguage.substr(0, 2) || null;
     // return null;
   }
   return lang;
 }
 
 function matchesUiLang(lang) {
-  var firstTwoOfLang = lang.substr(0,2);
-  var firstTwoOfUiLang = uiLanguage().substr(0,2);
+  var firstTwoOfLang = lang.substr(0, 2);
+  var firstTwoOfUiLang = uiLanguage().substr(0, 2);
   return firstTwoOfLang === firstTwoOfUiLang;
 }
 
@@ -372,7 +347,7 @@ module.exports = {
   argMax: argMax,
   argMin: argMin,
   mapObj: mapObj,
-  computeXySpans: function(points) {
+  computeXySpans: function (points) {
     var spans = {
       x: {
         min: Infinity,
@@ -398,43 +373,43 @@ module.exports = {
   toQueryParamString: toQueryParamString,
   parseQueryParams: parseQueryParams,
 
-  supportsSVG: function() {
+  supportsSVG: function () {
     return !!document.createElementNS && !!document.createElementNS('http://www.w3.org/2000/svg', 'svg').createSVGRect;
   },
-  isIE8: function() {
+  isIE8: function () {
     return navigator.userAgent.match(/MSIE [89]/);
   },
-  isIphone: function() {
+  isIphone: function () {
     return navigator.userAgent.match(/iPhone/);
   },
-  isIpad: function() {
+  isIpad: function () {
     return navigator.userAgent.match(/iPad/);
   },
-  isIos: function() {
+  isIos: function () {
     return this.isIpad() || this.isIphone();
   },
-  isAndroid: function() {
+  isAndroid: function () {
     return navigator.userAgent.match(/Android/);
   },
-  isOldAndroid: function() {
+  isOldAndroid: function () {
     return navigator.userAgent.match(/Android [012]\.[0-3]/);
   },
-  isMobile: function() {
+  isMobile: function () {
     return this.isIphone() || this.isIpad() || this.isAndroid();
   },
-  isShortConversationId: function(conversation_id) {
+  isShortConversationId: function (conversation_id) {
     return conversation_id.length <= 6;
   },
-  supportsVis: function() {
+  supportsVis: function () {
     return this.supportsSVG() && !this.isIE8();
   },
-  getAnonPicUrl: function() {
+  getAnonPicUrl: function () {
     return anonPicBase64;
   },
   getBestTranslation: getBestTranslation,
   getCookie: getCookie,
   getGroupAware: getGroupAware,
-  getGroupNameForGid: function(gid) {
+  getGroupNameForGid: function (gid) {
     if (gid < 0) {
       return gid;
     } else if (!_.isNumber(gid)) {
@@ -443,12 +418,9 @@ module.exports = {
     return gid + 1;
   },
   getXid: getXid,
-  isDemoMode: function() {
+  isDemoMode: function () {
     return document.location.pathname.indexOf('/demo') === 0;
   },
-  // toPercent: function(ratio) {
-  //   return ((ratio * 100) >> 0) + "%";
-  // },
   isInIframe: isInIframe,
   isHidden: isHidden,
   shouldFocusOnTextareaWhenWritePaneShown: shouldFocusOnTextareaWhenWritePaneShown,

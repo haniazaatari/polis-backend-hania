@@ -17,17 +17,6 @@ function polisAjax(api, data, type, headers) {
 
   var url = urlPrefix + basePath + api;
 
-  // Add the auth token if needed.
-  // if (_.includes(authenticatedCalls, api)) {
-  //     var token = tokenStore.get();
-  //     if (!token) {
-  //         needAuthCallbacks.fire();
-  //         console.error("auth needed");
-  //         return $.Deferred().reject("auth needed");
-  //     }
-  //     //data = $.extend({ token: token}, data); // moving to cookies
-  // }
-
   if (typeof window.preload.xid !== "undefined") {
     data.xid = window.preload.xid;
   }
@@ -72,7 +61,7 @@ function polisAjax(api, data, type, headers) {
     }));
   }
 
-  promise.then(function() {
+  promise.then(function () {
     var latestPid = Utils.getCookie("pid");
     if (pid !== latestPid) {
       pid = latestPid;
@@ -80,18 +69,11 @@ function polisAjax(api, data, type, headers) {
     }
   });
 
-  promise.fail(function(jqXHR, message, errorType) {
-
-    // sendEvent("Error", api, jqXHR.status);
-
-    // logger.error("SEND ERROR");
-    console.dir(arguments);
+  promise.fail(function (jqXHR) {
+    console.dir(jqXHR);
     if (403 === jqXHR.status) {
       eb.trigger(eb.authNeeded);
     }
-    //logger.dir(data);
-    //logger.dir(message);
-    //logger.dir(errorType);
   });
   return promise;
 }

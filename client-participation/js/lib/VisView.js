@@ -38,19 +38,15 @@ module.exports = function VisView(params) {
   var participantCount = 1;
   var nodes = [];
   var clusters = [];
-  var clusterParticipantTotals = [];
   var hulls = []; // NOTE hulls will be the same length as clusters
   var centroids = [];
   var visualization;
   var main_layer;
   var blocker_layer;
   var overlay_layer;
-  //var g; // top level svg group within the vis that gets translated/scaled on zoom
   var force;
-  var queryResults;
   var d3Hulls; // NOTE: this has constant length, may be longer than hulls array
   var d3HullSelections;
-  // var d3HullShadows;
   var hullPoints = [];
 
   var hullIdToGid = {};
@@ -60,14 +56,12 @@ module.exports = function VisView(params) {
 
   var eps = 0.000000001;
 
-  var COLOR_SELECTED_HULL = true;
   var EXTRA_RADIUS_FOR_SUMMARY_HALO = 2;
   var SELECTED_HULL_RADIUS_BOOST = 3;
   var UNSELECTED_HULL_RADIUS_BOOST = -1;
 
   var width = $(el_selector).width();
 
-  // var ptptOiRadius = d3_old.scale.linear().range([10, 16]).domain([350, 800]).clamp(true)(width);
   var retina = window.devicePixelRatio > 1;
   var basePtptoiRad = retina ? 12 : 10;
   if (isMobile) {
@@ -75,9 +69,7 @@ module.exports = function VisView(params) {
   }
   var maxradboost = 8;
   var ptptOiRadius = basePtptoiRad + d3_old.scale.linear().range([0, maxradboost]).domain([350, 800]).clamp(true)(width);
-  var maxPtptoiRad = basePtptoiRad + maxradboost;
   var ptptOiDiameter = ptptOiRadius * 2;
-
 
   var haloWidth = d3_old.scale.linear().range([1, 1]).domain([350, 800]).clamp(true)(width);
   var haloVoteWidth = d3_old.scale.linear().range([2, 4]).domain([350, 800]).clamp(true)(width);
@@ -106,7 +98,6 @@ module.exports = function VisView(params) {
   var bidToBucket = {};
 
   var SELF_DOT_SHOW_INITIALLY = true;
-  var selfDotTooltipShow = !SELF_DOT_SHOW_INITIALLY;
   var SELF_DOT_HINT_HIDE_AFTER_DELAY = 10 * 1000;
   var selfDotHintText = "you";
 
@@ -119,13 +110,10 @@ module.exports = function VisView(params) {
   var grayHaloColor = "darkgrey";
   var grayHaloColorSelected = grayHaloColor; // "rgba(0,0,0,0)";
   var colorPull = "#2ecc71";
-  var colorPullLabel = "rgb(0, 181, 77)";
   var colorPush = "#e74c3c"; // ALIZARIN
   var colorSummaryBlob = "#F9F9F9";
-  window.color = function() {
-    // colorPull = "rgb(0, 214, 195)";
+  window.color = function () {
     colorPull = "rgb(0, 182, 214)";
-    colorPullLabel = "#6d9eeb";
     colorPush = "rgb(234, 77, 30)";
 
     var update = visualization.selectAll(".node");
@@ -135,9 +123,6 @@ module.exports = function VisView(params) {
 
   var colorPass = "#bbb"; //#BDC3C7"; // SILVER
   var colorSelf = "rgb(0, 186, 255)"; // blue - like the 'you are here' in mapping software
-  // var colorSelfOutline = d3_old.rgb(colorSelf).darker().toString();
-  // var colorPullOutline = d3_old.rgb(colorPull).darker().toString();
-  // var colorPushOutline = d3_old.rgb(colorPush).darker().toString();
   var colorSelfOutline = "rgba(0, 0, 245, 0.25)";
 
   // Cached results of tunalbes - set during init
@@ -147,15 +132,6 @@ module.exports = function VisView(params) {
 
   /* d3-tip === d3 tooltips... api docs avail at https://github.com/Caged/d3-tip */
   var tip = null;
-  // var SHOW_TIP = true;
-  // if (SHOW_TIP) {
-  //   $("#ptpt-tip").remove();
-  //   tip = d3_old.tip().attr("id", "ptpt-tip").attr("stroke", "rgb(52,73,94)").html(
-  //     function(d) {
-  //       return d.tid;
-  //     }
-  //   );
-  // }
   var hoveredHullId = -1;
 
   function showTip(d) {
@@ -186,11 +162,11 @@ module.exports = function VisView(params) {
   }
 
   var onMajorityTab = false;
-  eb.on("aftershow:majority", function() {
+  eb.on("aftershow:majority", function () {
     console.log("aftershow:majority");
     onMajorityTab = true;
   });
-  eb.on("beforehide:majority", function() {
+  eb.on("beforehide:majority", function () {
     console.log("beforehide:majority");
     onMajorityTab = false;
   });
@@ -255,10 +231,6 @@ module.exports = function VisView(params) {
       "</filter>" +
 
       "</defs>" +
-      // "<g>" +
-      // '<rect x="'+ (w-150) +'" y="0" width="150" height="25" rx="3" ry="3" fill="#e3e4e5"/>'+
-      // '<text x="'+ (w-150) +'" y="10" width="150" height="25" rx="3" ry="3" fill="##3498db">SHOW LEGEND</text>'+
-      // "</g>" +
       "</svg>");
 
 
@@ -268,17 +240,13 @@ module.exports = function VisView(params) {
   //create svg, appended to a div with the id #visualization_div, w and h values to be computed by jquery later
   //to connect viz to responsive layout if desired
   visualization = d3_old.select(el_selector).select("svg")
-    .call(tip || function() {}) /* initialize d3-tip */
-    // .attr("width", "100%")
-    // .attr("height", "100%")
+    .call(tip || function () { }) /* initialize d3-tip */
     .attr(dimensions)
-    // .attr("viewBox", "0 0 " + w + " " + h )
     .classed("visualization", true)
     .append(groupTag)
-    // .call(d3_old.behavior.zoom().scaleExtent([1, 8]).on("zoom", zoom))
-  ;
+    ;
   $(el_selector).on("click", selectBackground);
-  $(el_selector).on("click", function() {
+  $(el_selector).on("click", function () {
     eb.trigger(eb.backgroundClicked);
   });
 
@@ -307,12 +275,6 @@ module.exports = function VisView(params) {
   var clusterPointerFromBottom = display.xs();
   var clusterPointerOriginY = clusterPointerFromBottom ? h + 2 : 80;
 
-
-  // function zoom() {
-  //   // TODO what is event?
-  //   visualization.attr("transform", "translate(" + d3_old.event.translate + ")scale(" + d3_old.event.scale + ")");
-  // }
-
   window.vis = visualization; // TODO why? may prevent GC
 
   strokeWidth = strokeWidthGivenVisWidth(w);
@@ -320,14 +282,8 @@ module.exports = function VisView(params) {
 
   charge = -60; //chargeForGivenVisWidth(w);
 
-  queryResults = $(el_queryResultSelector).html("");
-
-  // } else {
-  // queryResults = $(el_queryResultSelector).html("");
-
+  $(el_queryResultSelector).html("");
   $(el_queryResultSelector).hide();
-
-  //$(el_selector).prepend($($("#pca_vis_overlays_template").html()));
 
 
   force = d3_old.layout.force()
@@ -335,7 +291,7 @@ module.exports = function VisView(params) {
     .links([])
     .friction(0.9) // more like viscosity [0,1], defaults to 0.9
     .gravity(0)
-    .charge(function(d) {
+    .charge(function (d) {
       // slight overlap allowed
       if (isSummaryBucket(d)) {
         if (display.xs()) {
@@ -348,16 +304,6 @@ module.exports = function VisView(params) {
       }
     })
     .size([w, h]);
-
-
-  // function zoomToHull(d){
-
-  //     var b = bounds[d.hullId];
-  //     visualization.transition().duration(750)
-  //     //.attr("transform", "translate(" + d3_old.event.translate + ")scale(" + d3_old.event.scale + ")");
-  //     .attr("transform", "" + "scale(" + 0.95 / Math.max((b[1][0] - b[0][0]) / w, (b[1][1] - b[0][1]) / h) + ")" + "translate(" + -(b[1][0] + b[0][0]) / 2 + "," + -(b[1][1] + b[0][1]) / 2 + ")");
-  //     //visualization.attr("transform", "translate(10,10)scale(" + d3_old.event.scale + ")");
-  // }
 
   function setClusterActive(clusterId) {
     selectedCluster = clusterId;
@@ -379,14 +325,12 @@ module.exports = function VisView(params) {
     if (clusterIsSelected()) {
       d3_old.select(d3Hulls[selectedCluster][0][0]).classed("active_group", true);
       d3_old.select(d3HullSelections[selectedCluster][0][0]).classed("active_group", true);
-      // d3_old.select(d3HullShadows[selectedCluster][0][0]).classed("active_group", true);
     }
-    (function() {
+    (function () {
       for (var i = 0; i < d3Hulls.length; i++) {
         if (i === hoveredHullId) {
           d3_old.select(d3Hulls[i][0][0]).classed("hovered_group", true);
           d3_old.select(d3HullSelections[i][0][0]).classed("hovered_group", true);
-          // d3_old.select(d3HullShadows[selectedCluster][0][0]).classed("hovered_group", true);
         }
       }
     }());
@@ -409,16 +353,9 @@ module.exports = function VisView(params) {
   }
 
   function handleOnClusterClicked(hullId, silent) {
-    // // if the cluster/hull just selected was already selected...
-    // if (selectedCluster === hullId) {
-    //   return resetSelection();
-    // }
     exitTutorial();
 
     var gid = hullIdToGid[hullId];
-
-    // resetSelectedComment();
-    // unhoverAll();
     setClusterActive(gid)
       .then(
         updateHulls,
@@ -431,7 +368,6 @@ module.exports = function VisView(params) {
 
     updateHullColors();
 
-    //zoomToHull.call(this, d);
     if (d3 && d3_old.event) {
       if (d3_old.event.stopPropagation) {
         d3_old.event.stopPropagation();
@@ -449,11 +385,10 @@ module.exports = function VisView(params) {
 
 
   function makeD3Hulls(hullClass, strokeWidth, translateX, translateY) {
-    return _.times(9, function(i) {
+    return _.times(9, function (i) {
       var hull = main_layer.append("path");
       hull.classed(hullClass, true)
         .on("click", onClusterClicked) //selection-results:1 handle the click event
-        // .style("stroke-width", strokeWidth)
         .attr("hullId", i);
 
       if (translateX || translateY) {
@@ -463,15 +398,14 @@ module.exports = function VisView(params) {
     });
   }
 
-  // d3HullShadows = makeD3Hulls("hull_shadow", hull_shadow_stroke_width, 1, 1);
   d3HullSelections = makeD3Hulls("hull_selection", hull_selection_stroke_width, 0, 0);
   d3Hulls = makeD3Hulls("hull", hull_stoke_width);
 
 
   function updateHulls() {
     bidToBucket = _.fromPairs(_.map(nodes, "bid"), nodes);
-    hulls = clusters.map(function(cluster) {
-      var temp = _.map(cluster, function(bid) {
+    hulls = clusters.map(function (cluster) {
+      var temp = _.map(cluster, function (bid) {
         var bucket = bidToBucket[bid];
         if (_.isUndefined(bucket)) {
           return null;
@@ -480,7 +414,7 @@ module.exports = function VisView(params) {
         var y = bucket.y;
         return [x, y, bucket]; // [x,y] point with bucket tacked on for convenience. Ugly, sorry.
       });
-      temp = _.filter(temp, function(xy) {
+      temp = _.filter(temp, function (xy) {
         // filter out nulls
         return !!xy;
       });
@@ -520,32 +454,12 @@ module.exports = function VisView(params) {
     function hideHull(i) {
       d3Hulls[i].datum([]).style("visibility", "hidden");
       d3HullSelections[i].datum([]).style("visibility", "hidden");
-      // d3HullShadows[i].datum([]).style("visibility", "hidden");
     }
 
     function updateHull(i) {
       var dfd = new $.Deferred();
-      setTimeout(function() {
+      setTimeout(function () {
         var hull = hulls[i];
-
-        // var pointsToFeedToD3 = hull.map(function(pt) { return pt;});
-
-        // if (pointsToFeedTod3_old.length == 1) {
-        //     pointsToFeedTod3_old.push([
-        //         pointsToFeedToD3[0][0] + 0.01,
-        //         pointsToFeedToD3[0][1] + 0.01
-        //         ]);
-        // }
-        // if (pointsToFeedTod3_old.length == 2) {
-        //     pointsToFeedTod3_old.push([
-        //         pointsToFeedToD3[0][0] + 0.01,
-        //         pointsToFeedToD3[0][1] - 0.01 // NOTE subtracting so they're not inline
-        //         ]);
-        // }
-
-
-
-        // var hullPoints_WillBeMutated = d3_old.geom.hull(pointsToFeedToD3);
 
         if (!hull) {
           // TODO figure out what's up here
@@ -554,7 +468,7 @@ module.exports = function VisView(params) {
           dfd.resolve();
           return;
         }
-        var pointsToFeedToCentroidFinder = hull.map(function(pt) {
+        var pointsToFeedToCentroidFinder = hull.map(function (pt) {
           return pt;
         });
 
@@ -567,11 +481,11 @@ module.exports = function VisView(params) {
         var DO_TESSELATE_POINTS = true;
         var chooseRadius;
         if (DO_TESSELATE_POINTS) {
-          chooseRadius = function(node) {
+          chooseRadius = function (node) {
             return chooseRadiusForHullCorners(node) + HULL_EXTRA_RADIUS;
           };
         } else {
-          chooseRadius = function(node) {
+          chooseRadius = function () {
             // return chooseRadiusForHullCorners(node);
             return 5;
           };
@@ -579,14 +493,8 @@ module.exports = function VisView(params) {
         for (var p = 0; p < hull.length; p++) {
           tessellatedPoints = tessellatedPoints.concat(tesselatePoint(hull[p], chooseRadius));
         }
-        // if (!DO_TESSELATE_POINTS) {
-        //     tessellatedPoints = tessellatedPoints.map(function(pt) {
-        //         pt[1] += pinLength;
-        //         return pt;
-        //     });
-        // }
 
-        (function() {
+        (function () {
           for (var pi = 0; pi < hullPoints.length; pi++) {
             var p = hullPoints[pi];
             // inset to prevent overlap caused by stroke width.
@@ -605,20 +513,8 @@ module.exports = function VisView(params) {
         } else {
           points.hullId = i; // NOTE: d is an Array, but we're tacking on the hullId. TODO Does D3 have a better way of referring to the hulls by ID?
           var shape = makeHullShape(points);
-          // If the cluster has only one participant, don't show the hull.
-          // intead, make the hull into an extra large invisible touch target.
-          var color = (clusters[i].length > 1) ? "#eee" : "#f7f7f7";
-          // var strokeWidth = (clusters[i].length > 1) ? "6px" : "40px";
-
-          var shadowStrokeWidth = (clusters[i].length > 1) ? "8px" : "0px";
 
           if (selectedCluster === i) {
-            // no shadow, since we'll show dashed line
-            if (COLOR_SELECTED_HULL) {
-              shadowStrokeWidth = "0px";
-              color = "#e9f0f7";
-            }
-
             d3HullSelections[i].datum(points)
               .attr("d", shape)
               .style("visibility", "visible");
@@ -630,31 +526,10 @@ module.exports = function VisView(params) {
 
           d3Hulls[i].datum(points)
             .attr("d", shape)
-            // .style("fill-opacity", 1)
-            // .style("fill", "white")
             .style("stroke", "rgb(130,130,130)")
-            // .style("stroke-opacity", hullOpacity)
             .style("stroke-width", 1)
             .style("stroke-dasharray", "2px 4px")
             .style("visibility", "visible");
-
-
-          // d3HullShadows[i].datum(points)
-          //     .attr("d", shape)
-          //     .style("fill", colorShadow)
-          //     .style("stroke", colorShadow)
-          //     // .style("fill-opacity", hullOpacity)
-          //     // .style("stroke-opacity", hullOpacity)
-          //     .style("stroke-width", shadowStrokeWidth)
-          //     .attr("transform", function(h) {
-          //         if (h.hullId === getSelectedGid()) {
-          //             return "translate(2, 2)";
-          //         } else {
-          //             return "translate(1, 1)";
-          //         }
-          //     })
-          //     .style("visibility", "visible");
-
         }
         dfd.resolve();
       }, 0);
@@ -665,15 +540,13 @@ module.exports = function VisView(params) {
 
 
     var p = $.when.apply($, updateHullPromises);
-    p.then(function() {
+    p.then(function () {
       // Remove empty clusters.
       var emptyClusterCount = d3Hulls.length - clusters.length;
       var startIndex = d3Hulls.length - emptyClusterCount;
       for (var i = startIndex; i < d3Hulls.length; i++) {
         hideHull(i);
       }
-
-
 
       if (clusterToShowLineTo >= 0) {
         updateLineToCluster(clusterToShowLineTo);
@@ -694,9 +567,7 @@ module.exports = function VisView(params) {
       // Force Layout scenario
       var k = speed * e.alpha;
       // if (k <= 0.004) { return; } // save some CPU (and save battery) may stop abruptly if this thresh is too high
-      nodes.forEach(function(o) {
-        //o.x = o.targetX;
-        //o.y = o.targetY;
+      nodes.forEach(function (o) {
         if (!o.x) {
           o.x = w / 2;
         }
@@ -710,7 +581,7 @@ module.exports = function VisView(params) {
       });
     } else {
       // move directly to destination scenario (no force)
-      nodes.forEach(function(o) {
+      nodes.forEach(function (o) {
         o.x = o.targetX;
         o.y = o.targetY;
       });
@@ -743,7 +614,7 @@ module.exports = function VisView(params) {
       // casually reaching only as far as needed to point to the
       // cluster. This scheme also guarantees that the pointer
       // will point to a location where there are no participant dots.
-      points.sort(function(pairA, pairB) {
+      points.sort(function (pairA, pairB) {
         var xA = pairA[0];
         var xB = pairB[0];
         var yA = pairA[1];
@@ -768,14 +639,14 @@ module.exports = function VisView(params) {
           xDistFromPointerOriginA * xDistFromPointerOriginA +
           yDistFromPointerOriginA * yDistFromPointerOriginA
           // ); // Omitting sqrt for perf
-        ;
+          ;
 
         var distFromOriginB =
           // Math.sqrt(
           xDistFromPointerOriginB * xDistFromPointerOriginB +
           yDistFromPointerOriginB * yDistFromPointerOriginB
           // ); // Omitting sqrt for perf
-        ;
+          ;
 
         return (distFromOriginA - distFromOriginB);
         // large number is kept
@@ -898,9 +769,9 @@ module.exports = function VisView(params) {
   function shouldDisplayOuterCircle(d) {
     // Hide the circle so we can show the up/down arrows
     if ((commentIsSelected() &&
-        !isSelf(d) && // for now, always show circle - TODO fix up/down arrow for blue dot
-        !d.ups &&
-        !d.downs) || isSelf(d)) {
+      !isSelf(d) && // for now, always show circle - TODO fix up/down arrow for blue dot
+      !d.ups &&
+      !d.downs) || isSelf(d)) {
       return true;
     }
     return false;
@@ -924,19 +795,12 @@ module.exports = function VisView(params) {
     if (!commentIsSelected()) {
       return "";
     }
-
-    // if (d.ups > d.downs) {
-    //   return "url(#colorMeMatrixGreen)";
-    // } else if (d.downs > d.ups) {
-    //   return "url(#colorMeMatrixRed)";
-    // } else {
     return "url(#colorMeMatrix)";
     // }
   }
 
   function chooseDisplayForGrayHalo(d) {
     return "inherit";
-    // return !shouldDisplayArrows(d) ? "inherit" : "none";
   }
 
 
@@ -992,7 +856,7 @@ module.exports = function VisView(params) {
   }
 
 
-  var generateWedgeString = function(startX, startY, startAngle, endAngle, radius, largeArcFlag, shouldClose) {
+  var generateWedgeString = function (startX, startY, startAngle, endAngle, radius, largeArcFlag, shouldClose) {
     var x1 = startX + radius * Math.cos(startAngle);
     var y1 = startY + radius * Math.sin(startAngle);
     var x2 = startX + radius * Math.cos(endAngle);
@@ -1069,10 +933,6 @@ module.exports = function VisView(params) {
         y: d.y
       };
     }
-    // var radius = chooseCircleRadiusOuter(d);
-    // var inset = moveTowardsTarget(d.x, d.y, centroid.x, centroid.y, radius);
-    // // TODO reduce inset as it approaches the target.
-    // return inset;
     return {
       x: d.x,
       y: d.y
@@ -1147,20 +1007,19 @@ module.exports = function VisView(params) {
         .attr("font-size", (display.xs() || display.sm()) ? "1.5em" : "28px");
 
       blocker_layer.selectAll(".visBlockerGraphic")
-        .text(function(d) {
+        .text(function () {
           var txt = "";
-          _.times(participantCount, function() {
+          _.times(participantCount, function () {
             txt += "\uf007 "; // uf118
           });
-          _.times(neededCount, function() {
+          _.times(neededCount, function () {
             txt += "_ ";
           });
           return txt;
         })
         .attr("font-weight", 100)
         .attr("font-size", "30px")
-        // .attr("font-family", "brandon-grotesque")
-      ;
+        ;
     }
 
     var gids = _.map(_.keys(newClusters), Number);
@@ -1171,10 +1030,10 @@ module.exports = function VisView(params) {
     for (var id = 0; id < gids.length; id++) {
       gidToHullId[gids[id]] = id;
     }
-    clusters = _.map(gids, function(gid) {
+    clusters = _.map(gids, function (gid) {
       return newClusters[gid].members;
     });
-    clusterParticipantTotals = _.map(gids, function(gid) {
+    clusterParticipantTotals = _.map(gids, function (gid) {
       return newClusters[gid]["n-members"];
     });
 
@@ -1200,27 +1059,22 @@ module.exports = function VisView(params) {
 
     // TODO don't throw this computation away
     var maxCount = 0;
-    var biggestNode = null;
     for (var i = 0; i < updatedNodes.length; i++) {
       var node = updatedNodes[i];
       var count = node.count;
       if (count > maxCount) {
-        biggestNode = node;
         maxCount = count;
       }
     }
     var minRad = minNodeRadiusScaleForGivenVisWidth(w);
-    // var maxRad = maxNodeRadiusScaleForGivenVisWidth(w);
-    // bucketRadiusForCount = d3_old.scale.pow().exponent(.5).range([minRad, maxRad]).domain([1, maxCount]).clamp(true);
 
     var baseSquared = minRad * minRad;
-    bucketRadiusForCount = function(count) {
+    bucketRadiusForCount = function (count) {
       // 1 -> area of 25, rad of 5
       // 2 -> area of 50, rad of ~7
       // sqrt(base**2 * count)
       return Math.sqrt(baseSquared * count);
     };
-    // var maxRad = bucketRadiusForCount(maxCount);
 
     function createScales(updatedNodes) {
       var spans = computeXySpans(updatedNodes);
@@ -1235,7 +1089,7 @@ module.exports = function VisView(params) {
     var scaleX = scales.x;
     var scaleY = scales.y;
 
-    comments = comments.map(function(c) {
+    comments = comments.map(function (c) {
       c.target = {
         x: scaleX(-2 * c.proj.x),
         y: scaleY(-1 * c.proj.y)
@@ -1243,7 +1097,7 @@ module.exports = function VisView(params) {
       return c;
     });
 
-    var oldpositions = nodes.map(function(node) {
+    var oldpositions = nodes.map(function (node) {
       return {
         x: node.x,
         y: node.y,
@@ -1264,12 +1118,6 @@ module.exports = function VisView(params) {
       if (isSummaryBucket(b)) {
         return -999999;
       }
-      if (b.twitter.followers_count > a.twitter.followers_count) {
-        return -1;
-      }
-      if (a.twitter.followers_count > b.twitter.followers_count) {
-        return 1;
-      }
       if (b.priority > a.priority) {
         return -1;
       }
@@ -1282,7 +1130,7 @@ module.exports = function VisView(params) {
 
     var bidToOldNode = _.keyBy(nodes, getBid);
 
-    (function() {
+    (function () {
       for (var i = 0; i < updatedNodes.length; i++) {
         var node = updatedNodes[i];
         var oldNode = bidToOldNode[node.bid];
@@ -1306,7 +1154,7 @@ module.exports = function VisView(params) {
       nodes.push(nice[0]);
     }
 
-    oldpositions.forEach(function(oldNode) {
+    oldpositions.forEach(function (oldNode) {
       var newNode = nodes.find(n => n.bid === oldNode.bid);
       if (!newNode) {
         console.warn("not sure why a node would disappear");
@@ -1323,7 +1171,7 @@ module.exports = function VisView(params) {
 
 
     main_layer.selectAll(".node")
-      .attr("visibility", function(d) {
+      .attr("visibility", function (d) {
         return (d.count >= 1) ? "visbile" : "hidden";
       });
 
@@ -1340,14 +1188,14 @@ module.exports = function VisView(params) {
       .append(groupTag)
       .classed("ptpt", true)
       .classed("node", true)
-      .attr("data-bid", function(d) {
+      .attr("data-bid", function (d) {
         return d.bid;
       })
       .on("click", onParticipantClicked)
       .on("mouseover", showTip)
       .on("mouseout", hideTip)
       // .call(force.drag)
-    ;
+      ;
 
 
     var pinEnter = g.filter(isParticipantOfInterest);
@@ -1360,12 +1208,12 @@ module.exports = function VisView(params) {
       .attr("y2", pinLength)
       .attr("stroke-linecap", "round")
       .attr("stroke", "rgb(160,160,160)")
-      .attr("stroke-width", function(d) {
+      .attr("stroke-width", function () {
         return "1px";
       });
     pinEnter
       .append("circle")
-      .attr("r", function(d) {
+      .attr("r", function () {
         if (display.xs()) {
           return 1;
         } else {
@@ -1382,10 +1230,10 @@ module.exports = function VisView(params) {
       var commentWidthHalf = commentWidth / 2;
       var bar = foo.enter()
         .append("rect")
-        .attr("x", function(d) {
+        .attr("x", function (d) {
           return d.target.x - commentWidthHalf;
         })
-        .attr("y", function(d) {
+        .attr("y", function (d) {
           return d.target.y - commentWidthHalf;
         })
         .attr("width", commentWidth)
@@ -1405,36 +1253,30 @@ module.exports = function VisView(params) {
       .classed("bktv", true)
       .style("fill", colorPull)
       .style("fill-opacity", opacityOuter)
-      // .style("stroke", colorPullOutline)
-      // .style("stroke-width", 1)
-    ;
+      ;
     g.append("polygon") // downArrowEnter
       .classed("down", true)
       .classed("bktv", true)
       .style("fill", colorPush)
       .style("fill-opacity", opacityOuter)
-      // .style("stroke", colorPushOutline)
-      // .style("stroke-width", 1)
-    ;
+      ;
     var picEnter = g.append("image");
     picEnter
-    // .classed("circle", true)
       .classed("bktv", true)
-      .attr("x", function(d) {
+      .attr("x", function (d) {
         return getImageWidth(d) * -0.5;
       })
-      .attr("y", function(d) {
+      .attr("y", function (d) {
         return getImageWidth(d) * -0.5;
       })
       .attr("filter", "")
-      // .style("visibility", "hidden")
       .attr("height", getImageWidth)
       .attr("width", getImageWidth)
       .attr("clip-path", "url(#clipCircle)")
-      .attr("xlink:href", function(d) {
+      .attr("xlink:href", function (d) {
         return d.pic;
       })
-    ;
+      ;
 
 
     var grayHaloEnter = g.append("circle");
@@ -1443,20 +1285,17 @@ module.exports = function VisView(params) {
       .attr("cx", 0)
       .attr("cy", 0)
       .classed("ptptoi", isParticipantOfInterest)
-      .attr("r", function(d) {
+      .attr("r", function (d) {
         if (isSummaryBucket(d)) {
           return anonBlobRadius;
         }
         if (isParticipantOfInterest(d)) {
           return ptptOiRadius;
         }
-        // if (isSelf(d)) {
-        //     return ptptOiRadius;
-        // }
         return ptptOiRadius;
       })
       .attr("stroke", grayHaloColor)
-      .attr("stroke-width", function(d) {
+      .attr("stroke-width", function (d) {
         if (d.isSummaryBucket) {
           return 0;
         } else if (isSelf(d)) {
@@ -1487,7 +1326,7 @@ module.exports = function VisView(params) {
       .classed("up", true)
       .classed("bktvi", true)
       .style("fill", "rgba(0,0,0,0)")
-      .attr("stroke-width", function(d) {
+      .attr("stroke-width", function (d) {
         if (isSummaryBucket(d)) {
           return anonBlobHaloVoteWidth;
         } else {
@@ -1501,7 +1340,7 @@ module.exports = function VisView(params) {
       .classed("down", true)
       .classed("bktvi", true)
       .style("fill", "rgba(0,0,0,0)")
-      .attr("stroke-width", function(d) {
+      .attr("stroke-width", function (d) {
         if (d.isSummaryBucket) {
           return anonBlobHaloVoteWidth;
         } else {
@@ -1515,74 +1354,20 @@ module.exports = function VisView(params) {
     self.classed("selfDot", true);
 
 
-
-    var edgeLengthToMatchCircleRadius = Math.sqrt(1 / 2) * ptptOiDiameter / 2;
-    var socialIconScale = ptptOiDiameter / 2 / maxPtptoiRad * 0.8;
-    if (retina) {
-      socialIconScale *= 0.8;
-    } else {
-      socialIconScale *= 1.1;
-    }
-    var socialRoot = g.filter(isParticipantOfInterest).append("g");
-    socialRoot.attr("transform", "translate(" + edgeLengthToMatchCircleRadius + "," + edgeLengthToMatchCircleRadius + ")");
-
-    socialRoot.append("circle")
-      .style("fill", function(d) {
-        if (d.hasFacebook) {
-          return "#3A5795";
-        } else if (d.hasTwitter) {
-          return "#55acee";
-        } else {
-          return "rgba(0,0,0,0)";
-        }
-
-      })
-      .attr("cx", 0)
-      .attr("cy", 0)
-      .attr("r", ptptOiDiameter / 6)
-      // .classed("hideWhenGroupSelected", true)
-    ;
-
-    var socialIconRoot = socialRoot.append("g");
-    socialIconRoot.attr("transform", "scale(" + socialIconScale + "," + socialIconScale + ")");
-    socialIconRoot.append("g")
-    .attr("transform", function(d) {
-        if (d.hasFacebook) {
-          return "translate(" + (retina ? "-19,15" : "-19,15") + ") scale(.0065, -0.0065)";
-
-        } else if (d.hasTwitter) {
-          return "translate(" + (retina ? "-7,-7" : "-7,-7") + ") scale(0.015,0.015)";
-        }
-      })
-      .append("path")
-      .style("visibility", function(d) {
-        return (d.hasFacebook || d.hasTwitter) ? "visible" : "hidden";
-      })
-      .style("fill", "white")
-      .attr("d", function(d) {
-        if (d.hasFacebook) {
-          return "m 3179.0313,3471.2813 c 147.3,0 273.8408,-10.85 310.7504,-15.75 l 0,-360.25 -213.2496,-0.25 c -167.24,0 -199.5008,-79.38 -199.5008,-196 l 0,-257.25 398.7504,0 -52,-402.75 -346.7504,0 0,-1033.5 -415.9996,0 0,1033.5 -347.75,0 0,402.75 347.75,0 0,297 c 0,344.73 210.47,532.5 517.9996,532.5 z";
-        } else if (d.hasTwitter) {
-          return "d", "M0 781.864q0 7.32 7.32 13.176 12.2 8.296 43.432 24.4 119.072 61.488 249.856 61.488 162.992 0 296.216 -83.936 63.44 -40.016 112.728 -96.38t78.324 -117.608 43.432 -122.732 13.42 -119.56v-17.08q57.096 -40.992 89.304 -93.696 2.928 -5.856 2.928 -8.784 0 -6.344 -4.88 -11.224t-11.224 -4.88q-3.416 0 -11.712 3.904 -5.856 1.952 -14.396 4.88t-14.64 5.124 -8.052 2.684q12.688 -14.152 26.352 -38.308t13.664 -35.38q0 -6.344 -4.88 -10.98t-11.712 -4.636q-3.904 0 -7.808 2.44 -55.632 29.768 -103.944 40.504 -59.048 -56.12 -141.032 -56.12 -83.936 0 -142.984 58.56t-59.048 141.52q0 14.64 1.952 23.912 -82.472 -6.832 -159.088 -39.528t-137.616 -87.84q-14.152 -13.664 -54.656 -57.096 -5.856 -5.856 -13.664 -5.856 -5.856 0 -12.2 7.808 -12.688 19.032 -20.008 46.604t-7.32 53.924q0 72.712 45.384 126.88l-14.152 -6.832q-12.2 -5.368 -18.056 -5.368 -8.296 0 -13.908 4.88t-5.612 12.688q0 51.24 26.352 97.112t71.248 73.2l-5.856 -.976q-.976 0 -2.684 -.488t-2.684 -.732 -1.464 -.244q-6.344 0 -10.98 4.88t-4.636 10.736q0 .488 .976 5.368 16.592 50.752 55.144 86.132t90.28 47.58q-84.912 52.216 -187.392 52.216 -6.832 0 -21.96 -1.464 -20.496 -.976 -22.448 -.976 -6.344 0 -10.98 4.88t-4.636 11.224z";
-        }
-      })
-    ;
-
-
     var labelG = g.filter(isSummaryBucket)
       .append("g");
 
     labelG.append("path")
       .style("fill", "gray")
       .attr("transform", "translate(-18,-8) scale(.008, 0.008)")
-      .attr("d", function(d) {
+      .attr("d", function () {
         return "M529 896q-162 5-265 128h-134q-82 0-138-40.5t-56-118.5q0-353 124-353 6 0 43.5 21t97.5 42.5 119 21.5q67 0 133-23-5 37-5 66 0 139 81 256zm1071 637q0 120-73 189.5t-194 69.5h-874q-121 0-194-69.5t-73-189.5q0-53 3.5-103.5t14-109 26.5-108.5 43-97.5 62-81 85.5-53.5 111.5-20q10 0 43 21.5t73 48 107 48 135 21.5 135-21.5 107-48 73-48 43-21.5q61 0 111.5 20t85.5 53.5 62 81 43 97.5 26.5 108.5 14 109 3.5 103.5zm-1024-1277q0 106-75 181t-181 75-181-75-75-181 75-181 181-75 181 75 75 181zm704 384q0 159-112.5 271.5t-271.5 112.5-271.5-112.5-112.5-271.5 112.5-271.5 271.5-112.5 271.5 112.5 112.5 271.5zm576 225q0 78-56 118.5t-138 40.5h-134q-103-123-265-128 81-117 81-256 0-29-5-66 66 23 133 23 59 0 119-21.5t97.5-42.5 43.5-21q124 0 124 353zm-128-609q0 106-75 181t-181 75-181-75-75-181 75-181 181-75 181 75 75 181z";
       });
 
     labelG
       .append("text")
       .classed("summaryLabel", true)
-      .text(function(d) {
+      .text(function (d) {
         return getGroupNameForGid(d.gid);
       })
       .style("font-family", "Helvetica, sans-serif") // Tahoma, Helvetica, sans-serif For the "AGREED"/"DISAGREED" label: Tahoma should be good at small sizes http://ux.stackexchange.com/questions/3330/what-is-the-best-font-for-extremely-limited-space-i-e-will-fit-the-most-readab
@@ -1591,7 +1376,7 @@ module.exports = function VisView(params) {
       .attr("alignment-baseline", "middle")
       .attr("fill", "rgba(0,0,0,0.5)")
       // });
-    ;
+      ;
 
     updateNodes();
 
@@ -1635,7 +1420,7 @@ module.exports = function VisView(params) {
       // .attr("fill", "rgba(0,0,0,1.0)")
       .attr("fill", colorSelf)
       .attr("stroke", colorSelfOutline)
-      .attr("transform", function(d) {
+      .attr("transform", function () {
         return "translate(12, 6)";
       });
   }
@@ -1683,7 +1468,7 @@ module.exports = function VisView(params) {
 
     getReactionsToComment(tid)
       // .done(unhoverAll)
-      .then(function(votes) {
+      .then(function (votes) {
         for (i = 0; i < nodes.length; i++) {
           var node = nodes[i];
           node.ups = votes.A[node.bid] || 0;
@@ -1693,7 +1478,7 @@ module.exports = function VisView(params) {
 
         }
         updateNodes();
-      }, function() {
+      }, function () {
         console.error("failed to get reactions to comment: " + d.tid);
       });
   }
@@ -1704,18 +1489,6 @@ module.exports = function VisView(params) {
   }
 
   function onParticipantClicked(d) {
-    if (clickingPtptoiOpensProfile()) {
-      // NOTE: it may be hard to tap a hull without accidentally
-      // tapping a ptptoi on mobile, so disabling on mobile for now.
-      if (d.twitter && d.twitter.screen_name) {
-        window.open("https://twitter.com/" + d.twitter.screen_name);
-        return;
-      }
-      if (d.facebook && d.facebook.fb_link) {
-        window.open(d.facebook.fb_link);
-        return;
-      }
-    }
     var gid = bidToGid[d.bid];
     if (_.isNumber(gid)) {
       var hullId = gidToHullId[gid];
@@ -1739,7 +1512,7 @@ module.exports = function VisView(params) {
     update.selectAll(".up.bktvi").data(nodes, key) // upArrowUpdateInner
       .style("display", chooseDisplayForArrows)
       .attr("d", chooseUpArrowPath) // NOTE: using tranform to select the scale
-    ;
+      ;
 
     update.selectAll("image.bktv").data(nodes, key) // imageUpdate
       .attr("filter", chooseFilter);
@@ -1747,7 +1520,7 @@ module.exports = function VisView(params) {
     update.selectAll(".down.bktvi").data(nodes, key) // downArrowUpdateInner
       .style("display", chooseDisplayForArrows)
       .attr("d", chooseDownArrowPath) // NOTE: using tranform to select the scale
-    ;
+      ;
     update.selectAll(".grayHalo").data(nodes, key) // grayHaloUpdate
       .style("display", chooseDisplayForGrayHalo);
 
@@ -1758,7 +1531,7 @@ module.exports = function VisView(params) {
     }
 
     update.selectAll(".grayHalo")
-      .style("stroke", function(d) {
+      .style("stroke", function (d) {
         if (isSelf(d)) {
           if (clusterIsSelected() || onMajorityTab) {
             if (d.ups || d.downs) {
@@ -1801,11 +1574,11 @@ module.exports = function VisView(params) {
       .style("fill-opacity", 0)
       .attr("r", chooseCircleRadiusOuter)
       // .style("fill", chooseFill)
-    ;
+      ;
     update.selectAll(".circle.bktvi").data(nodes, key) // circleUpdateInner
       .style("display", chooseDisplayForCircle)
       .attr("r", chooseCircleRadius) // NOTE: using tranform to select the scale
-    ;
+      ;
 
     var selfNode = _.filter(nodes, isSelf)[0];
     if (selfNode && !selfHasAppeared) {
@@ -1875,7 +1648,7 @@ module.exports = function VisView(params) {
       .attr("text-anchor", "middle")
       .attr("fill", "#black")
       .attr('font-family', 'FontAwesome')
-      .attr('font-size', function(d) {
+      .attr('font-size', function () {
         return '2em';
       });
 
@@ -1893,7 +1666,7 @@ module.exports = function VisView(params) {
   function emphasizeParticipants(pids) {
     console.log("pids", pids.length);
     var hash = []; // sparse-ish array
-    getPidToBidMapping().then(function(o) {
+    getPidToBidMapping().then(function (o) {
       var pidToBid = o.p2b;
       var bidToPids = o.b2p;
       //bid = o.bid;
@@ -1920,7 +1693,7 @@ module.exports = function VisView(params) {
 
       visualization.selectAll(".bktvi")
         .attr("transform", chooseTransformSubset)
-      ;
+        ;
     });
   }
 
@@ -1989,16 +1762,14 @@ module.exports = function VisView(params) {
       return null;
     }
     hull = subdivideLongEdges(hull, 20);
-    // hull = subdivideLongEdges(hull, 20);
-    // hull = subdivideLongEdges(hull, 20);
 
-    var distances = hull.map(function(pt) {
+    var distances = hull.map(function (pt) {
       return {
         dist: distWithNonSquarePenalty(start, pt),
         pt: pt
       };
     });
-    distances.sort(function(a, b) {
+    distances.sort(function (a, b) {
       return a.dist - b.dist;
     });
     return distances[0].pt;
@@ -2049,20 +1820,14 @@ module.exports = function VisView(params) {
     helpArrowPoints.push([(startX + center[0]) * centerPointOnX, centerY]); // midpoint on x, same as origin on y
     helpArrowPoints.push(center);
 
-    // center = center.join(",");
     overlay_layer.selectAll(".helpArrow")
       .style("display", "block")
       .style("stroke-dasharray", "5,5")
-      // .attr("marker-end", "url(#ArrowTip)")
-      //// .attr("marker-start", "url(#ArrowTip)")
-      //// .attr("points", ["-2," + clusterPointerOriginY, center].join(" "));
       .attr("d", helpLine);
   }
 
   function setupBlueDotHelpText(self) {
     if (SELF_DOT_SHOW_INITIALLY) {
-      selfDotTooltipShow = false; // no tooltip
-
       var txt = self.append("text")
         .text(selfDotHintText)
         .attr("text-anchor", "middle")
@@ -2071,7 +1836,7 @@ module.exports = function VisView(params) {
         txt.transition(200)
           .delay(SELF_DOT_HINT_HIDE_AFTER_DELAY)
           .style("opacity", 0)
-          .each("end", function() {
+          .each("end", function () {
             selfDotTooltipShow = true;
             // need to remove the tooltip so it doesn't eat hover events
             d3_old.select(this).remove();
@@ -2081,7 +1846,7 @@ module.exports = function VisView(params) {
   }
 
 
-  eb.on(eb.vote, function(voteType) {
+  eb.on(eb.vote, function (voteType) {
     var color = colorPass;
     if (voteType === "agree") {
       color = colorPull;

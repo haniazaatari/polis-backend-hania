@@ -30,16 +30,11 @@ class Graph extends React.Component {
   componentWillMount() {
 
     window.addEventListener("resize", () => {
-      this.setState({browserDimensions: window.innerWidth})
+      this.setState({ browserDimensions: window.innerWidth })
     })
-
-    // document.getElementById("helpTextGroups").style.display = "none";
-    // document.getElementById("visualization_div").style.display = "none";
-    // document.getElementById("carouselPane").style.display = "none";
-    // document.getElementById("groupSelectionViewContainer").style.display = "none";
   }
 
-  componentWillReceiveProps(nextProps, nextState) {
+  componentWillReceiveProps(nextProps) {
 
     if (!nextProps.math) {
       return;
@@ -97,7 +92,6 @@ class Graph extends React.Component {
 
   handleCommentHover(selectedComment) {
     return () => {
-      // document.getElementById("readReactView").style.display = "none";
       this.setState({
         selectedComment
       });
@@ -106,7 +100,6 @@ class Graph extends React.Component {
 
   handleCommentClick(selectedComment) {
     return () => {
-      // document.getElementById("readReactView").style.display = "none";
       this.setState({
         selectedComment
       });
@@ -114,10 +107,9 @@ class Graph extends React.Component {
   }
 
   handleReturnToVoteClicked() {
-    // document.getElementById("readReactView").style.display = "block";
-    this.setState({selectedComment: null})
+    this.setState({ selectedComment: null })
   }
-  handleCurateButtonClick (tidCuration) {
+  handleCurateButtonClick(tidCuration) {
 
     this.setState({
       selectedTidCuration: tidCuration,
@@ -154,12 +146,13 @@ class Graph extends React.Component {
     return (
       <div>
         <svg width={globals.sideWithPadding} height={globals.svgHeightWithPadding} style={{
-          transform: "scale("+svgScale+")",
+          transform: "scale(" + svgScale + ")",
           transformOrigin: "0% 0%",
-          marginBottom: svgNegativeMargin}
+          marginBottom: svgNegativeMargin
+        }
         }>
           <filter id="grayscale">
-             <feColorMatrix type="saturate" values="0"/>
+            <feColorMatrix type="saturate" values="0" />
           </filter>
           <g transform={`translate(${globals.padding}, ${globals.padding})`}>
             {/* Comment https://bl.ocks.org/mbostock/7555321 */}
@@ -177,7 +170,7 @@ class Graph extends React.Component {
             <Axes
               xCenter={this.state.xCenter}
               yCenter={this.state.yCenter}
-              report={this.props.report}/>
+              report={this.props.report} />
             <Hulls
               handleClick={this.handleCurateButtonClick.bind(this)}
               selectedGroup={_.isNumber(this.state.selectedTidCuration) ? this.state.selectedTidCuration : null}
@@ -186,51 +179,43 @@ class Graph extends React.Component {
             <Participants
               selectedGroup={_.isNumber(this.state.selectedTidCuration) ? this.state.selectedTidCuration : null}
               points={this.state.baseClustersScaled}
-              ptptois={this.state.ptptoisProjected}/>
+              ptptois={this.state.ptptoisProjected} />
             <HullLabels
               handleClick={this.handleCurateButtonClick.bind(this)}
               selectedGroup={_.isNumber(this.state.selectedTidCuration) ? this.state.selectedTidCuration : null}
               groups={this.props.math["group-votes"] || window.preload.firstMath["group-votes"] /* for labels */}
               centroids={this.state.groupCentroids}
-              />
-            {/*<Comments
-              commentsPoints={this.state.commentsPoints}
-              selectedComment={this.state.selectedComment}
-              handleCommentHover={this.handleCommentHover.bind(this)}
-              points={this.state.commentsPoints}
-              repfulAgreeTidsByGroup={this.props.repfulAgreeTidsByGroup}
-              repfulDisageeTidsByGroup={this.props.repfulDisageeTidsByGroup}
-              formatTid={this.props.formatTid}/>*/}
+            />
             <BarChartsForGroupVotes
               hullElems={this.hullElems}
               selectedComment={this.state.selectedComment}
               allComments={this.props.comments}
               groups={this.props.math["group-votes"] || window.preload.firstMath["group-votes"]}
               groupCornerAssignments={this.state.groupCornerAssignments}
-              />
+            />
           </g>
         </svg>
         <div style={{
-            display: "flex",
-            alignItems: "baseline",
-            flexWrap: "wrap",
-            width: "100%",
-            justifyContent: "center",
-            margin: "20px 0px",
-          }}>
+          display: "flex",
+          alignItems: "baseline",
+          flexWrap: "wrap",
+          width: "100%",
+          justifyContent: "center",
+          margin: "20px 0px",
+        }}>
           <Curate
             handleCurateButtonClick={this.handleCurateButtonClick.bind(this)}
             math={this.props.math}
             selectedTidCuration={this.state.selectedTidCuration}
             Strings={this.props.Strings}
-            />
+          />
           <TidCarousel
             selectedTidCuration={this.state.selectedTidCuration}
             commentsToShow={this.state.tidCarouselComments}
             handleCommentClick={this.handleCommentClick.bind(this)}
             selectedComment={this.state.selectedComment}
             Strings={this.props.Strings}
-            />
+          />
         </div>
         <ExploreTid
           browserDimensions={this.state.browserDimensions}
@@ -241,48 +226,10 @@ class Graph extends React.Component {
           math={this.props.math || window.preload.firstMath}
           onVoteClicked={this.props.onVoteClicked}
           Strings={this.props.Strings}
-          comments={this.props.comment}/>
+          comments={this.props.comment} />
       </div>
     );
   }
 }
 
 export default Graph;
-
-
-/* heading */
-
-// let heading = (<span><p style={{fontSize: globals.primaryHeading}}> Opinion Graph </p>
-//   <p style={globals.paragraph}>
-//     This graph shows all people and all comments.
-//   </p>
-//   <p style={globals.paragraph}>
-//     Comments, identified by their number, are positioned more closely to comments that were voted on similarly (blue, in the correlation matrix above). Comments are positioned further away from comments that tended to be voted on differently (red, in the correlation matrix above). </p>
-//   <p style={globals.paragraph}>People are positioned closer to the comments on which they agreed, and further from the comments on which they disagreed. Groups of participants that tended to vote similarly across many comments (elaborated in the previous section) are identified by their similar color.
-//   </p></span>);
-//   {this.props.renderHeading ? heading : ""}
-
-/* group labels */
-
-// {/* this.props.math["group-clusters"].map((cluster, i) => {
-//   return (<text x={300} y={300}> Renzi Supporters </text>)
-// }) : null */}
-
-/* React SVG Pan Zoom */
-
-// componentDidMount() {
-//   this.Viewer.fitToViewer();
-// }
-// <div>
-//   <button onClick={event => this.Viewer.zoomOnViewerCenter(1.1)}>Zoom in</button>
-//   <button onClick={event => this.Viewer.fitSelection(40, 40, 200, 200)}>Zoom area</button>
-//   <button onClick={event => this.Viewer.fitToViewer()}>Fit</button>
-// </div>
-
-// <ReactSVGPanZoom
-//   style={{outline: "1px solid black", fill: "white"}}
-//   width={500} height={500} ref={Viewer => this.Viewer = Viewer}
-//   onClick={event => console.log('click', event.x, event.y, event.originalEvent)}
-//   onMouseMove={event => console.log('move', event.x, event.y)} >
-//
-// </ReactSVGPanZoom>

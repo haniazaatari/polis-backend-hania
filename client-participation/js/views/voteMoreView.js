@@ -8,13 +8,13 @@ module.exports = Handlebones.ModelView.extend({
   template: template,
   events: {
   },
-  context: function() {
+  context: function () {
     var ctx = Handlebones.ModelView.prototype.context.apply(this, arguments);
     ctx.oneMore = ctx.remaining === 1;
     ctx.twoMore = ctx.remaining === 2;
     return ctx;
   },
-  initialize: function(options) {
+  initialize: function () {
     Handlebones.ModelView.prototype.initialize.apply(this, arguments);
   }
 });

@@ -2,7 +2,7 @@ import React from "react";
 import _ from "lodash";
 import * as globals from "./globals";
 
-const GraphAxes = ({yCenter, xCenter, report}) => {
+const GraphAxes = ({ yCenter, xCenter, report }) => {
   if (!_.isNumber(yCenter) || !_.isNumber(xCenter) || !report) {
     return null;
   }
@@ -17,7 +17,7 @@ const GraphAxes = ({yCenter, xCenter, report}) => {
         style={{
           stroke: "rgb(200,200,200)",
           strokeWidth: 1
-        }}/>
+        }} />
       <line
         x1={xCenter}
         y1={padding}
@@ -26,7 +26,7 @@ const GraphAxes = ({yCenter, xCenter, report}) => {
         style={{
           stroke: "rgb(200,200,200)",
           strokeWidth: 1
-        }}/>
+        }} />
       {/* Bottom axis */}
       <g transform={`translate(${globals.side / 2}, ${globals.side - 20})`}>
         {report.label_x_neg ? <text
@@ -35,7 +35,7 @@ const GraphAxes = ({yCenter, xCenter, report}) => {
             fontSize: 14
           }}
           textAnchor="start"
-          x={-globals.side/2 + globals.labelPadding}
+          x={-globals.side / 2 + globals.labelPadding}
           y={-1}>
           {globals.axisLabels.leftArrow}
           {" "}
@@ -47,7 +47,7 @@ const GraphAxes = ({yCenter, xCenter, report}) => {
             fontSize: 14
           }}
           textAnchor="end"
-          x={globals.side/2 - globals.labelPadding}
+          x={globals.side / 2 - globals.labelPadding}
           y={-1}>
           {report.label_x_pos}
           {" "}
@@ -63,7 +63,7 @@ const GraphAxes = ({yCenter, xCenter, report}) => {
             fontSize: 14
           }}
           textAnchor="start"
-          x={-globals.side/2 + globals.labelPadding}
+          x={-globals.side / 2 + globals.labelPadding}
           y={-1}>
           {globals.axisLabels.leftArrow}
           {" "}
@@ -75,7 +75,7 @@ const GraphAxes = ({yCenter, xCenter, report}) => {
             fontSize: 14
           }}
           textAnchor="end"
-          x={globals.side/2 - globals.labelPadding}
+          x={globals.side / 2 - globals.labelPadding}
           y={-1}>
           {report.label_y_pos}
           {" "}

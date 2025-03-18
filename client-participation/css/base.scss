@@ -5,47 +5,25 @@
 
 
 
-/* ---------- BEGIN SHARE BUTTON STYLES ---------- */
-
-
-/* This gets Google to fall into place */
-.social {
-  font-size: 1px;
-}
-
-/* This gets Facebook to fall into place */
-.social iframe {
-  vertical-align: middle;
-}
-
-/* Set an optional width for your button wrappers */
-.social span {
-  display: inline-block;
-}
-
-.social iframe,.social>span {
-  vertical-align: middle;
-}
-
 /* ---------- END SHARE BUTTON STYLES ---------- */
 
 
 /* WARNING - duplicated in about-polis repo */
-  .logo_and_login_section {
+.logo_and_login_section {
   /*  border-bottom: 1px solid rgba(149, 165, 166,1.0);*/
-    background-color: rgba(189, 195, 199,.1);
-    border-top: 1px solid rgba(189, 195, 199,.2);
-    border-bottom: 1px solid rgba(189, 195, 199,.2);
-  }
+  background-color: rgba(189, 195, 199, .1);
+  border-top: 1px solid rgba(189, 195, 199, .2);
+  border-bottom: 1px solid rgba(189, 195, 199, .2);
+}
 
 
 
 .header_item {
-    position:relative;
-    top: 25px;
-    font-weight: 700;
-    color: black;
-    font-size: 16px;
+  position: relative;
+  top: 25px;
+  font-weight: 700;
+  color: black;
+  font-size: 16px;
 }
 
 /* Helpers */
@@ -64,7 +42,13 @@
 
 /* Start New Conversation Button*/
 
-.startNewConversation { margin: 0px auto; display: block; position: relative; width: 230px; margin-bottom: 20px }
+.startNewConversation {
+  margin: 0px auto;
+  display: block;
+  position: relative;
+  width: 230px;
+  margin-bottom: 20px
+}
 
 
 /* Conversation create - and everything concerned with metadata */
@@ -72,34 +56,41 @@
 .makeCursorPointer {
   cursor: pointer;
 }
+
 .addNewMetadataButton {
   margin-top: 25px;
   margin-bottom: 30px;
   font-size: 13.5px;
 }
+
 .removeUnderlinedLink:hover {
   text-decoration: none;
 }
-.createAnswer{
+
+.createAnswer {
   padding-inline-start: 0px;
 }
-.createAnswer:hover{
+
+.createAnswer:hover {
   text-decoration: none;
 }
-[data-view-name="metadataQuestionsViewWithCreate"] {
 
-}
+[data-view-name="metadataQuestionsViewWithCreate"] {}
+
 [data-view-name="metadataQuestionAndAnswersViewWithCreate"] {
-  margin-bottom: 30px ;
+  margin-bottom: 30px;
 }
 
 [data-view-name="metadataAnswerViewWithDelete"] {
   margin-inline-start: 20px;
 }
-.questionText { /* a medium weight / bolder brandon */
+
+.questionText {
+  /* a medium weight / bolder brandon */
   font-weight: 500;
   display: inline;
 }
+
 .questionAnswer {
   font-weight: 400;
   display: block;
@@ -141,6 +132,7 @@
   -webkit-user-select: none;
   -o-user-select: none;
 }
+
 .selectable {
   -moz-user-select: auto;
   -ms-user-select: element;
@@ -157,33 +149,16 @@
 
 /*XS XS XS XS XS XS XS */
 /*  @screen-sm-min  */
-@media(max-width:767px){
-
-
-
-}
+@media(max-width:767px) {}
 
 /*SM SM SM SM SM SM SM */
 /* @screen-sm-min  */
-@media(min-width:768px){
-
-
-
-
-
-}
+@media(min-width:768px) {}
 
 /*MD MD MD MD MD MD MD MD */
 /* @screen-md-min */
-@media(min-width:992px){
-
-
-
-}
+@media(min-width:992px) {}
 
 /*LG LG LG LG LG LG LG LG */
 /* @screen-lg-min  */
-@media(min-width:1200px){
-
-
-}
+@media(min-width:1200px) {}

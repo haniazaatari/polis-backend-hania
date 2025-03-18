@@ -1,7 +1,7 @@
 import React from "react";
 import * as globals from "./globals";
 
-const getBackgroundRectWidth = (ptptCount) =>  {
+const getBackgroundRectWidth = (ptptCount) => {
   let width = 46; /* smallest number */
   if (ptptCount >= 100 && ptptCount < 1000) {
     width = 52;
@@ -11,7 +11,7 @@ const getBackgroundRectWidth = (ptptCount) =>  {
   return width;
 }
 
-const Users = ({selectedGroup}) => {
+const Users = ({ selectedGroup }) => {
   return (
     <g width={7} fill={selectedGroup ? "white" : "black"} transform={`translate(0,-9)`}>
       <ellipse cx="1.99335548" cy="1.42348754" rx="1.32890365" ry="1.42348754"></ellipse>
@@ -24,18 +24,18 @@ const Users = ({selectedGroup}) => {
   )
 }
 
-const Label = ({ptptCount, centroid, gid, selectedGroup, handleClick}) => {
+const Label = ({ ptptCount, centroid, gid, selectedGroup, handleClick }) => {
   return (
     <g
       transform={`translate(${centroid.x},${centroid.y})`}
-      onClick={() => {handleClick(gid)}}>
+      onClick={() => { handleClick(gid) }}>
       <rect
         height={20}
         width={getBackgroundRectWidth(ptptCount)}
         rx="4" ry="4"
-        fill={selectedGroup === gid ? "#0090ff": "rgb(248,248,248)"}
+        fill={selectedGroup === gid ? "#0090ff" : "rgb(248,248,248)"}
         x={-16}
-        y={-15}/>
+        y={-15} />
       <text
         x={-11}
         style={{
@@ -47,7 +47,7 @@ const Label = ({ptptCount, centroid, gid, selectedGroup, handleClick}) => {
         }}>
         {globals.groupLabels[gid]}
       </text>
-      <Users selectedGroup={selectedGroup === gid}/>
+      <Users selectedGroup={selectedGroup === gid} />
       <text
         x={12}
         style={{
@@ -63,7 +63,7 @@ const Label = ({ptptCount, centroid, gid, selectedGroup, handleClick}) => {
   )
 }
 
-const HullLabels = ({groups, centroids, selectedGroup, handleClick}) => {
+const HullLabels = ({ groups, centroids, selectedGroup, handleClick }) => {
 
   if (!centroids || !groups) { return null }
 
@@ -77,7 +77,7 @@ const HullLabels = ({groups, centroids, selectedGroup, handleClick}) => {
             selectedGroup={selectedGroup}
             gid={groups[i].id}
             ptptCount={groups[i]["n-members"]}
-            centroid={centroid}/>
+            centroid={centroid} />
         )
       })}
     </g>

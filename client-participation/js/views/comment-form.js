@@ -8,7 +8,6 @@ var display = require("../util/display");
 var eb = require("../eventBus");
 var Handlebones = require("handlebones");
 var M = require("../util/metrics");
-var PolisFacebookUtils = require("../util/facebookButton");
 var ProfilePicView = require("../views/profilePicView");
 var serialize = require("../util/serialize");
 var Strings = require("../strings");
@@ -16,10 +15,6 @@ var Utils = require("../util/utils");
 var $ = require("jquery");
 
 var CHARACTER_LIMIT = Constants.CHARACTER_LIMIT;
-
-// var CommentsByMeView = Handlebones.CollectionView.extend({
-//   modelView: CommentView
-// });
 
 function reject() {
   return $.Deferred().reject();
@@ -42,10 +37,6 @@ module.exports = Handlebones.ModelView.extend({
     ctx.shouldAutofocusOnTextarea =
       this.shouldAutofocusOnTextarea ||
       Utils.shouldFocusOnTextareaWhenWritePaneShown();
-    ctx.hasTwitter = userObject.hasTwitter;
-    ctx.hasFacebook = userObject.hasFacebook && Constants.FB_APP_ID;
-    ctx.auth_opt_tw = false;
-    ctx.auth_opt_fb = false;
     ctx.s = Strings;
     ctx.desktop = !display.xs();
     ctx.hideHelp = !Utils.userCanSeeHelp() || preload.firstConv.help_type === 0;
@@ -130,13 +121,9 @@ module.exports = Handlebones.ModelView.extend({
     var num;
     var txt = "{{CHARACTERS_COUNT}}";
     if (remaining < 0) {
-      // txt = "- " + remaining;
       num = -1 * remaining;
       txt = Strings.commentTooLongByChars;
-      // this.$("#comment_button").attr("disabled", "disabled");
-      // this.$("#comment_button").css("opacity", 0.3);
       this.showMessage("#commentTooLongAlert");
-      // this.buttonActive = false;
       this.$("#commentCharCount").text("");
       this.$("#commentCharCount").hide();
       this.$("#commentCharCountExceeded").text(
@@ -145,14 +132,8 @@ module.exports = Handlebones.ModelView.extend({
       this.$("#commentCharCountExceeded").show();
     } else {
       num = remaining;
-      // this.$("#comment_button").attr("disabled", null);
-      // this.$("#comment_button").css("opacity", 1);
       this.hideMessage("#commentTooLongAlert");
       this.maybeShowBasicTip();
-      // this.buttonActive = true;
-      // if (remaining > 0) {
-      // } else {
-      // }
       this.$("#commentCharCount").text(
         txt.replace("{{CHARACTERS_COUNT}}", num)
       );
@@ -168,12 +149,7 @@ module.exports = Handlebones.ModelView.extend({
     eb.trigger(eb.interacted);
   },
   showFormControls: function () {
-    // this.$(".alert").hide();
     this.$(".comment_form_control_hideable").show();
-  },
-  hideFormControls: function () {
-    // this.$(".comment_form_control_hideable").hide();
-    // this.$("#commentCharCount").text("");
   },
   reloadPagePreservingCommentText: function () {
     var wipCommentFormText = $("#comment_form_textarea").val();
@@ -184,11 +160,11 @@ module.exports = Handlebones.ModelView.extend({
     eb.trigger(eb.reloadWithMoreParams, params);
   },
   events: {
-    "focus #comment_form_textarea": function (e) {
+    "focus #comment_form_textarea": function () {
       // maybe on keyup ?
       this.showFormControls();
     },
-    "blur #comment_form_textarea": function (e) {
+    "blur #comment_form_textarea": function () {
       var txt = this.$("#comment_form_textarea").val();
       if (!txt || !txt.length) {
         this.hideFormControls();
@@ -197,15 +173,13 @@ module.exports = Handlebones.ModelView.extend({
     "change #comment_form_textarea": "textChange",
     "keyup #comment_form_textarea": "textChange",
     "paste #comment_form_textarea": "textChange",
-    "click #facebookButtonCommentForm": "facebookClicked",
-    "click #twitterButtonCommentForm": "twitterClicked",
     "click #comment_button": "onSubmitClicked",
   },
   onSubmitClicked: function (e) {
     e.preventDefault();
     this.submitComment();
   },
-  submitComment: function (e) {
+  submitComment: function () {
     var that = this;
     this.hideMessage("#comment_sent_message");
     this.hideMessage("#comment_send_failed_message");
@@ -236,9 +210,6 @@ module.exports = Handlebones.ModelView.extend({
                 that.hideFormControls();
                 that.showMessage("#comment_sent_message");
               },
-              function (err) {
-                // that.showMessage("#comment_send_failed_message");
-              }
             )
             .always(function () {
               that.buttonActive = true;
@@ -246,11 +217,6 @@ module.exports = Handlebones.ModelView.extend({
         });
       }
     }
-    var xid = Utils.getXid();
-    var hasSocial =
-      window.userObject.hasFacebook ||
-      window.userObject.hasTwitter ||
-      !_.isUndefined(xid);
     var needsSocial = false;
     M.add(M.COMMENT_SUBMIT_CLICK);
     if (hasSocial || !needsSocial) {
@@ -263,57 +229,6 @@ module.exports = Handlebones.ModelView.extend({
   },
   onAuthSuccess: function () {
     this.reloadPagePreservingCommentText();
-    // $("#socialButtonsCommentForm").hide();
-    // $("#comment_form_controls").show();
-  },
-  facebookClicked: function (e) {
-    e.preventDefault();
-    var that = this;
-    M.addAndSend(M.COMMENT_SUBMIT_FB_INIT);
-    PolisFacebookUtils.connect().then(
-      function () {
-        M.addAndSend(M.COMMENT_SUBMIT_FB_OK);
-        // wait a bit for new cookies to be ready, or something, then submit comment.
-        setTimeout(function () {
-          that.onAuthSuccess();
-          // CurrentUserModel.update();
-        }, 100);
-      },
-      function (err) {
-        M.addAndSend(M.COMMENT_SUBMIT_FB_ERR);
-        // alert("facebook error");
-      }
-    );
-  },
-  twitterClicked: function (e) {
-    var that = this;
-    e.preventDefault();
-
-    eb.on(eb.twitterConnectedCommentForm, function () {
-      M.addAndSend(M.COMMENT_SUBMIT_TW_OK);
-      // wait a bit for new cookies to be ready, or something, then submit comment.
-      setTimeout(function () {
-        that.onAuthSuccess();
-        // CurrentUserModel.update();
-      }, 100);
-    });
-
-    M.addAndSend(M.COMMENT_SUBMIT_TW_INIT);
-
-    // open a new window where the twitter auth screen will show.
-    // that window will redirect back to a simple page that calls window.opener.twitterStatus("ok")
-    var params = "location=0,status=0,width=800,height=400";
-    window.open(
-      document.location.origin +
-        "/api/v3/twitterBtn?owner=false&dest=/twitterAuthReturn/CommentForm",
-      "twitterWindow",
-      params
-    );
-  },
-  showSocialAuthChoices: function () {
-    $("#comment_form_controls").hide();
-    $("#socialButtonsCommentForm").show();
-    $("#socialButtonsUnderReadReact").hide();
   },
   participantCommented: function (attrs) {
     var that = this; //that = the view
@@ -346,39 +261,16 @@ module.exports = Handlebones.ModelView.extend({
       promise.then(
         function () {
           that.trigger("commentSubmitted"); // view.trigger
-          // $("#comment_form_textarea").hide();
-          // $("#commentSentAlert").fadeIn(300);
-          // setTimeout(function() {
-          //   $("#commentSentAlert").fadeOut(500, function() {
-          //     $("#comment_form_textarea").fadeIn(400);
-          //   });
-          // }, 1500);
         },
         function (err) {
           if (err.status === 409) {
-            // that.model.set({
-            //   error: "Duplicate!",
-            //   errorExtra: "That comment already exists.",
-            // });
-            // alert(Strings.commentErrorDuplicate);
             that.showMessage("#comment_send_failed_duplicate_message");
           } else if (err.responseText === "polis_err_conversation_is_closed") {
-            // that.model.set({
-            //   error: "This conversation is closed.",
-            //   errorExtra: "No further commenting is allowed.",
-            // });
-            // alert(Strings.commentErrorConversationClosed);
             that.showMessage(
               "#comment_send_failed_conversation_closed_message"
             );
           } else {
-            // that.model.set({
-            //   error: "Error sending comment.",
-            //   errorExtra: "Please try again later.",
-            // });
-            // alert(Strings.commentSendFailed);
             that.showMessage("#comment_send_failed_message");
-            // this.showMessage("#comment_send_failed_message");
           }
         }
       );
@@ -390,9 +282,6 @@ module.exports = Handlebones.ModelView.extend({
     this.model = options.model;
     this.conversation_id = options.conversation_id;
     this.collection = options.collection;
-    // this.commentsByMeView = this.addChild(new CommentsByMeView({
-    //   collection: options.collection
-    // }));
     this.serverClient = options.serverClient;
 
     this.profilePicView = this.addChild(
