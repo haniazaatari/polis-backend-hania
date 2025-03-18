@@ -5,7 +5,7 @@ set -x
 cd /opt/polis
 sudo yum install -y git
 GIT_REPO_URL="https://github.com/compdemocracy/polis.git"
-GIT_BRANCH="edge"
+GIT_BRANCH="stable"
 
 if [ ! -d "polis" ]; then
   echo "Cloning public repository from $GIT_REPO_URL, branch: $GIT_BRANCH (HTTPS - Public Repo)"

@@ -24,7 +24,6 @@ interface PolisStackProps extends cdk.StackProps {
   webKeyPairName?: string;    // Key pair for web instances
   mathWorkerKeyPairName?: string; // Key pair for math worker
 }
-const defaultBranch = 'edge';
 
 export class CdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: PolisStackProps) {
@@ -59,8 +58,11 @@ export class CdkStack extends cdk.Stack {
 
     const instanceTypeWeb = ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM);
     const machineImageWeb = new ec2.AmazonLinuxImage({ generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023 });
-    const instanceTypeMathWorker = ec2.InstanceType.of(ec2.InstanceClass.C5A, ec2.InstanceSize.XLARGE8);
-    const machineImageMathWorker = new ec2.AmazonLinuxImage({ generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023 });
+    const instanceTypeMathWorker = ec2.InstanceType.of(ec2.InstanceClass.R8G, ec2.InstanceSize.XLARGE4);
+    const machineImageMathWorker = new ec2.AmazonLinuxImage({
+      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023,
+      cpuType: ec2.AmazonLinuxCpuType.ARM_64,
+    });
 
     const webSecurityGroup = new ec2.SecurityGroup(this, 'WebSecurityGroup', {
       vpc,
@@ -125,8 +127,8 @@ export class CdkStack extends cdk.Stack {
     // things are dockerized so we need ECR
     const ecrWebRepository = new ecr.Repository(this, 'PolisRepositoryServer', {
       repositoryName: 'polis/server',
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // fine for alpha testing - change to retain after
-      imageScanOnPush: true, // Enable image scanning (recommended)
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      imageScanOnPush: true,
     });
 
     ecrWebRepository.addToResourcePolicy(new iam.PolicyStatement({ // allow docker pull from anywhere
@@ -142,8 +144,8 @@ export class CdkStack extends cdk.Stack {
 
     const ecrMathRepository = new ecr.Repository(this, 'PolisRepositoryMath', {
       repositoryName: 'polis/math',
-      removalPolicy: cdk.RemovalPolicy.DESTROY, // fine for alpha testing - change to retain after
-      imageScanOnPush: true, // Enable image scanning (recommended)
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      imageScanOnPush: true,
     });
 
     ecrMathRepository.addToResourcePolicy(new iam.PolicyStatement({
@@ -160,7 +162,6 @@ export class CdkStack extends cdk.Stack {
     ecrWebRepository.grantPull(instanceRole);
     ecrMathRepository.grantPull(instanceRole);
 
-    // might remove this, not sure it's necessary since latest image is always pulled
     const imageTagParameter = new ssm.StringParameter(this, 'ImageTagParameter', {
       parameterName: '/polis/image-tag',
       stringValue: 'initial-tag', //CI/CD will update this
@@ -176,8 +177,8 @@ export class CdkStack extends cdk.Stack {
 
     const dbSubnetGroup = new rds.SubnetGroup(this, 'DatabaseSubnetGroup', {
       vpc,
-      subnetGroupName: 'PolisDatabaseSubnetGroup', // Give it a name
-      description: 'Subnet group for the postgres database', // Add a description
+      subnetGroupName: 'PolisDatabaseSubnetGroup',
+      description: 'Subnet group for the postgres database',
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
       },
@@ -193,7 +194,7 @@ export class CdkStack extends cdk.Stack {
       credentials: rds.Credentials.fromGeneratedSecret('dbUser'),
       databaseName: 'polisdb',
       removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
-      // deletionProtection: true, // turned off for now until preprod / prod phase
+      deletionProtection: true,
       publiclyAccessible: false,
       subnetGroup: dbSubnetGroup,
     });
@@ -332,8 +333,8 @@ EOF`,
       deploymentGroupName: 'PolisDeploymentGroup',
       autoScalingGroups: [asgWeb, asgMathWorker],
       deploymentConfig: codedeploy.ServerDeploymentConfig.ONE_AT_A_TIME,
-      role: codeDeployRole, // The IAM role for CodeDeploy
-      installAgent: true, // Installs the CodeDeploy agent.
+      role: codeDeployRole,
+      installAgent: true,
     });
 
     // Allow traffic from the web ASG to the database
@@ -367,13 +368,13 @@ EOF`,
 
     // ACM Certificate Request
     const certificate = new acm.Certificate(this, 'WebAppCertificate', {
-      domainName: 'awstest.pol.is', // Your domain name
-      validation: acm.CertificateValidation.fromDns(), // Using DNS validation
+      domainName: 'pol.is',
+      validation: acm.CertificateValidation.fromDns(),
     });
 
     const httpsListener = lb.addListener('HttpsListener', {
       port: 443,
-      certificates: [certificate], // Attach the ACM certificate
+      certificates: [certificate],
       open: true,
       defaultTargetGroups: [webTargetGroup],
     });
