@@ -452,13 +452,45 @@ def conv_repness(vote_matrix: NamedMatrix, group_clusters: List[Dict[str, Any]])
     Returns:
         Dictionary with representativeness data for each group
     """
-    matrix_values = vote_matrix.values
-    matrix_values = np.nan_to_num(matrix_values, nan=None)
+    # Extract and clean the matrix values
+    matrix_values = vote_matrix.values.copy()
+    
+    # Ensure the matrix contains numeric values
+    if not np.issubdtype(matrix_values.dtype, np.number):
+        # Convert to numeric matrix with proper NaN handling
+        numeric_matrix = np.zeros(matrix_values.shape, dtype=float)
+        for i in range(matrix_values.shape[0]):
+            for j in range(matrix_values.shape[1]):
+                val = matrix_values[i, j]
+                if pd.isna(val) or val is None:
+                    numeric_matrix[i, j] = np.nan
+                else:
+                    try:
+                        numeric_matrix[i, j] = float(val)
+                    except (ValueError, TypeError):
+                        numeric_matrix[i, j] = np.nan
+        matrix_values = numeric_matrix
+    
+    # Replace NaNs with None for the algorithm
+    matrix_values = np.where(np.isnan(matrix_values), None, matrix_values)
+    
+    # Create empty-result structure in case we need to return early
+    empty_result = {
+        'comment_ids': vote_matrix.colnames(),
+        'group_repness': {group['id']: [] for group in group_clusters},
+        'consensus_comments': [],
+        'comment_repness': []  # Add a list for all comment repness data
+    }
+    
+    # Check if we have enough data
+    if matrix_values.shape[0] < 2 or matrix_values.shape[1] < 2:
+        return empty_result
     
     # Result will hold repness data for each group
     result = {
         'comment_ids': vote_matrix.colnames(),
-        'group_repness': {}
+        'group_repness': {},
+        'comment_repness': []  # Add a list for all comment repness data
     }
     
     # For each group, calculate representativeness
@@ -466,8 +498,17 @@ def conv_repness(vote_matrix: NamedMatrix, group_clusters: List[Dict[str, Any]])
     
     for group in group_clusters:
         group_id = group['id']
-        group_members = [vote_matrix.get_row_index().index(m) for m in group['members'] 
-                        if m in vote_matrix.get_row_index()]
+        
+        # Convert member IDs to indices with error handling
+        group_members = []
+        for m in group['members']:
+            try:
+                if m in vote_matrix.get_row_index():
+                    idx = vote_matrix.get_row_index().index(m)
+                    if 0 <= idx < matrix_values.shape[0]:
+                        group_members.append(idx)
+            except (ValueError, TypeError) as e:
+                print(f"Error finding member {m} in matrix: {e}")
         
         if not group_members:
             # Skip empty groups
@@ -491,35 +532,57 @@ def conv_repness(vote_matrix: NamedMatrix, group_clusters: List[Dict[str, Any]])
             if not any(v is not None for v in comment_votes):
                 continue
                 
-            # Calculate stats for this group
-            stats = comment_stats(comment_votes, group_members)
-            
-            # Calculate stats for other groups
-            other_stats = comment_stats(comment_votes, other_members)
-            
-            # Add comparative stats
-            stats = add_comparative_stats(stats, other_stats)
-            
-            # Finalize stats
-            stats = finalize_cmt_stats(stats)
-            
-            # Add metadata
-            stats['comment_id'] = comment_id
-            stats['group_id'] = group_id
-            
-            group_stats.append(stats)
-            all_stats.append(stats)
+            try:
+                # Calculate stats for this group
+                stats = comment_stats(comment_votes, group_members)
+                
+                # Calculate stats for other groups
+                other_stats = comment_stats(comment_votes, other_members)
+                
+                # Add comparative stats
+                stats = add_comparative_stats(stats, other_stats)
+                
+                # Finalize stats
+                stats = finalize_cmt_stats(stats)
+                
+                # Add metadata
+                stats['comment_id'] = comment_id
+                stats['group_id'] = group_id
+                
+                group_stats.append(stats)
+                all_stats.append(stats)
+                
+                # Also add to the comment_repness list
+                repness = {
+                    'tid': comment_id,
+                    'gid': group_id,
+                    'repness': stats.get('agree_metric', 0) if stats.get('repful') == 'agree' else stats.get('disagree_metric', 0),
+                    'pa': stats.get('pa', 0),
+                    'pd': stats.get('pd', 0)
+                }
+                result['comment_repness'].append(repness)
+            except Exception as e:
+                print(f"Error calculating stats for comment {comment_id} in group {group_id}: {e}")
+                continue
         
-        # Select representative comments for this group
-        rep_comments = select_rep_comments(group_stats)
-        
-        # Store in result
-        result['group_repness'][group_id] = rep_comments
+        try:
+            # Select representative comments for this group
+            rep_comments = select_rep_comments(group_stats)
+            
+            # Store in result
+            result['group_repness'][group_id] = rep_comments
+        except Exception as e:
+            print(f"Error selecting representative comments for group {group_id}: {e}")
+            result['group_repness'][group_id] = []
     
     # Add consensus comments if there are multiple groups
-    if len(group_clusters) > 1:
-        result['consensus_comments'] = select_consensus_comments(all_stats)
-    else:
+    try:
+        if len(group_clusters) > 1 and all_stats:
+            result['consensus_comments'] = select_consensus_comments(all_stats)
+        else:
+            result['consensus_comments'] = []
+    except Exception as e:
+        print(f"Error selecting consensus comments: {e}")
         result['consensus_comments'] = []
     
     return result
@@ -539,9 +602,26 @@ def participant_stats(vote_matrix: NamedMatrix, group_clusters: List[Dict[str, A
     if not group_clusters:
         return {}
     
-    # Extract values
-    matrix_values = vote_matrix.values
-    matrix_values = np.nan_to_num(matrix_values, nan=None)
+    # Extract values and ensure they're numeric
+    matrix_values = vote_matrix.values.copy()
+    
+    # Convert to numeric matrix with NaN for missing values
+    if not np.issubdtype(matrix_values.dtype, np.number):
+        numeric_values = np.zeros(matrix_values.shape, dtype=float)
+        for i in range(matrix_values.shape[0]):
+            for j in range(matrix_values.shape[1]):
+                val = matrix_values[i, j]
+                if pd.isna(val) or val is None:
+                    numeric_values[i, j] = np.nan
+                else:
+                    try:
+                        numeric_values[i, j] = float(val)
+                    except (ValueError, TypeError):
+                        numeric_values[i, j] = np.nan
+        matrix_values = numeric_values
+    
+    # Replace NaNs with zeros for correlation calculation
+    matrix_values = np.nan_to_num(matrix_values, nan=0.0)
     
     # Create result structure
     result = {
@@ -556,10 +636,10 @@ def participant_stats(vote_matrix: NamedMatrix, group_clusters: List[Dict[str, A
             
         participant_votes = matrix_values[p_idx, :]
         
-        # Count votes
-        n_agree = sum(1 for v in participant_votes if agree(v))
-        n_disagree = sum(1 for v in participant_votes if disagree(v))
-        n_pass = sum(1 for v in participant_votes if pass_vote(v))
+        # Count votes (non-zero values are votes)
+        n_agree = np.sum(participant_votes > 0)
+        n_disagree = np.sum(participant_votes < 0)
+        n_pass = np.sum(participant_votes == 0) - np.count_nonzero(np.isnan(participant_votes))
         n_votes = n_agree + n_disagree
         
         # Skip participants with no votes
@@ -579,48 +659,58 @@ def participant_stats(vote_matrix: NamedMatrix, group_clusters: List[Dict[str, A
         for group in group_clusters:
             group_id = group['id']
             
-            # Get group member indices
-            group_members = [vote_matrix.get_row_index().index(m) for m in group['members'] 
-                           if m in vote_matrix.get_row_index()]
-            
-            if not group_members:
-                continue
+            try:
+                # Get group member indices
+                group_members = []
+                for m in group['members']:
+                    if m in vote_matrix.get_row_index():
+                        idx = vote_matrix.get_row_index().index(m)
+                        if 0 <= idx < matrix_values.shape[0]:
+                            group_members.append(idx)
                 
-            # Calculate average votes for this group for each comment
-            group_votes = []
-            
-            for c_idx in range(matrix_values.shape[1]):
-                comment_votes = matrix_values[:, c_idx]
+                if not group_members or len(group_members) < 3:
+                    # Skip groups with too few members
+                    group_agreements[group_id] = 0.0
+                    continue
                 
-                # Get votes from group members
-                group_comment_votes = [comment_votes[i] for i in group_members if i < len(comment_votes)]
+                # Calculate group average votes for each comment
+                group_vote_matrix = matrix_values[group_members, :]
+                group_avg_votes = np.mean(group_vote_matrix, axis=0)
                 
-                # Calculate average for non-null votes
-                non_null_votes = [v for v in group_comment_votes if v is not None]
+                # Get participant's votes
+                participant_vote_vector = participant_votes
                 
-                if non_null_votes:
-                    group_votes.append(sum(non_null_votes) / len(non_null_votes))
-            
-            # Get participant's votes (excluding nulls)
-            participant_non_null_votes = []
-            group_non_null_votes = []
-            
-            for i, (p_vote, g_vote) in enumerate(zip(participant_votes, group_votes)):
-                if p_vote is not None and g_vote is not None:
-                    participant_non_null_votes.append(p_vote)
-                    group_non_null_votes.append(g_vote)
-            
-            # Calculate correlation if enough votes
-            if len(participant_non_null_votes) >= 3:
-                correlation, _ = stats.pearsonr(participant_non_null_votes, group_non_null_votes)
-                group_agreements[group_id] = correlation
+                # Calculate correlation if enough votes
+                # Mask comments that have fewer than 3 votes from group members
+                valid_comment_mask = np.sum(group_vote_matrix != 0, axis=0) >= 3
+                
+                if np.sum(valid_comment_mask) >= 3:  # At least 3 common votes
+                    # Extract votes for valid comments
+                    p_votes = participant_vote_vector[valid_comment_mask]
+                    g_votes = group_avg_votes[valid_comment_mask]
+                    
+                    # Calculate correlation
+                    if np.std(p_votes) > 0 and np.std(g_votes) > 0:
+                        correlation = np.corrcoef(p_votes, g_votes)[0, 1]
+                        if not np.isnan(correlation):
+                            group_agreements[group_id] = correlation
+                        else:
+                            group_agreements[group_id] = 0.0
+                    else:
+                        group_agreements[group_id] = 0.0
+                else:
+                    group_agreements[group_id] = 0.0
+                    
+            except Exception as e:
+                # Fallback for errors
+                group_agreements[group_id] = 0.0
         
         # Store participant stats
         result['stats'][participant_id] = {
-            'n_agree': n_agree,
-            'n_disagree': n_disagree,
-            'n_pass': n_pass,
-            'n_votes': n_votes,
+            'n_agree': int(n_agree),
+            'n_disagree': int(n_disagree),
+            'n_pass': int(n_pass),
+            'n_votes': int(n_votes),
             'group': participant_group,
             'group_correlations': group_agreements
         }

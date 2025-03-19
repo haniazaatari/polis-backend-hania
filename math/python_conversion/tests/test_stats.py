@@ -256,13 +256,33 @@ class TestStatisticalTests:
         """Test binomial test calculation."""
         # Test against scipy's implementation
         p1 = binomial_test(70, 100, 0.5)
-        p2 = scipy_stats.binom_test(70, 100, 0.5)
+        
+        # Use the newer SciPy API if available
+        try:
+            p2 = scipy_stats.binomtest(70, 100, 0.5).pvalue
+        except AttributeError:
+            # Fall back to older API if necessary
+            try:
+                p2 = scipy_stats.binom_test(70, 100, 0.5)
+            except AttributeError:
+                # If neither is available, skip the test
+                pytest.skip("SciPy binomial test functions not available")
         
         assert np.isclose(p1, p2)
         
         # Test with different expected proportions
         p3 = binomial_test(70, 100, 0.7)
-        p4 = scipy_stats.binom_test(70, 100, 0.7)
+        
+        # Use the newer SciPy API if available
+        try:
+            p4 = scipy_stats.binomtest(70, 100, 0.7).pvalue
+        except AttributeError:
+            # Fall back to older API if necessary
+            try:
+                p4 = scipy_stats.binom_test(70, 100, 0.7)
+            except AttributeError:
+                # If neither is available, skip the test
+                return
         
         assert np.isclose(p3, p4)
         

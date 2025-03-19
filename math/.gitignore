@@ -54,3 +54,5 @@ ENV/
 # Jupyter Notebook
 .ipynb_checkpoints
 */.ipynb_checkpoints/*
+
+real_data

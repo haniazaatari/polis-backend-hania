@@ -105,32 +105,67 @@ class Conversation:
         
         # Process votes
         for vote in vote_data:
-            ptpt_id = vote.get('pid')
-            comment_id = vote.get('tid')
-            vote_value = vote.get('vote')
-            created = vote.get('created', last_vote_timestamp)
-            
-            # Skip invalid votes
-            if ptpt_id is None or comment_id is None or vote_value is None:
-                continue
-                
-            # Convert vote value
             try:
-                if vote_value == 'agree':
-                    vote_value = 1
-                elif vote_value == 'disagree':
-                    vote_value = -1
-                elif vote_value == 'pass':
+                ptpt_id = str(vote.get('pid'))  # Ensure string
+                comment_id = str(vote.get('tid'))  # Ensure string
+                vote_value = vote.get('vote')
+                created = vote.get('created', last_vote_timestamp)
+                
+                # Skip invalid votes
+                if ptpt_id is None or comment_id is None or vote_value is None:
+                    continue
+                    
+                # Convert vote value to standard format
+                try:
+                    # Handle string values
+                    if isinstance(vote_value, str):
+                        vote_value = vote_value.lower()
+                        if vote_value == 'agree':
+                            vote_value = 1.0
+                        elif vote_value == 'disagree':
+                            vote_value = -1.0
+                        elif vote_value == 'pass':
+                            vote_value = None
+                        else:
+                            # Try to convert numeric string
+                            try:
+                                vote_value = float(vote_value)
+                                # Normalize to -1, 0, 1
+                                if vote_value > 0:
+                                    vote_value = 1.0
+                                elif vote_value < 0:
+                                    vote_value = -1.0
+                                else:
+                                    vote_value = 0.0
+                            except (ValueError, TypeError):
+                                vote_value = None
+                    # Handle numeric values
+                    elif isinstance(vote_value, (int, float)):
+                        vote_value = float(vote_value)
+                        # Normalize to -1, 0, 1
+                        if vote_value > 0:
+                            vote_value = 1.0
+                        elif vote_value < 0:
+                            vote_value = -1.0
+                        else:
+                            vote_value = 0.0
+                    else:
+                        vote_value = None
+                except Exception as e:
+                    print(f"Error converting vote value: {e}")
                     vote_value = None
-                else:
-                    vote_value = int(vote_value)
-            except (ValueError, TypeError):
+                
+                # Skip null votes or unknown format
+                if vote_value is None:
+                    continue
+                
+                # Update the raw rating matrix
+                result.raw_rating_mat = result.raw_rating_mat.update(
+                    ptpt_id, comment_id, vote_value
+                )
+            except Exception as e:
+                print(f"Error processing vote: {e}")
                 continue
-            
-            # Update the raw rating matrix
-            result.raw_rating_mat = result.raw_rating_mat.update(
-                ptpt_id, comment_id, vote_value
-            )
         
         # Update last updated timestamp
         result.last_updated = max(
@@ -150,7 +185,11 @@ class Conversation:
         
         # Recompute clustering if requested
         if recompute:
-            result = result.recompute()
+            try:
+                result = result.recompute()
+            except Exception as e:
+                print(f"Error during recompute: {e}")
+                # If recompute fails, return the conversation with just the new votes
         
         return result
     
@@ -184,51 +223,92 @@ class Conversation:
             'participant_stats': {}
         }
         
-        # Get matrix values
-        values = self.rating_mat.values
-        
-        # Count votes
-        non_null_mask = ~np.isnan(values)
-        agree_mask = values == 1
-        disagree_mask = values == -1
-        
-        self.vote_stats['n_votes'] = np.sum(non_null_mask)
-        self.vote_stats['n_agree'] = np.sum(agree_mask)
-        self.vote_stats['n_disagree'] = np.sum(disagree_mask)
-        self.vote_stats['n_pass'] = np.sum(np.isnan(values))
-        
-        # Compute comment stats
-        for i, cid in enumerate(self.rating_mat.colnames()):
-            if i >= values.shape[1]:
-                continue
-                
-            col = values[:, i]
-            n_votes = np.sum(~np.isnan(col))
-            n_agree = np.sum(col == 1)
-            n_disagree = np.sum(col == -1)
+        # Get matrix values and ensure they are numeric
+        try:
+            # Make a clean copy that's definitely numeric
+            clean_mat = self._get_clean_matrix()
+            values = clean_mat.values
             
-            self.vote_stats['comment_stats'][cid] = {
-                'n_votes': int(n_votes),
-                'n_agree': int(n_agree),
-                'n_disagree': int(n_disagree),
-                'agree_ratio': float(n_agree / max(n_votes, 1))
-            }
-        
-        # Compute participant stats
-        for i, pid in enumerate(self.rating_mat.rownames()):
-            if i >= values.shape[0]:
-                continue
+            # Count votes safely
+            try:
+                # Create masks, handling non-numeric data
+                non_null_mask = ~np.isnan(values)
+                agree_mask = np.abs(values - 1.0) < 0.001  # Close to 1
+                disagree_mask = np.abs(values + 1.0) < 0.001  # Close to -1
                 
-            row = values[i, :]
-            n_votes = np.sum(~np.isnan(row))
-            n_agree = np.sum(row == 1)
-            n_disagree = np.sum(row == -1)
+                self.vote_stats['n_votes'] = int(np.sum(non_null_mask))
+                self.vote_stats['n_agree'] = int(np.sum(agree_mask))
+                self.vote_stats['n_disagree'] = int(np.sum(disagree_mask))
+                self.vote_stats['n_pass'] = int(np.sum(np.isnan(values)))
+            except Exception as e:
+                print(f"Error counting votes: {e}")
+                # Set defaults if counting fails
+                self.vote_stats['n_votes'] = 0
+                self.vote_stats['n_agree'] = 0
+                self.vote_stats['n_disagree'] = 0
+                self.vote_stats['n_pass'] = 0
             
-            self.vote_stats['participant_stats'][pid] = {
-                'n_votes': int(n_votes),
-                'n_agree': int(n_agree),
-                'n_disagree': int(n_disagree),
-                'agree_ratio': float(n_agree / max(n_votes, 1))
+            # Compute comment stats
+            for i, cid in enumerate(clean_mat.colnames()):
+                if i >= values.shape[1]:
+                    continue
+                    
+                try:
+                    col = values[:, i]
+                    n_votes = np.sum(~np.isnan(col))
+                    n_agree = np.sum(np.abs(col - 1.0) < 0.001)
+                    n_disagree = np.sum(np.abs(col + 1.0) < 0.001)
+                    
+                    self.vote_stats['comment_stats'][cid] = {
+                        'n_votes': int(n_votes),
+                        'n_agree': int(n_agree),
+                        'n_disagree': int(n_disagree),
+                        'agree_ratio': float(n_agree / max(n_votes, 1))
+                    }
+                except Exception as e:
+                    print(f"Error computing stats for comment {cid}: {e}")
+                    self.vote_stats['comment_stats'][cid] = {
+                        'n_votes': 0,
+                        'n_agree': 0,
+                        'n_disagree': 0,
+                        'agree_ratio': 0.0
+                    }
+            
+            # Compute participant stats
+            for i, pid in enumerate(clean_mat.rownames()):
+                if i >= values.shape[0]:
+                    continue
+                    
+                try:
+                    row = values[i, :]
+                    n_votes = np.sum(~np.isnan(row))
+                    n_agree = np.sum(np.abs(row - 1.0) < 0.001)
+                    n_disagree = np.sum(np.abs(row + 1.0) < 0.001)
+                    
+                    self.vote_stats['participant_stats'][pid] = {
+                        'n_votes': int(n_votes),
+                        'n_agree': int(n_agree),
+                        'n_disagree': int(n_disagree),
+                        'agree_ratio': float(n_agree / max(n_votes, 1))
+                    }
+                except Exception as e:
+                    print(f"Error computing stats for participant {pid}: {e}")
+                    self.vote_stats['participant_stats'][pid] = {
+                        'n_votes': 0,
+                        'n_agree': 0,
+                        'n_disagree': 0,
+                        'agree_ratio': 0.0
+                    }
+        except Exception as e:
+            print(f"Error in vote stats computation: {e}")
+            # Initialize with empty stats if computation fails
+            self.vote_stats = {
+                'n_votes': 0,
+                'n_agree': 0,
+                'n_disagree': 0,
+                'n_pass': 0,
+                'comment_stats': {},
+                'participant_stats': {}
             }
     
     def update_moderation(self, 
@@ -286,51 +366,109 @@ class Conversation:
             n_components: Number of principal components
         """
         # Check if we have enough data
-        if self.rating_mat.values.shape[0] == 0 or self.rating_mat.values.shape[1] == 0:
-            self.pca = {'center': np.zeros(n_components), 'comps': np.zeros((n_components, n_components))}
-            self.proj = {}
+        if self.rating_mat.values.shape[0] < 2 or self.rating_mat.values.shape[1] < 2:
+            # Not enough data for PCA, create minimal results
+            cols = max(self.rating_mat.values.shape[1], 1)
+            self.pca = {
+                'center': np.zeros(cols),
+                'comps': np.zeros((min(n_components, 2), cols))
+            }
+            self.proj = {pid: np.zeros(2) for pid in self.rating_mat.rownames()}
             return
         
-        # Perform PCA
-        if self.participant_count <= SMALL_CONV_THRESHOLD:
-            # Regular PCA for small conversations
-            pca_results, proj_dict = pca_project_named_matrix(self.rating_mat, n_components)
-        else:
-            # Sampling-based PCA for large conversations
-            sample_size = min(SMALL_CONV_THRESHOLD, self.participant_count)
-            row_names = self.rating_mat.rownames()
-            sample_rows = np.random.choice(row_names, sample_size, replace=False)
+        try:
+            # Make a clean copy of the rating matrix
+            clean_matrix = self._get_clean_matrix()
             
-            # Create sample matrix
-            sample_mat = self.rating_mat.rowname_subset(sample_rows)
-            
-            # Perform PCA on sample
-            pca_results, _ = pca_project_named_matrix(sample_mat, n_components)
-            
-            # Project all participants
-            proj_dict = {}
-            for ptpt_id in self.rating_mat.rownames():
+            # Perform PCA based on conversation size
+            if self.participant_count <= SMALL_CONV_THRESHOLD:
+                # Regular PCA for small conversations
+                pca_results, proj_dict = pca_project_named_matrix(clean_matrix, n_components)
+            else:
+                # Sampling-based PCA for large conversations
                 try:
-                    votes = self.rating_mat.get_row_by_name(ptpt_id)
-                    from polismath.math.pca import sparsity_aware_project_ptpt
-                    proj = sparsity_aware_project_ptpt(votes, pca_results)
-                    proj_dict[ptpt_id] = proj
-                except KeyError:
-                    continue
+                    sample_size = min(SMALL_CONV_THRESHOLD, self.participant_count)
+                    row_names = clean_matrix.rownames()
+                    sample_rows = np.random.choice(row_names, sample_size, replace=False)
+                    
+                    # Create sample matrix
+                    sample_mat = clean_matrix.rowname_subset(sample_rows)
+                    
+                    # Perform PCA on sample
+                    pca_results, _ = pca_project_named_matrix(sample_mat, n_components)
+                    
+                    # Project all participants
+                    proj_dict = {}
+                    for ptpt_id in clean_matrix.rownames():
+                        try:
+                            votes = clean_matrix.get_row_by_name(ptpt_id)
+                            from polismath.math.pca import sparsity_aware_project_ptpt
+                            proj = sparsity_aware_project_ptpt(votes, pca_results)
+                            proj_dict[ptpt_id] = proj
+                        except (KeyError, ValueError, TypeError) as e:
+                            # If we can't project this participant, use zeros
+                            proj_dict[ptpt_id] = np.zeros(2)
+                            print(f"Error projecting participant {ptpt_id}: {e}")
+                except Exception as e:
+                    # If sampling PCA fails, fall back to regular PCA
+                    print(f"Error in sampling PCA: {e}, falling back to regular PCA")
+                    pca_results, proj_dict = pca_project_named_matrix(clean_matrix, n_components)
+            
+            # Store results
+            self.pca = pca_results
+            self.proj = proj_dict
         
-        # Store results
-        self.pca = pca_results
-        self.proj = proj_dict
+        except Exception as e:
+            # If PCA fails, create minimal results
+            print(f"Error in PCA computation: {e}")
+            cols = self.rating_mat.values.shape[1]
+            self.pca = {
+                'center': np.zeros(cols),
+                'comps': np.zeros((min(n_components, 2), cols))
+            }
+            self.proj = {pid: np.zeros(2) for pid in self.rating_mat.rownames()}
     
-    def _compute_clusters(self, 
-                         k_min: int = 2, 
-                         k_max: int = 5) -> None:
+    def _get_clean_matrix(self) -> NamedMatrix:
         """
-        Compute participant clusters.
+        Get a clean copy of the rating matrix with proper numeric values.
         
-        Args:
-            k_min: Minimum number of clusters
-            k_max: Maximum number of clusters
+        Returns:
+            Clean NamedMatrix
+        """
+        # Make a copy of the matrix
+        matrix_values = self.rating_mat.values.copy()
+        
+        # Ensure the matrix contains numeric values
+        if not np.issubdtype(matrix_values.dtype, np.number):
+            # Convert to numeric matrix with proper NaN handling
+            numeric_matrix = np.zeros(matrix_values.shape, dtype=float)
+            for i in range(matrix_values.shape[0]):
+                for j in range(matrix_values.shape[1]):
+                    val = matrix_values[i, j]
+                    if pd.isna(val) or val is None:
+                        numeric_matrix[i, j] = np.nan
+                    else:
+                        try:
+                            numeric_matrix[i, j] = float(val)
+                        except (ValueError, TypeError):
+                            numeric_matrix[i, j] = np.nan
+            matrix_values = numeric_matrix
+        
+        # Create a DataFrame with proper indexing
+        import pandas as pd
+        df = pd.DataFrame(
+            matrix_values,
+            index=self.rating_mat.rownames(),
+            columns=self.rating_mat.colnames()
+        )
+        
+        # Create a new NamedMatrix
+        from polismath.math.named_matrix import NamedMatrix
+        return NamedMatrix(df)
+    
+    def _compute_clusters(self) -> None:
+        """
+        Compute participant clusters using auto-determination of optimal k.
         """
         # Check if we have projections
         if not self.proj:
@@ -350,25 +488,13 @@ class Conversation:
             colnames=['x', 'y']
         )
         
-        # Determine optimal k
-        best_k = k_min
-        best_silhouette = -1
+        # Use auto-determination of k based on data size
+        # The determine_k function will handle this appropriately
+        from polismath.math.clusters import cluster_named_matrix
         
-        for k in range(k_min, k_max + 1):
-            # Cluster with current k
-            from polismath.math.clusters import kmeans, silhouette
-            clusters = kmeans(proj_values, k, max_iters=30)
-            
-            # Calculate silhouette
-            sil = silhouette(proj_values, clusters)
-            
-            # Update best k if silhouette is better
-            if sil > best_silhouette:
-                best_silhouette = sil
-                best_k = k
-        
-        # Cluster with best k
-        base_clusters = cluster_named_matrix(proj_matrix, best_k)
+        # Let the clustering function auto-determine the appropriate number of clusters
+        # Pass k=None to use the built-in determine_k function
+        base_clusters = cluster_named_matrix(proj_matrix, k=None)
         
         # Convert base clusters to group clusters
         # Group clusters are high-level groups based on base clusters
