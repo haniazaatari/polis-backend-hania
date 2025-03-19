@@ -257,11 +257,15 @@ async function createTestComment(authToken, conversationId, options = {}) {
   }
 
   const defaultOptions = {
+    agid: 1,
     conversation_id: conversationId,
-    txt: `This is a test comment created at ${Date.now()}`,
     is_active: true,
+    pid: 'mypid',
+    txt: `This is a test comment created at ${Date.now()}`,
     ...options
   };
+
+  console.log('Creating test comment with txt:', defaultOptions.txt);
 
   const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/comments`), authToken).send(
     defaultOptions
@@ -276,6 +280,26 @@ async function createTestComment(authToken, conversationId, options = {}) {
   await wait(1000);
 
   return commentId;
+}
+
+/**
+ * Helper function to extract a specific cookie value from a cookie array
+ * @param {Array} cookies - Array of cookies from response
+ * @param {string} cookieName - Name of the cookie to extract
+ * @returns {string|null} Cookie value or null if not found
+ */
+function extractCookieValue(cookies, cookieName) {
+  if (!cookies || !Array.isArray(cookies) || cookies.length === 0) {
+    return null;
+  }
+
+  for (const cookie of cookies) {
+    if (cookie.startsWith(`${cookieName}=`)) {
+      return cookie.split(`${cookieName}=`)[1].split(';')[0];
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -306,26 +330,6 @@ async function initializeParticipant(conversationId) {
     body: response.body,
     status: response.status
   };
-}
-
-/**
- * Helper function to extract a specific cookie value from a cookie array
- * @param {Array} cookies - Array of cookies from response
- * @param {string} cookieName - Name of the cookie to extract
- * @returns {string|null} Cookie value or null if not found
- */
-function extractCookieValue(cookies, cookieName) {
-  if (!cookies || !Array.isArray(cookies) || cookies.length === 0) {
-    return null;
-  }
-
-  for (const cookie of cookies) {
-    if (cookie.startsWith(`${cookieName}=`)) {
-      return cookie.split(`${cookieName}=`)[1].split(';')[0];
-    }
-  }
-
-  return null;
 }
 
 /**

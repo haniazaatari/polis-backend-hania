@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from '@jest/globals';
 import request from 'supertest';
 import {
   API_PREFIX,
@@ -6,28 +6,25 @@ import {
   attachAuthToken,
   createTestComment,
   createTestConversation,
-  generateTestUser
+  generateRandomXid,
+  generateTestUser,
+  initializeParticipant,
+  initializeParticipantWithXid,
+  wait
 } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 describe('Comment Endpoints', () => {
-  // Store auth data and ids between tests
   let authToken = null;
   let conversationId = null;
   let conversationZinvite = null;
-  let commentId = null;
   let client = null;
-  let pid = null;
-
-  // Store test user data
   const testUser = generateTestUser();
 
-  // Start a transaction before each test
   beforeEach(async () => {
     client = await startTransaction();
   });
 
-  // Rollback the transaction after each test
   afterEach(async () => {
     if (client) {
       await rollbackTransaction(client);
@@ -35,7 +32,6 @@ describe('Comment Endpoints', () => {
     }
   });
 
-  // Register, login, and create a conversation before testing comment endpoints
   beforeAll(async () => {
     // Register a test user
     const registerResponse = await request(API_URL).post(`${API_PREFIX}/auth/new`).send({
@@ -46,8 +42,9 @@ describe('Comment Endpoints', () => {
     });
 
     expect(registerResponse.status).toBe(200);
+    expect(registerResponse.body).toHaveProperty('uid');
 
-    // Login with the test user
+    // Login to get auth token
     const loginResponse = await request(API_URL).post(`${API_PREFIX}/auth/login`).send({
       email: testUser.email,
       password: testUser.password
@@ -55,159 +52,123 @@ describe('Comment Endpoints', () => {
 
     expect(loginResponse.status).toBe(200);
 
-    // Extract auth token (could be in headers or cookies)
+    // Extract auth token - fail if not found
     if (loginResponse.headers['x-polis']) {
       authToken = loginResponse.headers['x-polis'];
-    } else if (loginResponse.body?.token) {
-      authToken = loginResponse.body.token;
-    } else if (loginResponse.headers['set-cookie']) {
-      authToken = loginResponse.headers['set-cookie'];
+    } else {
+      throw new Error('No auth token found in response');
     }
 
     // Create a test conversation
     const conversation = await createTestConversation(authToken);
+    expect(conversation).toBeDefined();
+    expect(conversation.zid).toBeDefined();
+    expect(conversation.zinvite).toBeDefined();
+
     conversationId = conversation.zid;
     conversationZinvite = conversation.zinvite;
-
-    // Get participant ID for this user in this conversation
-    try {
-      const metaResponse = await attachAuth(
-        request(API_URL).get(`${API_PREFIX}/participation?conversation_id=${conversationZinvite}`)
-      );
-
-      if (metaResponse.status === 200 && metaResponse.body && metaResponse.body.pid) {
-        pid = metaResponse.body.pid;
-      }
-    } catch (error) {
-      console.warn('Could not get participant ID, some tests may fail');
-    }
   });
 
-  // Helper function that uses the class-level authToken
-  function attachAuth(req) {
-    return attachAuthToken(req, authToken);
-  }
-
-  describe('POST /comments', () => {
-    it('should create a new comment', async () => {
-      commentId = await createTestComment(authToken, conversationZinvite);
-      expect(commentId).toBeDefined();
+  test('Comment lifecycle', async () => {
+    // STEP 1: Create a new comment
+    const timestamp = Date.now();
+    const commentText = `Test comment ${timestamp}`;
+    const createResponse = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/comments`), authToken).send({
+      conversation_id: conversationZinvite,
+      txt: commentText
     });
 
-    it('should reject comments with invalid conversation ID', async () => {
-      const commentData = {
-        conversation_id: 'invalid-conversation-id',
-        txt: `This is a test comment created at ${Date.now()}`
-      };
+    expect(createResponse.status).toBe(200);
+    expect(createResponse.body).toBeDefined();
+    const commentId = createResponse.body.tid;
+    expect(commentId).toBeDefined();
 
-      const response = await attachAuth(request(API_URL).post(`${API_PREFIX}/comments`)).send(commentData);
+    // Wait for comment creation to complete
+    await wait(1000);
 
-      expect(response.status).not.toBe(200);
-    });
+    // STEP 2: Verify comment appears in conversation
+    const listResponse = await attachAuthToken(
+      request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationZinvite}`),
+      authToken
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(Array.isArray(listResponse.body)).toBe(true);
+    const foundComment = listResponse.body.find((comment) => comment.tid === commentId);
+    expect(foundComment).toBeDefined();
+    expect(foundComment.txt).toBe(commentText);
   });
 
-  describe('GET /comments', () => {
-    it('should retrieve comments for a conversation with various parameters', async () => {
-      // Ensure we have a comment to retrieve
-      if (!commentId) {
-        commentId = await createTestComment(authToken, conversationZinvite);
-      }
-
-      // Try with different parameter combinations
-      const parameterSets = [
-        { conversation_id: conversationZinvite },
-        { conversation_id: conversationZinvite, moderation: true },
-        { conversation_id: conversationZinvite, mod: -1 } // -1 should include all moderation states
-      ];
-
-      // If we have a pid, also try including it
-      if (pid) {
-        parameterSets.push({
-          conversation_id: conversationZinvite,
-          pid: pid
-        });
-      }
-
-      for (const params of parameterSets) {
-        const queryParams = Object.entries(params)
-          .map(([key, value]) => `${key}=${value}`)
-          .join('&');
-
-        const response = await attachAuth(request(API_URL).get(`${API_PREFIX}/comments?${queryParams}`));
-
-        // Just check that the endpoint returns successfully
-        expect(response.status).toBe(200);
-      }
-
-      // We now consider the test passed if:
-      // 1. We got successful responses (checked above with expect(response.status).toBe(200))
-      // 2. That's it - we don't require finding our specific comment anymore
-      // because we understand the API might filter comments
+  test('Comment validation', async () => {
+    // Test invalid conversation ID
+    const invalidResponse = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/comments`), authToken).send({
+      conversation_id: 'invalid-conversation-id',
+      txt: 'This comment should fail'
     });
 
-    it('should return 400 if conversation_id is missing', async () => {
-      const response = await attachAuth(request(API_URL).get(`${API_PREFIX}/comments`));
+    expect(invalidResponse.status).toBe(400);
 
-      expect(response.status).toBe(400);
-    });
+    // Test missing conversation ID in comments list
+    const missingConvResponse = await attachAuthToken(request(API_URL).get(`${API_PREFIX}/comments`), authToken);
 
-    // This test just checks that the moderation endpoint works
-    it('should be able to retrieve comments with moderation=true', async () => {
-      // Create a fresh comment if we don't have one
-      if (!commentId) {
-        commentId = await createTestComment(authToken, conversationZinvite);
-      }
-
-      const response = await attachAuth(
-        request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationZinvite}&moderation=true`)
-      );
-
-      // For this test, we only care that we get a successful response
-      expect(response.status).toBe(200);
-    });
+    expect(missingConvResponse.status).toBe(400);
   });
 
-  describe('GET /comments/translations', () => {
-    it('should attempt to retrieve comment translations', async () => {
-      // Ensure we have a comment
-      if (!commentId) {
-        commentId = await createTestComment(authToken, conversationZinvite);
-      }
+  test('Anonymous participant can submit a comment', async () => {
+    // Initialize anonymous participant
+    const { cookies, body: initBody } = await initializeParticipant(conversationZinvite);
+    expect(cookies).toBeDefined();
+    expect(cookies.length).toBeGreaterThan(0);
 
-      const response = await attachAuth(
-        request(API_URL).get(
-          `${API_PREFIX}/comments/translations?conversation_id=${conversationZinvite}&tid=${commentId}`
-        )
-      );
-
-      // The current implementation may legitimately return various status codes
-      // For testing purposes, we'll allow any of these status codes
-      expect([200, 404, 500, 400]).toContain(response.status);
+    // Create a comment as anonymous participant using the helper
+    const timestamp = Date.now();
+    const commentText = `Anonymous participant comment ${timestamp}`;
+    const commentId = await createTestComment(cookies, conversationZinvite, {
+      txt: commentText
     });
+
+    expect(commentId).toBeDefined();
+
+    // Verify the comment appears in the conversation
+    const listResponse = await attachAuthToken(
+      request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationZinvite}`),
+      authToken
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(Array.isArray(listResponse.body)).toBe(true);
+    const foundComment = listResponse.body.find(comment => comment.tid === commentId);
+    expect(foundComment).toBeDefined();
+    expect(foundComment.txt).toBe(commentText);
   });
 
-  describe('POST /ptptCommentMod', () => {
-    it('should submit participant comment moderation', async () => {
-      // Ensure we have a comment
-      if (!commentId) {
-        commentId = await createTestComment(authToken, conversationZinvite);
-      }
+  test('XID participant can submit a comment', async () => {
+    // Initialize participant with XID
+    const xid = generateRandomXid();
+    const { cookies, body: initBody } = await initializeParticipantWithXid(conversationZinvite, xid);
+    expect(cookies).toBeDefined();
+    expect(cookies.length).toBeGreaterThan(0);
+    console.log('cookies', cookies);
 
-      const moderationData = {
-        tid: commentId,
-        conversation_id: conversationZinvite,
-        as_important: true
-      };
-
-      // Add participant ID if we have one
-      if (pid) {
-        moderationData.pid = pid;
-      }
-
-      const response = await attachAuth(request(API_URL).post(`${API_PREFIX}/ptptCommentMod`)).send(moderationData);
-
-      // For testing purposes, accept a range of status codes
-      expect([200, 400, 403, 404, 500]).toContain(response.status);
+    // Create a comment as XID participant using the helper
+    const timestamp = Date.now();
+    const commentText = `XID participant comment ${timestamp}`;
+    const commentId = await createTestComment(cookies, conversationZinvite, {
+      txt: commentText
     });
+
+    expect(commentId).toBeDefined();
+
+    // Verify the comment appears in the conversation
+    const listResponse = await attachAuthToken(
+      request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationZinvite}`),
+      authToken
+    );
+
+    expect(listResponse.status).toBe(200);
+    expect(Array.isArray(listResponse.body)).toBe(true);
+    const foundComment = listResponse.body.find(comment => comment.tid === commentId);
+    expect(foundComment).toBeDefined();
+    expect(foundComment.txt).toBe(commentText);
   });
 });

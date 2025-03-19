@@ -1,37 +1,32 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from '@jest/globals';
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from '@jest/globals';
+import request from 'supertest';
 import {
+  API_PREFIX,
+  API_URL,
   attachAuthToken,
   createTestComment,
   createTestConversation,
   generateRandomXid,
   generateTestUser,
-  makeRequestWithTimeout
+  initializeParticipant,
+  initializeParticipantWithXid,
+  wait
 } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
-// Helper function to wait for a specified duration
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 describe('Participation Endpoints', () => {
-  // Store auth token and other data between tests
   let authToken = null;
-  let userId = null;
   let conversationId = null;
   let conversationZinvite = null;
-  let commentId = null;
+  const xidConversationZinvite = null;
   let client = null;
-  let xidConversationId = null;
-
-  // Store test user data
   const testUser = generateTestUser();
   const testXid = generateRandomXid();
 
-  // Start a transaction before each test
   beforeEach(async () => {
     client = await startTransaction();
   });
 
-  // Rollback the transaction after each test
   afterEach(async () => {
     if (client) {
       await rollbackTransaction(client);
@@ -39,304 +34,97 @@ describe('Participation Endpoints', () => {
     }
   });
 
-  // Helper function to apply auth token to requests
-  function attachAuth(req) {
-    return attachAuthToken(req, authToken);
-  }
-
-  // Register and login a test user before running tests
   beforeAll(async () => {
-    try {
-      // Register a test user with retries
-      let registerResponse;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          registerResponse = await makeRequestWithTimeout(
-            'POST',
-            '/auth/new',
-            {
-              email: testUser.email,
-              password: testUser.password,
-              hname: testUser.hname,
-              gatekeeperTosPrivacy: true
-            },
-            null,
-            { timeout: 5000 }
-          );
-          if (registerResponse.status === 200) break;
-          await wait(1000);
-        } catch (error) {
-          console.warn(`Registration attempt ${attempt} failed:`, error.message);
-          if (attempt === 3) throw error;
-          await wait(1000);
-        }
-      }
+    // Register a test user
+    const registerResponse = await request(API_URL).post(`${API_PREFIX}/auth/new`).send({
+      email: testUser.email,
+      password: testUser.password,
+      hname: testUser.hname,
+      gatekeeperTosPrivacy: true
+    });
 
-      expect(registerResponse.status).toBe(200);
-      userId = registerResponse.body.uid;
+    expect(registerResponse.status).toBe(200);
+    expect(registerResponse.body).toHaveProperty('uid');
 
-      await wait(1000); // Wait before login
+    // Login to get auth token
+    const loginResponse = await request(API_URL).post(`${API_PREFIX}/auth/login`).send({
+      email: testUser.email,
+      password: testUser.password
+    });
 
-      // Login with retries
-      let loginResponse;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          loginResponse = await makeRequestWithTimeout(
-            'POST',
-            '/auth/login',
-            {
-              email: testUser.email,
-              password: testUser.password
-            },
-            null,
-            { timeout: 5000 }
-          );
-          if (loginResponse.status === 200) break;
-          await wait(1000);
-        } catch (error) {
-          console.warn(`Login attempt ${attempt} failed:`, error.message);
-          if (attempt === 3) throw error;
-          await wait(1000);
-        }
-      }
+    expect(loginResponse.status).toBe(200);
 
-      expect(loginResponse.status).toBe(200);
-      if (loginResponse.headers['x-polis']) {
-        authToken = loginResponse.headers['x-polis'];
-      } else if (loginResponse.body?.token) {
-        authToken = loginResponse.body.token;
-      } else if (loginResponse.headers['set-cookie']) {
-        authToken = loginResponse.headers['set-cookie'];
-      }
-
-      expect(authToken).toBeTruthy();
-
-      await wait(1000); // Wait before creating conversation
-
-      // Create a test conversation with retries
-      let conversation;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          conversation = await createTestConversation(authToken);
-          if (conversation.zid && conversation.zinvite) break;
-          await wait(1000);
-        } catch (error) {
-          console.warn(`Conversation creation attempt ${attempt} failed:`, error.message);
-          if (attempt === 3) throw error;
-          await wait(1000);
-        }
-      }
-
-      conversationId = conversation.zid;
-      conversationZinvite = conversation.zinvite;
-
-      await wait(1000); // Wait before creating comment
-
-      // Create a test comment with retries
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          commentId = await createTestComment(authToken, conversationZinvite);
-          if (commentId) break;
-          await wait(1000);
-        } catch (error) {
-          console.warn(`Comment creation attempt ${attempt} failed:`, error.message);
-          if (attempt === 3) throw error;
-          await wait(1000);
-        }
-      }
-
-      await wait(1000); // Wait before creating XID conversation
-
-      // Create a conversation with XID with retries
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          const xidConversation = await createTestConversation(authToken, {
-            xid: testXid
-          });
-          if (xidConversation.zinvite) {
-            xidConversationId = xidConversation.zinvite;
-            break;
-          }
-          await wait(1000);
-        } catch (error) {
-          console.warn(`XID conversation creation attempt ${attempt} failed:`, error.message);
-          if (attempt === 3) throw error;
-          await wait(1000);
-        }
-      }
-    } catch (error) {
-      console.error('Error in beforeAll:', error);
-      throw error;
+    // Extract auth token - fail if not found
+    if (loginResponse.headers['x-polis']) {
+      authToken = loginResponse.headers['x-polis'];
+    } else {
+      throw new Error('No auth token found in response');
     }
-  }, 30000); // Increase timeout to 30 seconds
 
-  describe('GET /participation', () => {
-    it('should get participation data for a conversation', async () => {
-      try {
-        const response = await makeRequestWithTimeout(
-          'GET',
-          `/participation?conversation_id=${conversationZinvite}`,
-          null,
-          authToken,
-          { timeout: 5000, retries: 2 }
-        );
+    // Create a regular test conversation
+    const conversation = await createTestConversation(authToken);
+    expect(conversation).toBeDefined();
+    expect(conversation.zid).toBeDefined();
+    expect(conversation.zinvite).toBeDefined();
 
-        // Legacy server might return various status codes or error messages
-        if (response.status === 500 && response.text?.includes('polis_err')) {
-          console.warn('Participation endpoint returned expected error:', response.text);
-          return;
-        }
+    conversationId = conversation.zid;
+    conversationZinvite = conversation.zinvite;
 
-        expect([200, 304]).toContain(response.status);
-        if (response.status === 200) {
-          expect(response.body).toBeDefined();
-        }
-      } catch (error) {
-        console.warn('Participation data retrieval failed:', error.message);
-        if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
-          console.warn('Skipping test due to connection issues');
-          return;
-        }
-        throw error;
-      }
-    });
+    // Create test comments in the conversation
+    const commentId = await createTestComment(authToken, conversationZinvite);
+    expect(commentId).toBeDefined();
+    await createTestComment(authToken, conversationZinvite);
+    await createTestComment(authToken, conversationZinvite);
 
-    it('should handle missing conversation ID', async () => {
-      const response = await makeRequestWithTimeout('GET', '/participation', null, authToken, { timeout: 5000 });
-      expect([400, 500]).toContain(response.status);
-    });
+    // Wait for all setup operations to complete
+    await wait(1000);
+  }, 15000);
+
+  test('Regular participation lifecycle', async () => {
+    // STEP 1: Initialize anonymous participant
+    const { body, cookies, status} = await initializeParticipant(conversationZinvite);
+
+    expect(status).toBe(200);
+    expect(cookies).toBeDefined();
+    expect(cookies.length).toBeGreaterThan(0);
+    expect(body).toBeDefined();
+
+    // STEP 2: Get next comment for participant
+    const nextCommentResponse = await request(API_URL)
+      .get(`${API_PREFIX}/nextComment?conversation_id=${conversationZinvite}`)
+      .set('Cookie', cookies);
+
+    expect(nextCommentResponse.status).toBe(200);
+    expect(nextCommentResponse.body).toBeDefined();
   });
 
-  describe('GET /participationInit', () => {
-    it('should initialize participation for anonymous users', async () => {
-      try {
-        const response = await makeRequestWithTimeout(
-          'GET',
-          `/participationInit?conversation_id=${conversationZinvite}&pid=mypid&lang=en`,
-          null,
-          null,
-          { timeout: 5000, retries: 2 }
-        );
+  test('XID participation lifecycle', async () => {
+    // STEP 1: Initialize participation with XID
+    const { body, cookies, status} = await initializeParticipantWithXid(conversationZinvite, testXid);
 
-        // Legacy server might return various status codes or error messages
-        if (response.status === 500 && response.text?.includes('polis_err')) {
-          console.warn('ParticipationInit endpoint returned expected error:', response.text);
-          return;
-        }
+    expect(status).toBe(200);
+    expect(cookies).toBeDefined();
+    expect(cookies.length).toBeGreaterThan(0);
+    expect(body).toBeDefined();
 
-        expect([200, 304]).toContain(response.status);
-        if (response.status === 200) {
-          expect(response.body).toBeDefined();
-          if (response.body.pid !== undefined) {
-            expect(typeof response.body.pid).toBe('number');
-          }
-          expect(response.headers['set-cookie']).toBeDefined();
-        }
-      } catch (error) {
-        console.warn('ParticipationInit failed:', error.message);
-        if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
-          console.warn('Skipping test due to connection issues');
-          return;
-        }
-        throw error;
-      }
-    });
+    // STEP 2: Get next comment for participant
+    const nextCommentResponse = await request(API_URL)
+      .get(`${API_PREFIX}/nextComment?conversation_id=${conversationZinvite}&xid=${testXid}`)
+      .set('Cookie', cookies);
 
-    it('should handle missing conversation ID', async () => {
-      const response = await makeRequestWithTimeout('GET', '/participationInit', null, null, { timeout: 5000 });
-      expect([200, 500]).toContain(response.status);
-      if (response.status === 500) {
-        expect(response.text).toContain('polis_err');
-      }
-    });
+    expect(nextCommentResponse.status).toBe(200);
+    expect(nextCommentResponse.body).toBeDefined();
   });
 
-  describe('GET /nextComment', () => {
-    it('should get the next comment to show', async () => {
-      try {
-        const response = await makeRequestWithTimeout(
-          'GET',
-          `/nextComment?conversation_id=${conversationZinvite}`,
-          null,
-          authToken,
-          { timeout: 5000, retries: 2 }
-        );
+  test('Participation validation', async () => {
+    // Test missing conversation ID in participation
+    const missingConvResponse = await attachAuthToken(request(API_URL).get(`${API_PREFIX}/participation`), authToken);
+    expect(missingConvResponse.status).toBe(400);
 
-        // Legacy server might return various status codes or error messages
-        if (response.status === 500 && response.text?.includes('polis_err')) {
-          console.warn('NextComment endpoint returned expected error:', response.text);
-          return;
-        }
-
-        expect([200, 304, 404]).toContain(response.status);
-        if (response.status === 200) {
-          expect(response.body).toBeDefined();
-          if (response.body.currentPid) {
-            expect(typeof response.body.currentPid).toBe('number');
-          }
-        }
-      } catch (error) {
-        console.warn('NextComment retrieval failed:', error.message);
-        if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
-          console.warn('Skipping test due to connection issues');
-          return;
-        }
-        throw error;
-      }
-    });
-
-    it('should handle missing conversation ID', async () => {
-      const response = await makeRequestWithTimeout('GET', '/nextComment', null, authToken, { timeout: 5000 });
-      expect([400, 500]).toContain(response.status);
-    });
-  });
-
-  describe('GET /participationInit by XID', () => {
-    it('should initialize participation with XID', async () => {
-      try {
-        const response = await makeRequestWithTimeout(
-          'GET',
-          `/participationInit?conversation_id=${xidConversationId}&xid=${testXid}`,
-          null,
-          null,
-          { timeout: 5000, retries: 2 }
-        );
-
-        // Legacy server might return various status codes or error messages
-        if (response.status === 500 && response.text?.includes('polis_err')) {
-          console.warn('ParticipationInit XID endpoint returned expected error:', response.text);
-          return;
-        }
-
-        expect([200, 304]).toContain(response.status);
-        if (response.status === 200) {
-          expect(response.body).toBeDefined();
-          if (response.body.pid !== undefined) {
-            expect(typeof response.body.pid).toBe('number');
-          }
-        }
-      } catch (error) {
-        console.warn('ParticipationInit XID failed:', error.message);
-        if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
-          console.warn('Skipping test due to connection issues');
-          return;
-        }
-        throw error;
-      }
-    });
-
-    it('should handle invalid XID', async () => {
-      const response = await makeRequestWithTimeout(
-        'GET',
-        `/participationInit?xid=invalid_xid&conversation_id=${xidConversationId}`,
-        null,
-        null,
-        { timeout: 5000 }
-      );
-      expect([200, 500]).toContain(response.status);
-      if (response.status === 500) {
-        expect(response.text).toContain('polis_err');
-      }
-    });
+    // Test missing conversation ID in participationInit
+    const missingConvInitResponse = await request(API_URL).get(`${API_PREFIX}/participationInit`);
+    expect(missingConvInitResponse.status).toBe(200);
+    expect(missingConvInitResponse.body).toBeDefined();
+    expect(missingConvInitResponse.body.conversation).toBeNull();
   });
 });

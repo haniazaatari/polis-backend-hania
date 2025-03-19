@@ -32,7 +32,8 @@ To maintain consistency and reduce duplication, all test files use shared helper
 - `createTestComment()` - Creates a comment in a conversation
 - `wait()` - Pauses execution for a specified time
 - `retryRequest()` - Retries a request with backoff
-- `initializeAnonymousParticipant()` - Initializes an anonymous participant for voting
+- `initializeParticipant()` - Initializes an anonymous participant for voting
+- `initializeParticipantWithXid()` - Initializes a participant for voting with an external ID
 - `registerAndLoginUser()` - Registers and logs in a user in one step
 - `getParticipantId()` - Retrieves a participant's ID for a conversation
 - `submitVote()` - Submits a vote on a comment
@@ -93,6 +94,7 @@ The `comment.test.js` file tests the comment-related endpoints:
 - Validates input parameters
 
 ### GET /comments
+
 - Retrieves comments with various filters
 - Supports moderation parameters
 - Handles pagination

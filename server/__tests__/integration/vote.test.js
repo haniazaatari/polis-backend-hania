@@ -5,7 +5,7 @@ import {
   createTestConversation,
   generateTestUser,
   getParticipantId,
-  initializeAnonymousParticipant,
+  initializeParticipant,
   makeRequestWithTimeout,
   wait
 } from '../setup/api-test-helpers.js';
@@ -202,7 +202,7 @@ describe('Vote Endpoints', () => {
 
     it('should handle anonymous votes', async () => {
       try {
-        const participant = await initializeAnonymousParticipant(conversationZinvite);
+        const participant = await initializeParticipant(conversationZinvite);
 
         const response = await makeRequestWithTimeout(
           'POST',

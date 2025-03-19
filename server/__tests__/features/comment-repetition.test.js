@@ -110,7 +110,15 @@ describe('Comment Repetition Bug Test', () => {
       // STEP 2: Process each comment one by one
       console.log('Step 2: Starting vote loop');
 
+      const MAX_ALLOWED_COMMENTS = NUM_COMMENTS + 1; // Allow one extra to detect repetition
+      let processedComments = 0;
+
       while (commentId) {
+        processedComments++;
+        if (processedComments > MAX_ALLOWED_COMMENTS) {
+          throw new Error(`Test failed: Processed ${processedComments} comments which exceeds maximum allowed (${MAX_ALLOWED_COMMENTS}). This indicates a comment repetition issue.`);
+        }
+
         console.log(`\nProcessing comment ID ${commentId}`);
 
         // Add the comment ID to our ordered list
