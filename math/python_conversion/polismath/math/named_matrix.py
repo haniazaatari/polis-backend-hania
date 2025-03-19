@@ -113,7 +113,8 @@ class NamedMatrix:
     def __init__(self, 
                  matrix: Optional[Union[np.ndarray, pd.DataFrame]] = None,
                  rownames: Optional[List[Any]] = None,
-                 colnames: Optional[List[Any]] = None):
+                 colnames: Optional[List[Any]] = None,
+                 enforce_numeric: bool = True):
         """
         Initialize a NamedMatrix with optional initial data.
         
@@ -121,6 +122,7 @@ class NamedMatrix:
             matrix: Initial matrix data (numpy array or pandas DataFrame)
             rownames: List of row names
             colnames: List of column names
+            enforce_numeric: Whether to enforce numeric values (convert to float)
         """
         # Initialize row and column indices
         self._row_index = IndexHash(rownames)
@@ -139,8 +141,17 @@ class NamedMatrix:
             # Update indices if provided
             if rownames is not None:
                 self._matrix.index = rownames
+            else:
+                # Use DataFrame's index as rownames
+                rownames = list(matrix.index)
+                self._row_index = IndexHash(rownames)
+                
             if colnames is not None:
                 self._matrix.columns = colnames
+            else:
+                # Use DataFrame's columns as colnames
+                colnames = list(matrix.columns)
+                self._col_index = IndexHash(colnames)
         else:
             # Convert numpy array to DataFrame
             rows = rownames if rownames is not None else range(matrix.shape[0])
@@ -150,6 +161,71 @@ class NamedMatrix:
                 index=rows,
                 columns=cols
             )
+        
+        # Ensure numeric data if requested
+        if enforce_numeric:
+            self._convert_to_numeric()
+    
+    def _convert_to_numeric(self) -> None:
+        """
+        Convert all data in the matrix to numeric (float) values.
+        Non-convertible values are replaced with NaN.
+        """
+        # Check if the matrix is empty
+        if self._matrix.empty:
+            return
+            
+        # Check if the matrix has any columns
+        if len(self._matrix.columns) == 0:
+            return
+            
+        # Check if the matrix has any rows
+        if len(self._matrix.index) == 0:
+            return
+        
+        # Check if the matrix is already numeric
+        try:
+            if pd.api.types.is_numeric_dtype(self._matrix.dtypes.iloc[0]) and not self._matrix.dtypes.iloc[0] == np.dtype('O'):
+                return
+        except (IndexError, AttributeError):
+            # Handle empty DataFrames or other issues
+            return
+            
+        # If matrix has object or non-numeric type, convert manually
+        numeric_matrix = np.zeros(self._matrix.shape, dtype=float)
+        
+        for i in range(self._matrix.shape[0]):
+            for j in range(self._matrix.shape[1]):
+                try:
+                    val = self._matrix.iloc[i, j]
+                    
+                    if pd.isna(val) or val is None:
+                        numeric_matrix[i, j] = np.nan
+                    else:
+                        try:
+                            # Try to convert to float
+                            numeric_value = float(val)
+                            
+                            # For vote values, normalize to -1.0, 0.0, or 1.0
+                            if numeric_value > 0:
+                                numeric_matrix[i, j] = 1.0
+                            elif numeric_value < 0:
+                                numeric_matrix[i, j] = -1.0
+                            else:
+                                numeric_matrix[i, j] = 0.0
+                        except (ValueError, TypeError):
+                            # If conversion fails, use NaN
+                            numeric_matrix[i, j] = np.nan
+                except IndexError:
+                    # Handle out of bounds access
+                    continue
+        
+        # Create a new DataFrame with the numeric values
+        self._matrix = pd.DataFrame(
+            numeric_matrix,
+            index=self._matrix.index,
+            columns=self._matrix.columns
+        )
     
     @property
     def matrix(self) -> pd.DataFrame:
@@ -192,8 +268,38 @@ class NamedMatrix:
         Returns:
             A new NamedMatrix with the updated value
         """
+        # Convert value to numeric if needed
+        if value is not None:
+            try:
+                # Try to convert to float
+                numeric_value = float(value)
+                
+                # For vote values, normalize to -1.0, 0.0, or 1.0
+                if numeric_value > 0:
+                    value = 1.0
+                elif numeric_value < 0:
+                    value = -1.0
+                else:
+                    value = 0.0
+            except (ValueError, TypeError):
+                # If conversion fails, use NaN
+                value = np.nan
+        
         # Make a copy of the current matrix
         new_matrix = self._matrix.copy()
+        
+        # Handle the case of empty matrix
+        if len(new_matrix.columns) == 0 and col is not None:
+            # Initialize with a single column
+            new_matrix[col] = np.nan
+            new_col_index = self._col_index.append(col)
+        else:
+            new_col_index = self._col_index
+            
+            # Add column if it doesn't exist
+            if col not in new_matrix.columns:
+                new_matrix[col] = np.nan
+                new_col_index = new_col_index.append(col)
         
         # Add row if it doesn't exist
         if row not in new_matrix.index:
@@ -201,14 +307,7 @@ class NamedMatrix:
             new_row_index = self._row_index.append(row)
         else:
             new_row_index = self._row_index
-            
-        # Add column if it doesn't exist
-        if col not in new_matrix.columns:
-            new_matrix[col] = np.nan
-            new_col_index = self._col_index.append(col)
-        else:
-            new_col_index = self._col_index
-            
+        
         # Update the value
         new_matrix.loc[row, col] = value
         

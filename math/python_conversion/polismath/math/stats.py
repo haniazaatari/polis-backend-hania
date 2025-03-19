@@ -128,18 +128,32 @@ def gini_coefficient(values: np.ndarray) -> float:
         values: Array of values
         
     Returns:
-        Gini coefficient
+        Gini coefficient (0 = perfect equality, 1 = perfect inequality)
     """
-    # Sort values
-    sorted_values = np.sort(values)
-    n = len(sorted_values)
-    
-    if n == 0 or np.sum(sorted_values) == 0:
+    # Handle edge cases
+    values = np.asarray(values)
+    n = len(values)
+    if n <= 1 or np.all(values == values[0]):
         return 0.0
     
-    # Calculate Gini coefficient
-    cumulative = np.cumsum(sorted_values)
-    return 1 - 2 * np.sum(cumulative) / (n * np.sum(sorted_values))
+    # Ensure all values are non-negative (Gini is typically for income/wealth)
+    if np.any(values < 0):
+        values = values - np.min(values)  # Shift to non-negative
+    
+    # Handle zero sum case
+    if np.sum(values) == 0:
+        return 0.0
+    
+    # Sort values (ascending)
+    sorted_values = np.sort(values)
+    
+    # Calculate cumulative proportion of population and values
+    cumulative_population = np.arange(1, n + 1) / n
+    cumulative_values = np.cumsum(sorted_values) / np.sum(sorted_values)
+    
+    # Calculate Gini coefficient using the area method
+    # Area between Lorenz curve and line of equality
+    return 1 - 2 * np.trapz(cumulative_values, cumulative_population)
 
 
 def weighted_stddev(values: np.ndarray, weights: Optional[np.ndarray] = None) -> float:
@@ -275,7 +289,35 @@ def binomial_test(success_count: int, total_count: int, p: float = 0.5) -> float
     if total_count == 0:
         return 1.0
     
-    return stats.binom_test(success_count, total_count, p)
+    # In newer versions of scipy, binom_test was renamed to binomtest
+    # and its API was updated to return an object with a pvalue attribute
+    try:
+        # Try the new API first
+        result = stats.binomtest(success_count, total_count, p)
+        return result.pvalue
+    except AttributeError:
+        # Fall back to the old API if available
+        try:
+            return stats.binom_test(success_count, total_count, p)
+        except AttributeError:
+            # If neither is available, implement a simple approximation
+            import math
+            from scipy.special import comb
+            
+            # Calculate binomial PMF
+            def binom_pmf(k, n, p):
+                return comb(n, k) * (p ** k) * ((1 - p) ** (n - k))
+            
+            # Calculate two-sided p-value
+            observed_pmf = binom_pmf(success_count, total_count, p)
+            p_value = 0.0
+            
+            for k in range(total_count + 1):
+                k_pmf = binom_pmf(k, total_count, p)
+                if k_pmf <= observed_pmf:
+                    p_value += k_pmf
+                    
+            return min(p_value, 1.0)
 
 
 def fisher_exact_test(count_matrix: np.ndarray) -> Tuple[float, float]:

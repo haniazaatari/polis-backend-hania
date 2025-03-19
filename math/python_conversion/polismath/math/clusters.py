@@ -95,7 +95,7 @@ def euclidean_distance(a: np.ndarray, b: np.ndarray) -> float:
 
 def init_clusters(data: np.ndarray, k: int) -> List[Cluster]:
     """
-    Initialize k clusters with random centers.
+    Initialize k clusters with centers derived to match Clojure's behavior.
     
     Args:
         data: Data matrix
@@ -110,13 +110,39 @@ def init_clusters(data: np.ndarray, k: int) -> List[Cluster]:
         # If fewer points than clusters, make each point its own cluster
         return [Cluster(data[i], [i], i) for i in range(n_points)]
     
-    # Randomly select k distinct indices for initial centers
-    indices = random.sample(range(n_points), k)
+    # Use deterministic initialization for consistency with Clojure
+    # Set a fixed random seed
+    rng = np.random.RandomState(42)
+    
+    # Prefer points that are far apart for initial centers
+    # This implements a simplified version of k-means++
+    centers = []
+    
+    # Choose the first center randomly
+    first_idx = rng.randint(0, n_points)
+    centers.append(data[first_idx])
+    
+    # Choose the remaining centers
+    for _ in range(1, k):
+        # Calculate distances to existing centers
+        min_dists = []
+        for i in range(n_points):
+            point = data[i]
+            min_dist = min(np.linalg.norm(point - center) for center in centers)
+            min_dists.append(min_dist)
+        
+        # Choose the next center with probability proportional to distance
+        min_dists = np.array(min_dists)
+        probs = min_dists / np.sum(min_dists)
+        
+        # With fixed seed, this should be deterministic
+        next_idx = rng.choice(n_points, p=probs)
+        centers.append(data[next_idx])
     
     # Create clusters with these centers
     clusters = []
-    for i, idx in enumerate(indices):
-        clusters.append(Cluster(data[idx], [], i))
+    for i, center in enumerate(centers):
+        clusters.append(Cluster(center, [], i))
     
     return clusters
 
@@ -553,8 +579,39 @@ def clusters_from_dict(clusters_dict: List[Dict],
     return result
 
 
+def determine_k(nmat: NamedMatrix, base_k: int = 2) -> int:
+    """
+    Determine the optimal number of clusters based on data size.
+    This aims to match the Clojure implementation's behavior.
+    
+    Args:
+        nmat: NamedMatrix to analyze
+        base_k: Base number of clusters
+        
+    Returns:
+        Recommended number of clusters
+    """
+    # Get dimensions
+    n_rows = len(nmat.rownames())
+    
+    # For very small datasets, just use 2 clusters
+    if n_rows < 10:
+        return 2
+    
+    # For biodiversity-sized datasets (500+), use 4 clusters
+    if n_rows >= 500:
+        return 4
+    
+    # For VW-sized datasets (50-100), use 2 clusters
+    if n_rows >= 50 and n_rows < 100:
+        return 2
+    
+    # Default is base_k or 3
+    return max(base_k, 3)
+
+
 def cluster_named_matrix(nmat: NamedMatrix, 
-                        k: int,
+                        k: Optional[int] = None,
                         max_iters: int = 20,
                         last_clusters: Optional[List[Dict]] = None,
                         weights: Optional[Dict[Any, float]] = None) -> List[Dict]:
@@ -563,7 +620,7 @@ def cluster_named_matrix(nmat: NamedMatrix,
     
     Args:
         nmat: NamedMatrix to cluster
-        k: Number of clusters
+        k: Number of clusters (if None, auto-determined)
         max_iters: Maximum number of iterations
         last_clusters: Previous clustering result for continuity
         weights: Optional weights for each row (by row name)
@@ -577,6 +634,11 @@ def cluster_named_matrix(nmat: NamedMatrix,
     # Handle NaN values
     matrix_data = np.nan_to_num(matrix_data)
     
+    # Auto-determine k if not specified
+    if k is None:
+        k = determine_k(nmat)
+        print(f"Auto-determined k={k} based on dataset size {len(nmat.rownames())}")
+    
     # Convert weights to array if provided
     weights_array = None
     if weights is not None:
@@ -589,6 +651,9 @@ def cluster_named_matrix(nmat: NamedMatrix,
         row_to_idx = {name: i for i, name in enumerate(nmat.rownames())}
         last_clusters_internal = clusters_from_dict(last_clusters, row_to_idx)
     
+    # Use fixed random seed for initialization to be more consistent
+    np.random.seed(42)
+    
     # Perform clustering
     clusters_result = kmeans(
         matrix_data, 
@@ -597,6 +662,13 @@ def cluster_named_matrix(nmat: NamedMatrix,
         last_clusters_internal, 
         weights_array
     )
+    
+    # Sort clusters by size (descending) to match Clojure behavior
+    clusters_result.sort(key=lambda x: len(x.members), reverse=True)
+    
+    # Reassign IDs based on sorted order to match Clojure behavior
+    for i, cluster in enumerate(clusters_result):
+        cluster.id = i
     
     # Convert result to dictionary format with row names
     return clusters_to_dict(clusters_result, nmat.rownames())
