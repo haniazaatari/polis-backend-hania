@@ -112,10 +112,6 @@ Or to run all integration tests:
 npm test -- __tests__/integration
 ```
 
-## Database Transactions
-
-Each test is wrapped in a database transaction that is rolled back at the end of the test. This ensures that tests don't interfere with each other and that the database is left in a clean state.
-
 ## Known Issues
 
 ### Database Schema Issues

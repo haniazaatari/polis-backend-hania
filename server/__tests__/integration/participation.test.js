@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, test } from '@jest/globals';
+import { beforeAll, describe, expect, test } from '@jest/globals';
 import request from 'supertest';
 import {
   API_PREFIX,
@@ -9,24 +9,11 @@ import {
   initializeParticipantWithXid,
   setupAuthForTest
 } from '../setup/api-test-helpers.js';
-import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 describe('Participation Endpoints', () => {
   let authToken = null;
   let conversationZinvite = null;
-  let client = null;
   const testXid = generateRandomXid();
-
-  beforeEach(async () => {
-    client = await startTransaction();
-  });
-
-  afterEach(async () => {
-    if (client) {
-      await rollbackTransaction(client);
-      client = null;
-    }
-  });
 
   beforeAll(async () => {
     // Setup auth and create test conversation with comments

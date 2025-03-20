@@ -7,7 +7,7 @@
  * 2. No comments are repeated for a participant who has already voted on them
  */
 
-import { afterEach, beforeAll, beforeEach, describe, expect, test } from '@jest/globals';
+import { beforeAll, describe, expect, test } from '@jest/globals';
 import {
   createTestComment,
   initializeParticipant,
@@ -15,7 +15,6 @@ import {
   submitVote,
   wait
 } from '../setup/api-test-helpers.js';
-import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 // Constants
 const NUM_COMMENTS = 5; // Total number of comments to create
@@ -26,20 +25,6 @@ describe('Comment Repetition Bug Test', () => {
   let ownerAuthToken;
   let conversationZinvite;
   const allCommentIds = [];
-  let client = null;
-
-  // Start a transaction before each test
-  beforeEach(async () => {
-    client = await startTransaction();
-  });
-
-  // Rollback the transaction after each test
-  afterEach(async () => {
-    if (client) {
-      await rollbackTransaction(client);
-      client = null;
-    }
-  });
 
   // Setup: Register admin, create conversation, and create comments
   beforeAll(async () => {

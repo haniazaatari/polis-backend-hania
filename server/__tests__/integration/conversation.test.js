@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, test } from '@jest/globals';
+import { beforeAll, describe, expect, test } from '@jest/globals';
 import request from 'supertest';
 import {
   API_PREFIX,
@@ -7,22 +7,9 @@ import {
   makeRequestWithTimeout,
   setupAuthForTest
 } from '../setup/api-test-helpers.js';
-import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 describe('Conversation Endpoints', () => {
   let authToken = null;
-  let client = null;
-
-  beforeEach(async () => {
-    client = await startTransaction();
-  });
-
-  afterEach(async () => {
-    if (client) {
-      await rollbackTransaction(client);
-      client = null;
-    }
-  });
 
   beforeAll(async () => {
     // Setup auth without creating conversation

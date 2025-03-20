@@ -57,35 +57,11 @@ RESET_DB_BEFORE_TESTS=true npm test
 
 ⚠️ **WARNING**: The `db:reset` script will delete ALL data in the database specified by `DATABASE_URL`.
 
-### Option 2: Use Transaction Isolation
-
-Tests can use transaction isolation to avoid affecting each other. This is the default approach in most tests:
-
-```javascript
-import { startTransaction, rollbackTransaction } from '../setup/db-test-helpers.js';
-
-describe('My test suite', () => {
-  let client;
-  
-  beforeEach(async () => {
-    client = await startTransaction();
-  });
-  
-  afterEach(async () => {
-    await rollbackTransaction(client);
-  });
-  
-  // Tests here will run in isolation
-});
-```
-
 ## Test Safety Features
 
-The test environment includes several safety features:
+The test environment includes this safety feature:
 
-1. **Production Database Prevention**: Tests will not run against production databases (URLs containing 'amazonaws', 'prod', etc.)
-2. **Transaction Isolation**: Most tests run in transactions that roll back after completion
-3. **Table Cleaning**: Helpers for cleaning specific tables
+- **Production Database Prevention**: Tests will not run against production databases (URLs containing 'amazonaws', 'prod', etc.)
 
 ## Troubleshooting Common Issues
 

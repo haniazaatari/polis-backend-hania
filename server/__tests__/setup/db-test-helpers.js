@@ -43,38 +43,13 @@ const pool = new Pool({
 });
 
 /**
- * Start a transaction for a test
- * Use this in beforeEach hooks to isolate test data changes
- */
-export async function startTransaction() {
-  const client = await pool.connect();
-  await client.query('BEGIN');
-  return client;
-}
-
-/**
- * Roll back a transaction after a test
- * Use this in afterEach hooks to clean up test data changes
- * @param {Object} client - Database client with active transaction
- */
-export async function rollbackTransaction(client) {
-  try {
-    await client.query('ROLLBACK');
-  } finally {
-    client.release();
-  }
-}
-
-/**
  * Close the database pool
  */
-export async function closePool() {
+async function closePool() {
   await pool.end();
 }
 
 export default {
   pool,
-  startTransaction,
-  rollbackTransaction,
   closePool
 };

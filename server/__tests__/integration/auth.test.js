@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
+import { beforeEach, describe, expect, test } from '@jest/globals';
 import {
   extractCookieValue,
   generateTestUser,
@@ -8,22 +8,9 @@ import {
   submitVote,
   wait
 } from '../setup/api-test-helpers.js';
-import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 describe('Authentication', () => {
-  let client = null;
   const testUser = generateTestUser();
-
-  beforeEach(async () => {
-    client = await startTransaction();
-  });
-
-  afterEach(async () => {
-    if (client) {
-      await rollbackTransaction(client);
-      client = null;
-    }
-  });
 
   describe('Login Endpoint', () => {
     test('should validate login parameters', async () => {

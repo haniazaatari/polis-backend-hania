@@ -104,6 +104,7 @@ async function resetDatabase() {
 
     if (!skipConfirm) {
       console.log('\x1b[33m%s\x1b[0m', '⚠️  WARNING: All data in the database will be lost!');
+      console.log('\x1b[33m%s\x1b[0m', '⚠️  DATABASE_URL:', databaseUrl);
       console.log('\x1b[33m%s\x1b[0m', '⚠️  You have 5 seconds to cancel (Ctrl+C)...');
 
       // Wait 5 seconds to give user a chance to cancel
