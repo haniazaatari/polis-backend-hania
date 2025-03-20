@@ -9,8 +9,6 @@ import request from 'supertest';
 // Use { override: false } to prevent dotenv from overriding command-line env vars
 dotenv.config({ override: false });
 
-console.log('process.env.API_SERVER_PORT', process.env.API_SERVER_PORT);
-
 // API constants - export these for use in test files
 const API_PORT = process.env.API_SERVER_PORT || 5000;
 const API_URL = process.env.API_URL || `http://localhost:${API_PORT}`;

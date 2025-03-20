@@ -130,7 +130,7 @@ describe('Conversation Endpoints', () => {
       if (!error.message.includes('timed out')) {
         throw error;
       }
-      console.log('Close conversation timed out as expected');
+      // Close conversation timed out as expected
     }
 
     // STEP 6: Reopen conversation
