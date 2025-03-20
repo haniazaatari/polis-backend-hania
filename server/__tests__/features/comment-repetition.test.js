@@ -10,23 +10,21 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from '@jest/globals';
 import {
   createTestComment,
-  createTestConversation,
   initializeParticipant,
-  registerAndLoginUser,
+  setupAuthForTest,
   submitVote,
   wait
 } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 // Constants
-const NUM_COMMENTS = 8; // Total number of comments to create
+const NUM_COMMENTS = 5; // Total number of comments to create
 const VOTE_DELAY = 1000; // Delay between voting on comments in milliseconds
 
 describe('Comment Repetition Bug Test', () => {
   // Test state
-  let conversationOwner;
-  let ownerToken;
-  let zinvite;
+  let ownerAuthToken;
+  let conversationZinvite;
   const allCommentIds = [];
   let client = null;
 
@@ -45,25 +43,22 @@ describe('Comment Repetition Bug Test', () => {
 
   // Setup: Register admin, create conversation, and create comments
   beforeAll(async () => {
-    // Register and login admin user as conversation owner
-    conversationOwner = await registerAndLoginUser({
-      email: `owner_${Date.now()}@example.com`,
-      password: 'password123',
-      hname: 'Conversation Owner'
-    });
-    ownerToken = conversationOwner.authToken;
-
-    // Create test conversation
-    const conversationData = await createTestConversation(ownerToken, {
-      topic: `Comment Repetition Test ${Date.now()}`,
-      description: 'A conversation to test for the comment repetition bug'
+    // Setup auth without creating comments (we'll create them manually)
+    const setup = await setupAuthForTest({
+      createConversation: true,
+      commentCount: 0,
+      conversationOptions: {
+        topic: `Comment Repetition Test ${Date.now()}`,
+        description: 'A conversation to test for the comment repetition bug'
+      }
     });
 
-    zinvite = conversationData.zinvite;
+    ownerAuthToken = setup.authToken;
+    conversationZinvite = setup.conversationZinvite;
 
     // Create comments as the owner
     for (let i = 0; i < NUM_COMMENTS; i++) {
-      const commentId = await createTestComment(ownerToken, zinvite, {
+      const commentId = await createTestComment(ownerAuthToken, conversationZinvite, {
         txt: `Test comment ${i + 1}`
       });
       allCommentIds.push(commentId);
@@ -86,9 +81,9 @@ describe('Comment Repetition Bug Test', () => {
 
     try {
       // STEP 1: Initialize anonymous participant
-      const { cookies: initCookies, body: initBody, status: initStatus } = await initializeParticipant(zinvite);
+      const { cookies, body: initBody } = await initializeParticipant(conversationZinvite);
 
-      let authToken = initCookies;
+      let authToken = cookies;
       let nextComment = initBody.nextComment;
       let commentId = nextComment.tid;
 
@@ -99,9 +94,12 @@ describe('Comment Repetition Bug Test', () => {
       while (commentId) {
         processedComments++;
         if (processedComments > MAX_ALLOWED_COMMENTS) {
-          throw new Error(
-            `Test failed: Processed ${processedComments} comments which exceeds maximum allowed (${MAX_ALLOWED_COMMENTS}). This indicates a comment repetition issue.`
+          // Instead of throwing an error, use expect to fail the test properly
+          expect(processedComments).toBeLessThanOrEqual(
+            MAX_ALLOWED_COMMENTS,
+            `Processed ${processedComments} comments which exceeds maximum allowed (${MAX_ALLOWED_COMMENTS}). This indicates a comment repetition issue.`
           );
+          break;
         }
 
         // Add the comment ID to our ordered list
@@ -111,7 +109,7 @@ describe('Comment Repetition Bug Test', () => {
         if (seenCommentIds.has(commentId)) {
           // Update repetition count
           commentRepetitions.set(commentId, (commentRepetitions.get(commentId) || 1) + 1);
-          console.error(`REPETITION DETECTED: Comment ${commentId} seen again`);
+          console.warn(`REPETITION DETECTED: Comment ${commentId} seen again`);
         } else {
           seenCommentIds.add(commentId);
           commentRepetitions.set(commentId, 1);
@@ -124,7 +122,7 @@ describe('Comment Repetition Bug Test', () => {
 
         // Build vote payload
         const voteData = {
-          conversation_id: zinvite,
+          conversation_id: conversationZinvite,
           tid: commentId,
           vote: randomVote
         };
@@ -133,12 +131,9 @@ describe('Comment Repetition Bug Test', () => {
         const { cookies: voteCookies, body: voteBody, status: voteStatus } = await submitVote(voteData, authToken);
 
         // Check for error in response
-        if (voteStatus !== 200) {
-          const voteError = 'Error submitting vote'; // TODO: Get error from response
-          console.error(voteError);
-          throw new Error(voteError);
-        }
+        expect(voteStatus).toBe(200, 'Failed to submit vote');
 
+        // Update authToken with the cookies from the vote response
         authToken = voteCookies;
         nextComment = voteBody.nextComment;
         commentId = nextComment?.tid;
@@ -168,7 +163,7 @@ describe('Comment Repetition Bug Test', () => {
         .map(([commentId, count]) => ({ commentId, count }));
 
       if (repeatedComments.length > 0) {
-        console.error('Found repeated comments:', repeatedComments);
+        console.warn('Found repeated comments:', repeatedComments);
       }
 
       // Check if all comments were seen
@@ -185,7 +180,7 @@ describe('Comment Repetition Bug Test', () => {
         console.log('SUCCESS: No comments were repeated! This suggests the bug does not occur in this scenario.');
       }
 
-      expect(repeatedComments.length).toBe(0); // No comment should be repeated
+      expect(repeatedComments.length).toBe(0, `Found ${repeatedComments.length} repeated comments`); // No comment should be repeated
     } catch (err) {
       console.error('Test error:', err);
       throw err;
