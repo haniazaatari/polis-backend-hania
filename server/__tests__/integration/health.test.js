@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import request from 'supertest';
 import { API_PREFIX, API_URL } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
@@ -20,7 +20,7 @@ describe('Health Check Endpoints', () => {
   });
 
   describe('GET /testConnection', () => {
-    it('should return 200 OK', async () => {
+    test('should return 200 OK', async () => {
       const response = await request(API_URL).get(`${API_PREFIX}/testConnection`);
 
       expect(response.status).toBe(200);
@@ -29,7 +29,7 @@ describe('Health Check Endpoints', () => {
   });
 
   describe('GET /testDatabase', () => {
-    it('should return 200 OK when database is connected', async () => {
+    test('should return 200 OK when database is connected', async () => {
       const response = await request(API_URL).get(`${API_PREFIX}/testDatabase`);
 
       expect(response.status).toBe(200);

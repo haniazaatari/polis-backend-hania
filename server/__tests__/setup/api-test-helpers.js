@@ -489,9 +489,53 @@ async function submitVote(options, authToken) {
   }
 }
 
+/**
+ * Sets up authentication for tests - registers user, logs in, creates test conversation
+ * @param {Object} options - Options for setup
+ * @returns {Promise<Object>} Object containing auth token, userId, and conversation info
+ */
+async function setupAuthForTest(options = {}) {
+  const { createConversation = true } = options;
+  const testUser = generateTestUser();
+
+  // Register and login
+  const { authToken, userId } = await registerAndLoginUser(testUser);
+
+  let conversationData = {};
+
+  // Create test conversation if requested
+  if (createConversation) {
+    const conversation = await createTestConversation(authToken, options.conversationOptions || {});
+    conversationData = {
+      conversationId: conversation.zid,
+      conversationZinvite: conversation.zinvite
+    };
+
+    // Create test comments if commentCount is specified
+    if (options.commentCount && options.commentCount > 0) {
+      const commentIds = [];
+      for (let i = 0; i < options.commentCount; i++) {
+        const commentId = await createTestComment(
+          authToken,
+          conversation.zinvite,
+          options.commentOptions || { txt: `Test comment ${i + 1}` }
+        );
+        commentIds.push(commentId);
+      }
+      conversationData.commentIds = commentIds;
+    }
+  }
+
+  return {
+    authToken,
+    userId,
+    testUser,
+    ...conversationData
+  };
+}
+
 // Export API constants along with helper functions
 export {
-  API_PORT,
   API_PREFIX,
   API_URL,
   attachAuthToken,
@@ -507,7 +551,7 @@ export {
   makeRequest,
   makeRequestWithTimeout,
   registerAndLoginUser,
-  retryRequest,
+  setupAuthForTest,
   submitVote,
   wait
 };

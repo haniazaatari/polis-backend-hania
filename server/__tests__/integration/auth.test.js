@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from '@jest/globals';
 import {
-  createTestComment,
-  createTestConversation,
   extractCookieValue,
   generateTestUser,
   initializeParticipant,
   makeRequest,
+  setupAuthForTest,
   submitVote,
   wait
 } from '../setup/api-test-helpers.js';
@@ -188,38 +187,11 @@ describe('Authentication', () => {
     let ownerAuthToken;
 
     beforeEach(async () => {
-      // Create owner and conversation
-      const ownerUser = generateTestUser();
-
-      // Register owner
-      const registerResponse = await makeRequest('POST', '/auth/new', {
-        email: ownerUser.email,
-        password: ownerUser.password,
-        password2: ownerUser.password,
-        hname: ownerUser.hname,
-        gatekeeperTosPrivacy: true
-      });
-      expect(registerResponse.status).toBe(200);
-
-      // Login owner
-      const loginResponse = await makeRequest('POST', '/auth/login', {
-        email: ownerUser.email,
-        password: ownerUser.password
-      });
-      expect(loginResponse.status).toBe(200);
-      ownerAuthToken = loginResponse.headers['x-polis'];
-
-      // Create conversation
-      const conversation = await createTestConversation(ownerAuthToken, {
-        topic: `Participant Auth Test ${Date.now()}`,
-        description: 'Test conversation for participant authentication'
-      });
-      conversationId = conversation.zinvite;
-
-      // Create comment
-      commentId = await createTestComment(ownerAuthToken, conversationId, {
-        txt: 'Test comment for participant auth flow'
-      });
+      // Create owner and conversation using the helper function
+      const setup = await setupAuthForTest({ commentCount: 1 });
+      ownerAuthToken = setup.authToken;
+      conversationId = setup.conversationZinvite;
+      commentId = setup.commentIds[0];
     });
 
     test('should initialize participant session', async () => {

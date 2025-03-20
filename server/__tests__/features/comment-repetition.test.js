@@ -99,7 +99,9 @@ describe('Comment Repetition Bug Test', () => {
       while (commentId) {
         processedComments++;
         if (processedComments > MAX_ALLOWED_COMMENTS) {
-          throw new Error(`Test failed: Processed ${processedComments} comments which exceeds maximum allowed (${MAX_ALLOWED_COMMENTS}). This indicates a comment repetition issue.`);
+          throw new Error(
+            `Test failed: Processed ${processedComments} comments which exceeds maximum allowed (${MAX_ALLOWED_COMMENTS}). This indicates a comment repetition issue.`
+          );
         }
 
         // Add the comment ID to our ordered list

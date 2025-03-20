@@ -4,22 +4,17 @@ import {
   API_PREFIX,
   API_URL,
   attachAuthToken,
-  createTestComment,
-  createTestConversation,
   generateRandomXid,
-  generateTestUser,
   initializeParticipant,
-  initializeParticipantWithXid
+  initializeParticipantWithXid,
+  setupAuthForTest
 } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 describe('Participation Endpoints', () => {
   let authToken = null;
-  let conversationId = null;
   let conversationZinvite = null;
-  const xidConversationZinvite = null;
   let client = null;
-  const testUser = generateTestUser();
   const testXid = generateRandomXid();
 
   beforeEach(async () => {
@@ -34,46 +29,13 @@ describe('Participation Endpoints', () => {
   });
 
   beforeAll(async () => {
-    // Register a test user
-    const registerResponse = await request(API_URL).post(`${API_PREFIX}/auth/new`).send({
-      email: testUser.email,
-      password: testUser.password,
-      hname: testUser.hname,
-      gatekeeperTosPrivacy: true
+    // Setup auth and create test conversation with comments
+    const setup = await setupAuthForTest({
+      commentCount: 3
     });
 
-    expect(registerResponse.status).toBe(200);
-    expect(registerResponse.body).toHaveProperty('uid');
-
-    // Login to get auth token
-    const loginResponse = await request(API_URL).post(`${API_PREFIX}/auth/login`).send({
-      email: testUser.email,
-      password: testUser.password
-    });
-
-    expect(loginResponse.status).toBe(200);
-
-    // Extract auth token - fail if not found
-    if (loginResponse.headers['x-polis']) {
-      authToken = loginResponse.headers['x-polis'];
-    } else {
-      throw new Error('No auth token found in response');
-    }
-
-    // Create a regular test conversation
-    const conversation = await createTestConversation(authToken);
-    expect(conversation).toBeDefined();
-    expect(conversation.zid).toBeDefined();
-    expect(conversation.zinvite).toBeDefined();
-
-    conversationId = conversation.zid;
-    conversationZinvite = conversation.zinvite;
-
-    // Create test comments in the conversation
-    const commentId = await createTestComment(authToken, conversationZinvite);
-    expect(commentId).toBeDefined();
-    await createTestComment(authToken, conversationZinvite);
-    await createTestComment(authToken, conversationZinvite);
+    authToken = setup.authToken;
+    conversationZinvite = setup.conversationZinvite;
   }, 15000);
 
   test('Regular participation lifecycle', async () => {

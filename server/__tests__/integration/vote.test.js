@@ -3,12 +3,10 @@ import request from 'supertest';
 import {
   API_PREFIX,
   API_URL,
-  createTestComment,
-  createTestConversation,
-  generateTestUser,
   getMyVotes,
   getVotes,
   initializeParticipant,
+  setupAuthForTest,
   submitVote
 } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
@@ -16,12 +14,9 @@ import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.
 describe('Vote Endpoints', () => {
   let ownerAuthToken = null;
   let voterAuthToken = null;
-  let conversationId = null;
   let conversationZinvite = null;
   let commentId = null;
   let client = null;
-  const ownerUser = generateTestUser();
-  const voterUser = generateTestUser();
 
   beforeEach(async () => {
     client = await startTransaction();
@@ -35,72 +30,18 @@ describe('Vote Endpoints', () => {
   });
 
   beforeAll(async () => {
-    // Register the conversation owner/comment creator
-    const ownerRegisterResponse = await request(API_URL).post(`${API_PREFIX}/auth/new`).send({
-      email: ownerUser.email,
-      password: ownerUser.password,
-      hname: ownerUser.hname,
-      gatekeeperTosPrivacy: true
+    // Setup owner with conversation and comments
+    const ownerSetup = await setupAuthForTest({
+      commentCount: 3
     });
 
-    expect(ownerRegisterResponse.status).toBe(200);
-    expect(ownerRegisterResponse.body).toHaveProperty('uid');
+    ownerAuthToken = ownerSetup.authToken;
+    conversationZinvite = ownerSetup.conversationZinvite;
+    commentId = ownerSetup.commentIds[0];
 
-    // Login as owner
-    const ownerLoginResponse = await request(API_URL).post(`${API_PREFIX}/auth/login`).send({
-      email: ownerUser.email,
-      password: ownerUser.password
-    });
-
-    expect(ownerLoginResponse.status).toBe(200);
-
-    // Extract owner's auth token
-    if (ownerLoginResponse.headers['x-polis']) {
-      ownerAuthToken = ownerLoginResponse.headers['x-polis'];
-    } else {
-      throw new Error('No auth token found in owner login response');
-    }
-
-    // Register the voter (separate user)
-    const voterRegisterResponse = await request(API_URL).post(`${API_PREFIX}/auth/new`).send({
-      email: voterUser.email,
-      password: voterUser.password,
-      hname: voterUser.hname,
-      gatekeeperTosPrivacy: true
-    });
-
-    expect(voterRegisterResponse.status).toBe(200);
-    expect(voterRegisterResponse.body).toHaveProperty('uid');
-
-    // Login as voter
-    const voterLoginResponse = await request(API_URL).post(`${API_PREFIX}/auth/login`).send({
-      email: voterUser.email,
-      password: voterUser.password
-    });
-
-    expect(voterLoginResponse.status).toBe(200);
-
-    // Extract voter's auth token
-    if (voterLoginResponse.headers['x-polis']) {
-      voterAuthToken = voterLoginResponse.headers['x-polis'];
-    } else {
-      throw new Error('No auth token found in voter login response');
-    }
-
-    // Create a test conversation as owner
-    const conversation = await createTestConversation(ownerAuthToken);
-    expect(conversation).toBeDefined();
-    expect(conversation.zid).toBeDefined();
-    expect(conversation.zinvite).toBeDefined();
-
-    conversationId = conversation.zid;
-    conversationZinvite = conversation.zinvite;
-
-    // Create test comments as owner
-    commentId = await createTestComment(ownerAuthToken, conversationZinvite);
-    expect(commentId).toBeDefined();
-    await createTestComment(ownerAuthToken, conversationZinvite);
-    await createTestComment(ownerAuthToken, conversationZinvite);
+    // Setup voter (separate user)
+    const voterSetup = await setupAuthForTest({ createConversation: false });
+    voterAuthToken = voterSetup.authToken;
   }, 30000); // Increase timeout for setup
 
   test('Vote lifecycle for authenticated user', async () => {
