@@ -14,7 +14,8 @@ export async function logModelCoverage(
   rid: string,
   zid: number,
   inputComments: any,
-  modelResponse: any
+  modelResponse: any,
+  modelName?: string
 ): Promise<void> {
   // DEBUG: Log function entry
   console.log(`DEBUG: logModelCoverage called for ${sectionName}`);
@@ -23,8 +24,9 @@ export async function logModelCoverage(
   );
 
   try {
-    // Create debug directory structure
-    const debugDir = path.join(__dirname, "../../../../debug/coverage");
+    // Create debug directory structure with model subfolder
+    const safeModelName = modelName ? modelName.replace(/[^a-zA-Z0-9-_]/g, "_") : "unknown";
+    const debugDir = path.join(__dirname, "../../../../debug/coverage", safeModelName);
     console.log(`DEBUG: Creating directory at ${debugDir}`);
 
     await fs.mkdir(debugDir, { recursive: true });
@@ -34,7 +36,7 @@ export async function logModelCoverage(
       .toISOString()
       .replace(/:/g, "-")
       .replace(/\./g, "-");
-    const filename = `${rid}_${sectionName}_${timestamp}.json`;
+    const filename = `${rid}_${sectionName}_${safeModelName}_${timestamp}.json`;
 
     console.log(`DEBUG: Writing file ${filename}`);
 
@@ -94,6 +96,7 @@ export async function logModelCoverage(
         section: sectionName,
         rid,
         zid,
+        modelName: safeModelName,
         timestamp: new Date().toISOString(),
       },
       inputCommentsXml: inputComments,
@@ -108,7 +111,7 @@ export async function logModelCoverage(
     await fs.writeFile(fullPath, JSON.stringify(debugData, null, 2), "utf8");
 
     console.log(
-      `SUCCESS: Coverage debug for ${sectionName} saved to debug/coverage/${filename}`
+      `SUCCESS: Coverage debug for ${sectionName} saved to debug/coverage/${safeModelName}/${filename}`
     );
     console.log(
       `COVERAGE STATS: Total comments: ${totalCommentsProvided}, Cited: ${citedCommentIds.length}, Coverage: ${coverageStats.coveragePercentage}`

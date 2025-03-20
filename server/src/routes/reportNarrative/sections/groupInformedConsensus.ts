@@ -131,7 +131,8 @@ export async function handle_GET_groupInformedConsensus({
         rid,
         zid as number,
         commentsResult.xml, // All comments sent to the model
-        resp // The model's response
+        resp, // The model's response
+        model // Model name
       );
     } else {
       console.log(`DEBUG: Environment check failed, skipping logModelCoverage`);
