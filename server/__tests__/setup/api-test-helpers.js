@@ -265,8 +265,6 @@ async function createTestComment(authToken, conversationId, options = {}) {
     ...options
   };
 
-  console.log('Creating test comment with txt:', defaultOptions.txt);
-
   const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/comments`), authToken).send(
     defaultOptions
   );
@@ -434,13 +432,14 @@ async function getParticipantId(authToken, conversationId) {
  * Retrieves votes for a conversation
  * @param {Object} authToken - Authentication token for the request
  * @param {string} zinvite - Conversation invite code
+ * @param {number} pid - Participant ID
  * @returns {Promise<Array>} - Array of votes
  */
-async function getVotes(authToken, zinvite) {
+async function getVotes(authToken, zinvite, pid) {
   try {
     // Get votes for the conversation
     const response = await attachAuthToken(
-      request(API_URL).get(`${API_PREFIX}/votes?conversation_id=${zinvite}`),
+      request(API_URL).get(`${API_PREFIX}/votes?conversation_id=${zinvite}&pid=${pid}`),
       authToken
     );
 
@@ -479,6 +478,7 @@ async function getMyVotes(authToken, zinvite) {
       throw new Error(`Failed to get my votes: ${response.status} ${JSON.stringify(response.body)}`);
     }
 
+    // NOTE: This endpoint seems to return a 200 status with an empty array.
     return response.body;
   } catch (error) {
     console.error('Error getting my votes:', error.message);
@@ -499,7 +499,6 @@ async function submitVote(options, authToken) {
   // Error if options does not have tid or conversation_id
   // NOTE: 0 is a valid value for tid or conversation_id
   if (options.tid === undefined || options.conversation_id === undefined) {
-    console.log('Options:', JSON.stringify(options, null, 2));
     throw new Error('Options must have tid or conversation_id');
   }
 

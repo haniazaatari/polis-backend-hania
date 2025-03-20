@@ -71,7 +71,6 @@ beforeAll(async () => {
   // Make sure database is available
   try {
     const client = await dbHelpers.pool.connect();
-    console.log('Successfully connected to database');
     client.release();
   } catch (error) {
     console.error('Failed to connect to database:', error);

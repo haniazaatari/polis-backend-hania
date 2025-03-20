@@ -244,18 +244,14 @@ describe('Authentication', () => {
 
         conversationId = conversationData.zinvite;
         expect(conversationId).toBeDefined();
-        console.log(`Created test conversation with ID: ${conversationId}`);
 
         // Create a test comment - the legacy server response format is different
         commentId = await createTestComment(testOwner.authToken, conversationId, {
           txt: 'Test comment for participant auth flow'
         });
 
-        console.log(`Created test comment with ID: ${commentId}`);
-
         // For legacy server testing, we can continue even if we don't have a specific comment ID
         // The initialize participant endpoint will return a comment anyway
-        console.log(`Set up conversation ${conversationId} with comment ${commentId} for participant auth tests`);
       } catch (err) {
         console.error('Failed to set up participant auth tests:', err);
         throw err;
@@ -280,9 +276,6 @@ describe('Authentication', () => {
       // Response body should have conversation and nextComment objects
       expect(Object.keys(body)).toContain('conversation');
       expect(Object.keys(body)).toContain('nextComment');
-
-      // Log response structure to help debugging
-      console.log('Participant init response keys:', Object.keys(body));
 
       const { conversation, nextComment } = body;
 

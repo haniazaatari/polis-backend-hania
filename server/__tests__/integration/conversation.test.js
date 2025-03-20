@@ -44,10 +44,6 @@ describe('Conversation Endpoints', () => {
     // Extract auth token - fail if not found
     if (loginResponse.headers['x-polis']) {
       authToken = loginResponse.headers['x-polis'];
-    } else if (loginResponse.body?.token) {
-      authToken = loginResponse.body.token;
-    } else if (loginResponse.headers['set-cookie']) {
-      authToken = loginResponse.headers['set-cookie'];
     } else {
       throw new Error('No auth token found in response');
     }

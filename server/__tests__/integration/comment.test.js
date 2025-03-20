@@ -148,7 +148,6 @@ describe('Comment Endpoints', () => {
     const { cookies, body: initBody } = await initializeParticipantWithXid(conversationZinvite, xid);
     expect(cookies).toBeDefined();
     expect(cookies.length).toBeGreaterThan(0);
-    console.log('cookies', cookies);
 
     // Create a comment as XID participant using the helper
     const timestamp = Date.now();
