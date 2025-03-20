@@ -133,7 +133,13 @@ def init_clusters(data: np.ndarray, k: int) -> List[Cluster]:
         
         # Choose the next center with probability proportional to distance
         min_dists = np.array(min_dists)
-        probs = min_dists / np.sum(min_dists)
+        
+        # Handle case where all distances are 0 (prevent divide by zero)
+        if np.sum(min_dists) == 0:
+            # If all distances are 0, choose randomly with equal probability
+            probs = np.ones(n_points) / n_points
+        else:
+            probs = min_dists / np.sum(min_dists)
         
         # With fixed seed, this should be deterministic
         next_idx = rng.choice(n_points, p=probs)

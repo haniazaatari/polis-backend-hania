@@ -8,6 +8,8 @@ and performing hierarchical clustering based on those correlations.
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Union, Any
+import scipy
+import scipy.stats
 import scipy.cluster.hierarchy as hcluster
 from scipy.spatial.distance import pdist, squareform
 import json
