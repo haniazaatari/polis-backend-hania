@@ -24,8 +24,9 @@
     "check:fix": "biome check --write --unsafe",
     "db:reset": "node bin/db-reset.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:unit": "npm test -- --testPathIgnorePatterns=integration",
-    "test:integration": "npm test -- --testPathPattern=integration"
+    "test:unit": "npm test -- /__tests__/unit/",
+    "test:integration": "npm test -- /__tests__/integration/",
+    "test:feature": "npm test -- /__tests__/feature/ --testPathIgnorePatterns=[]"
   },
   "repository": {
     "type": "git",
