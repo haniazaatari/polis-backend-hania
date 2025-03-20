@@ -128,7 +128,7 @@ describe('Conversation Endpoints', () => {
       ]);
 
       // If we get a response, it should be 200
-      expect([200, 304]).toContain(closeResponse.status);
+      expect(closeResponse.status).toBe(200);
     } catch (error) {
       // For the close endpoint, a timeout is actually expected and indicates success
       // Only fail if we get an actual error response that isn't a timeout

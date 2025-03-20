@@ -406,29 +406,6 @@ async function registerAndLoginUser(userData) {
 }
 
 /**
- * Helper to get a participant ID for a conversation
- * @param {string|Array} authToken - Auth token or cookie array
- * @param {string} conversationId - Conversation ID (zinvite)
- * @returns {Promise<number|null>} Participant ID or null if not found
- */
-async function getParticipantId(authToken, conversationId) {
-  try {
-    const response = await attachAuthToken(
-      request(API_URL).get(`${API_PREFIX}/participation?conversation_id=${conversationId}`),
-      authToken
-    );
-
-    if (response.status === 200 && response.body?.pid !== undefined) {
-      return response.body.pid;
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting participant ID:', error.message);
-    return null;
-  }
-}
-
-/**
  * Retrieves votes for a conversation
  * @param {Object} authToken - Authentication token for the request
  * @param {string} zinvite - Conversation invite code
@@ -543,7 +520,6 @@ export {
   generateRandomXid,
   generateTestUser,
   getMyVotes,
-  getParticipantId,
   getVotes,
   initializeParticipant,
   initializeParticipantWithXid,

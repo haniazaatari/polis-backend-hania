@@ -35,10 +35,9 @@ To maintain consistency and reduce duplication, all test files use shared helper
 - `initializeParticipant()` - Initializes an anonymous participant for voting
 - `initializeParticipantWithXid()` - Initializes a participant for voting with an external ID
 - `registerAndLoginUser()` - Registers and logs in a user in one step
-- `getParticipantId()` - Retrieves a participant's ID for a conversation
 - `submitVote()` - Submits a vote on a comment
 - `getVotes()` - Retrieves votes for a conversation
-- `getMyVotes()` - Retrieves a participant's votes
+- `getMyVotes()` - Retrieves a participant's votes. NOTE: In the legacy implementation, this seems to always return an empty array.
 
 ## Participation Tests
 

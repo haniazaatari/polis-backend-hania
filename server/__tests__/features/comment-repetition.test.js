@@ -52,19 +52,13 @@ describe('Comment Repetition Bug Test', () => {
     });
     ownerToken = conversationOwner.authToken;
 
-    console.log('Created owner user');
-
     // Create test conversation
     const conversationData = await createTestConversation(ownerToken, {
       topic: `Comment Repetition Test ${Date.now()}`,
-      description: 'A conversation to test for the comment repetition bug',
-      is_active: true,
-      is_anon: true
+      description: 'A conversation to test for the comment repetition bug'
     });
 
     zinvite = conversationData.zinvite;
-
-    console.log(`Created test conversation with zinvite: ${zinvite}`);
 
     // Create comments as the owner
     for (let i = 0; i < NUM_COMMENTS; i++) {
@@ -94,22 +88,13 @@ describe('Comment Repetition Bug Test', () => {
 
     try {
       // STEP 1: Initialize anonymous participant
-      console.log('Step 1: Initializing participation');
-
       const { cookies: initCookies, body: initBody, status: initStatus } = await initializeParticipant(zinvite);
-
-      console.log(`Participation init status: ${initStatus}`);
-      console.log(`Got cookies: ${JSON.stringify(initCookies)}`);
 
       let authToken = initCookies;
       let nextComment = initBody.nextComment;
       let commentId = nextComment.tid;
 
-      console.log(`Next comment: ${commentId}`);
-
       // STEP 2: Process each comment one by one
-      console.log('Step 2: Starting vote loop');
-
       const MAX_ALLOWED_COMMENTS = NUM_COMMENTS + 1; // Allow one extra to detect repetition
       let processedComments = 0;
 
@@ -118,8 +103,6 @@ describe('Comment Repetition Bug Test', () => {
         if (processedComments > MAX_ALLOWED_COMMENTS) {
           throw new Error(`Test failed: Processed ${processedComments} comments which exceeds maximum allowed (${MAX_ALLOWED_COMMENTS}). This indicates a comment repetition issue.`);
         }
-
-        console.log(`\nProcessing comment ID ${commentId}`);
 
         // Add the comment ID to our ordered list
         orderedCommentIds.push(commentId);
@@ -139,8 +122,6 @@ describe('Comment Repetition Bug Test', () => {
         const voteOptions = [-1, 1, 0]; // -1 agree, 1 disagree, 0 pass
         const randomVote = voteOptions[Math.floor(Math.random() * voteOptions.length)];
 
-        console.log(`Voting on comment ${commentId} with vote=${randomVote}`);
-
         // Build vote payload
         const voteData = {
           conversation_id: zinvite,
@@ -150,8 +131,6 @@ describe('Comment Repetition Bug Test', () => {
 
         // Submit vote using our improved helper - will handle auth errors
         const { cookies: voteCookies, body: voteBody, status: voteStatus } = await submitVote(voteData, authToken);
-
-        console.log(`Vote response status: ${voteStatus}`);
 
         // Check for error in response
         if (voteStatus !== 200) {
@@ -163,8 +142,6 @@ describe('Comment Repetition Bug Test', () => {
         authToken = voteCookies;
         nextComment = voteBody.nextComment;
         commentId = nextComment?.tid;
-
-        console.log(`Next comment: ${commentId || 'No more comments'}`);
 
         // Log progress periodically
         if ((votedCount + 1) % 5 === 0) {
@@ -198,7 +175,6 @@ describe('Comment Repetition Bug Test', () => {
       const unseenComments = allCommentIds.filter((id) => !seenCommentIds.has(id));
       if (unseenComments.length > 0) {
         console.log(`Comments never seen: ${unseenComments.length} of ${NUM_COMMENTS}`);
-        console.log('First few unseen comments:', unseenComments.slice(0, 5));
       }
 
       // Test assertions: We're in development mode, so if there are repetitions,
@@ -209,11 +185,7 @@ describe('Comment Repetition Bug Test', () => {
         console.log('SUCCESS: No comments were repeated! This suggests the bug does not occur in this scenario.');
       }
 
-      // Just make the test pass for now while we're debugging
-      expect(true).toBe(true);
-
-      // Uncomment once we've fixed the issue
-      // expect(repeatedComments.length).toBe(0); // No comment should be repeated
+      expect(repeatedComments.length).toBe(0); // No comment should be repeated
     } catch (err) {
       console.error('Test error:', err);
       throw err;
