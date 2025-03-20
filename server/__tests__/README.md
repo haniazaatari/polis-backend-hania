@@ -79,18 +79,6 @@ describe('My test suite', () => {
 });
 ```
 
-### Option 3: Table Cleanup
-
-You can selectively clean tables before or after tests:
-
-```javascript
-import { cleanTables } from '../setup/db-test-helpers.js';
-
-beforeAll(async () => {
-  await cleanTables(['participants', 'comments', 'votes']);
-});
-```
-
 ## Test Safety Features
 
 The test environment includes several safety features:

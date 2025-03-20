@@ -111,7 +111,7 @@ describe('Authentication', () => {
       expect(registerResponse.body).toHaveProperty('email', testUser.email);
       const userId = registerResponse.body.uid;
 
-      await wait(1000);
+      await wait(1000); // Wait for registration to complete
 
       // STEP 2: Login with registered user
       const loginResponse = await makeRequest('POST', '/auth/login', {
@@ -148,7 +148,7 @@ describe('Authentication', () => {
       expect(registerResponse.status).toBe(200);
       expect(registerResponse.body).toHaveProperty('uid');
 
-      await wait(1000);
+      await wait(1000); // Wait for registration to complete
 
       // STEP 2: Login user
       const loginResponse = await makeRequest('POST', '/auth/login', {
@@ -220,8 +220,6 @@ describe('Authentication', () => {
       commentId = await createTestComment(ownerAuthToken, conversationId, {
         txt: 'Test comment for participant auth flow'
       });
-
-      await wait(1000);
     });
 
     test('should initialize participant session', async () => {

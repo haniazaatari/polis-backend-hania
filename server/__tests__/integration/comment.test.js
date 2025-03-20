@@ -9,8 +9,7 @@ import {
   generateRandomXid,
   generateTestUser,
   initializeParticipant,
-  initializeParticipantWithXid,
-  wait
+  initializeParticipantWithXid
 } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
@@ -83,9 +82,6 @@ describe('Comment Endpoints', () => {
     const commentId = createResponse.body.tid;
     expect(commentId).toBeDefined();
 
-    // Wait for comment creation to complete
-    await wait(1000);
-
     // STEP 2: Verify comment appears in conversation
     const listResponse = await attachAuthToken(
       request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationZinvite}`),
@@ -137,7 +133,7 @@ describe('Comment Endpoints', () => {
 
     expect(listResponse.status).toBe(200);
     expect(Array.isArray(listResponse.body)).toBe(true);
-    const foundComment = listResponse.body.find(comment => comment.tid === commentId);
+    const foundComment = listResponse.body.find((comment) => comment.tid === commentId);
     expect(foundComment).toBeDefined();
     expect(foundComment.txt).toBe(commentText);
   });
@@ -166,7 +162,7 @@ describe('Comment Endpoints', () => {
 
     expect(listResponse.status).toBe(200);
     expect(Array.isArray(listResponse.body)).toBe(true);
-    const foundComment = listResponse.body.find(comment => comment.tid === commentId);
+    const foundComment = listResponse.body.find((comment) => comment.tid === commentId);
     expect(foundComment).toBeDefined();
     expect(foundComment.txt).toBe(commentText);
   });

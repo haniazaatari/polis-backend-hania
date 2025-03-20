@@ -9,8 +9,7 @@ import {
   generateRandomXid,
   generateTestUser,
   initializeParticipant,
-  initializeParticipantWithXid,
-  wait
+  initializeParticipantWithXid
 } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
@@ -75,14 +74,11 @@ describe('Participation Endpoints', () => {
     expect(commentId).toBeDefined();
     await createTestComment(authToken, conversationZinvite);
     await createTestComment(authToken, conversationZinvite);
-
-    // Wait for all setup operations to complete
-    await wait(1000);
   }, 15000);
 
   test('Regular participation lifecycle', async () => {
     // STEP 1: Initialize anonymous participant
-    const { body, cookies, status} = await initializeParticipant(conversationZinvite);
+    const { body, cookies, status } = await initializeParticipant(conversationZinvite);
 
     expect(status).toBe(200);
     expect(cookies).toBeDefined();
@@ -100,7 +96,7 @@ describe('Participation Endpoints', () => {
 
   test('XID participation lifecycle', async () => {
     // STEP 1: Initialize participation with XID
-    const { body, cookies, status} = await initializeParticipantWithXid(conversationZinvite, testXid);
+    const { body, cookies, status } = await initializeParticipantWithXid(conversationZinvite, testXid);
 
     expect(status).toBe(200);
     expect(cookies).toBeDefined();

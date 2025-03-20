@@ -19,7 +19,8 @@ import {
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
 // Constants
-const NUM_COMMENTS = 5; // Total number of comments to create
+const NUM_COMMENTS = 8; // Total number of comments to create
+const VOTE_DELAY = 1000; // Delay between voting on comments in milliseconds
 
 describe('Comment Repetition Bug Test', () => {
   // Test state
@@ -70,9 +71,6 @@ describe('Comment Repetition Bug Test', () => {
       if (i % 5 === 0 || i === NUM_COMMENTS - 1) {
         console.log(`Created ${i + 1} of ${NUM_COMMENTS} comments`);
       }
-
-      // Add a small delay between comment creation to avoid rate limiting
-      await wait(200);
     }
 
     console.log(`Created ${NUM_COMMENTS} total comments for the test conversation`);
@@ -149,7 +147,7 @@ describe('Comment Repetition Bug Test', () => {
         }
 
         // Add a small delay to avoid rate limiting
-        await wait(1000);
+        await wait(VOTE_DELAY);
       }
 
       // STEP 3: Analyze results

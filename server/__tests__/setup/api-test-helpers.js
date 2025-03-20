@@ -20,7 +20,7 @@ const API_PREFIX = '/api/v3';
  * Helper function to make HTTP requests that can handle both JSON and text responses
  * This is needed because the legacy server sometimes sends text responses with JSON content-type
  */
-async function makeRequest(method, path, data = null, cookies = null) {
+async function makeRequest(method, path, data = null, token = null) {
   const options = {
     hostname: 'localhost',
     port: API_PORT,
@@ -31,17 +31,18 @@ async function makeRequest(method, path, data = null, cookies = null) {
     }
   };
 
-  // Add cookies if provided
-  if (cookies) {
-    // Handle both array and string cookie formats
-    let cookieStr = '';
-    if (Array.isArray(cookies)) {
-      cookieStr = cookies.map((cookie) => cookie.split(';')[0]).join('; ');
-    } else if (typeof cookies === 'string') {
-      cookieStr = cookies.split(';')[0];
-    }
-    if (cookieStr) {
-      options.headers.Cookie = cookieStr;
+  // Use attachAuthToken's logic for handling auth tokens
+  if (token) {
+    if (Array.isArray(token)) {
+      // This is cookie array
+      const cookieValues = token.map((cookie) => cookie.split(';')[0]);
+      options.headers.Cookie = cookieValues.join('; ');
+    } else if (typeof token === 'string' && (token.includes(';') || token.startsWith('token2='))) {
+      // This is likely a cookie string
+      options.headers.Cookie = token;
+    } else {
+      // This is likely a token for the x-polis header
+      options.headers['x-polis'] = token;
     }
   }
 
@@ -62,7 +63,6 @@ async function makeRequest(method, path, data = null, cookies = null) {
           }
         } catch (e) {
           // Keep as text if JSON parsing fails
-          console.warn('Failed to parse JSON response:', e.message);
         }
         resolve({
           status: res.statusCode,
@@ -74,17 +74,8 @@ async function makeRequest(method, path, data = null, cookies = null) {
     });
 
     req.on('error', (error) => {
-      // For connection resets and timeouts, return a 500 response
-      if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
-        resolve({
-          status: 500,
-          headers: {},
-          body: { error: error.message },
-          text: error.message
-        });
-      } else {
-        reject(error);
-      }
+      console.error('request error', error);
+      reject(error);
     });
 
     if (data) {
@@ -238,6 +229,8 @@ async function createTestConversation(authToken, options = {}) {
   // Handle both legacy and new response formats
   const zid = response.body.zid || response.body.conversation_id;
 
+  await wait(1000); // Wait for conversation to be created
+
   return {
     zid,
     zinvite: zinvite
@@ -274,8 +267,7 @@ async function createTestComment(authToken, conversationId, options = {}) {
 
   const commentId = response.body.tid;
 
-  // Wait a moment to ensure the comment is processed
-  await wait(1000);
+  await wait(1000); // Wait for comment to be created
 
   return commentId;
 }
@@ -381,6 +373,8 @@ async function registerAndLoginUser(userData) {
   expect(registerResponse.status).toBe(200);
   const userId = registerResponse.body?.uid;
 
+  await wait(1000); // Wait for registration to complete
+
   // Login with the user
   const loginResponse = await request(API_URL).post(`${API_PREFIX}/auth/login`).send({
     email: userData.email,
@@ -390,14 +384,7 @@ async function registerAndLoginUser(userData) {
   expect(loginResponse.status).toBe(200);
 
   // Extract auth token from response
-  let authToken = null;
-  if (loginResponse.headers['x-polis']) {
-    authToken = loginResponse.headers['x-polis'];
-  } else if (loginResponse.body?.token) {
-    authToken = loginResponse.body.token;
-  } else if (loginResponse.headers['set-cookie']) {
-    authToken = loginResponse.headers['set-cookie'];
-  }
+  const authToken = loginResponse.headers['x-polis'];
 
   return {
     authToken,
@@ -445,12 +432,6 @@ async function getMyVotes(authToken, zinvite) {
       authToken
     );
 
-    // Note: This endpoint might return a 500 error with 'polis_err_get_votes_by_me'
-    if (response.status === 500 && response.body?.error === 'polis_err_get_votes_by_me') {
-      console.warn('Warning: votes/me endpoint returned an error. This may be expected behavior.');
-      return [];
-    }
-
     if (response.status !== 200) {
       throw new Error(`Failed to get my votes: ${response.status} ${JSON.stringify(response.body)}`);
     }
@@ -496,6 +477,8 @@ async function submitVote(options, authToken) {
     const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/votes`), authToken).send(voteData);
 
     const cookies = response.headers['set-cookie'] || [];
+
+    await wait(1000); // Wait for vote to be processed
 
     return {
       cookies,

@@ -9,8 +9,7 @@ import {
   getMyVotes,
   getVotes,
   initializeParticipant,
-  submitVote,
-  wait
+  submitVote
 } from '../setup/api-test-helpers.js';
 import { rollbackTransaction, startTransaction } from '../setup/db-test-helpers.js';
 
@@ -102,9 +101,6 @@ describe('Vote Endpoints', () => {
     expect(commentId).toBeDefined();
     await createTestComment(ownerAuthToken, conversationZinvite);
     await createTestComment(ownerAuthToken, conversationZinvite);
-
-    // Wait for all setup operations to complete
-    await wait(1000);
   }, 30000); // Increase timeout for setup
 
   test('Vote lifecycle for authenticated user', async () => {
@@ -123,8 +119,6 @@ describe('Vote Endpoints', () => {
     const { currentPid, nextComment } = voteResponse.body;
     expect(nextComment).toBeDefined();
     expect(currentPid).toBeDefined();
-
-    await wait(1000); // Wait for vote to be processed
 
     // STEP 2: Verify vote appears in voter's votes
     // NOTE: The legacy implementation returns an empty array.
@@ -161,8 +155,6 @@ describe('Vote Endpoints', () => {
     const { currentPid, nextComment } = voteResponse.body;
     expect(currentPid).toBeDefined();
     expect(nextComment).toBeDefined();
-
-    await wait(1000); // Wait for vote to be processed
 
     // STEP 3: Verify anonymous vote appears in conversation votes
     const votes = await getVotes(cookies, conversationZinvite, currentPid);
@@ -216,7 +208,10 @@ describe('Vote Endpoints', () => {
     expect(invalidVoteBody).toStrictEqual({});
 
     // Test missing required fields
-    const missingFieldsResponse = await request(API_URL).post(`${API_PREFIX}/votes`).set('x-polis', voterAuthToken).send({});
+    const missingFieldsResponse = await request(API_URL)
+      .post(`${API_PREFIX}/votes`)
+      .set('x-polis', voterAuthToken)
+      .send({});
     const { body: missingFieldsBody, status: missingFieldsStatus } = missingFieldsResponse;
     // Note: The legacy implementation returns a 400 status with an empty body.
     expect(missingFieldsStatus).toBe(400);
@@ -238,8 +233,6 @@ describe('Vote Endpoints', () => {
     const { currentPid } = initialVoteBody;
     expect(currentPid).toBeDefined();
 
-    await wait(1000);
-
     // STEP 2: Change vote
     const { status: changedVoteStatus } = await submitVote(
       {
@@ -250,8 +243,6 @@ describe('Vote Endpoints', () => {
       voterAuthToken
     );
     expect(changedVoteStatus).toBe(200);
-
-    await wait(1000);
 
     // STEP 3: Verify vote was changed
     const myVotes = await getVotes(voterAuthToken, conversationZinvite, currentPid);
