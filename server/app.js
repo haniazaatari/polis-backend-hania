@@ -1,5 +1,3 @@
-import bodyParser from 'body-parser';
-import cookieParser from 'cookie-parser';
 import express from 'express';
 import morgan from 'morgan';
 import Config from './src/config.js';
@@ -26,9 +24,9 @@ const app = express();
 initializeErrorHandlers();
 
 app.use(morgan('dev'));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.cookieParser());
 app.set('trust proxy', 'uniquelocal');
 
 // Initialize the application (no need to wait for the return value)
