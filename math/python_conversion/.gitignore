@@ -11,6 +11,7 @@ build/
 
 # Virtual environments
 polis_env/
+new_polis_env/
 venv/
 ENV/
 env/

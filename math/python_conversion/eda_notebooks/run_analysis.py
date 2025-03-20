@@ -5,6 +5,7 @@ This script implements the same analysis as the notebook to verify functionality
 
 import os
 import sys
+import importlib.util
 import pandas as pd
 import numpy as np
 import json
@@ -12,6 +13,36 @@ from pathlib import Path
 
 # Add the parent directory to the path to import the polismath modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+def check_environment():
+    """Check if the required packages are installed and the environment is set up correctly."""
+    required_packages = [
+        'pandas', 'numpy', 'matplotlib', 'seaborn'
+    ]
+    
+    missing_packages = []
+    for package in required_packages:
+        if importlib.util.find_spec(package) is None:
+            missing_packages.append(package)
+    
+    if missing_packages:
+        print(f"Missing required packages: {', '.join(missing_packages)}")
+        print("Please install them using pip install <package_name>")
+        return False
+    
+    # Check if the polismath package is available
+    try:
+        # Try importing key polismath modules
+        from polismath.conversation.conversation import Conversation
+        from polismath.math.named_matrix import NamedMatrix
+        from polismath.math.pca import pca_project_named_matrix
+        
+        print("Polismath modules imported successfully")
+        return True
+    except ImportError as e:
+        print(f"Error importing polismath modules: {e}")
+        print("Make sure you've installed the package using 'pip install -e .' from the python_conversion directory")
+        return False
 
 # Import polismath modules
 from polismath.conversation.conversation import Conversation
@@ -227,4 +258,10 @@ def main():
     print(f"Analysis complete. Results saved to {output_dir}/")
 
 if __name__ == "__main__":
-    main()
+    # Check for command line arguments
+    if len(sys.argv) > 1 and sys.argv[1] == "--check":
+        # Just check the environment and exit
+        sys.exit(0 if check_environment() else 1)
+    else:
+        # Run the full analysis
+        main()
