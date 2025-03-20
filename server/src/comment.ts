@@ -1,5 +1,5 @@
 import _ from "underscore";
-import Translate from "@google-cloud/translate";
+const { Translate } = require("@google-cloud/translate").v2;
 
 import pg from "./db/pg-query";
 import SQL from "./db/sql";
@@ -27,7 +27,7 @@ type Docs = {
 };
 
 const useTranslateApi: boolean = Config.shouldUseTranslationAPI;
-const translateClient = useTranslateApi ? Translate() : null;
+const translateClient = useTranslateApi ? new Translate() : null;
 
 function getComment(zid: Id, tid: Id) {
   return (

@@ -26,17 +26,18 @@
 
 services:
   server:
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_SSL=${DATABASE_SSL}
     env_file:
       - ${SERVER_ENV_FILE:-.env}
-    image: docker.io/compdem/polis-server:${TAG:-dev}
+    image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis/server:latest
     build:
       context: ./server
       dockerfile: Dockerfile
       target: prod
       args:
         NODE_ENV: production
-      labels:
-        polis_tag: ${TAG:-dev}
     depends_on:
       - "file-server"
     networks:
@@ -48,11 +49,9 @@ services:
       - server-logs:/app/logs
 
   math:
-    image: docker.io/compdem/polis-math:${TAG:-dev}
+    image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis/math:latest
     build:
       context: ./math
-      labels:
-        polis_tag: ${TAG:-dev}
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - LOGGING_LEVEL=${MATH_LOG_LEVEL:-warn}
@@ -116,6 +115,18 @@ services:
       - PORT=${STATIC_FILES_PORT:-8080}
     networks:
       - "polis-net"
+
+  dynamodb:
+    image: amazon/dynamodb-local
+    container_name: polis-dynamodb
+    ports:
+      - "8000:8000"
+    networks:
+      - "polis-net"
+    # Running DynamoDB in memory for ephemeral storage (no persistence)
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
+    labels:
+      polis_tag: ${TAG:-dev}
 
 networks:
   polis-net:
