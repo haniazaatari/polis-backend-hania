@@ -1,10 +1,13 @@
-import { Pool } from 'pg';
-import { parse as parsePgConnectionString } from 'pg-connection-string';
+import pg from 'pg';
+import pgConnectionString from 'pg-connection-string';
 import QueryStream from 'pg-query-stream';
 import { isFunction, isString, isUndefined } from 'underscore';
 import Config from '../config.js';
 import logger from '../utils/logger.js';
 import { MPromise } from '../utils/metered.js';
+
+const { Pool } = pg;
+const { parse: parsePgConnectionString } = pgConnectionString;
 const usingReplica = Config.databaseURL !== Config.readOnlyDatabaseURL;
 const poolSize = Config.isDevMode ? 2 : usingReplica ? 3 : 12;
 const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), {
@@ -49,6 +52,7 @@ function queryImpl(pool, queryString, ...args) {
   } else {
     throw 'unexpected db query syntax';
   }
+
   return new Promise((resolve, reject) => {
     pool.connect((err, client, release) => {
       if (err) {
