@@ -4,8 +4,35 @@ import BluebirdPromise from 'bluebird';
 import express from 'express';
 import morgan from 'morgan';
 import Config from './src/config.js';
+import { handle_GET_conversationUuid } from './src/routes/conversationUuid.js';
+import { handle_GET_xidReport } from './src/routes/export.js';
 import server from './src/server.js';
 import logger from './src/utils/logger.js';
+import {
+  assignToP,
+  assignToPCustom,
+  getArrayOfInt,
+  getArrayOfStringNonEmpty,
+  getArrayOfStringNonEmptyLimitLength,
+  getBool,
+  getConversationIdFetchZid,
+  getEmail,
+  getInt,
+  getIntInRange,
+  getNumberInRange,
+  getOptionalStringLimitLength,
+  getPassword,
+  getPasswordWithCreatePasswordRules,
+  getReportIdFetchRid,
+  getStringLimitLength,
+  getUrlLimitLength,
+  moveToBody,
+  need,
+  resolve_pidThing,
+  want,
+  wantCookie,
+  wantHeader
+} from './src/utils/parameter.js';
 const app = express();
 app.use(morgan('dev'));
 app.set('trust proxy', 'uniquelocal');
@@ -67,7 +94,6 @@ helpersInitialized.then(
       handle_GET_domainWhitelist,
       handle_GET_dummyButton,
       handle_GET_einvites,
-      handle_GET_facebook_delete,
       handle_GET_groupDemographics,
       handle_GET_iim_conversation,
       handle_GET_iip_conversation,
@@ -93,10 +119,6 @@ helpersInitialized.then(
       handle_GET_testConnection,
       handle_GET_testDatabase,
       handle_GET_tryCookie,
-      handle_GET_twitter_image,
-      handle_GET_twitter_oauth_callback,
-      handle_GET_twitter_users,
-      handle_GET_twitterBtn,
       handle_GET_users,
       handle_GET_verification,
       handle_GET_votes,
@@ -105,7 +127,6 @@ helpersInitialized.then(
       handle_GET_xids,
       handle_GET_zinvites,
       handle_POST_auth_deregister,
-      handle_POST_auth_facebook,
       handle_POST_auth_login,
       handle_POST_auth_new,
       handle_POST_auth_password,
@@ -148,31 +169,6 @@ helpersInitialized.then(
       handle_PUT_reports,
       handle_PUT_users
     } = o;
-    const {
-      assignToP,
-      assignToPCustom,
-      getArrayOfInt,
-      getArrayOfStringNonEmpty,
-      getArrayOfStringNonEmptyLimitLength,
-      getBool,
-      getConversationIdFetchZid,
-      getEmail,
-      getInt,
-      getIntInRange,
-      getNumberInRange,
-      getOptionalStringLimitLength,
-      getPassword,
-      getPasswordWithCreatePasswordRules,
-      getReportIdFetchRid,
-      getStringLimitLength,
-      getUrlLimitLength,
-      moveToBody,
-      need,
-      resolve_pidThing,
-      want,
-      wantCookie,
-      wantHeader
-    } = require('./src/utils/parameter');
     app.disable('x-powered-by');
     app.use(middleware_responseTime_start);
     app.use(redirectIfNotHttps);
@@ -429,23 +425,6 @@ helpersInitialized.then(
       need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
       handle_GET_snapshot
     );
-    app.get('/api/v3/facebook/delete', moveToBody, auth(assignToP), handle_GET_facebook_delete);
-    app.post(
-      '/api/v3/auth/facebook',
-      enableAgid,
-      authOptional(assignToP),
-      want('fb_granted_scopes', getStringLimitLength(1, 9999), assignToP),
-      want('fb_friends_response', getStringLimitLength(1, 99999), assignToP),
-      want('fb_public_profile', getStringLimitLength(1, 99999), assignToP),
-      want('fb_email', getEmail, assignToP),
-      want('hname', getOptionalStringLimitLength(9999), assignToP),
-      want('provided_email', getEmail, assignToP),
-      want('conversation_id', getOptionalStringLimitLength(999), assignToP),
-      want('password', getPassword, assignToP),
-      need('response', getStringLimitLength(1, 9999), assignToP),
-      want('owner', getBool, assignToP, true),
-      handle_POST_auth_facebook
-    );
     app.post(
       '/api/v3/auth/new',
       want('anon', getBool, assignToP),
@@ -509,8 +488,6 @@ helpersInitialized.then(
       need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
       want('txt', getOptionalStringLimitLength(997), assignToP),
       want('vote', getIntInRange(-1, 1), assignToP),
-      want('twitter_tweet_id', getStringLimitLength(999), assignToP),
-      want('quote_twitter_screen_name', getStringLimitLength(999), assignToP),
       want('quote_txt', getStringLimitLength(999), assignToP),
       want('quote_src_url', getUrlLimitLength(999), assignToP),
       want('anon', getBool, assignToP),
@@ -897,25 +874,6 @@ helpersInitialized.then(
       handle_POST_sendCreatedLinkToEmail
     );
     app.get(
-      '/api/v3/twitterBtn',
-      moveToBody,
-      authOptional(assignToP),
-      want('dest', getStringLimitLength(9999), assignToP),
-      want('owner', getBool, assignToP, true),
-      handle_GET_twitterBtn
-    );
-    app.get(
-      '/api/v3/twitter_oauth_callback',
-      moveToBody,
-      enableAgid,
-      auth(assignToP),
-      need('dest', getStringLimitLength(9999), assignToP),
-      need('oauth_token', getStringLimitLength(9999), assignToP),
-      need('oauth_verifier', getStringLimitLength(9999), assignToP),
-      want('owner', getBool, assignToP, true),
-      handle_GET_twitter_oauth_callback
-    );
-    app.get(
       '/api/v3/locations',
       moveToBody,
       authOptional(assignToP),
@@ -949,13 +907,6 @@ helpersInitialized.then(
       want('math_tick', getInt, assignToP, -1),
       want('ptptoiLimit', getIntInRange(0, 99), assignToP),
       handle_GET_votes_famous
-    );
-    app.get(
-      '/api/v3/twitter_users',
-      moveToBody,
-      authOptional(assignToP),
-      want('twitter_user_id', getInt, assignToP),
-      handle_GET_twitter_users
     );
     app.post('/api/v3/einvites', need('email', getEmail, assignToP), handle_POST_einvites);
     app.get(
@@ -1015,7 +966,6 @@ helpersInitialized.then(
       need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
       handle_GET_iim_conversation
     );
-    app.get('/twitter_image', moveToBody, need('id', getStringLimitLength(999), assignToP), handle_GET_twitter_image);
     app.get(
       '/api/v3/launchPrep',
       moveToBody,
@@ -1140,12 +1090,6 @@ helpersInitialized.then(
         'Content-Type': 'text/html'
       })
     );
-    app.get(
-      /^\/twitterAuthReturn(\/.*)?$/,
-      makeFileFetcher(hostname, staticFilesParticipationPort, '/twitterAuthReturn.html', {
-        'Content-Type': 'text/html'
-      })
-    );
     app.get('/', handle_GET_conditionalIndexFetcher);
     app.get(/^\/cached\/.*/, proxy);
     app.get(/^\/font\/.*/, proxy);
@@ -1168,13 +1112,13 @@ helpersInitialized.then(
     const missingFilesGet404 = false;
     if (missingFilesGet404) {
       app.get(
-        /^\/[^(api/)]?.*/,
+        /^\/[^(api\/)]?.*/,
         makeFileFetcher(hostname, staticFilesAdminPort, '/404.html', {
           'Content-Type': 'text/html'
         })
       );
     } else {
-      app.get(/^\/[^(api/)]?.*/, proxy);
+      app.get(/^\/[^(api\/)]?.*/, proxy);
     }
     app.listen(Config.serverPort);
     logger.info(`started on port ${Config.serverPort}`);
