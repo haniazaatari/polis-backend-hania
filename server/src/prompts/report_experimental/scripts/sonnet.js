@@ -1,12 +1,13 @@
 import fs from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { parse } from 'csv-parse/sync';
-import { convertXML } from 'simple-xml-to-json';
+import convertXMLpkg from 'simple-xml-to-json';
 import { create } from 'xmlbuilder2';
 import logger from '../../../utils/logger.js';
 
-const js2xmlparser = require('js2xmlparser');
+const js2xmlparser = await import('js2xmlparser');
 const report_id = process.argv[2];
+const { convertXML } = convertXMLpkg;
 
 // Convert class with static methods to exported functions
 export function convertToXml(csvContent) {

@@ -1,6 +1,6 @@
-import { GoogleAIModel } from '@tevko/sensemaking-tools/src/models/aiStudio_model';
-import { Sensemaker } from '@tevko/sensemaking-tools/src/sensemaker';
-import { VoteTally } from '@tevko/sensemaking-tools/src/types';
+import { GoogleAIModel } from '@tevko/sensemaking-tools/src/models/aiStudio_model.js';
+import { Sensemaker } from '@tevko/sensemaking-tools/src/sensemaker.js';
+import { VoteTally } from '@tevko/sensemaking-tools/src/types.js';
 import { parse } from 'csv-parse';
 import config from '../../config.js';
 import { sendCommentGroupsSummary } from '../../routes/export.js';

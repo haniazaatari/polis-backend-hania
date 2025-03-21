@@ -1,4 +1,4 @@
-import { v2 } from '@google-cloud/translate';
+import translatePkg from '@google-cloud/translate';
 import _ from 'underscore';
 import Config from './config.js';
 import Conversation from './conversation.js';
@@ -6,7 +6,7 @@ import pg from './db/pg-query.js';
 import SQL from './db/sql.js';
 import Utils from './utils/common.js';
 import { MPromise } from './utils/metered.js';
-const { Translate } = v2;
+const { v2: Translate } = translatePkg;
 const useTranslateApi = Config.shouldUseTranslationAPI;
 const translateClient = useTranslateApi ? new Translate() : null;
 function getComment(zid, tid) {

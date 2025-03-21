@@ -2,9 +2,9 @@ import crypto from 'node:crypto';
 import akismetLib from 'akismet';
 import async from 'async';
 import AWS from 'aws-sdk';
-import badwords from 'badwords/object';
+import badwords from 'badwords/object.js';
 import bcrypt from 'bcryptjs';
-import { Promise as BluebirdPromise } from 'bluebird';
+import BluebirdPromise from 'bluebird';
 import timeout from 'connect-timeout';
 import FB from 'fb';
 import { google } from 'googleapis';
@@ -573,8 +573,6 @@ function initializePolisHelpers() {
     'localhost:5000',
     'localhost:5001',
     'localhost:5010',
-    'facebook.com',
-    'api.twitter.com',
     ''
   ];
   function hasWhitelistMatches(host) {

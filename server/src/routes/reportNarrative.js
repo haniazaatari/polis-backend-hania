@@ -4,17 +4,17 @@ import { countTokens } from '@anthropic-ai/tokenizer';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { parse } from 'csv-parse/sync';
 import OpenAI from 'openai';
-import { convertXML } from 'simple-xml-to-json';
+import convertXMLpkg from 'simple-xml-to-json';
 import { create } from 'xmlbuilder2';
 import config from '../config.js';
-import { getTopicsFromRID } from '../report_experimental/topics-example.js';
+import { getTopicsFromRID } from '../report_experimental/topics-example/index.js';
 import fail from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import DynamoStorageService from '../utils/storage.js';
 import { getZidForRid } from '../utils/zinvite.js';
 import { sendCommentGroupsSummary } from './export.js';
-const js2xmlparser = require('js2xmlparser');
-
+const js2xmlparser = await import('js2xmlparser');
+const { convertXML } = convertXMLpkg;
 export function convertToXml(csvContent) {
   const records = parse(csvContent, {
     columns: true,
