@@ -10,8 +10,7 @@ import {
 } from '../db/pg-query.js';
 import logger from '../utils/logger.js';
 import { MPromise } from './metered.js';
-
-const serverUrl = Config.getServerNameWithProtocol();
+const serverUrl = Config.getServerUrl();
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
 const akismet = akismetLib.client({
   blog: serverUrl,
@@ -78,11 +77,10 @@ polisTypes.reactionValues = _.values(polisTypes.reactions);
 polisTypes.starValues = _.values(polisTypes.staractions);
 function isConversationOwner(zid, uid, callback) {
   pgQuery_readOnly('SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);', [zid, uid], (err, docs) => {
-    let resultError = err;
     if (!docs || !docs.rows || docs.rows.length === 0) {
-      resultError = resultError || 1;
+      err = err || 1;
     }
-    callback?.(resultError);
+    callback?.(err);
   });
 }
 function isModerator(zid, uid) {

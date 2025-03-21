@@ -9,13 +9,12 @@ import SQL from '../db/sql.js';
 import { isDuplicateKey } from '../utils/common.js';
 import logger from '../utils/logger.js';
 import { MPromise } from '../utils/metered.js';
-
 const isXidWhitelisted = Conversation.isXidWhitelisted;
 const sql_votes_latest_unique = SQL.sql_votes_latest_unique;
 function doVotesPost(_uid, pid, conv, tid, voteType, weight, high_priority) {
   const zid = conv?.zid;
-  const effectiveWeight = weight || 0;
-  const weight_x_32767 = Math.trunc(effectiveWeight * 32767);
+  weight = weight || 0;
+  const weight_x_32767 = Math.trunc(weight * 32767);
   return new Promise((resolve, reject) => {
     const query =
       'INSERT INTO votes (pid, zid, tid, vote, weight_x_32767, high_priority, created) VALUES ($1, $2, $3, $4, $5, $6, default) RETURNING *;';
@@ -53,6 +52,7 @@ function votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
           if (is_whitelisted) {
             return conv;
           }
+
           throw 'polis_err_xid_not_whitelisted';
         });
       }

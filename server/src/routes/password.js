@@ -40,10 +40,9 @@ ${serverName}/pwreset/${pwresettoken}
       });
   });
 }
-
 function getUidByEmail(email) {
-  const lowercasedEmail = email.toLowerCase();
-  return pgQueryP_readOnly('SELECT uid FROM users where LOWER(email) = ($1);', [lowercasedEmail]).then((rows) => {
+  email = email.toLowerCase();
+  return pgQueryP_readOnly('SELECT uid FROM users where LOWER(email) = ($1);', [email]).then((rows) => {
     if (!rows || !rows.length) {
       throw new Error('polis_err_no_user_matching_email');
     }
@@ -66,7 +65,7 @@ function handle_POST_auth_password(req, res) {
           'do update set pwhash = excluded.pwhash;',
         [uid, hashedPassword]
       ).then(
-        () => {
+        (_rows) => {
           res.status(200).json('Password reset successful.');
           clearPwResetToken(pwresettoken, (err) => {
             if (err) {
@@ -83,7 +82,7 @@ function handle_POST_auth_password(req, res) {
 }
 function handle_POST_auth_pwresettoken(req, res) {
   const email = req.p.email;
-  const server = getServerNameWithProtocol();
+  const server = getServerNameWithProtocol(req);
   cookies.clearCookies(req, res);
   function finish() {
     res.status(200).json('Password reset email sent, please check your email.');
@@ -106,7 +105,6 @@ function handle_POST_auth_pwresettoken(req, res) {
     }
   );
 }
-
 function sendPasswordResetEmailFailure(email, server) {
   const body = `We were unable to find a pol.is account registered with the email address: ${email}
 
@@ -115,8 +113,6 @@ You may have used another email address to create your account.
 If you need to create a new account, you can do that here ${server}/home
 
 Feel free to reply to this email if you need help.`;
-
   return sendTextEmail(polisFromAddress, email, 'Password Reset Failed', body);
 }
-
 export { handle_POST_auth_password, handle_POST_auth_pwresettoken };

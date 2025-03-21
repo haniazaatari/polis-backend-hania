@@ -7,7 +7,7 @@ import Utils from '../utils/common.js';
 import cookies from '../utils/cookies.js';
 import fail from '../utils/fail.js';
 import Password from './password.js';
-
+const _COOKIES = cookies.COOKIES;
 const sendTextEmail = emailSenders.sendTextEmail;
 function createUser(req, res) {
   const hname = req.p.hname;
@@ -114,8 +114,8 @@ function doSendVerification(req, email) {
       .then((_rows) => sendVerificationEmail(req, email, einvite))
   );
 }
-function sendVerificationEmail(_req, email, einvite) {
-  const serverName = Config.getServerNameWithProtocol();
+function sendVerificationEmail(req, email, einvite) {
+  const serverName = Config.getServerNameWithProtocol(req);
   const body = `Welcome to pol.is!
 
 Click this link to verify your email address:
@@ -127,9 +127,12 @@ function decodeParams(encodedStringifiedJson) {
   if (typeof encodedStringifiedJson === 'string' && !encodedStringifiedJson.match(/^\/?ep1_/)) {
     throw new Error('wrong encoded params prefix');
   }
-  const slicedJson =
-    encodedStringifiedJson[0] === '/' ? encodedStringifiedJson.slice(5) : encodedStringifiedJson.slice(4);
-  const stringifiedJson = Utils.hexToStr(slicedJson);
+  if (encodedStringifiedJson[0] === '/') {
+    encodedStringifiedJson = encodedStringifiedJson.slice(5);
+  } else {
+    encodedStringifiedJson = encodedStringifiedJson.slice(4);
+  }
+  const stringifiedJson = Utils.hexToStr(encodedStringifiedJson);
   const o = JSON.parse(stringifiedJson);
   return o;
 }
@@ -141,7 +144,7 @@ function generateAndRegisterZinvite(zid, generateShort) {
   return Password.generateTokenP(len, false).then((zinvite) =>
     pg
       .queryP('INSERT INTO zinvites (zid, zinvite, created) VALUES ($1, $2, default);', [zid, zinvite])
-      .then(() => zinvite)
+      .then((_rows) => zinvite)
   );
 }
 export { createUser, doSendVerification, generateAndRegisterZinvite };

@@ -39,23 +39,10 @@ async function getUser(uid, zid_optional, xid_optional, owner_uid_optional) {
   } else if (xid_optional && owner_uid_optional) {
     xidInfoPromise = Conversation.getXidRecordByXidOwnerId(xid_optional, owner_uid_optional, zid_optional);
   }
-  const o = await Promise.all([getUserInfoForUid2(uid), getFacebookInfo([uid]), getTwitterInfo([uid]), xidInfoPromise]);
+  const o = await Promise.all([getUserInfoForUid2(uid), xidInfoPromise]);
   const info = o[0];
-  const fbInfo = o[1];
-  const twInfo = o[2];
-  const xInfo = o[3];
-  const hasFacebook = fbInfo?.length && fbInfo[0];
-  const hasTwitter = twInfo?.length && twInfo[0];
+  const xInfo = o[1];
   const hasXid = xInfo?.length && xInfo[0];
-  if (hasFacebook) {
-    const width = 40;
-    const height = 40;
-    fbInfo.fb_picture = `https://graph.facebook.com/v2.2/${fbInfo.fb_user_id}/picture?width=${width}&height=${height}`;
-    fbInfo[0].response = undefined;
-  }
-  if (hasTwitter) {
-    twInfo[0].response = undefined;
-  }
   if (hasXid) {
     xInfo[0].owner = undefined;
     xInfo[0].created = undefined;
@@ -65,22 +52,12 @@ async function getUser(uid, zid_optional, xid_optional, owner_uid_optional) {
     uid: uid,
     email: info.email,
     hname: info.hname,
-    hasFacebook: !!hasFacebook,
-    facebook: fbInfo?.[0],
-    twitter: twInfo?.[0],
-    hasTwitter: !!hasTwitter,
     hasXid: !!hasXid,
     xInfo: xInfo?.[0],
     finishedTutorial: !!info.tut,
     site_ids: [info.site_id],
     created: Number(info.created)
   };
-}
-function getTwitterInfo(uids) {
-  return pg.queryP_readOnly('select * from twitter_users where uid in ($1);', uids);
-}
-function getFacebookInfo(uids) {
-  return pg.queryP_readOnly('select * from facebook_users where uid in ($1);', uids);
 }
 function createDummyUser() {
   return new MPromise('createDummyUser', (resolve, reject) => {

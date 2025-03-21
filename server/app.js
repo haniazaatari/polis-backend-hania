@@ -48,7 +48,6 @@ helpersInitialized.then(
       COOKIES,
       denyIfNotFromWhitelistedDomain,
       devMode,
-      enableAgid,
       fetchThirdPartyCookieTestPt1,
       fetchThirdPartyCookieTestPt2,
       fetchIndexForAdminPage,
