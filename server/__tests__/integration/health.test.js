@@ -3,7 +3,6 @@ import request from 'supertest';
 import { API_PREFIX, API_URL } from '../setup/api-test-helpers.js';
 
 describe('Health Check Endpoints', () => {
-
   describe('GET /testConnection', () => {
     test('should return 200 OK', async () => {
       const response = await request(API_URL).get(`${API_PREFIX}/testConnection`);

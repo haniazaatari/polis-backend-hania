@@ -29,6 +29,12 @@ npm run test:unit
 npm run test:integration
 ```
 
+### Feature Tests Only
+
+```bash
+npm run test:feature
+```
+
 ### Run Specific Tests
 
 ```bash
