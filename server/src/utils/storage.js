@@ -1,7 +1,7 @@
 import { CreateTableCommand, DeleteItemCommand, DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DeleteCommand, PutCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
-import config from '../config';
-import logger from './logger';
+import config from '../config.js';
+import logger from './logger.js';
 
 export default class DynamoStorageService {
   client;

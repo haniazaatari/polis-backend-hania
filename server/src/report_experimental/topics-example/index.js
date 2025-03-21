@@ -2,9 +2,9 @@ import { GoogleAIModel } from '@tevko/sensemaking-tools/src/models/aiStudio_mode
 import { Sensemaker } from '@tevko/sensemaking-tools/src/sensemaker';
 import { VoteTally } from '@tevko/sensemaking-tools/src/types';
 import { parse } from 'csv-parse';
-import config from '../../config';
-import { sendCommentGroupsSummary } from '../../routes/export';
-import logger from '../../utils/logger';
+import config from '../../config.js';
+import { sendCommentGroupsSummary } from '../../routes/export.js';
+import logger from '../../utils/logger.js';
 
 async function parseCsvString(csvString) {
   return new Promise((resolve, reject) => {

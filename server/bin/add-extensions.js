@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import { glob } from 'glob';
 
 async function addExtensions() {
-  const files = await glob('src-ts/**/*.ts');
+  const files = await glob(['src-ts/**/*.ts', 'app.js', 'src/**/*.js']);
 
   for (const file of files) {
     let content = await fs.readFile(file, 'utf8');
