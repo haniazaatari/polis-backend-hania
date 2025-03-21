@@ -63,6 +63,10 @@ RESET_DB_BEFORE_TESTS=true npm test
 
 ⚠️ **WARNING**: The `db:reset` script will delete ALL data in the database specified by `DATABASE_URL`.
 
+## Mailer Testing
+
+A maildev container is typically running (see `docker-compose.dev.yml`) and will capture emails sent during testing. You can view the emails at `http://localhost:1080` (SMTP port 1025).
+
 ## Test Safety Features
 
 The test environment includes this safety feature:

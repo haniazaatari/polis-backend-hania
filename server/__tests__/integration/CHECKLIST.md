@@ -35,8 +35,8 @@ This checklist tracks API endpoints and functional domains that should be tested
 
 - ✅ POST /conversations - Create conversation
 - ✅ GET /conversations - List conversations
-- ❌ GET /conversation/:conversation_id - Get conversation
-- ❌ PUT /conversations - Update conversation
+- ✅ GET /conversation/:conversation_id - Get conversation details
+- ✅ PUT /conversations - Update conversation
 - ❌ POST /conversation/close - Close conversation
 - ❌ POST /reserve_conversation_id - Reserve conversation ID
 

@@ -217,22 +217,18 @@ async function createTestConversation(authToken, options = {}) {
     requiredProperties: ['body.url']
   });
 
-  // Extract conversation zinvite from URL (needed for API calls)
-  const url = response.body.url;
-  const zinvite = url.split('/').pop();
+  const url = getResponseProperty(response, 'body.url');
+  const conversationId = getResponseProperty(response, 'body.conversation_id');
 
-  // Handle both legacy and new response formats
-  const zid = getResponseProperty(response, 'body.zid', getResponseProperty(response, 'body.conversation_id'));
-
-  if (zid === null) {
+  if (conversationId === null) {
     throw new Error('Conversation creation succeeded but no conversation ID was returned');
   }
 
   await wait(1000); // Wait for conversation to be created
 
   return {
-    zid,
-    zinvite: zinvite
+    conversationId,
+    url
   };
 }
 
@@ -511,15 +507,14 @@ async function setupAuthForTest(options = {}) {
 
   // Register and login
   const { authToken, userId } = await registerAndLoginUser(testUser);
-
   let conversationData = {};
 
   // Create test conversation if requested
   if (createConversation) {
-    const conversation = await createTestConversation(authToken, options.conversationOptions || {});
+    const { conversationId, url } = await createTestConversation(authToken, options.conversationOptions || {});
     conversationData = {
-      conversationId: conversation.zid,
-      conversationZinvite: conversation.zinvite
+      conversationZinvite: conversationId,
+      conversationUrl: url
     };
 
     // Create test comments if commentCount is specified
@@ -528,7 +523,7 @@ async function setupAuthForTest(options = {}) {
       for (let i = 0; i < options.commentCount; i++) {
         const commentId = await createTestComment(
           authToken,
-          conversation.zinvite,
+          conversationId,
           options.commentOptions || { txt: `Test comment ${i + 1}` }
         );
         commentIds.push(commentId);

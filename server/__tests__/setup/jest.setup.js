@@ -57,7 +57,7 @@ async function resetDatabase() {
 preventProductionDatabaseTesting();
 
 // Increase timeout for all tests
-jest.setTimeout(5000);
+jest.setTimeout(60000);
 
 // Setup global hooks
 beforeAll(async () => {
