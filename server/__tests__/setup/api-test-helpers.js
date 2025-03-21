@@ -1,10 +1,5 @@
 import http from 'http';
-import { expect } from '@jest/globals';
 import dotenv from 'dotenv';
-/**
- * Shared API test helper functions for Polis tests
- */
-import request from 'supertest';
 
 // Use { override: false } to prevent dotenv from overriding command-line env vars
 dotenv.config({ override: false });
@@ -213,19 +208,25 @@ async function createTestConversation(authToken, options = {}) {
     ...options
   };
 
-  const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/conversations`), authToken).send(
-    defaultOptions
-  );
+  const response = await makeRequest('POST', '/conversations', defaultOptions, authToken);
 
-  expect(response.status).toBe(200);
-  expect(response.body).toHaveProperty('url');
+  // Validate response
+  validateResponse(response, {
+    expectedStatus: 200,
+    errorPrefix: 'Failed to create conversation',
+    requiredProperties: ['body.url']
+  });
 
   // Extract conversation zinvite from URL (needed for API calls)
   const url = response.body.url;
   const zinvite = url.split('/').pop();
 
   // Handle both legacy and new response formats
-  const zid = response.body.zid || response.body.conversation_id;
+  const zid = getResponseProperty(response, 'body.zid', getResponseProperty(response, 'body.conversation_id'));
+
+  if (zid === null) {
+    throw new Error('Conversation creation succeeded but no conversation ID was returned');
+  }
 
   await wait(1000); // Wait for conversation to be created
 
@@ -256,15 +257,16 @@ async function createTestComment(authToken, conversationId, options = {}) {
     ...options
   };
 
-  const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/comments`), authToken).send(
-    defaultOptions
-  );
+  const response = await makeRequest('POST', '/comments', defaultOptions, authToken);
 
-  expect(response.status).toBe(200);
-  expect(response.body).toHaveProperty('tid');
+  // Validate response
+  validateResponse(response, {
+    expectedStatus: 200,
+    errorPrefix: 'Failed to create comment',
+    requiredProperties: ['body.tid']
+  });
 
   const commentId = response.body.tid;
-
   await wait(1000); // Wait for comment to be created
 
   return commentId;
@@ -361,28 +363,41 @@ async function initializeParticipantWithXid(conversationId, xid = null) {
  */
 async function registerAndLoginUser(userData) {
   // Register the user
-  const registerResponse = await request(API_URL)
-    .post(`${API_PREFIX}/auth/new`)
-    .send({
-      ...userData,
-      gatekeeperTosPrivacy: true
-    });
+  const registerResponse = await makeRequest('POST', '/auth/new', {
+    ...userData,
+    gatekeeperTosPrivacy: true
+  });
 
-  expect(registerResponse.status).toBe(200);
-  const userId = registerResponse.body?.uid;
+  // Validate registration response
+  validateResponse(registerResponse, {
+    expectedStatus: 200,
+    errorPrefix: 'Failed to register user',
+    requiredProperties: ['body.uid']
+  });
 
+  const userId = registerResponse.body.uid;
   await wait(1000); // Wait for registration to complete
 
   // Login with the user
-  const loginResponse = await request(API_URL).post(`${API_PREFIX}/auth/login`).send({
+  const loginResponse = await makeRequest('POST', '/auth/login', {
     email: userData.email,
     password: userData.password
   });
 
-  expect(loginResponse.status).toBe(200);
+  // Validate login response
+  validateResponse(loginResponse, {
+    expectedStatus: 200,
+    errorPrefix: 'Failed to login user'
+  });
 
   // Extract auth token from response
-  const authToken = loginResponse.headers['x-polis'];
+  const authToken =
+    loginResponse.headers['x-polis'] ||
+    (loginResponse.headers['set-cookie'] ? loginResponse.headers['set-cookie'] : null);
+
+  if (!authToken) {
+    throw new Error('Login succeeded but no authentication token was returned');
+  }
 
   return {
     authToken,
@@ -400,14 +415,13 @@ async function registerAndLoginUser(userData) {
 async function getVotes(authToken, zinvite, pid) {
   try {
     // Get votes for the conversation
-    const response = await attachAuthToken(
-      request(API_URL).get(`${API_PREFIX}/votes?conversation_id=${zinvite}&pid=${pid}`),
-      authToken
-    );
+    const response = await makeRequest('GET', `/votes?conversation_id=${zinvite}&pid=${pid}`, null, authToken);
 
-    if (response.status !== 200) {
-      throw new Error(`Failed to get votes: ${response.status} ${JSON.stringify(response.body)}`);
-    }
+    // Validate response
+    validateResponse(response, {
+      expectedStatus: 200,
+      errorPrefix: 'Failed to get votes'
+    });
 
     return response.body;
   } catch (error) {
@@ -425,14 +439,13 @@ async function getVotes(authToken, zinvite, pid) {
 async function getMyVotes(authToken, zinvite) {
   try {
     // Get votes for the participant
-    const response = await attachAuthToken(
-      request(API_URL).get(`${API_PREFIX}/votes/me?conversation_id=${zinvite}`),
-      authToken
-    );
+    const response = await makeRequest('GET', `/votes/me?conversation_id=${zinvite}`, null, authToken);
 
-    if (response.status !== 200) {
-      throw new Error(`Failed to get my votes: ${response.status} ${JSON.stringify(response.body)}`);
-    }
+    // Validate response
+    validateResponse(response, {
+      expectedStatus: 200,
+      errorPrefix: 'Failed to get my votes'
+    });
 
     // NOTE: This endpoint seems to return a 200 status with an empty array.
     return response.body;
@@ -444,11 +457,8 @@ async function getMyVotes(authToken, zinvite) {
 
 /**
  * Submits a vote for a comment
+ * @param {Object} options - Vote options (tid, conversation_id, vote, etc)
  * @param {Object} authToken - Authentication token for the request
- * @param {number} commentId - ID of the comment to vote on
- * @param {string} zinvite - Conversation invite code
- * @param {number} vote - Vote value (-1 for agree, 1 for disagree, 0 for pass)
- * @param {number} [pid] - Optional participant ID (if known)
  * @returns {Promise<Object>} - Response from the vote API
  */
 async function submitVote(options, authToken) {
@@ -471,15 +481,16 @@ async function submitVote(options, authToken) {
       options
     );
 
-    // Submit the vote
-    const response = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/votes`), authToken).send(voteData);
+    // Submit the vote using makeRequest instead of supertest
+    // This handles the content-type mismatch issues more gracefully
+    const response = await makeRequest('POST', '/votes', voteData, authToken);
 
-    const cookies = response.headers['set-cookie'] || [];
-
+    // Don't use validateResponse here as we want to handle multiple status codes
+    // Legacy server can return error responses that are also valid test outcomes
     await wait(1000); // Wait for vote to be processed
 
     return {
-      cookies,
+      cookies: response.headers['set-cookie'] || [],
       body: response.body,
       status: response.status
     };
@@ -532,6 +543,90 @@ async function setupAuthForTest(options = {}) {
     testUser,
     ...conversationData
   };
+}
+
+/**
+ * Utility function to safely check for response properties, handling falsy values correctly
+ * @param {Object} response - API response object
+ * @param {string} propertyPath - Dot-notation path to property (e.g., 'body.tid')
+ * @returns {boolean} - True if property exists and is not undefined/null
+ */
+function hasResponseProperty(response, propertyPath) {
+  if (!response) return false;
+
+  const parts = propertyPath.split('.');
+  let current = response;
+
+  for (const part of parts) {
+    // 0, false, and empty string are valid values
+    if (current[part] === undefined || current[part] === null) {
+      return false;
+    }
+    current = current[part];
+  }
+
+  return true;
+}
+
+/**
+ * Utility function to safely get response property value, with proper handling for IDs that might be 0
+ * @param {Object} response - API response object
+ * @param {string} propertyPath - Dot-notation path to property (e.g., 'body.tid')
+ * @param {*} defaultValue - Default value to return if property doesn't exist
+ * @returns {*} - Property value or default
+ */
+function getResponseProperty(response, propertyPath, defaultValue = null) {
+  if (!response) return defaultValue;
+
+  const parts = propertyPath.split('.');
+  let current = response;
+
+  for (const part of parts) {
+    // Check explicitly for undefined/null (not falsy check)
+    if (current[part] === undefined || current[part] === null) {
+      return defaultValue;
+    }
+    current = current[part];
+  }
+
+  return current;
+}
+
+/**
+ * Formats an error message from a response
+ * @param {Object} response - The API response
+ * @param {string} prefix - Error message prefix
+ * @returns {string} - Formatted error message
+ */
+function formatErrorMessage(response, prefix = 'API error') {
+  const errorMessage =
+    typeof response.body === 'string' ? response.body : response.text || JSON.stringify(response.body);
+  return `${prefix}: ${response.status} ${errorMessage}`;
+}
+
+/**
+ * Validates a response and throws an error if invalid
+ * @param {Object} response - The API response
+ * @param {Object} options - Validation options
+ * @returns {Object} - The response if valid
+ * @throws {Error} - If response is invalid
+ */
+function validateResponse(response, options = {}) {
+  const { expectedStatus = 200, errorPrefix = 'API error', requiredProperties = [] } = options;
+
+  // Check status
+  if (response.status !== expectedStatus) {
+    throw new Error(formatErrorMessage(response, errorPrefix));
+  }
+
+  // Check required properties
+  for (const prop of requiredProperties) {
+    if (!hasResponseProperty(response, prop)) {
+      throw new Error(`${errorPrefix}: Missing required property '${prop}'`);
+    }
+  }
+
+  return response;
 }
 
 // Export API constants along with helper functions

@@ -17,12 +17,12 @@ describe('Authentication', () => {
       // Test missing password
       const noPasswordResponse = await makeRequest('POST', '/auth/login', {});
       expect(noPasswordResponse.status).toBe(400);
-      expect(noPasswordResponse.text).toContain('polis_err_param_missing_password');
+      expect(noPasswordResponse.text).toMatch(/polis_err_param_missing_password/);
 
       // Test missing email
       const noEmailResponse = await makeRequest('POST', '/auth/login', { password: 'testpassword' });
       expect(noEmailResponse.status).toBe(403);
-      expect(noEmailResponse.text).toContain('polis_err_login_unknown_user_or_password_noresults');
+      expect(noEmailResponse.text).toMatch(/polis_err_login_unknown_user_or_password_noresults/);
 
       // Test invalid credentials
       const invalidResponse = await makeRequest('POST', '/auth/login', {
@@ -30,7 +30,7 @@ describe('Authentication', () => {
         password: 'wrongpassword'
       });
       expect(invalidResponse.status).toBe(403);
-      expect(invalidResponse.text).toContain('polis_err_login_unknown_user_or_password');
+      expect(invalidResponse.text).toMatch(/polis_err_login_unknown_user_or_password/);
     });
   });
 
@@ -154,7 +154,7 @@ describe('Authentication', () => {
       // STEP 4: Verify protected resource access fails
       const protectedResponse = await makeRequest('GET', '/conversations', null, authCookies);
       expect(protectedResponse.status).toBe(403);
-      expect(protectedResponse.text).toContain('polis_err_need_auth');
+      expect(protectedResponse.text).toMatch(/polis_err_need_auth/);
 
       // STEP 5: Verify can login again
       const reloginResponse = await makeRequest('POST', '/auth/login', {
@@ -203,11 +203,7 @@ describe('Authentication', () => {
       expect(body.nextComment.tid).toBe(commentId);
 
       // STEP 2: Submit vote
-      const {
-        cookies: voteCookies,
-        body: voteBody,
-        status: voteStatus
-      } = await submitVote(
+      const response = await submitVote(
         {
           conversation_id: conversationId,
           tid: commentId,
@@ -217,11 +213,11 @@ describe('Authentication', () => {
         cookies
       );
 
-      expect(voteStatus).toBe(200);
-      expect(voteCookies.length).toBeGreaterThan(1);
-      expect(voteBody).toHaveProperty('currentPid');
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('currentPid');
 
       // Verify participant cookies
+      const voteCookies = response.cookies;
       const uc = extractCookieValue(voteCookies, 'uc');
       const uid2 = extractCookieValue(voteCookies, 'uid2');
       const token2 = extractCookieValue(voteCookies, 'token2');

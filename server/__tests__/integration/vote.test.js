@@ -117,9 +117,10 @@ describe('Vote Endpoints', () => {
       voterAuthToken
     );
     const { body: invalidConvBody, status: invalidConvStatus } = invalidConvResponse;
-    // Note: The legacy implementation returns a 400 status with an empty body.
+
     expect(invalidConvStatus).toBe(400);
-    expect(invalidConvBody).toStrictEqual({});
+    expect(invalidConvBody).toMatch(/polis_err_param_parse_failed_conversation_id/);
+    expect(invalidConvBody).toMatch(/error=polis_err_fetching_zid_for_conversation_id/);
 
     // Test invalid vote value
     const invalidVoteResponse = await submitVote(
@@ -131,9 +132,10 @@ describe('Vote Endpoints', () => {
       voterAuthToken
     );
     const { body: invalidVoteBody, status: invalidVoteStatus } = invalidVoteResponse;
-    // Note: The legacy implementation returns a 400 status with an empty body.
+
     expect(invalidVoteStatus).toBe(400);
-    expect(invalidVoteBody).toStrictEqual({});
+    expect(invalidVoteBody).toMatch(/polis_err_param_parse_failed_vote/);
+    expect(invalidVoteBody).toMatch(/polis_fail_parse_int_out_of_range/);
 
     // Test missing required fields
     const missingFieldsResponse = await request(API_URL)

@@ -11,6 +11,7 @@ Each test file focuses on a specific aspect of the API:
 - `conversation.test.js` - Conversation creation and management endpoints
 - `health.test.js` - Health check endpoints
 - `participation.test.js` - Participation and initialization endpoints
+- `tutorial.test.js` - Tutorial step tracking endpoints
 - `vote.test.js` - Voting endpoints
 
 ## Shared Test Helpers
@@ -23,21 +24,54 @@ To maintain consistency and reduce duplication, all test files use shared helper
 - `API_URL` - The base URL for the API (defaults to localhost with port from env or 5000)
 - `API_PREFIX` - The API version prefix ('/api/v3')
 
-### Helper Functions
+### Data Generation Helpers
 
 - `generateTestUser()` - Creates random user data for registration
 - `generateRandomXid()` - Creates random external IDs for testing
+
+### API Request Helpers
+
+- `makeRequest()` - Makes HTTP requests with smart handling of both JSON and text responses
+- `makeRequestWithTimeout()` - Makes HTTP requests with timeout and retry capabilities
 - `attachAuthToken()` - Attaches authentication tokens to requests
+- `retryRequest()` - Retries a request with backoff
+
+### Entity Creation Helpers
+
 - `createTestConversation()` - Creates a conversation with the specified options
 - `createTestComment()` - Creates a comment in a conversation
-- `wait()` - Pauses execution for a specified time
-- `retryRequest()` - Retries a request with backoff
+- `registerAndLoginUser()` - Registers and logs in a user in one step
+
+### Participation and Voting Helpers
+
 - `initializeParticipant()` - Initializes an anonymous participant for voting
 - `initializeParticipantWithXid()` - Initializes a participant for voting with an external ID
-- `registerAndLoginUser()` - Registers and logs in a user in one step
 - `submitVote()` - Submits a vote on a comment
 - `getVotes()` - Retrieves votes for a conversation
-- `getMyVotes()` - Retrieves a participant's votes. NOTE: In the legacy implementation, this seems to always return an empty array.
+- `getMyVotes()` - Retrieves a participant's votes
+
+### Response Handling Utilities
+
+- `validateResponse()` - Validates API responses with proper status and property checks
+- `formatErrorMessage()` - Formats error messages consistently from API responses
+- `hasResponseProperty()` - Safely checks for properties in responses (handles falsy values correctly)
+- `getResponseProperty()` - Safely gets property values from responses (handles falsy values correctly)
+- `extractCookieValue()` - Extracts a cookie value from response headers
+
+### Test Setup Helpers
+
+- `setupAuthForTest()` - Sets up authentication, creates a conversation, and comments in one step
+- `wait()` - Pauses execution for a specified time
+
+## Response Handling
+
+The test helpers are designed to handle various quirks of the legacy server:
+
+- **Content-Type Mismatches**: The legacy server sometimes sends plain text responses with `content-type: application/json`. Our test helpers handle this by attempting JSON parsing first, then falling back to raw text.
+  
+- **Error Response Format**: Error responses are often plain text error codes (e.g., `polis_err_param_missing_password`) rather than structured JSON objects. The test helpers check for both formats.
+
+- **Falsy ID Values**: Special care is taken to handle IDs that might be 0 (which is a valid value but falsy in JavaScript), preventing false negative checks.
 
 ## Participation Tests
 
