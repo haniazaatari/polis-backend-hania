@@ -199,6 +199,8 @@ The legacy server's response handling is inconsistent and can be misleading:
 - Some endpoints return text/plain for JSON responses
 - Error responses mix formats between structured JSON and plain text
 - Status codes may not follow REST conventions
+- **Some endpoints use gzip compression without proper indication**
+- **Content may be compressed but returned with incorrect content-type headers**
 
 **Solution:**
 
@@ -206,6 +208,8 @@ The legacy server's response handling is inconsistent and can be misleading:
 - Don't rely solely on Content-Type headers
 - Implement robust response parsing that can handle both formats
 - Document endpoint-specific response format quirks
+- **Use helpers with automatic gzip decompression capabilities**
+- **Check both content-encoding headers and attempt gzip decompression fallbacks**
 
 ### Dead Code and Deprecated Endpoints
 

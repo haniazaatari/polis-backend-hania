@@ -31,7 +31,7 @@ To maintain consistency and reduce duplication, all test files use shared helper
 
 ### API Request Helpers
 
-- `makeRequest()` - Makes HTTP requests with smart handling of both JSON and text responses
+- `makeRequest()` - Makes HTTP requests with smart handling of both JSON and text responses, including gzip decompression
 - `makeRequestWithTimeout()` - Makes HTTP requests with timeout and retry capabilities
 - `attachAuthToken()` - Attaches authentication tokens to requests
 - `retryRequest()` - Retries a request with backoff
@@ -71,7 +71,26 @@ The test helpers are designed to handle various quirks of the legacy server:
   
 - **Error Response Format**: Error responses are often plain text error codes (e.g., `polis_err_param_missing_password`) rather than structured JSON objects. The test helpers check for both formats.
 
+- **Gzip Compression**: Some responses are gzipped, either with or without proper `content-encoding: gzip` headers. The helpers automatically detect and decompress gzipped content.
+
 - **Falsy ID Values**: Special care is taken to handle IDs that might be 0 (which is a valid value but falsy in JavaScript), preventing false negative checks.
+
+### Email Testing
+
+The `email-helpers.js` file provides utilities for testing email functionality:
+
+- **Finding Emails**: `findEmailByRecipient()` locates emails sent to specific recipients
+- **Email Cleanup**: `deleteAllEmails()` removes all emails before and after tests
+- **Content Extraction**: Functions to extract specific content like reset URLs from emails
+- **Polling Mechanism**: Retry and timeout functionality to allow for email delivery delays
+
+These helpers are used in tests that verify email-based functionality like:
+
+- User invitations
+- Password resets
+- Notifications
+
+To use the email testing capabilities, ensure MailDev is running (included in the docker-compose setup) and accessible at <http://localhost:1080>.
 
 ## Participation Tests
 

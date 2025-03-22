@@ -28,22 +28,22 @@
 - [x] Test Auth
 - [x] Test Comment
 - [x] Test Conversation
-- [ ] Test Cookie
+- [x] Test Cookie
 - [ ] Test Data Export
-- [ ] Test Email
+- [x] Test Email
 - [ ] Test LaunchPrep
-- [ ] Test Math
+- [x] Test Math
 - [ ] Test Metadata
 - [ ] Test Moderation
 - [x] Test Participation
-- [ ] Test Participant
-- [ ] Test Password
+- [x] Test Participant
+- [x] Test Password
 - [ ] Test Report
 - [ ] Test Narrative Report
 - [ ] Test Subscription
-- [ ] Test User
+- [x] Test User
 - [x] Test Vote
-- [ ] Test Zinvite
+- [x] Test Zinvite
 - [ ] Test Static File Fetching
 - [ ] Test Middleware
 

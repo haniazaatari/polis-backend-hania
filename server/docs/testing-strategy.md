@@ -67,6 +67,8 @@ When testing against the legacy server, be aware of these known quirks:
 
 - **Response Format Inconsistency**: The legacy server sometimes sends plain text responses with `content-type: application/json`. Our test helpers handle this by attempting JSON parsing first, then falling back to raw text.
 - **Error Response Format**: Error responses are often plain text error codes (e.g., `polis_err_param_missing_password`) rather than structured JSON objects.
+- **Gzip Compression Handling**: The server sometimes responds with gzipped content, both with and without proper content-encoding headers. The test helpers automatically detect and decompress gzipped responses, handling both properly marked and unmarked compressed content.
+- **Email Verification Challenges**: Testing email sending is critical but challenging. The test suite uses MailDev to capture and verify emails, with helpers to find emails by recipient and extract content for validation.
 - **Deregister Endpoint Timeout**: The `/auth/deregister` endpoint may timeout when called with a `showPage` parameter but no auth token. This case is currently skipped in tests.
 - **Server Stability Issues**:
   - The server frequently crashes or hangs due to unhandled errors
@@ -139,6 +141,7 @@ For each difference identified between modular and legacy servers, explicitly de
 - **Isolate Test Suite State**: Each test suite should maintain its own state variables (users, cookies, etc.) to prevent interference between suites.
 - **Use Unique Test Data**: Generate unique test data (e.g., email addresses) for each test suite to prevent conflicts in concurrent or sequential test runs.
 - **Clear State After Tests**: Always clear any stored state (cookies, tokens, etc.) after tests complete to prevent leakage into subsequent tests.
+- **Clean Up External Resources**: When testing features that create external resources (like emails), ensure proper cleanup before and after tests.
 
 ### Database Transactions
 

@@ -67,6 +67,33 @@ RESET_DB_BEFORE_TESTS=true npm test
 
 A maildev container is typically running (see `docker-compose.dev.yml`) and will capture emails sent during testing. You can view the emails at `http://localhost:1080` (SMTP port 1025).
 
+The test suite includes helper functions in `__tests__/setup/email-helpers.js` to interact with MailDev:
+
+```javascript
+// Find an email sent to a specific recipient
+const email = await findEmailByRecipient('test@example.com');
+
+// Get all emails currently in MailDev
+const allEmails = await getEmails();
+
+// Clean up emails before/after tests
+await deleteAllEmails();
+
+// Extract password reset URLs from emails
+const { url, token } = getPasswordResetUrl(email);
+```
+
+## Response Format Handling
+
+The test suite includes robust handling for the various response formats from the API:
+
+- **JSON Responses**: Automatically parsed into JavaScript objects
+- **Text Responses**: Preserved as strings
+- **Gzipped Content**: Automatically detected and decompressed, even when incorrectly marked
+- **Mixed Content-Types**: Handles cases where JSON content is served with non-JSON content types
+
+The `makeRequest()` helper function handles these cases transparently, so tests can focus on validating business logic rather than response format quirks.
+
 ## Test Safety Features
 
 The test environment includes this safety feature:
