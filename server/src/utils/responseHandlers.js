@@ -111,7 +111,11 @@ export function fail(res, statusCode, errorCode, err) {
     logger.error(errorCode, err);
   }
 
-  return res.status(statusCode).json({
-    error: errorCode
-  });
+  // Return plain text error code to match legacy server behavior
+  return res.status(statusCode).send(errorCode);
+
+  // TODO: Properly handle JSON responses:
+  // return res.status(statusCode).json({
+  //   error: errorCode
+  // });
 }

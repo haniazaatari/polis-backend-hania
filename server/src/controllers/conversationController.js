@@ -372,10 +372,10 @@ async function handleCreateConversation(req, res) {
       req.p.short_url
     );
 
-    // Return success with URL and ZID
+    // Return success with both url and conversation_id to satisfy both test helper and test
     res.status(200).json({
       url: result.url,
-      zid: result.zid
+      conversation_id: result.zinvite
     });
   } catch (err) {
     if (err.message === 'polis_err_conversation_id_already_in_use') {

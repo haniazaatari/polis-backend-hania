@@ -27,6 +27,8 @@ async function login(req, res) {
       logger.debug(`Found user for email ${email}: uid=${user.uid}`);
     } else {
       logger.debug(`No user found for email ${email}`);
+      // Return 403 for missing email to match legacy server
+      return fail(res, 403, 'polis_err_login_unknown_user_or_password_noresults');
     }
 
     // Authenticate user

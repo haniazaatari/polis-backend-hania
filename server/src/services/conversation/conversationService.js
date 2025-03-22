@@ -579,7 +579,8 @@ async function createConversation(conversationData, requestedConversationId, gen
 
     return {
       url,
-      zid
+      zid,
+      zinvite
     };
   } catch (error) {
     logger.error('Error creating conversation', error);
