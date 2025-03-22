@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from '@jest/globals';
 import {
-  createTestConversation,
+  createConversation,
   generateTestUser,
   makeRequest,
   registerAndLoginUser,
@@ -19,7 +19,7 @@ describe('Conversation Update API', () => {
     authToken = auth.authToken;
 
     // Create a test conversation for each test
-    const response = await createTestConversation(authToken, {
+    const response = await createConversation(authToken, {
       is_active: true,
       is_anon: true,
       topic: 'Original Topic',

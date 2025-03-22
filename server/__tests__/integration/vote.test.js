@@ -6,28 +6,28 @@ import {
   getMyVotes,
   getVotes,
   initializeParticipant,
-  setupAuthForTest,
+  setupAuthAndConvo,
   submitVote
 } from '../setup/api-test-helpers.js';
 
 describe('Vote Endpoints', () => {
   let ownerAuthToken = null;
   let voterAuthToken = null;
-  let conversationZinvite = null;
+  let conversationId = null;
   let commentId = null;
 
   beforeAll(async () => {
     // Setup owner with conversation and comments
-    const ownerSetup = await setupAuthForTest({
+    const ownerSetup = await setupAuthAndConvo({
       commentCount: 3
     });
 
     ownerAuthToken = ownerSetup.authToken;
-    conversationZinvite = ownerSetup.conversationZinvite;
+    conversationId = ownerSetup.conversationId;
     commentId = ownerSetup.commentIds[0];
 
     // Setup voter (separate user)
-    const voterSetup = await setupAuthForTest({ createConversation: false });
+    const voterSetup = await setupAuthAndConvo({ createConvo: false });
     voterAuthToken = voterSetup.authToken;
   }, 30000); // Increase timeout for setup
 
@@ -37,7 +37,7 @@ describe('Vote Endpoints', () => {
       {
         tid: commentId,
         vote: 1, // Agree
-        conversation_id: conversationZinvite
+        conversation_id: conversationId
       },
       voterAuthToken
     );
@@ -50,11 +50,11 @@ describe('Vote Endpoints', () => {
 
     // STEP 2: Verify vote appears in voter's votes
     // NOTE: The legacy implementation returns an empty array.
-    const myVotes = await getMyVotes(voterAuthToken, conversationZinvite, currentPid);
+    const myVotes = await getMyVotes(voterAuthToken, conversationId, currentPid);
     expect(Array.isArray(myVotes)).toBe(true);
 
     // STEP 3: Verify vote appears in conversation votes
-    const votes = await getVotes(voterAuthToken, conversationZinvite, currentPid);
+    const votes = await getVotes(voterAuthToken, conversationId, currentPid);
     expect(Array.isArray(votes)).toBe(true);
     expect(votes.length).toBe(1);
     expect(votes[0].tid).toBe(commentId);
@@ -63,7 +63,7 @@ describe('Vote Endpoints', () => {
 
   test('Vote lifecycle for anonymous participant', async () => {
     // STEP 1: Initialize anonymous participant
-    const { cookies, body: initBody } = await initializeParticipant(conversationZinvite);
+    const { cookies, body: initBody } = await initializeParticipant(conversationId);
     expect(cookies).toBeDefined();
     expect(cookies.length).toBeGreaterThan(0);
     expect(initBody).toBeDefined();
@@ -73,7 +73,7 @@ describe('Vote Endpoints', () => {
       {
         tid: commentId,
         vote: -1, // Disagree
-        conversation_id: conversationZinvite
+        conversation_id: conversationId
       },
       cookies
     );
@@ -85,7 +85,7 @@ describe('Vote Endpoints', () => {
     expect(nextComment).toBeDefined();
 
     // STEP 3: Verify anonymous vote appears in conversation votes
-    const votes = await getVotes(cookies, conversationZinvite, currentPid);
+    const votes = await getVotes(cookies, conversationId, currentPid);
     expect(Array.isArray(votes)).toBe(true);
     expect(votes.length).toBe(1);
     expect(votes[0].tid).toBe(commentId);
@@ -98,7 +98,7 @@ describe('Vote Endpoints', () => {
       {
         tid: 999999,
         vote: 1,
-        conversation_id: conversationZinvite
+        conversation_id: conversationId
       },
       voterAuthToken
     );
@@ -127,7 +127,7 @@ describe('Vote Endpoints', () => {
       {
         tid: commentId,
         vote: 5, // Only -1, 0, 1 are valid
-        conversation_id: conversationZinvite
+        conversation_id: conversationId
       },
       voterAuthToken
     );
@@ -154,7 +154,7 @@ describe('Vote Endpoints', () => {
       {
         tid: commentId,
         vote: 1,
-        conversation_id: conversationZinvite
+        conversation_id: conversationId
       },
       voterAuthToken
     );
@@ -168,14 +168,14 @@ describe('Vote Endpoints', () => {
       {
         tid: commentId,
         vote: -1,
-        conversation_id: conversationZinvite
+        conversation_id: conversationId
       },
       voterAuthToken
     );
     expect(changedVoteStatus).toBe(200);
 
     // STEP 3: Verify vote was changed
-    const myVotes = await getVotes(voterAuthToken, conversationZinvite, currentPid);
+    const myVotes = await getVotes(voterAuthToken, conversationId, currentPid);
     expect(Array.isArray(myVotes)).toBe(true);
     const userVote = myVotes.find((v) => v.tid === commentId);
     expect(userVote).toBeDefined();

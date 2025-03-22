@@ -38,8 +38,8 @@ To maintain consistency and reduce duplication, all test files use shared helper
 
 ### Entity Creation Helpers
 
-- `createTestConversation()` - Creates a conversation with the specified options
-- `createTestComment()` - Creates a comment in a conversation
+- `createConversation()` - Creates a conversation with the specified options
+- `createComment()` - Creates a comment in a conversation
 - `registerAndLoginUser()` - Registers and logs in a user in one step
 
 ### Participation and Voting Helpers
@@ -60,7 +60,7 @@ To maintain consistency and reduce duplication, all test files use shared helper
 
 ### Test Setup Helpers
 
-- `setupAuthForTest()` - Sets up authentication, creates a conversation, and comments in one step
+- `setupAuthAndConvo()` - Sets up authentication, creates a conversation, and comments in one step
 - `wait()` - Pauses execution for a specified time
 
 ## Response Handling

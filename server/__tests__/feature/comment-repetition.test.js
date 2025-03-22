@@ -9,9 +9,9 @@
 
 import { beforeAll, describe, expect, test } from '@jest/globals';
 import {
-  createTestComment,
+  createComment,
   initializeParticipant,
-  setupAuthForTest,
+  setupAuthAndConvo,
   submitVote,
   wait
 } from '../setup/api-test-helpers.js';
@@ -23,14 +23,14 @@ const VOTE_DELAY = 1000; // Delay between voting on comments in milliseconds
 describe('Comment Repetition Bug Test', () => {
   // Test state
   let ownerAuthToken;
-  let conversationZinvite;
+  let conversationId;
   const allCommentIds = [];
 
   // Setup: Register admin, create conversation, and create comments
   beforeAll(async () => {
     // Setup auth without creating comments (we'll create them manually)
-    const setup = await setupAuthForTest({
-      createConversation: true,
+    const setup = await setupAuthAndConvo({
+      createConvo: true,
       commentCount: 0,
       conversationOptions: {
         topic: `Comment Repetition Test ${Date.now()}`,
@@ -39,11 +39,11 @@ describe('Comment Repetition Bug Test', () => {
     });
 
     ownerAuthToken = setup.authToken;
-    conversationZinvite = setup.conversationZinvite;
+    conversationId = setup.conversationId;
 
     // Create comments as the owner
     for (let i = 0; i < NUM_COMMENTS; i++) {
-      const commentId = await createTestComment(ownerAuthToken, conversationZinvite, {
+      const commentId = await createComment(ownerAuthToken, conversationId, {
         txt: `Test comment ${i + 1}`
       });
       allCommentIds.push(commentId);
@@ -66,7 +66,7 @@ describe('Comment Repetition Bug Test', () => {
 
     try {
       // STEP 1: Initialize anonymous participant
-      const { cookies, body: initBody } = await initializeParticipant(conversationZinvite);
+      const { cookies, body: initBody } = await initializeParticipant(conversationId);
 
       let authToken = cookies;
       let nextComment = initBody.nextComment;
@@ -107,7 +107,7 @@ describe('Comment Repetition Bug Test', () => {
 
         // Build vote payload
         const voteData = {
-          conversation_id: conversationZinvite,
+          conversation_id: conversationId,
           tid: commentId,
           vote: randomVote
         };

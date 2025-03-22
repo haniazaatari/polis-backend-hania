@@ -4,8 +4,9 @@ import {
   API_PREFIX,
   API_URL,
   attachAuthToken,
+  createConversation,
   makeRequestWithTimeout,
-  setupAuthForTest
+  setupAuthAndConvo
 } from '../setup/api-test-helpers.js';
 
 describe('Conversation Endpoints', () => {
@@ -13,29 +14,21 @@ describe('Conversation Endpoints', () => {
 
   beforeAll(async () => {
     // Setup auth without creating conversation
-    const setup = await setupAuthForTest({ createConversation: false });
+    const setup = await setupAuthAndConvo({ createConvo: false });
     authToken = setup.authToken;
   });
 
   test('Full conversation lifecycle', async () => {
     // STEP 1: Create a new conversation
     const timestamp = Date.now();
-    const createResponse = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/conversations`), authToken).send({
+    const { conversationId } = await createConversation(authToken, {
       topic: `Test Conversation ${timestamp}`,
       description: `Test Description ${timestamp}`,
       is_active: true,
       is_draft: false
     });
 
-    expect(createResponse.status).toBe(200);
-    expect(createResponse.body).toHaveProperty('url');
-    expect(createResponse.body).toHaveProperty('conversation_id');
-
-    const { conversation_id: conversationId } = createResponse.body;
-
-    // Extract and validate zinvite
-    const conversationZinvite = createResponse.body.url.split('/').pop();
-    expect(conversationZinvite).toBeTruthy();
+    expect(conversationId).toBeDefined();
 
     // STEP 2: Verify conversation appears in list
     const listResponse = await attachAuthToken(request(API_URL).get(`${API_PREFIX}/conversations`), authToken);
@@ -43,12 +36,12 @@ describe('Conversation Endpoints', () => {
     expect(listResponse.status).toBe(200);
     expect(Array.isArray(listResponse.body)).toBe(true);
     expect(
-      listResponse.body.some((conv) => conv.conversation_id === conversationId || conv.zid === conversationId)
+      listResponse.body.some((conv) => conv.conversation_id === conversationId)
     ).toBe(true);
 
     // STEP 3: Get conversation stats
     const statsResponse = await attachAuthToken(
-      request(API_URL).get(`${API_PREFIX}/conversationStats?conversation_id=${conversationZinvite}`),
+      request(API_URL).get(`${API_PREFIX}/conversationStats?conversation_id=${conversationId}`),
       authToken
     );
 
@@ -57,7 +50,7 @@ describe('Conversation Endpoints', () => {
 
     // STEP 4: Update conversation
     const updateData = {
-      conversation_id: conversationZinvite,
+      conversation_id: conversationId,
       description: `Updated description ${timestamp}`,
       topic: `Updated topic ${timestamp}`,
       is_active: true,
@@ -75,7 +68,7 @@ describe('Conversation Endpoints', () => {
       const closeResponse = await makeRequestWithTimeout(
         'POST',
         '/conversation/close',
-        { conversation_id: conversationZinvite },
+        { conversation_id: conversationId },
         authToken,
         {
           timeout: 5000, // 5s timeout as before
@@ -100,7 +93,7 @@ describe('Conversation Endpoints', () => {
       request(API_URL).post(`${API_PREFIX}/conversation/reopen`),
       authToken
     ).send({
-      conversation_id: conversationZinvite
+      conversation_id: conversationId
     });
 
     expect(reopenResponse.status).toBe(200);

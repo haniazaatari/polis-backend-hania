@@ -7,27 +7,27 @@ import {
   generateRandomXid,
   initializeParticipant,
   initializeParticipantWithXid,
-  setupAuthForTest
+  setupAuthAndConvo
 } from '../setup/api-test-helpers.js';
 
 describe('Participation Endpoints', () => {
   let authToken = null;
-  let conversationZinvite = null;
+  let conversationId = null;
   const testXid = generateRandomXid();
 
   beforeAll(async () => {
     // Setup auth and create test conversation with comments
-    const setup = await setupAuthForTest({
+    const setup = await setupAuthAndConvo({
       commentCount: 3
     });
 
     authToken = setup.authToken;
-    conversationZinvite = setup.conversationZinvite;
+    conversationId = setup.conversationId;
   }, 15000);
 
   test('Regular participation lifecycle', async () => {
     // STEP 1: Initialize anonymous participant
-    const { body, cookies, status } = await initializeParticipant(conversationZinvite);
+    const { body, cookies, status } = await initializeParticipant(conversationId);
 
     expect(status).toBe(200);
     expect(cookies).toBeDefined();
@@ -36,7 +36,7 @@ describe('Participation Endpoints', () => {
 
     // STEP 2: Get next comment for participant
     const nextCommentResponse = await request(API_URL)
-      .get(`${API_PREFIX}/nextComment?conversation_id=${conversationZinvite}`)
+      .get(`${API_PREFIX}/nextComment?conversation_id=${conversationId}`)
       .set('Cookie', cookies);
 
     expect(nextCommentResponse.status).toBe(200);
@@ -45,7 +45,7 @@ describe('Participation Endpoints', () => {
 
   test('XID participation lifecycle', async () => {
     // STEP 1: Initialize participation with XID
-    const { body, cookies, status } = await initializeParticipantWithXid(conversationZinvite, testXid);
+    const { body, cookies, status } = await initializeParticipantWithXid(conversationId, testXid);
 
     expect(status).toBe(200);
     expect(cookies).toBeDefined();
@@ -54,7 +54,7 @@ describe('Participation Endpoints', () => {
 
     // STEP 2: Get next comment for participant
     const nextCommentResponse = await request(API_URL)
-      .get(`${API_PREFIX}/nextComment?conversation_id=${conversationZinvite}&xid=${testXid}`)
+      .get(`${API_PREFIX}/nextComment?conversation_id=${conversationId}&xid=${testXid}`)
       .set('Cookie', cookies);
 
     expect(nextCommentResponse.status).toBe(200);

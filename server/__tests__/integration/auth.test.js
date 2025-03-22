@@ -4,7 +4,7 @@ import {
   generateTestUser,
   initializeParticipant,
   makeRequest,
-  setupAuthForTest,
+  setupAuthAndConvo,
   submitVote,
   wait
 } from '../setup/api-test-helpers.js';
@@ -175,9 +175,9 @@ describe('Authentication', () => {
 
     beforeEach(async () => {
       // Create owner and conversation using the helper function
-      const setup = await setupAuthForTest({ commentCount: 1 });
+      const setup = await setupAuthAndConvo({ commentCount: 1 });
       ownerAuthToken = setup.authToken;
-      conversationId = setup.conversationZinvite;
+      conversationId = setup.conversationId;
       commentId = setup.commentIds[0];
     });
 

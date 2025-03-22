@@ -1,7 +1,7 @@
 import { describe, expect, test } from '@jest/globals';
 import {
-  createTestComment,
-  createTestConversation,
+  createComment,
+  createConversation,
   generateTestUser,
   makeRequest,
   registerAndLoginUser
@@ -14,7 +14,7 @@ describe('Conversation Details API', () => {
     const { authToken } = await registerAndLoginUser(testUser);
 
     // Create a public conversation
-    const { conversationId } = await createTestConversation(authToken, {
+    const { conversationId } = await createConversation(authToken, {
       is_active: true,
       is_anon: true,
       topic: 'Test Public Conversation',
@@ -22,7 +22,7 @@ describe('Conversation Details API', () => {
     });
 
     // Add a comment to the conversation
-    await createTestComment(authToken, conversationId, {
+    await createComment(authToken, conversationId, {
       txt: 'This is a test comment for the conversation'
     });
 
@@ -48,7 +48,7 @@ describe('Conversation Details API', () => {
     const { authToken } = await registerAndLoginUser(testUser);
 
     // Create a public conversation
-    const { conversationId } = await createTestConversation(authToken, {
+    const { conversationId } = await createConversation(authToken, {
       is_active: true,
       is_anon: true,
       topic: 'My Test Conversation',
@@ -77,7 +77,7 @@ describe('Conversation Details API', () => {
     const { authToken } = await registerAndLoginUser(testUser);
 
     // Create a public conversation
-    const { conversationId } = await createTestConversation(authToken, {
+    const { conversationId } = await createConversation(authToken, {
       is_active: true,
       is_anon: true,
       topic: 'Public Test Conversation',
@@ -121,7 +121,7 @@ describe('Conversation Details API', () => {
     const { authToken } = await registerAndLoginUser(testUser);
 
     // Create a public conversation
-    const { conversationId } = await createTestConversation(authToken, {
+    const { conversationId } = await createConversation(authToken, {
       is_active: true,
       is_anon: true,
       topic: 'Test Stats Conversation'

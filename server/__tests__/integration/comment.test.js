@@ -4,41 +4,37 @@ import {
   API_PREFIX,
   API_URL,
   attachAuthToken,
-  createTestComment,
+  createComment,
   generateRandomXid,
   initializeParticipant,
   initializeParticipantWithXid,
-  setupAuthForTest
+  setupAuthAndConvo
 } from '../setup/api-test-helpers.js';
 
 describe('Comment Endpoints', () => {
   let authToken = null;
-  let conversationZinvite = null;
+  let conversationId = null;
 
   beforeAll(async () => {
     // Setup auth and create test conversation
-    const setup = await setupAuthForTest();
+    const setup = await setupAuthAndConvo();
     authToken = setup.authToken;
-    conversationZinvite = setup.conversationZinvite;
+    conversationId = setup.conversationId;
   });
 
   test('Comment lifecycle', async () => {
     // STEP 1: Create a new comment
     const timestamp = Date.now();
     const commentText = `Test comment ${timestamp}`;
-    const createResponse = await attachAuthToken(request(API_URL).post(`${API_PREFIX}/comments`), authToken).send({
-      conversation_id: conversationZinvite,
+    const commentId = await createComment(authToken, conversationId, {
       txt: commentText
     });
 
-    expect(createResponse.status).toBe(200);
-    expect(createResponse.body).toBeDefined();
-    const commentId = createResponse.body.tid;
     expect(commentId).toBeDefined();
 
     // STEP 2: Verify comment appears in conversation
     const listResponse = await attachAuthToken(
-      request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationZinvite}`),
+      request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationId}`),
       authToken
     );
 
@@ -66,14 +62,14 @@ describe('Comment Endpoints', () => {
 
   test('Anonymous participant can submit a comment', async () => {
     // Initialize anonymous participant
-    const { cookies, body: initBody } = await initializeParticipant(conversationZinvite);
+    const { cookies, body: initBody } = await initializeParticipant(conversationId);
     expect(cookies).toBeDefined();
     expect(cookies.length).toBeGreaterThan(0);
 
     // Create a comment as anonymous participant using the helper
     const timestamp = Date.now();
     const commentText = `Anonymous participant comment ${timestamp}`;
-    const commentId = await createTestComment(cookies, conversationZinvite, {
+    const commentId = await createComment(cookies, conversationId, {
       txt: commentText
     });
 
@@ -81,7 +77,7 @@ describe('Comment Endpoints', () => {
 
     // Verify the comment appears in the conversation
     const listResponse = await attachAuthToken(
-      request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationZinvite}`),
+      request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationId}`),
       authToken
     );
 
@@ -95,14 +91,14 @@ describe('Comment Endpoints', () => {
   test('XID participant can submit a comment', async () => {
     // Initialize participant with XID
     const xid = generateRandomXid();
-    const { cookies, body: initBody } = await initializeParticipantWithXid(conversationZinvite, xid);
+    const { cookies, body: initBody } = await initializeParticipantWithXid(conversationId, xid);
     expect(cookies).toBeDefined();
     expect(cookies.length).toBeGreaterThan(0);
 
     // Create a comment as XID participant using the helper
     const timestamp = Date.now();
     const commentText = `XID participant comment ${timestamp}`;
-    const commentId = await createTestComment(cookies, conversationZinvite, {
+    const commentId = await createComment(cookies, conversationId, {
       txt: commentText
     });
 
@@ -110,7 +106,7 @@ describe('Comment Endpoints', () => {
 
     // Verify the comment appears in the conversation
     const listResponse = await attachAuthToken(
-      request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationZinvite}`),
+      request(API_URL).get(`${API_PREFIX}/comments?conversation_id=${conversationId}`),
       authToken
     );
 

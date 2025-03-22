@@ -195,7 +195,7 @@ async function retryRequest(requestFn, maxRetries = 3, delay = 1000) {
  * @param {Object} options - Conversation options
  * @returns {Promise<Object>} Created conversation data
  */
-async function createTestConversation(authToken, options = {}) {
+async function createConversation(authToken, options = {}) {
   const timestamp = Date.now();
   const defaultOptions = {
     topic: `Test Conversation ${timestamp}`,
@@ -239,7 +239,7 @@ async function createTestConversation(authToken, options = {}) {
  * @param {Object} options - Comment options
  * @returns {Promise<number>} Created comment ID
  */
-async function createTestComment(authToken, conversationId, options = {}) {
+async function createComment(authToken, conversationId, options = {}) {
   if (!conversationId) {
     throw new Error('Conversation ID is required to create a comment');
   }
@@ -501,8 +501,8 @@ async function submitVote(options, authToken) {
  * @param {Object} options - Options for setup
  * @returns {Promise<Object>} Object containing auth token, userId, and conversation info
  */
-async function setupAuthForTest(options = {}) {
-  const { createConversation = true } = options;
+async function setupAuthAndConvo(options = {}) {
+  const { createConvo = true } = options;
   const testUser = generateTestUser();
 
   // Register and login
@@ -510,10 +510,11 @@ async function setupAuthForTest(options = {}) {
   let conversationData = {};
 
   // Create test conversation if requested
-  if (createConversation) {
-    const { conversationId, url } = await createTestConversation(authToken, options.conversationOptions || {});
+  if (createConvo) {
+    const { conversationId, url } = await createConversation(authToken, options.conversationOptions || {});
+
     conversationData = {
-      conversationZinvite: conversationId,
+      conversationId,
       conversationUrl: url
     };
 
@@ -521,7 +522,7 @@ async function setupAuthForTest(options = {}) {
     if (options.commentCount && options.commentCount > 0) {
       const commentIds = [];
       for (let i = 0; i < options.commentCount; i++) {
-        const commentId = await createTestComment(
+        const commentId = await createComment(
           authToken,
           conversationId,
           options.commentOptions || { txt: `Test comment ${i + 1}` }
@@ -629,8 +630,8 @@ export {
   API_PREFIX,
   API_URL,
   attachAuthToken,
-  createTestComment,
-  createTestConversation,
+  createComment,
+  createConversation,
   extractCookieValue,
   generateRandomXid,
   generateTestUser,
@@ -641,7 +642,7 @@ export {
   makeRequest,
   makeRequestWithTimeout,
   registerAndLoginUser,
-  setupAuthForTest,
+  setupAuthAndConvo,
   submitVote,
   wait
 };
