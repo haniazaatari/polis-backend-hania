@@ -164,24 +164,28 @@ describe('User Management Endpoints', () => {
 
       // Verify that emails were sent
       // Allow a small delay for emails to be processed
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
       // Find the emails in MailDev
       const email1 = await findEmailByRecipient(testEmails[0]);
       const email2 = await findEmailByRecipient(testEmails[1]);
-      
+
       // Test should fail if we don't find both emails
       if (!email1) {
-        throw new Error(`Email verification failed: No email found for recipient ${testEmails[0]}. Is MailDev running?`);
+        throw new Error(
+          `Email verification failed: No email found for recipient ${testEmails[0]}. Is MailDev running?`
+        );
       }
       if (!email2) {
-        throw new Error(`Email verification failed: No email found for recipient ${testEmails[1]}. Is MailDev running?`);
+        throw new Error(
+          `Email verification failed: No email found for recipient ${testEmails[1]}. Is MailDev running?`
+        );
       }
-      
+
       // Verify email content
       expect(email1.subject).toMatch(/Join the Pol.is conversation!/i);
       expect(email1.html || email1.text).toContain(conversationId);
-      
+
       expect(email2.subject).toMatch(/Join the Pol.is conversation!/i);
       expect(email2.html || email2.text).toContain(conversationId);
     });

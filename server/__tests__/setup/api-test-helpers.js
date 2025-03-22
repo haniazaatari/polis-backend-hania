@@ -27,7 +27,7 @@ function decompressAndParseGzip(data) {
       }
 
       const decompressedText = decompressed.toString('utf-8');
-      
+
       try {
         // Try to parse as JSON first
         const parsed = JSON.parse(decompressedText);
@@ -86,7 +86,7 @@ async function makeRequest(method, path, data = null, token = null) {
 
         let body;
         let rawText;
-        
+
         try {
           if (isGzipped) {
             // If gzipped, decompress and get result (either JSON or text)
