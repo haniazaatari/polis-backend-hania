@@ -1,4 +1,4 @@
-import http from 'http';
+import http from 'node:http';
 import dotenv from 'dotenv';
 
 // Use { override: false } to prevent dotenv from overriding command-line env vars
@@ -75,6 +75,34 @@ async function makeRequest(method, path, data = null, token = null) {
       req.write(JSON.stringify(data));
     }
     req.end();
+  });
+}
+
+/**
+ * Helper function to make a regular HTTP GET request
+ * @param {string} url - The URL to make the request to
+ * @returns {Promise<Object>} - The response object
+ */
+async function makeHttpGetRequest(url) {
+  return new Promise((resolve, reject) => {
+    http.get(url, (res) => {
+      let data = '';
+
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      res.on('end', () => {
+        resolve({
+          status: res.statusCode,
+          headers: res.headers,
+          body: data
+        });
+      });
+    }).on('error', (error) => {
+      console.error('request error', error);
+      reject(error);
+    });
   });
 }
 
@@ -630,6 +658,7 @@ export {
   getVotes,
   initializeParticipant,
   initializeParticipantWithXid,
+  makeHttpGetRequest,
   makeRequest,
   makeRequestWithTimeout,
   registerAndLoginUser,

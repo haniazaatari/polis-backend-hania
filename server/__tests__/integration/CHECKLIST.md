@@ -15,9 +15,9 @@ This checklist tracks API endpoints and functional domains that should be tested
 - ✅ POST /auth/new - User registration
 - ✅ POST /auth/login - User login
 - ✅ POST /auth/deregister - User logout
-- 🔶 POST /auth/pwresettoken - Password reset token
-- ❌ GET /auth/pwreset - Password reset page
-- ❌ POST /auth/pwreset - Process password reset
+- ✅ POST /auth/pwresettoken - Password reset token
+- ✅ GET /auth/pwreset - Password reset page
+- ✅ POST /auth/pwreset - Process password reset
 - ❌ GET /verify - Email verification
 
 ### Auth Features
@@ -27,7 +27,7 @@ This checklist tracks API endpoints and functional domains that should be tested
 - ✅ Token-based authentication
 - ✅ Cookie-based authentication
 - ❌ XID-based authentication
-- ❌ Password reset flow
+- ✅ Password reset flow
 
 ## Conversations
 
