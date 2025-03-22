@@ -2722,11 +2722,9 @@ Email verified! You can close this tab or hit the back button.
         logger.error('isSpam failed', err);
         return false;
       });
-      logger.debug(5471);
       const jigsawModerationPromise = Config.googleJigsawPerspectiveApiKey
         ? analyzeComment(txt)
         : Promise.resolve(null);
-      logger.debug(5478);
       const isModeratorPromise = isModerator(zid, uid);
       const conversationInfoPromise = getConversationInfo(zid);
       let shouldCreateXidRecord = false;
@@ -2771,7 +2769,6 @@ Email verified! You can close this tab or hit the back button.
         fail(res, 403, 'polis_err_conversation_is_closed');
         return;
       }
-      logger.debug(5541);
       const bad = hasBadWords(txt);
       const velocity = 1;
       const jigsawToxicityThreshold = 0.8;
@@ -2800,9 +2797,7 @@ Email verified! You can close this tab or hit the back button.
         mod = polisTypes.mod.ok;
         active = true;
       }
-      logger.debug(5584);
       const [detections] = await Promise.all([detectLanguage(txt)]);
-      logger.debug(5588);
       const detection = Array.isArray(detections) ? detections[0] : detections;
       const lang = detection.language;
       const lang_confidence = detection.confidence;
