@@ -1,4 +1,5 @@
 import http from 'node:http';
+import zlib from 'node:zlib';
 import dotenv from 'dotenv';
 
 // Use { override: false } to prevent dotenv from overriding command-line env vars
@@ -8,6 +9,36 @@ dotenv.config({ override: false });
 const API_PORT = process.env.API_SERVER_PORT || 5000;
 const API_URL = process.env.API_URL || `http://localhost:${API_PORT}`;
 const API_PREFIX = '/api/v3';
+
+/**
+ * Helper function to decompress gzipped content and parse as JSON or return as text
+ * @param {Buffer|string} data - The gzipped data
+ * @returns {Promise<Object|string>} - Decompressed data - either parsed JSON or plain text if not valid JSON
+ */
+function decompressAndParseGzip(data) {
+  return new Promise((resolve, reject) => {
+    // Ensure data is a Buffer
+    const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
+
+    zlib.gunzip(buffer, (err, decompressed) => {
+      if (err) {
+        reject(new Error(`Failed to decompress gzipped data: ${err.message}`));
+        return;
+      }
+
+      const decompressedText = decompressed.toString('utf-8');
+      
+      try {
+        // Try to parse as JSON first
+        const parsed = JSON.parse(decompressedText);
+        resolve(parsed);
+      } catch (parseErr) {
+        // If parsing fails, return the raw text content instead of an error
+        resolve(decompressedText);
+      }
+    });
+  });
+}
 
 /**
  * Helper function to make HTTP requests that can handle both JSON and text responses
@@ -20,7 +51,8 @@ async function makeRequest(method, path, data = null, token = null) {
     path: `${API_PREFIX}${path}`,
     method: method.toUpperCase(),
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Accept-Encoding': 'gzip' // Add this to accept gzipped responses
     }
   };
 
@@ -41,28 +73,53 @@ async function makeRequest(method, path, data = null, token = null) {
 
   return new Promise((resolve, reject) => {
     const req = http.request(options, (res) => {
-      let data = '';
+      const responseData = [];
       res.on('data', (chunk) => {
-        data += chunk;
+        responseData.push(chunk);
       });
-      res.on('end', () => {
-        // Try to parse as JSON first, fall back to text if that fails
-        let body = data;
+      res.on('end', async () => {
+        // Combine chunks into a single buffer
+        const buffer = Buffer.concat(responseData);
+
+        // Check if the response is gzipped
+        const isGzipped = res.headers['content-encoding'] === 'gzip';
+
+        let body;
+        let rawText;
+        
         try {
-          // Only try to parse as JSON if content-type includes json
-          const contentType = res.headers['content-type'] || '';
-          if (contentType.includes('json')) {
-            body = JSON.parse(data);
+          if (isGzipped) {
+            // If gzipped, decompress and get result (either JSON or text)
+            body = await decompressAndParseGzip(buffer);
+            // For gzipped responses, set rawText to the string value if body is not an object
+            rawText = typeof body === 'string' ? body : null;
+          } else {
+            // Regular handling - try JSON first, fall back to text
+            rawText = buffer.toString('utf-8');
+            const contentType = res.headers['content-type'] || '';
+
+            if (contentType.includes('json')) {
+              try {
+                body = JSON.parse(rawText);
+              } catch (e) {
+                // Keep as text if JSON parsing fails
+                body = rawText;
+              }
+            } else {
+              body = rawText;
+            }
           }
-        } catch (e) {
-          // Keep as text if JSON parsing fails
+
+          resolve({
+            status: res.statusCode,
+            headers: res.headers,
+            body,
+            text: rawText // Set text for both gzipped and non-gzipped responses
+          });
+        } catch (error) {
+          console.error('Error processing response:', error);
+          reject(error);
         }
-        resolve({
-          status: res.statusCode,
-          headers: res.headers,
-          body,
-          text: data
-        });
       });
     });
 
@@ -253,7 +310,7 @@ async function createConversation(authToken, options = {}) {
     throw new Error('Conversation creation succeeded but no conversation ID was returned');
   }
 
-  await wait(1000); // Wait for conversation to be created
+  await wait(500); // Wait for conversation to be created
 
   return conversationId;
 }
@@ -289,7 +346,7 @@ async function createComment(authToken, conversationId, options = {}) {
   });
 
   const commentId = response.body.tid;
-  await wait(1000); // Wait for comment to be created
+  await wait(500); // Wait for comment to be created
 
   return commentId;
 }
@@ -398,7 +455,7 @@ async function registerAndLoginUser(userData) {
   });
 
   const userId = registerResponse.body.uid;
-  await wait(1000); // Wait for registration to complete
+  await wait(500); // Wait for registration to complete
 
   // Login with the user
   const loginResponse = await makeRequest('POST', '/auth/login', {
@@ -509,7 +566,7 @@ async function submitVote(options, authToken) {
 
     // Don't use validateResponse here as we want to handle multiple status codes
     // Legacy server can return error responses that are also valid test outcomes
-    await wait(1000); // Wait for vote to be processed
+    await wait(500); // Wait for vote to be processed
 
     return {
       cookies: response.headers['set-cookie'] || [],
@@ -712,6 +769,7 @@ export {
   attachAuthToken,
   createComment,
   createConversation,
+  decompressAndParseGzip,
   extractCookieValue,
   generateRandomXid,
   generateTestUser,
