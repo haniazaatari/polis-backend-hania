@@ -36,8 +36,6 @@ describe('Password Reset API', () => {
     } catch (error) {
       console.warn('Could not clear emails after tests:', error.message);
     }
-
-    await wait(1000);
   });
 
   describe('POST /auth/pwresettoken', () => {

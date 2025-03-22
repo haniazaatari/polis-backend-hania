@@ -183,4 +183,10 @@ async function getPasswordResetUrl(recipient) {
   return { url, token };
 }
 
-export { deleteAllEmails, getPasswordResetUrl };
+export {
+  deleteAllEmails,
+  findEmailByRecipient,
+  getEmail,
+  getEmails,
+  getPasswordResetUrl
+};

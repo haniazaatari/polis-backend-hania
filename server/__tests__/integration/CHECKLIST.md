@@ -19,7 +19,6 @@ This checklist tracks API endpoints and functional domains that should be tested
 - ✅ POST /auth/pwresettoken - Password reset token
 - ✅ GET /auth/pwreset - Password reset page
 - ✅ POST /auth/pwreset - Process password reset
-- ❌ GET /verify - Email verification
 
 ### Auth Features
 
@@ -72,7 +71,7 @@ This checklist tracks API endpoints and functional domains that should be tested
 
 - ✅ GET /participationInit - Initialize participation
 - ✅ GET /participation - Get participation data
-- ❌ GET /nextComment - Get next comment for voting
+- ✅ GET /nextComment - Get next comment for voting
 - ❌ POST /ptpt - Participant metadata
 - ❌ PUT /ptpt - Update participant metadata
 
@@ -96,13 +95,13 @@ This checklist tracks API endpoints and functional domains that should be tested
 - ✅ Anonymous voting
 - ✅ Authenticated voting
 - ✅ Vote retrieval
-- ❌ Vote updating
+- ✅ Vote updating
 
 ## Math and Analysis
 
 ### Math Endpoints
 
-- ❌ GET /math/pca - Principal Component Analysis
+- ✅ GET /math/pca2 - Principal Component Analysis
 - ❌ GET /math/correlationMatrix - Get correlation matrix
 
 ### Report Endpoints
@@ -126,6 +125,7 @@ This checklist tracks API endpoints and functional domains that should be tested
 
 - ✅ POST /tutorial - Track tutorial steps
 - ❌ POST /einvites - Send email invites
+- ❌ GET /verify - Email invite verification
 - ❌ GET /tryCookie - Test cookie functionality
 - ❌ GET /perfStats_9182738127 - Performance statistics
 
@@ -133,10 +133,9 @@ This checklist tracks API endpoints and functional domains that should be tested
 
 ### User Management
 
-- ❌ GET /users - List users (admin)
-- ❌ PUT /users - Update user (admin)
-- ❌ DELETE /users - Delete user
-- ❌ GET /user/:user_id - Get user profile
+- ✅ GET /users - List users (admin)
+- ✅ PUT /users - Update user (admin)
+- ✅ POST /users/invite - Invite users (admin)
 
 ### Moderation and Administration
 
