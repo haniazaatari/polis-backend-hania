@@ -130,9 +130,9 @@ describe('Next Comment Endpoint', () => {
   });
 
   test('GET /nextComment - Handles `without` parameter', async () => {
-    const withoutCommentIds = commentIds.slice(1, 4);
+    const withoutCommentIds = commentIds.slice(0, 4);
 
-    // Request next comment without comments 1-4
+    // Request next comment without comments 0-3
     const response = await makeRequest(
       'GET',
       `/nextComment?conversation_id=${conversationId}&without=${withoutCommentIds}`,
