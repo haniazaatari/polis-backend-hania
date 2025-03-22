@@ -147,4 +147,4 @@ For each difference identified between modular and legacy servers, explicitly de
 
 ## Final Goal
 
-The final goal is a robust, comprehensive API test suite that passes consistently against both the modular and legacy servers, enabling a confident and smooth transition to the modular server in production. 
+The final goal is a robust, comprehensive API test suite that passes consistently against both the modular and legacy servers, enabling a confident and smooth transition to the modular server in production.

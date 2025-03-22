@@ -85,24 +85,26 @@ async function makeRequest(method, path, data = null, token = null) {
  */
 async function makeHttpGetRequest(url) {
   return new Promise((resolve, reject) => {
-    http.get(url, (res) => {
-      let data = '';
+    http
+      .get(url, (res) => {
+        let data = '';
 
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-
-      res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          headers: res.headers,
-          body: data
+        res.on('data', (chunk) => {
+          data += chunk;
         });
+
+        res.on('end', () => {
+          resolve({
+            status: res.statusCode,
+            headers: res.headers,
+            body: data
+          });
+        });
+      })
+      .on('error', (error) => {
+        console.error('request error', error);
+        reject(error);
       });
-    }).on('error', (error) => {
-      console.error('request error', error);
-      reject(error);
-    });
   });
 }
 
@@ -644,6 +646,65 @@ function validateResponse(response, options = {}) {
   return response;
 }
 
+/**
+ * Helper to get comments from a conversation
+ * @param {string|Array} authToken - Auth token or cookie array
+ * @param {string} conversationId - Conversation ID (zinvite)
+ * @param {Object} options - Optional parameters for filtering comments
+ * @returns {Promise<Array>} - Array of comments
+ */
+async function getComments(authToken, conversationId, options = {}) {
+  if (!conversationId) {
+    throw new Error('Conversation ID is required to get comments');
+  }
+
+  // Build query string from options
+  let queryParams = `conversation_id=${conversationId}`;
+
+  // Handle tids (can be single ID or array of IDs)
+  if (options.tids) {
+    // If tids is an array, join with commas
+    // const tidsParam = Array.isArray(options.tids) ? options.tids.join(',') : options.tids;
+    // queryParams += `&tids=[${tidsParam}]`;
+    queryParams += `&tids=${options.tids}`;
+  }
+
+  // Handle other optional parameters
+  if (options.moderation !== undefined) {
+    queryParams += `&moderation=${options.moderation}`;
+  }
+
+  if (options.mod !== undefined) {
+    queryParams += `&mod=${options.mod}`;
+  }
+
+  if (options.include_social !== undefined) {
+    queryParams += `&include_social=${options.include_social}`;
+  }
+
+  if (options.include_demographics !== undefined) {
+    queryParams += `&include_demographics=${options.include_demographics}`;
+  }
+
+  if (options.not_voted_by_pid !== undefined) {
+    queryParams += `&not_voted_by_pid=${options.not_voted_by_pid}`;
+  }
+
+  if (options.pid !== undefined) {
+    queryParams += `&pid=${options.pid}`;
+  }
+
+  // Make request
+  const response = await makeRequest('GET', `/comments?${queryParams}`, null, authToken);
+
+  // Validate response
+  if (response.status !== 200) {
+    throw new Error(`Failed to get comments: ${response.status} ${response.body || response.text}`);
+  }
+
+  return response.body;
+}
+
 // Export API constants along with helper functions
 export {
   API_PREFIX,
@@ -654,6 +715,7 @@ export {
   extractCookieValue,
   generateRandomXid,
   generateTestUser,
+  getComments,
   getMyVotes,
   getVotes,
   initializeParticipant,

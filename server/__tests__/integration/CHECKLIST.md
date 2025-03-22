@@ -7,6 +7,7 @@ This checklist tracks API endpoints and functional domains that should be tested
 - ✅ Fully tested
 - 🔶 Partially tested
 - ❌ Not tested yet
+- ⛔️ Expected to fail, or has known issues
 
 ## Authentication
 
@@ -37,13 +38,13 @@ This checklist tracks API endpoints and functional domains that should be tested
 - ✅ GET /conversations - List conversations
 - ✅ GET /conversation/:conversation_id - Get conversation details
 - ✅ PUT /conversations - Update conversation
-- ❌ POST /conversation/close - Close conversation
+- ⛔️ POST /conversation/close - Close conversation
 - ❌ POST /reserve_conversation_id - Reserve conversation ID
 
 ### Conversation Features
 
 - ✅ Public vs. private conversations
-- ❌ Conversation closure
+- ⛔️ Conversation closure
 - ❌ Conversation sharing settings
 - ❌ Conversation monitoring
 - ❌ Conversation embedding
@@ -54,17 +55,16 @@ This checklist tracks API endpoints and functional domains that should be tested
 
 - ✅ POST /comments - Create comment
 - ✅ GET /comments - List comments
-- ❌ GET /comments/translations - Get comment translations
-- ❌ PUT /comments - Update comment
-- ❌ GET /comment/:comment_id - Get specific comment
+- ⛔️ GET /comments/translations - Get comment translations
+- ✅ PUT /comments - Update comment
 
 ### Comment Features
 
 - ✅ Comment creation
 - ✅ Comment retrieval with filters
-- ❌ Comment moderation
+- ✅ Comment moderation
 - ❌ Comment rejection
-- ❌ Comment translation
+- ⛔️ Comment translation
 
 ## Participation
 
@@ -171,3 +171,4 @@ This checklist tracks API endpoints and functional domains that should be tested
 4. **Known Issues**: Be aware of potential stability issues with:
    - `/conversation/close` endpoint (may hang)
    - `/auth/deregister` endpoint (may timeout)
+   - `/comments/translations` endpoint (always returns 400 error)

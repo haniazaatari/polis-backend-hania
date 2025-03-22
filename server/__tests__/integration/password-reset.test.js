@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
-import { generateTestUser, makeHttpGetRequest, makeRequest, registerAndLoginUser, wait } from '../setup/api-test-helpers.js';
+import {
+  generateTestUser,
+  makeHttpGetRequest,
+  makeRequest,
+  registerAndLoginUser,
+  wait
+} from '../setup/api-test-helpers.js';
 import { deleteAllEmails, getPasswordResetUrl } from '../setup/email-helpers.js';
 
 describe('Password Reset API', () => {
@@ -105,9 +111,9 @@ describe('Password Reset API', () => {
       expect(loginResponse.status).toBe(200);
       const cookies = loginResponse.headers['set-cookie'];
       expect(cookies).toBeTruthy();
-      expect(cookies.some(cookie => cookie.startsWith('token2='))).toBe(true);
-      expect(cookies.some(cookie => cookie.startsWith('uid2='))).toBe(true);
-      expect(cookies.some(cookie => cookie.startsWith('pc='))).toBe(true);
+      expect(cookies.some((cookie) => cookie.startsWith('token2='))).toBe(true);
+      expect(cookies.some((cookie) => cookie.startsWith('uid2='))).toBe(true);
+      expect(cookies.some((cookie) => cookie.startsWith('pc='))).toBe(true);
     });
 
     it('should reject reset attempts with invalid tokens', async () => {

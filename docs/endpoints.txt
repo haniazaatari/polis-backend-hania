@@ -1,0 +1,175 @@
+# Polis API Endpoints Reference
+
+## API Endpoints
+
+/ handle_GET_conditionalIndexFetcher
+
+/api/v3/auth/deregister handle_POST_auth_deregister
+/api/v3/auth/login handle_POST_auth_login
+/api/v3/auth/new handle_POST_auth_new
+/api/v3/auth/password handle_POST_auth_password
+/api/v3/auth/pwresettoken handle_POST_auth_pwresettoken
+
+/api/v3/bid handle_GET_bid
+/api/v3/bidToPid handle_GET_bidToPid
+
+/api/v3/comments handle_GET_comments
+/api/v3/comments handle_POST_comments
+/api/v3/comments handle_PUT_comments
+/api/v3/comments/translations handle_GET_comments_translations
+
+/api/v3/contexts handle_GET_contexts
+/api/v3/contexts handle_POST_contexts
+
+/api/v3/contributors handle_POST_contributors
+
+/api/v3/conversation/close handle_POST_conversation_close
+/api/v3/conversation/reopen handle_POST_conversation_reopen
+/api/v3/conversations handle_GET_conversations
+/api/v3/conversations handle_POST_conversations
+/api/v3/conversations handle_PUT_conversations
+/api/v3/conversations/preload handle_GET_conversationPreloadInfo
+/api/v3/conversations/recent_activity handle_GET_conversationsRecentActivity
+/api/v3/conversations/recently_started handle_GET_conversationsRecentlyStarted
+
+/api/v3/conversationStats handle_GET_conversationStats
+/api/v3/convSubscriptions handle_POST_convSubscriptions
+
+/api/v3/dataExport handle_GET_dataExport
+/api/v3/dataExport/results handle_GET_dataExport_results
+
+/api/v3/domainWhitelist handle_GET_domainWhitelist
+/api/v3/domainWhitelist handle_POST_domainWhitelist
+
+/api/v3/dummyButton handle_GET_dummyButton
+
+/api/v3/einvites handle_GET_einvites
+/api/v3/einvites handle_POST_einvites
+
+/api/v3/group_demographics handle_GET_groupDemographics
+/api/v3/joinWithInvite handle_POST_joinWithInvite
+/api/v3/launchPrep handle_GET_launchPrep
+/api/v3/locations handle_GET_locations
+
+/api/v3/math/correlationMatrix handle_GET_math_correlationMatrix
+/api/v3/math/pca handle_GET_math_pca
+/api/v3/math/pca2 handle_GET_math_pca2
+/api/v3/mathUpdate handle_POST_math_update
+
+/api/v3/metadata handle_GET_metadata
+/api/v3/metadata/answers handle_GET_metadata_answers
+/api/v3/metadata/answers handle_POST_metadata_answers
+/api/v3/metadata/answers/:pmaid handle_DELETE_metadata_answers
+/api/v3/metadata/choices handle_GET_metadata_choices
+/api/v3/metadata/questions handle_GET_metadata_questions
+/api/v3/metadata/questions handle_POST_metadata_questions
+/api/v3/metadata/questions/:pmqid handle_DELETE_metadata_questions
+
+/api/v3/metrics handle_POST_metrics
+/api/v3/nextComment handle_GET_nextComment
+
+/api/v3/notifications/subscribe handle_GET_notifications_subscribe
+/api/v3/notifications/unsubscribe handle_GET_notifications_unsubscribe
+/api/v3/notifyTeam handle_POST_notifyTeam
+
+/api/v3/participants handle_GET_participants
+/api/v3/participants handle_POST_participants
+/api/v3/participants_extended handle_PUT_participants_extended
+/api/v3/participation handle_GET_participation
+/api/v3/participationInit handle_GET_participationInit
+/api/v3/ptptCommentMod handle_POST_ptptCommentMod
+/api/v3/ptptois handle_GET_ptptois
+/api/v3/ptptois handle_PUT_ptptois
+/api/v3/query_participants_by_metadata handle_POST_query_participants_by_metadata
+
+/api/v3/reportCommentSelections handle_POST_reportCommentSelections
+/api/v3/reportExport/:report_id/:report_type handle_GET_reportExport
+/api/v3/reportNarrative handle_GET_reportNarrative
+/api/v3/reports handle_GET_reports
+/api/v3/reports handle_POST_reports
+/api/v3/reports handle_PUT_reports
+
+/api/v3/reserve_conversation_id handle_POST_reserve_conversation_id
+/api/v3/sendCreatedLinkToEmail handle_POST_sendCreatedLinkToEmail
+/api/v3/sendEmailExportReady handle_POST_sendEmailExportReady
+/api/v3/snapshot handle_GET_snapshot
+/api/v3/stars handle_POST_stars
+
+/api/v3/testConnection handle_GET_testConnection
+/api/v3/testDatabase handle_GET_testDatabase
+/api/v3/trashes handle_POST_trashes
+/api/v3/tryCookie handle_GET_tryCookie
+/api/v3/tutorial handle_POST_tutorial
+/api/v3/upvotes handle_POST_upvotes
+
+/api/v3/users handle_GET_users
+/api/v3/users handle_PUT_users
+/api/v3/users/invite handle_POST_users_invite
+
+/api/v3/verify handle_GET_verification
+
+/api/v3/votes handle_GET_votes
+/api/v3/votes handle_POST_votes
+/api/v3/votes/famous handle_GET_votes_famous
+/api/v3/votes/me handle_GET_votes_me
+
+/api/v3/xids handle_GET_xids
+/api/v3/xidWhitelist handle_POST_xidWhitelist
+
+/api/v3/zinvites/:zid handle_GET_zinvites
+/api/v3/zinvites/:zid handle_POST_zinvites
+
+/iim/:conversation_id handle_GET_iim_conversation
+/iip/:conversation_id handle_GET_iip_conversation
+
+/perfStats_9182738127 handle_GET_perfStats
+/polis_site_id.* handle_GET_implicit_conversation_generation
+
+## Non-API Routes (Static Files, Redirects, etc.)
+
+/football -> redirects to /2arcefpshi
+/nabi -> redirects to /8ufpzc6fkm
+/pdf -> redirects to /23mymwyhkn
+
+/[0-9][0-9A-Za-z]+(\/.*)?/ fetchIndexForConversation
+/about$/ -> redirects to /home
+/account(\/.*)?/ fetchIndexForAdminPage
+/bot(\/.*)?/ fetchIndexForAdminPage
+/bot\/install(\/.*)?/ fetchIndexForAdminPage
+/bot\/support(\/.*)?/ fetchIndexForAdminPage
+/company$/ fetchIndexForAdminPage
+/contrib(\/.*)?/ fetchIndexForAdminPage
+/conversation\/create(\/.*)?/ fetchIndexWithoutPreloadData
+/conversations(\/.*)?/ fetchIndexForAdminPage
+/createuser(\/.*)?/ fetchIndexForAdminPage
+/demo\/[0-9][0-9A-Za-z]+/ fetchIndexForConversation
+/demo$/ fetchIndexForAdminPage
+/explore\/[0-9][0-9A-Za-z]+(\/.*)?/ fetchIndexForConversation
+/gov(\/.*)?/ fetchIndexForAdminPage
+/hk/ fetchIndexWithoutPreloadData
+/hk\/new/ fetchIndexWithoutPreloadData
+/home(\/.*)?/ fetchIndexForAdminPage 
+/inbox(\/.*)?$/ fetchIndexWithoutPreloadData
+/inboxApiTest/ fetchIndexWithoutPreloadData
+/integrate(\/.*)?/ fetchIndexForAdminPage
+/m\/[0-9][0-9A-Za-z]+(\/.*)?/ fetchIndexForAdminPage
+/narrativeReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/ fetchIndexForReportPage
+/ot\/[0-9][0-9A-Za-z]+(\/.*)?/ fetchIndexForConversation
+/other-conversations(\/.*)?/ fetchIndexForAdminPage
+/privacy$/ fetchIndexForAdminPage
+/pwreset.*/ fetchIndexForAdminPage
+/pwresetinit.*/ fetchIndexForAdminPage
+/report\/r?[0-9][0-9A-Za-z]+(\/.*)?/ fetchIndexForReportPage
+/s\// fetchIndexWithoutPreloadData
+/s$/ fetchIndexWithoutPreloadData
+/settings(\/.*)?$/ makeFetchIndexWithoutPreloadData()
+/share\/[0-9][0-9A-Za-z]+(\/.*)?/ fetchIndexForConversation
+/signin(\/.*)?/ fetchIndexForAdminPage
+/signout(\/.*)?/ fetchIndexForAdminPage
+/summary\/[0-9][0-9A-Za-z]+(\/.*)?/ fetchIndexForConversation
+/thirdPartyCookieTestPt1\.html$/ fetchThirdPartyCookieTestPt1
+/thirdPartyCookieTestPt2\.html$/ fetchThirdPartyCookieTestPt2
+/tos$/ fetchIndexForAdminPage
+/user\/create(\/.*)?$/ fetchIndexWithoutPreloadData
+/user\/login(\/.*)?$/ fetchIndexWithoutPreloadData
+/user\/logout(\/.*)?$/ fetchIndexWithoutPreloadData
