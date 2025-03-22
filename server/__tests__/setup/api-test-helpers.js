@@ -217,7 +217,6 @@ async function createConversation(authToken, options = {}) {
     requiredProperties: ['body.url']
   });
 
-  const url = getResponseProperty(response, 'body.url');
   const conversationId = getResponseProperty(response, 'body.conversation_id');
 
   if (conversationId === null) {
@@ -226,10 +225,7 @@ async function createConversation(authToken, options = {}) {
 
   await wait(1000); // Wait for conversation to be created
 
-  return {
-    conversationId,
-    url
-  };
+  return conversationId;
 }
 
 /**
@@ -507,20 +503,15 @@ async function setupAuthAndConvo(options = {}) {
 
   // Register and login
   const { authToken, userId } = await registerAndLoginUser(testUser);
-  let conversationData = {};
+  const commentIds = [];
+  let conversationId;
 
   // Create test conversation if requested
   if (createConvo) {
-    const { conversationId, url } = await createConversation(authToken, options.conversationOptions || {});
-
-    conversationData = {
-      conversationId,
-      conversationUrl: url
-    };
+    conversationId = await createConversation(authToken, options.conversationOptions || {});
 
     // Create test comments if commentCount is specified
     if (options.commentCount && options.commentCount > 0) {
-      const commentIds = [];
       for (let i = 0; i < options.commentCount; i++) {
         const commentId = await createComment(
           authToken,
@@ -529,7 +520,6 @@ async function setupAuthAndConvo(options = {}) {
         );
         commentIds.push(commentId);
       }
-      conversationData.commentIds = commentIds;
     }
   }
 
@@ -537,7 +527,8 @@ async function setupAuthAndConvo(options = {}) {
     authToken,
     userId,
     testUser,
-    ...conversationData
+    conversationId,
+    commentIds
   };
 }
 

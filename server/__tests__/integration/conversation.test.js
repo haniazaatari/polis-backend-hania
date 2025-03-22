@@ -21,7 +21,7 @@ describe('Conversation Endpoints', () => {
   test('Full conversation lifecycle', async () => {
     // STEP 1: Create a new conversation
     const timestamp = Date.now();
-    const { conversationId } = await createConversation(authToken, {
+    const conversationId = await createConversation(authToken, {
       topic: `Test Conversation ${timestamp}`,
       description: `Test Description ${timestamp}`,
       is_active: true,
@@ -35,9 +35,7 @@ describe('Conversation Endpoints', () => {
 
     expect(listResponse.status).toBe(200);
     expect(Array.isArray(listResponse.body)).toBe(true);
-    expect(
-      listResponse.body.some((conv) => conv.conversation_id === conversationId)
-    ).toBe(true);
+    expect(listResponse.body.some((conv) => conv.conversation_id === conversationId)).toBe(true);
 
     // STEP 3: Get conversation stats
     const statsResponse = await attachAuthToken(

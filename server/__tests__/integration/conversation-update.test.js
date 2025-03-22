@@ -19,15 +19,13 @@ describe('Conversation Update API', () => {
     authToken = auth.authToken;
 
     // Create a test conversation for each test
-    const response = await createConversation(authToken, {
+    conversationId = await createConversation(authToken, {
       is_active: true,
       is_anon: true,
       topic: 'Original Topic',
       description: 'Original Description',
       strict_moderation: false
     });
-
-    conversationId = response.conversationId;
   });
 
   test('should update basic conversation properties', async () => {
@@ -47,12 +45,7 @@ describe('Conversation Update API', () => {
     await wait(1000);
 
     // Verify the changes by getting the conversation details
-    const getResponse = await makeRequest(
-      'GET',
-      `/conversations?conversation_id=${conversationId}`,
-      null,
-      authToken
-    );
+    const getResponse = await makeRequest('GET', `/conversations?conversation_id=${conversationId}`, null, authToken);
 
     expect(getResponse.status).toBe(200);
     expect(getResponse.body).toBeDefined();
@@ -78,12 +71,7 @@ describe('Conversation Update API', () => {
     await wait(1000);
 
     // Verify the changes by getting the conversation details
-    const getResponse = await makeRequest(
-      'GET',
-      `/conversations?conversation_id=${conversationId}`,
-      null,
-      authToken
-    );
+    const getResponse = await makeRequest('GET', `/conversations?conversation_id=${conversationId}`, null, authToken);
 
     expect(getResponse.status).toBe(200);
     expect(getResponse.body).toBeDefined();
@@ -110,12 +98,7 @@ describe('Conversation Update API', () => {
     await wait(1000);
 
     // Verify the changes by getting the conversation details
-    const getResponse = await makeRequest(
-      'GET',
-      `/conversations?conversation_id=${conversationId}`,
-      null,
-      authToken
-    );
+    const getResponse = await makeRequest('GET', `/conversations?conversation_id=${conversationId}`, null, authToken);
 
     expect(getResponse.status).toBe(200);
     expect(getResponse.body).toBeDefined();
@@ -185,12 +168,7 @@ describe('Conversation Update API', () => {
     await wait(1000);
 
     // Verify the changes by getting the conversation details
-    const getResponse = await makeRequest(
-      'GET',
-      `/conversations?conversation_id=${conversationId}`,
-      null,
-      authToken
-    );
+    const getResponse = await makeRequest('GET', `/conversations?conversation_id=${conversationId}`, null, authToken);
 
     expect(getResponse.status).toBe(200);
     expect(getResponse.body).toBeDefined();

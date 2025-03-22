@@ -14,7 +14,7 @@ describe('Conversation Details API', () => {
     const { authToken } = await registerAndLoginUser(testUser);
 
     // Create a public conversation
-    const { conversationId } = await createConversation(authToken, {
+    const conversationId = await createConversation(authToken, {
       is_active: true,
       is_anon: true,
       topic: 'Test Public Conversation',
@@ -27,12 +27,7 @@ describe('Conversation Details API', () => {
     });
 
     // Fetch conversation details - notice we're not prepending API_PREFIX since makeRequest adds it
-    const response = await makeRequest(
-      'GET',
-      `/conversations?conversation_id=${conversationId}`,
-      null,
-      authToken
-    );
+    const response = await makeRequest('GET', `/conversations?conversation_id=${conversationId}`, null, authToken);
 
     // Check that the response is successful
     expect(response.status).toBe(200);
@@ -48,7 +43,7 @@ describe('Conversation Details API', () => {
     const { authToken } = await registerAndLoginUser(testUser);
 
     // Create a public conversation
-    const { conversationId } = await createConversation(authToken, {
+    const conversationId = await createConversation(authToken, {
       is_active: true,
       is_anon: true,
       topic: 'My Test Conversation',
@@ -63,9 +58,7 @@ describe('Conversation Details API', () => {
     expect(Array.isArray(response.body)).toBe(true);
 
     // Find our created conversation in the list
-    const foundConversation = response.body.find(
-      (conv) => conv.conversation_id === conversationId
-    );
+    const foundConversation = response.body.find((conv) => conv.conversation_id === conversationId);
 
     expect(foundConversation).toBeDefined();
     expect(foundConversation.topic).toBe('My Test Conversation');
@@ -77,7 +70,7 @@ describe('Conversation Details API', () => {
     const { authToken } = await registerAndLoginUser(testUser);
 
     // Create a public conversation
-    const { conversationId } = await createConversation(authToken, {
+    const conversationId = await createConversation(authToken, {
       is_active: true,
       is_anon: true,
       topic: 'Public Test Conversation',
@@ -87,10 +80,7 @@ describe('Conversation Details API', () => {
     expect(conversationId).toBeDefined();
 
     // Fetch conversation details without auth token
-    const response = await makeRequest(
-      'GET',
-      `/conversations?conversation_id=${conversationId}`
-    );
+    const response = await makeRequest('GET', `/conversations?conversation_id=${conversationId}`);
 
     // Check that the response is successful
     expect(response.status).toBe(200);
@@ -121,19 +111,14 @@ describe('Conversation Details API', () => {
     const { authToken } = await registerAndLoginUser(testUser);
 
     // Create a public conversation
-    const { conversationId } = await createConversation(authToken, {
+    const conversationId = await createConversation(authToken, {
       is_active: true,
       is_anon: true,
       topic: 'Test Stats Conversation'
     });
 
     // Get conversation stats
-    const response = await makeRequest(
-      'GET',
-      `/conversationStats?conversation_id=${conversationId}`,
-      null,
-      authToken
-    );
+    const response = await makeRequest('GET', `/conversationStats?conversation_id=${conversationId}`, null, authToken);
 
     // Check that the response is successful
     expect(response.status).toBe(200);
