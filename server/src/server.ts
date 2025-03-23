@@ -12,14 +12,13 @@ import async from "async";
 // @ts-ignore
 import FB from "fb";
 import { google } from "googleapis";
-import fs from "fs";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import OAuth from "oauth";
 import replaceStream from "replacestream";
 import responseTime from "response-time";
 import request from "request-promise"; // includes Request, but adds promise methods
-import LruCache from "lru-cache";
+import { LRUCache } from "lru-cache";
 import timeout from "connect-timeout";
 import _ from "underscore";
 import pg from "pg";
@@ -32,18 +31,16 @@ import dbPgQuery, {
   query as pgQuery,
   query_readOnly as pgQuery_readOnly,
   queryP as pgQueryP,
-  queryP_metered as pgQueryP_metered,
   queryP_metered_readOnly as pgQueryP_metered_readOnly,
   queryP_readOnly as pgQueryP_readOnly,
-  stream_queryP_readOnly as stream_pgQueryP_readOnly,
   queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty,
 } from "./db/pg-query";
 
 import Config from "./config";
 import fail from "./utils/fail";
 import { PcaCacheItem, getPca, fetchAndCacheLatestPcaData } from "./utils/pca";
-import { getZinvite, getZinvites, getZidForRid } from "./utils/zinvite";
-import { getBidIndexToPidMapping, getPidsForGid } from "./utils/participants";
+import { getZinvite, getZinvites } from "./utils/zinvite";
+import { getPidsForGid } from "./utils/participants";
 
 import { handle_GET_reportExport } from "./routes/export";
 import { handle_GET_reportNarrative } from "./routes/reportNarrative";
@@ -54,8 +51,6 @@ import {
   Headers,
   Query,
   AuthRequest,
-  AuthBody,
-  AuthQuery,
   ParticipantInfo,
   PidReadyResult,
   CommentOptions,
@@ -66,7 +61,6 @@ import {
   CommentType,
   TwitterParameters,
   ParticipantSocialNetworkInfo,
-  ParticipantOption,
   DemographicEntry,
   Demo,
   Vote,
@@ -99,7 +93,6 @@ import {
 
 AWS.config.update({ region: Config.awsRegion });
 const devMode = Config.isDevMode;
-const s3Client = new AWS.S3({ apiVersion: "2006-03-01" });
 const escapeLiteral = pg.Client.prototype.escapeLiteral;
 const doSendVerification = CreateUser.doSendVerification;
 const generateAndRegisterZinvite = CreateUser.generateAndRegisterZinvite;
@@ -107,7 +100,7 @@ const generateToken = Password.generateToken;
 const generateTokenP = Password.generateTokenP;
 
 // TODO: Maybe able to remove
-import { checkPassword, generateHashedPassword } from "./auth/password";
+import { checkPassword } from "./auth/password";
 import cookies from "./utils/cookies";
 const COOKIES = cookies.COOKIES;
 const COOKIES_TO_CLEAR = cookies.COOKIES_TO_CLEAR;
@@ -128,10 +121,6 @@ import logger from "./utils/logger";
 import emailSenders from "./email/senders";
 const sendTextEmail = emailSenders.sendTextEmail;
 const sendTextEmailWithBackupOnly = emailSenders.sendTextEmailWithBackupOnly;
-
-const resolveWith = (x: { body?: { user_id: string } }) => {
-  return Promise.resolve(x);
-};
 
 if (devMode) {
   BluebirdPromise.longStackTraces();
@@ -1070,7 +1059,7 @@ function initializePolisHelpers() {
 
   // don't start immediately, let other things load first.
   // setTimeout(fetchAndCacheLatestPcaData, 5000);
-  fetchAndCacheLatestPcaData; // TODO_DELETE
+  fetchAndCacheLatestPcaData(); // TODO_DELETE
 
   function redirectIfHasZidButNoConversationId(
     req: { body: { zid: any; conversation_id: any }; headers?: any },
@@ -3914,10 +3903,9 @@ Email verified! You can close this tab or hit the back button.
     return pgQueryP(
       "select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));",
       [uid]
-      //     Argument of type '(rows: string | any[]) => Promise<unknown>' is not assignable to parameter of type '(value: unknown) => unknown'.
+      // Argument of type '(rows: string | any[]) => Promise<unknown>' is not assignable to parameter of type '(value: unknown) => unknown'.
       // Types of parameters 'rows' and 'value' are incompatible.
       //   Type 'unknown' is not assignable to type 'string | any[]'.
-      //     Type 'unknown' is not assignable to type 'any[]'.ts(2345)
       // @ts-ignore
     ).then(function (rows: string | any[]) {
       if (!rows || !rows.length) {
@@ -3938,10 +3926,8 @@ Email verified! You can close this tab or hit the back button.
     return pgQueryP(
       "select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));",
       [uid]
-      //     Argument of type '(rows: string | any[]) => any' is not assignable to parameter of type '(value: unknown) => any'.
-      // Types of parameters 'rows' and 'value' are incompatible.
+      // Argument of type '(rows: string | any[]) => any' is not assignable to parameter of type '(value: unknown) => any'.
       //   Type 'unknown' is not assignable to type 'string | any[]'.
-      //     Type 'unknown' is not assignable to type 'any[]'.ts(2345)
       // @ts-ignore
     ).then(function (rows: string | any[]) {
       if (!rows || !rows.length) {
@@ -5264,7 +5250,7 @@ Email verified! You can close this tab or hit the back button.
         logger.error("polis_err_getting_zinvite", err);
         return void 0;
       })
-      .then(function (zinvite: any) {
+      .then(function (zinvite: string) {
         // NOTE: the counter goes in the email body so it doesn't create a new email thread (in Gmail, etc)
 
         body += createProdModerationUrl(zinvite);
@@ -6398,8 +6384,8 @@ Email verified! You can close this tab or hit the back button.
     ]).then(
       //     Argument of type '(rows: string | any[]) => void' is not assignable to parameter of type '(value: unknown) => void | PromiseLike<void>'.
       // Types of parameters 'rows' and 'value' are incompatible.
-      //   Type 'unknown' is not assignable to type 'string | any[]'.
-      //     Type 'unknown' is not assignable to type 'any[]'.ts(2345)
+      //     Type 'unknown' is not assignable to type 'string | any[]'.
+      //       Type 'unknown' is not assignable to type 'any[]'.ts(2345)
       // @ts-ignore
       function (rows: string | any[]) {
         if (rows && rows.length) {
@@ -8119,10 +8105,8 @@ Email verified! You can close this tab or hit the back button.
     }
     pgQueryP("select name from contexts where name = ($1);", [name])
       .then(
-        //       Argument of type '(rows: string | any[]) => Promise<void> | undefined' is not assignable to parameter of type '(value: unknown) => void | PromiseLike<void | undefined> | undefined'.
-        // Types of parameters 'rows' and 'value' are incompatible.
+        // Argument of type '(rows: string | any[]) => Promise<void> | undefined' is not assignable to parameter of type '(value: unknown) => void | PromiseLike<void | undefined> | undefined'.
         //   Type 'unknown' is not assignable to type 'string | any[]'.
-        //     Type 'unknown' is not assignable to type 'any[]'.ts(2345)
         // @ts-ignore
         function (rows: string | any[]) {
           let exists = rows && rows.length;
@@ -8346,7 +8330,7 @@ Email verified! You can close this tab or hit the back button.
             fail(res, 500, "polis_err_metadata_query", err);
             return;
           }
-          // Argument of type 'any[]' is not assignable to parameter of type 'never[]'.ts(2345)
+          // Argument of type 'any[]' is not assignable to parameter of type 'never[]'.
           // @ts-ignore
           res.status(200).json(_.pluck(results.rows, "pid"));
         }
@@ -8597,7 +8581,7 @@ Thanks for using Polis!
   }
 
   // TODO expire this stuff
-  let twitterUserInfoCache = new LruCache({
+  let twitterUserInfoCache = new LRUCache<string, any>({
     max: 10000,
   });
   function getTwitterUserInfo(
@@ -9378,8 +9362,7 @@ Thanks for using Polis!
     return pgQueryP(q, params);
   }
 
-  let socialParticipantsCache = new LruCache({
-    maxAge: 1000 * 30, // 30 seconds
+  let socialParticipantsCache = new LRUCache<string, any>({
     max: 999,
   });
 
@@ -9490,7 +9473,7 @@ Thanks for using Polis!
 
   // zid_pid => "math_tick:ppaddddaadadaduuuuuuuuuuuuuuuuu"; // not using objects to save some ram
   // TODO consider "p2a24a2dadadu15" format
-  let votesForZidPidCache = new LruCache({
+  let votesForZidPidCache = new LRUCache<string, any>({
     max: 5000,
   });
 
@@ -9706,10 +9689,8 @@ Thanks for using Polis!
       return o;
     });
   }
-  // Value of type 'typeof LRUCache' is not callable. Did you mean to include 'new'? ts(2348)
-  // @ts-ignore
-  let twitterShareCountCache = LruCache({
-    maxAge: 1000 * 60 * 30, // 30 minutes
+
+  let twitterShareCountCache = new LRUCache<string, number>({
     max: 999,
   });
 
@@ -9742,10 +9723,7 @@ Thanks for using Polis!
     );
   }
 
-  // Value of type 'typeof LRUCache' is not callable. Did you mean to include 'new'? ts(2348)
-  // @ts-ignore
-  let fbShareCountCache = LruCache({
-    maxAge: 1000 * 60 * 30, // 30 minutes
+  let fbShareCountCache = new LRUCache<string, number>({
     max: 999,
   });
 
@@ -10368,10 +10346,9 @@ Thanks for using Polis!
     let einvite = req.p.einvite;
 
     pgQueryP("select * from einvites where einvite = ($1);", [einvite])
-      //     Argument of type '(rows: string | any[]) => void' is not assignable to parameter of type '(value: unknown) => void | PromiseLike<void>'.
+      // Argument of type '(rows: string | any[]) => Promise<unknown>' is not assignable to parameter of type '(value: unknown) => unknown'.
       // Types of parameters 'rows' and 'value' are incompatible.
       //   Type 'unknown' is not assignable to type 'string | any[]'.
-      //     Type 'unknown' is not assignable to type 'any[]'.ts(2345)
       // @ts-ignore
       .then(function (rows: string | any[]) {
         if (!rows.length) {
