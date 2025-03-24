@@ -1,9 +1,7 @@
-import * as pg from '../db/pg-query.js';
+import { updateSubscription } from '../db/notifications.js';
 import { createNotificationsSubscribeUrl, createNotificationsUnsubscribeUrl } from '../email/notifications.js';
 import { HMAC_SIGNATURE_PARAM_NAME, verifyHmacForQueryParams } from '../utils/hmac.js';
 import { fail } from '../utils/responseHandlers.js';
-
-const pgQueryP = pg.queryP;
 
 /**
  * Handle GET request to subscribe to notifications
@@ -21,17 +19,17 @@ function handleNotificationsSubscribe(req, res) {
 
   verifyHmacForQueryParams('api/v3/notifications/subscribe', params)
     .then(
-      () => {
-        return pgQueryP(
-          'update participants set subscribed = 1 where uid = (select uid from users where email = ($2)) and zid = ($1);',
-          [zid, email]
-        ).then(() => {
+      async () => {
+        try {
+          await updateSubscription(zid, email, true);
           res.set('Content-Type', 'text/html');
           res.send(`<h1>Subscribed!</h1>
 <p>
 <a href="${createNotificationsUnsubscribeUrl(req.p.conversation_id, req.p.email)}">oops, unsubscribe me.</a>
 </p>`);
-        });
+        } catch (err) {
+          fail(res, 500, 'polis_err_subscribe_misc', err);
+        }
       },
       () => {
         fail(res, 403, 'polis_err_subscribe_signature_mismatch');
@@ -58,17 +56,17 @@ function handleNotificationsUnsubscribe(req, res) {
 
   verifyHmacForQueryParams('api/v3/notifications/unsubscribe', params)
     .then(
-      () => {
-        return pgQueryP(
-          'update participants set subscribed = 0 where uid = (select uid from users where email = ($2)) and zid = ($1);',
-          [zid, email]
-        ).then(() => {
+      async () => {
+        try {
+          await updateSubscription(zid, email, false);
           res.set('Content-Type', 'text/html');
           res.send(`<h1>Unsubscribed.</h1>
 <p>
 <a href="${createNotificationsSubscribeUrl(req.p.conversation_id, req.p.email)}">oops, subscribe me again.</a>
 </p>`);
-        });
+        } catch (err) {
+          fail(res, 500, 'polis_err_unsubscribe_misc', err);
+        }
       },
       () => {
         fail(res, 403, 'polis_err_unsubscribe_signature_mismatch');

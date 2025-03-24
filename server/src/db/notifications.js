@@ -17,4 +17,23 @@ async function createNotificationTask(zid) {
   }
 }
 
-export { createNotificationTask };
+/**
+ * Update participant's notification subscription status
+ * @param {number} zid - The conversation ID
+ * @param {string} email - The participant's email
+ * @param {boolean} subscribed - Whether to subscribe (true) or unsubscribe (false)
+ * @returns {Promise<void>}
+ */
+async function updateSubscription(zid, email, subscribed) {
+  try {
+    await pgQueryP(
+      'update participants set subscribed = ($3) where uid = (select uid from users where email = ($2)) and zid = ($1);',
+      [zid, email, subscribed ? 1 : 0]
+    );
+  } catch (err) {
+    logger.error('Error updating notification subscription', { zid, email, subscribed, error: err });
+    throw err;
+  }
+}
+
+export { createNotificationTask, updateSubscription };

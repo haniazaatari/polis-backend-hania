@@ -1,6 +1,11 @@
 import _ from 'underscore';
 import Config from '../../config.js';
-import { queryP_readOnly } from '../../db/pg-query.js';
+import {
+  getConversationMetadataQuestions,
+  getConversationTranslationsByLang,
+  getConversationWithOwner,
+  getCourseByInvite
+} from '../../db/conversations.js';
 import { sendCreatedLinkToEmail } from '../../email/specialized.js';
 import * as conversationRepository from '../../repositories/conversation/conversationRepository.js';
 import { ifDefinedFirstElseSecond } from '../../utils/common.js';
@@ -706,10 +711,7 @@ function appendImplicitConversationParams(url, params) {
  */
 async function getConversationHasMetadata(zid) {
   try {
-    const rows = await queryP_readOnly(
-      'SELECT * FROM participant_metadata_questions WHERE zid = ($1) AND alive = TRUE;',
-      [zid]
-    );
+    const rows = await getConversationMetadataQuestions(zid);
     return rows && rows.length > 0;
   } catch (err) {
     logger.error('Error checking if conversation has metadata', { error: err, zid });
@@ -724,18 +726,9 @@ async function getConversationHasMetadata(zid) {
  * @returns {Promise<Object[]>} - Array of translations
  */
 async function getConversationTranslations(zid, lang) {
-  const firstTwoCharsOfLang = lang.substring(0, 2);
   try {
-    const rows = await queryP_readOnly('SELECT * FROM conversation_translations WHERE zid = ($1) AND lang = ($2);', [
-      zid,
-      firstTwoCharsOfLang
-    ]);
-
-    if (!rows || !rows.length) {
-      return [];
-    }
-
-    return rows;
+    const rows = await getConversationTranslationsByLang(zid, lang);
+    return rows || [];
   } catch (err) {
     logger.error('Error getting conversation translations', { error: err, zid, lang });
     return [];
@@ -778,10 +771,7 @@ async function getOneConversation(zid, uid, lang) {
   try {
     // Get all necessary data in parallel
     const [conversationRows, convHasMetadata, requestingUserInfo, translations] = await Promise.all([
-      queryP_readOnly(
-        'select * from conversations left join (select uid, site_id from users) as u on conversations.owner = u.uid where conversations.zid = ($1);',
-        [zid]
-      ),
+      getConversationWithOwner(zid),
       getConversationHasMetadata(zid),
       uid ? getUserInfoForUid2(uid) : Promise.resolve({}),
       lang ? getConversationTranslationsMinimal(zid, lang) : Promise.resolve(null)
@@ -837,7 +827,7 @@ async function getOneConversation(zid, uid, lang) {
  */
 async function getCourseIdFromInvite(courseInvite) {
   try {
-    const result = await queryP_readOnly('select course_id from courses where course_invite = ($1);', [courseInvite]);
+    const result = await getCourseByInvite(courseInvite);
 
     if (!result || !result.length) {
       throw new Error('polis_err_course_not_found');

@@ -275,6 +275,31 @@ async function getCommentTranslationsFromDb(zid, tid) {
   return await pgQueryP_readOnly('select * from comment_translations where zid = ($1) and tid = ($2);', [zid, tid]);
 }
 
+/**
+ * Get comments without language detection
+ * @returns {Promise<Array>} Array of comments without language set
+ */
+async function getCommentsWithoutLanguage() {
+  return await queryP('select tid, txt, zid from comments where lang is null;', []);
+}
+
+/**
+ * Update comment language
+ * @param {string} language - Detected language code
+ * @param {number} confidence - Language detection confidence
+ * @param {number} zid - Conversation ID
+ * @param {number} tid - Comment ID
+ * @returns {Promise<void>}
+ */
+async function updateCommentLanguage(language, confidence, zid, tid) {
+  await queryP('update comments set lang = ($1), lang_confidence = ($2) where zid = ($3) and tid = ($4)', [
+    language,
+    confidence,
+    zid,
+    tid
+  ]);
+}
+
 export {
   getNumberOfCommentsWithModerationStatus,
   addNoMoreCommentsRecord,
@@ -286,5 +311,7 @@ export {
   getCommentsListFromDb,
   getNumberOfCommentsRemainingFromDb,
   storeCommentTranslationInDb,
-  getCommentTranslationsFromDb
+  getCommentTranslationsFromDb,
+  getCommentsWithoutLanguage,
+  updateCommentLanguage
 };
