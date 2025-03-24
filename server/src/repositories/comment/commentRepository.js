@@ -217,19 +217,6 @@ async function getCommentsList(options) {
  */
 async function getNumberOfCommentsRemaining(zid, pid) {
   try {
-    // Validate pid - it must be an integer and not null/undefined
-    if (pid === null || pid === undefined || !Number.isInteger(pid) || pid < 0) {
-      logger.debug(`Invalid pid ${pid} for getNumberOfCommentsRemaining in repository`);
-      // Return a mock result with 0 remaining and 0 total
-      return [
-        {
-          remaining: 0,
-          total: 0,
-          pid
-        }
-      ];
-    }
-
     const results = await queryP_readOnly(
       'WITH ' +
         'v AS (SELECT * FROM votes_latest_unique WHERE zid = ($1) AND pid = ($2)), ' +

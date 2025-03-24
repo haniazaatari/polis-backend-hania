@@ -1,3 +1,4 @@
+import _ from 'underscore';
 import * as authRepository from '../../repositories/auth/authRepository.js';
 import * as userRepository from '../../repositories/user/userRepository.js';
 import logger from '../../utils/logger.js';
@@ -102,6 +103,21 @@ async function authenticateUser(req) {
       authResult = await authenticateWithBasicAuth(authHeader);
       if (authResult?.uid) {
         return authResult;
+      }
+    }
+
+    // Check for agid - create anonymous user
+    if (req.body?.agid) {
+      try {
+        const uid = await createDummyUser();
+        return {
+          isAuthenticated: true,
+          uid,
+          shouldAddCookies: _.isUndefined(req.body.xid)
+        };
+      } catch (err) {
+        logger.error('Error creating anonymous user', err);
+        throw err;
       }
     }
 
@@ -392,7 +408,7 @@ async function authenticateWithBasicAuth(authHeader) {
  * Create an anonymous user
  * @returns {Promise<number>} - Created user ID
  */
-async function createAnonymousUser() {
+async function createDummyUser() {
   try {
     // Create a dummy user
     const uid = await userRepository.createDummyUser();
@@ -427,7 +443,6 @@ export {
   authenticateWithXidConversation,
   authenticateWithCookie,
   authenticateWithBasicAuth,
-  createAnonymousUser,
   isAuthenticated,
   parseBasicAuthHeader,
   hasAuthToken

@@ -3,7 +3,7 @@ import {
   handleGetParticipantsOfInterest,
   handleUpdateParticipantModerationStatus
 } from '../controllers/participantModerationController.js';
-import { auth, authOptional, moveToBody } from '../middlewares/index.js';
+import { auth, authOptional, moveToBody, resolveParticipantId } from '../middlewares/index.js';
 import {
   assignToP,
   assignToPCustom,
@@ -11,7 +11,6 @@ import {
   getInt,
   getStringLimitLength,
   need,
-  resolve_pidThing,
   want
 } from '../utils/parameter.js';
 
@@ -43,7 +42,7 @@ router.put(
   auth(assignToP),
   need('mod', getInt, assignToP),
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
-  resolve_pidThing('pid', assignToP),
+  resolveParticipantId('pid', assignToP),
   handleUpdateParticipantModerationStatus
 );
 

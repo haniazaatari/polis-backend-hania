@@ -6,6 +6,7 @@ import {
   getVotesForSingleParticipant,
   processVote
 } from '../services/vote/voteService.js';
+import logger from '../utils/logger.js';
 import { fail, finishArray, finishOne } from '../utils/responseHandlers.js';
 
 /**
@@ -64,24 +65,22 @@ export const handleCreateVote = async (req, res) => {
   const token = req.cookies[COOKIES.TOKEN];
   const apiToken = req?.headers?.authorization || '';
   const xPolisHeaderToken = req?.headers?.['x-polis'];
+  logger.debug('handleCreateVote', { uid, zid, pid, lang, token, apiToken, xPolisHeaderToken });
+
+  const uidUndefined = uid === undefined || uid === null;
 
   // Check authentication
-  if (!uid && !token && !apiToken && !xPolisHeaderToken) {
+  if (uidUndefined && !token && !apiToken && !xPolisHeaderToken) {
     return fail(res, 403, 'polis_err_vote_noauth');
   }
 
   // Validate required parameters
-  if (!zid) {
+  if (zid === undefined || zid === null) {
     return fail(res, 400, 'polis_err_missing_zid');
   }
 
   if (tid === undefined || tid === null) {
     return fail(res, 400, 'polis_err_missing_tid');
-  }
-
-  // We allow pid to be 0 (valid participant ID)
-  if (pid === undefined || pid === null || pid < 0) {
-    return fail(res, 400, 'polis_err_missing_pid');
   }
 
   try {

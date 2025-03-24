@@ -4,7 +4,13 @@
  */
 import express from 'express';
 import { handleGetParticipation, handleGetParticipationInit } from '../controllers/participationController.js';
-import { auth, authOptional, denyIfNotFromWhitelistedDomain, moveToBody } from '../middlewares/index.js';
+import {
+  auth,
+  authOptional,
+  denyIfNotFromWhitelistedDomain,
+  moveToBody,
+  resolveParticipantId
+} from '../middlewares/index.js';
 import {
   assignToP,
   assignToPCustom,
@@ -13,7 +19,6 @@ import {
   getInt,
   getStringLimitLength,
   need,
-  resolve_pidThing,
   want
 } from '../utils/parameter.js';
 
@@ -64,7 +69,7 @@ router.get(
   want('domain_whitelist_override_key', getStringLimitLength(1, 1000), assignToP),
   denyIfNotFromWhitelistedDomain,
   want('xid', getStringLimitLength(1, 999), assignToP),
-  resolve_pidThing('pid', assignToP, 'get:votes'),
+  resolveParticipantId('pid', assignToP, 'get:votes'),
   handleGetParticipationInit
 );
 

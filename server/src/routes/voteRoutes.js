@@ -5,7 +5,7 @@ import {
   handleGetVotes,
   handleGetVotesForMe
 } from '../controllers/voteController.js';
-import { auth, authOptional, moveToBody } from '../middlewares/index.js';
+import { auth, authOptional, moveToBody, resolveParticipantId } from '../middlewares/index.js';
 import {
   assignToP,
   assignToPCustom,
@@ -15,7 +15,6 @@ import {
   getIntInRange,
   getStringLimitLength,
   need,
-  resolve_pidThing,
   want
 } from '../utils/parameter.js';
 
@@ -32,7 +31,7 @@ router.get(
   authOptional(assignToP),
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
   want('tid', getInt, assignToP),
-  resolve_pidThing('pid', assignToP, 'get:votes'),
+  resolveParticipantId('pid', assignToP, 'get:votes'),
   handleGetVotes
 );
 
@@ -77,9 +76,7 @@ router.post(
   need('vote', getIntInRange(-1, 1), assignToP),
   want('starred', getBool, assignToP),
   want('high_priority', getBool, assignToP, false),
-  // TODO: Try to use resolve_pidThing to handle diverse pid placements
-  // resolve_pidThing('pid', assignToP, 'post:votes'),
-  need('pid', getInt, assignToP),
+  resolveParticipantId('pid', assignToP, 'post:votes'),
   want('xid', getStringLimitLength(1, 999), assignToP),
   want('lang', getStringLimitLength(1, 10), assignToP),
   handleCreateVote

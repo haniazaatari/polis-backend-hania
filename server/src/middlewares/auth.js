@@ -1,6 +1,5 @@
-import _ from 'underscore';
 import { asyncMiddleware } from '../middlewares/utilityMiddleware.js';
-import { authenticateUser, createAnonymousUser } from '../services/auth/authService.js';
+import { authenticateUser } from '../services/auth/authService.js';
 import * as sessionService from '../services/auth/sessionService.js';
 import logger from '../utils/logger.js';
 import { fail } from '../utils/responseHandlers.js';
@@ -50,6 +49,17 @@ function _auth(assigner, isOptional) {
         req.p = req.p || {};
         req.p.uid = authResult.uid;
 
+        // If this was an auth that requires cookies to be added
+        if (authResult.shouldAddCookies) {
+          try {
+            await sessionService.startSessionAndAddCookies(authResult.uid, res);
+          } catch (sessionErr) {
+            res.status(500);
+            logger.error('polis_err_auth_token_error_2343', sessionErr);
+            return fail(res, 500, 'polis_err_auth_token_error_2343');
+          }
+        }
+
         return next();
       }
 
@@ -57,52 +67,6 @@ function _auth(assigner, isOptional) {
       if (authResult?.error) {
         res.status(authResult.status || 403);
         return next(authResult.error);
-      }
-
-      // Handle anonymous user with agid
-      if (req.body?.agid) {
-        try {
-          const uid = await createAnonymousUser();
-
-          // Add cookies if no XID is provided (using _.isUndefined to match original behavior)
-          const shouldAddCookies = _.isUndefined(req.body.xid);
-          if (!shouldAddCookies) {
-            // Just set the UID without adding cookies
-            if (assigner) {
-              assigner(req, 'uid', uid);
-            }
-
-            // Also set req.p.uid for backward compatibility
-            req.p = req.p || {};
-            req.p.uid = uid;
-
-            return next();
-          }
-
-          // Add cookies
-          try {
-            await sessionService.startSessionAndAddCookies(uid, res);
-
-            // Set the UID
-            if (assigner) {
-              assigner(req, 'uid', uid);
-            }
-
-            // Also set req.p.uid for backward compatibility
-            req.p = req.p || {};
-            req.p.uid = uid;
-
-            return next();
-          } catch (sessionErr) {
-            res.status(500);
-            logger.error('polis_err_auth_token_error_2343', sessionErr);
-            return fail(res, 500, 'polis_err_auth_token_error_2343');
-          }
-        } catch (err) {
-          res.status(500);
-          logger.error('polis_err_auth_token_error_1241', err);
-          return fail(res, 500, 'polis_err_auth_token_error_1241');
-        }
       }
 
       // If authentication is optional, continue

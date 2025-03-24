@@ -75,7 +75,7 @@ async function createUser(user) {
  */
 async function createDummyUser() {
   try {
-    const results = await queryP('INSERT INTO users (created) VALUES (now()) RETURNING uid;');
+    const results = await queryP('INSERT INTO users (created) VALUES (default) RETURNING uid;');
     return results[0].uid;
   } catch (error) {
     logger.error('Error creating dummy user', error);

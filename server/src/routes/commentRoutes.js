@@ -8,7 +8,8 @@ import {
   handlePostPtptCommentMod,
   handlePutComments
 } from '../controllers/commentController.js';
-import { auth, authOptional, getParticipantIdMiddleware, moveToBody } from '../middlewares/index.js';
+import { auth, authOptional, getPidForParticipant, moveToBody, resolveParticipantId } from '../middlewares/index.js';
+import { pidCache } from '../repositories/participant/participantRepository.js';
 import {
   assignToP,
   assignToPCustom,
@@ -22,7 +23,6 @@ import {
   getStringLimitLength,
   getUrlLimitLength,
   need,
-  resolve_pidThing,
   want
 } from '../utils/parameter.js';
 import { fail } from '../utils/responseHandlers.js';
@@ -66,7 +66,7 @@ router.post(
   want('anon', getBool, assignToP),
   want('is_seed', getBool, assignToP),
   want('xid', getStringLimitLength(1, 999), assignToP),
-  resolve_pidThing('pid', assignToP, 'post:comments'),
+  resolveParticipantId('pid', assignToP, 'post:comments'),
   handlePostComments
 );
 
@@ -150,7 +150,7 @@ router.get(
   moveToBody,
   authOptional(assignToP),
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
-  resolve_pidThing('not_voted_by_pid', assignToP, 'get:nextComment'),
+  resolveParticipantId('not_voted_by_pid', assignToP, 'get:nextComment'),
   want('without', getArrayOfInt, assignToP),
   want('include_social', getBool, assignToP),
   want('lang', getStringLimitLength(1, 10), assignToP),
@@ -196,7 +196,7 @@ router.post(
   want('as_offtopic', getBool, assignToP, null),
   want('as_spam', getBool, assignToP, null),
   want('as_unsure', getBool, assignToP, null),
-  getParticipantIdMiddleware(assignToP),
+  getPidForParticipant(assignToP, pidCache),
   handlePostPtptCommentMod
 );
 

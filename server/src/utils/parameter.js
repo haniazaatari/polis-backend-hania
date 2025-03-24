@@ -2,7 +2,6 @@ import LruCache from 'lru-cache';
 import _ from 'underscore';
 import { isUri } from 'valid-url';
 import * as pg from '../db/pg-query.js';
-import { getParticipantId } from '../repositories/participant/participantRepository.js';
 import { getZidFromConversationId } from '../services/conversation/conversationService.js';
 import logger from './logger.js';
 import { MPromise } from './metered.js';
@@ -64,17 +63,6 @@ function wantCookie(name, parserWhichReturnsPromise, assigner, defaultVal) {
     parserWhichReturnsPromise: parserWhichReturnsPromise,
     assigner: assigner,
     required: false,
-    defaultVal: defaultVal
-  });
-}
-
-function needHeader(name, parserWhichReturnsPromise, assigner, defaultVal) {
-  return buildCallback({
-    name: name,
-    extractor: extractFromHeader,
-    parserWhichReturnsPromise: parserWhichReturnsPromise,
-    assigner: assigner,
-    required: true,
     defaultVal: defaultVal
   });
 }
@@ -416,61 +404,6 @@ function assignToPCustom(name) {
   };
 }
 
-function resolve_pidThing(pidThingStringName, assigner, loggingString) {
-  const effectiveLoggingString = _.isUndefined(loggingString) ? '' : loggingString;
-
-  logger.debug(`resolve_pidThing ${effectiveLoggingString}`);
-  return (req, res, next) => {
-    logger.debug(`resolve_pidThing req.p: ${JSON.stringify(req.p)}`);
-    if (!req.p) {
-      fail(res, 500, 'polis_err_this_middleware_should_be_after_auth_and_zid');
-      next('polis_err_this_middleware_should_be_after_auth_and_zid');
-    }
-    const existingValue = extractFromBody(req, pidThingStringName) || extractFromCookie(req, pidThingStringName);
-    logger.debug(`resolve_pidThing existingValue: ${existingValue}, type: ${typeof existingValue}`);
-
-    if (existingValue === 'mypid' && req?.p?.zid && req.p.uid) {
-      getParticipantId(req.p.zid, req.p.uid)
-        .then((pid) => {
-          logger.debug(`resolve_pidThing got pid from getParticipantId: ${pid}`);
-          if (pid >= 0) {
-            assigner(req, pidThingStringName, pid);
-            logger.debug(`resolve_pidThing assigned pid: ${pid}`);
-          }
-          next();
-        })
-        .catch((err) => {
-          fail(res, 500, 'polis_err_mypid_resolve_error', err);
-          next(err);
-        });
-    } else if (existingValue === 'mypid') {
-      logger.debug('resolve_pidThing existingValue is mypid');
-      next();
-    } else if (!_.isUndefined(existingValue)) {
-      getInt(existingValue)
-        .then((pidNumber) => {
-          logger.debug(`resolve_pidThing got pidNumber from getInt: ${pidNumber}, type: ${typeof pidNumber}`);
-          // Important: pidNumber can be 0, which is a valid pid but falsy in JavaScript
-          if (pidNumber >= 0) {
-            assigner(req, pidThingStringName, pidNumber);
-            logger.debug(`resolve_pidThing assigned pidNumber: ${pidNumber}`);
-          } else {
-            logger.debug(`resolve_pidThing pidNumber < 0: ${pidNumber}`);
-          }
-          next();
-        })
-        .catch((err) => {
-          logger.error(`resolve_pidThing getInt error: ${err}`);
-          fail(res, 500, 'polis_err_pid_error', err);
-          next(err);
-        });
-    } else {
-      logger.warn('resolve_pidThing no existing value or mypid');
-      next();
-    }
-  };
-}
-
 /**
  * Convert params object to a sorted string for HMAC generation
  * @param {Object} params - The parameters to convert
@@ -482,9 +415,13 @@ function paramsToStringSortedByName(params) {
   return pairsList.join('&');
 }
 
+// Export functions for use in other modules
 export {
   assignToP,
   assignToPCustom,
+  extractFromBody,
+  extractFromCookie,
+  extractFromHeader,
   getArrayOfInt,
   getArrayOfString,
   getArrayOfStringNonEmpty,
@@ -494,7 +431,6 @@ export {
   getEmail,
   getInt,
   getIntInRange,
-  getNumber,
   getNumberInRange,
   getOptionalStringLimitLength,
   getPassword,
@@ -504,9 +440,7 @@ export {
   getUrlLimitLength,
   need,
   needCookie,
-  needHeader,
   paramsToStringSortedByName,
-  resolve_pidThing,
   want,
   wantCookie,
   wantHeader

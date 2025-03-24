@@ -238,14 +238,6 @@ async function getNextPrioritizedComment(zid, pid, withoutTids, include_social) 
   }
 
   try {
-    // Handle cases where pid is invalid:
-    // - undefined or null (not provided)
-    // - negative (invalid values)
-    if (pid === null || pid === undefined || pid < 0) {
-      logger.debug(`getNextPrioritizedComment: pid is ${pid}, returning null`);
-      return null;
-    }
-
     const [comments, math, numberOfCommentsRemainingRows] = await Promise.all([
       getCommentsList(params),
       getPca(zid, 0),

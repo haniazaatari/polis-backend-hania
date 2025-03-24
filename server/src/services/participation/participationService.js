@@ -104,7 +104,7 @@ async function getParticipationInit(params) {
   try {
     logger.info('getParticipationInit');
     const { zid, uid, pid, xid, owner_uid, conversation_id, lang } = params;
-    logger.debug(`getParticipationInit params: ${JSON.stringify(params)}`);
+    logger.debug('getParticipationInit params:', params);
 
     // Helper functions to conditionally execute promises
     function ifConv(f, args) {

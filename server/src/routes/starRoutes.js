@@ -1,14 +1,14 @@
 import express from 'express';
 import { handlePostStars } from '../controllers/starController.js';
-import { auth } from '../middlewares/index.js';
+import { auth, getPidForParticipant } from '../middlewares/index.js';
+import { pidCache } from '../repositories/participant/participantRepository.js';
 import {
   assignToP,
   assignToPCustom,
-  getBool,
   getConversationIdFetchZid,
   getInt,
-  need,
-  resolve_pidThing
+  getIntInRange,
+  need
 } from '../utils/parameter.js';
 
 const router = express();
@@ -21,10 +21,10 @@ const router = express();
 router.post(
   '/',
   auth(assignToP),
-  need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
   need('tid', getInt, assignToP),
-  need('starred', getBool, assignToP),
-  resolve_pidThing('pid', assignToP, 'post:stars'),
+  need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
+  need('starred', getIntInRange(0, 1), assignToP),
+  getPidForParticipant(assignToP, pidCache),
   handlePostStars
 );
 

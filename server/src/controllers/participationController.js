@@ -39,7 +39,7 @@ async function handleGetParticipation(req, res) {
  */
 async function handleGetParticipationInit(req, res) {
   try {
-    logger.info('handleGetParticipationInit');
+    logger.info('handleGetParticipationInit', req.p);
 
     // Get accept-language header
     const acceptLanguage = req?.headers?.['accept-language'] || req?.headers?.['Accept-Language'] || 'en-US';
@@ -58,7 +58,7 @@ async function handleGetParticipationInit(req, res) {
       acceptLanguage
     };
 
-    logger.debug('Calling getParticipationInit with params:', JSON.stringify(params, null, 2));
+    logger.debug('Calling getParticipationInit with params:', params);
 
     try {
       // Get participation initialization data

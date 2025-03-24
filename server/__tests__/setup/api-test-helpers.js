@@ -544,7 +544,7 @@ async function submitVote(options, authToken) {
   // Error if options does not have tid or conversation_id
   // NOTE: 0 is a valid value for tid or conversation_id
   if (options.tid === undefined || options.conversation_id === undefined) {
-    throw new Error('Options must have tid or conversation_id');
+    throw new Error('Options must have tid or conversation_id to vote');
   }
 
   try {

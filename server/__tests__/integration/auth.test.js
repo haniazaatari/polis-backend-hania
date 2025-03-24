@@ -207,8 +207,7 @@ describe('Authentication', () => {
         {
           conversation_id: conversationId,
           tid: commentId,
-          vote: -1,
-          agid: 1
+          vote: -1
         },
         cookies
       );

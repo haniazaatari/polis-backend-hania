@@ -32,7 +32,7 @@ export { checkIfOptions, addCorsHeader, hasWhitelistMatches } from './corsMiddle
 export { responseTimeStart } from './performanceMiddleware.js';
 
 // Participant middlewares
-export { getParticipantIdMiddleware } from './participantMiddleware.js';
+export { getPidForParticipant, resolveParticipantId } from './participantMiddleware.js';
 
 // Utility middlewares
 export { asyncMiddleware } from './utilityMiddleware.js';
