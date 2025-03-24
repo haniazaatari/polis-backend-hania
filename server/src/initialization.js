@@ -1,3 +1,4 @@
+import Config from './config.js';
 import { backfillCommentLanguageDetection } from './services/comment/commentLanguageService.js';
 import { initializeApplicationServices } from './services/initialization/appInitializationService.js';
 import { scheduleExportTests } from './services/scheduled/exportTestScheduler.js';
@@ -8,6 +9,10 @@ import logger from './utils/logger.js';
  * This initializes all required services for the application
  */
 function initializeApplication() {
+  if (!Config.backfillCommentLangDetection) {
+    return;
+  }
+  
   logger.debug('Starting application initialization');
 
   // Initialize core services

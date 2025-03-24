@@ -1,5 +1,5 @@
 import _ from 'underscore';
-import { queryP } from '../../db/pg-query.js';
+import { createInviterRecord, createSUZinvites, deleteSUZinviteRecord, getSUZinviteRecord } from '../../db/invites.js';
 import { sendSuzinviteEmail } from '../../email/specialized.js';
 import logger from '../../utils/logger.js';
 import { getConversationInfo } from '../conversation/conversationService.js';
@@ -12,7 +12,7 @@ import { generateSUZinvites } from '../url/urlService.js';
  */
 async function getSUZinviteInfo(suzinvite) {
   try {
-    const rows = await queryP('SELECT * FROM suzinvites WHERE suzinvite = ($1);', [suzinvite]);
+    const rows = await getSUZinviteRecord(suzinvite);
 
     if (!rows || !rows.length) {
       throw new Error('polis_err_invite_not_found');
@@ -35,7 +35,7 @@ async function getSUZinviteInfo(suzinvite) {
  */
 async function deleteSuzinvite(suzinvite) {
   try {
-    await queryP('DELETE FROM suzinvites WHERE suzinvite = ($1);', [suzinvite]);
+    await deleteSUZinviteRecord(suzinvite);
   } catch (error) {
     logger.error('Error deleting suzinvite', error);
     throw error;
@@ -50,20 +50,11 @@ async function deleteSuzinvite(suzinvite) {
  */
 async function addInviter(inviter_uid, invited_email) {
   try {
-    await queryP('INSERT INTO inviters (inviter_uid, invited_email) VALUES ($1, $2);', [inviter_uid, invited_email]);
+    await createInviterRecord(inviter_uid, invited_email);
   } catch (error) {
     logger.error('Error adding inviter record', error);
     throw error;
   }
-}
-
-/**
- * Escape a string literal for use in a SQL query
- * @param {string} str - String to escape
- * @returns {string} - Escaped string
- */
-function escapeLiteral(str) {
-  return `'${str.replace(/'/g, "''")}'`;
 }
 
 /**
@@ -86,28 +77,23 @@ async function inviteUsersToConversation(uid, emails, zid, conversation_id) {
     // Create pairs of emails and invites
     const pairs = _.zip(emails, suzinviteArray);
 
-    // Create SQL values statements for bulk insert
-    const valuesStatements = pairs.map((pair) => {
-      const xid = escapeLiteral(pair[0]);
-      const suzinvite = escapeLiteral(pair[1]);
-      return `(${suzinvite}, ${xid}, ${zid}, ${owner})`;
-    });
-
-    // Insert all invites in a single query
-    const query = `INSERT INTO suzinvites (suzinvite, xid, zid, owner) VALUES ${valuesStatements.join(',')};`;
+    // Create array of invite data
+    const invites = pairs.map(([email, suzinvite]) => ({
+      suzinvite,
+      xid: email,
+      zid,
+      owner
+    }));
 
     try {
-      await queryP(query, []);
+      await createSUZinvites(invites);
     } catch (_) {
       throw new Error('polis_err_saving_invites');
     }
 
     // Send emails and record inviters
     await Promise.all(
-      pairs.map(async (pair) => {
-        const email = pair[0];
-        const suzinvite = pair[1];
-
+      pairs.map(async ([email, suzinvite]) => {
         try {
           await sendSuzinviteEmail(email, conversation_id, suzinvite);
           await addInviter(uid, email);

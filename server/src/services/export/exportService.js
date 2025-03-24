@@ -1,7 +1,11 @@
 import {
-  queryP_readOnly as pgQueryP_readOnly,
-  stream_queryP_readOnly as stream_pgQueryP_readOnly
-} from '../../db/pg-query.js';
+  getCommenterCount,
+  getCommentsForExport,
+  getCommentsForGroupExport,
+  getConversationMetadata,
+  streamParticipantVotesForExport,
+  streamVotesForExport
+} from '../../db/exports.js';
 import logger from '../../utils/logger.js';
 import { getPca } from '../../utils/pca.js';
 import { getZinvite } from '../zinvite/zinviteService.js';
@@ -66,8 +70,8 @@ export function formatCSV(colFns, rows) {
 export async function loadConversationSummary(zid, siteUrl) {
   const [zinvite, convoRows, commentersRow, pca] = await Promise.all([
     getZinvite(zid),
-    pgQueryP_readOnly('SELECT topic, description FROM conversations WHERE zid = $1', [zid]),
-    pgQueryP_readOnly('SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1', [zid]),
+    getConversationMetadata(zid),
+    getCommenterCount(zid),
     getPca(zid)
   ]);
 
@@ -76,7 +80,7 @@ export async function loadConversationSummary(zid, siteUrl) {
   }
 
   const convo = convoRows[0];
-  const commenters = commentersRow[0].count;
+  const commenters = commentersRow.count;
   const data = pca.asPOJO;
 
   return [
@@ -118,9 +122,7 @@ export async function getCommentSummary(zid) {
   return new Promise((resolve, reject) => {
     const comments = new Map();
 
-    pgQueryP_readOnly('SELECT tid, pid, created, txt, mod, velocity, active FROM comments WHERE zid = ($1)', [
-      zid
-    ]).then((commentRows) => {
+    getCommentsForExport(zid).then((commentRows) => {
       for (const comment of commentRows) {
         comment.agrees = 0;
         comment.disagrees = 0;
@@ -128,9 +130,8 @@ export async function getCommentSummary(zid) {
         comments.set(comment.tid, comment);
       }
 
-      stream_pgQueryP_readOnly(
-        'SELECT tid, vote FROM votes WHERE zid = ($1) ORDER BY tid',
-        [zid],
+      streamVotesForExport(
+        zid,
         (row) => {
           const comment = comments.get(row.tid);
           if (comment) {
@@ -178,16 +179,12 @@ export async function getCommentSummary(zid) {
  */
 export async function getVotesSummary(zid) {
   return new Promise((resolve, reject) => {
-    // Use the exact same SQL query as the legacy function
-    const query = 'SELECT created as timestamp, tid, pid, vote FROM votes WHERE zid = $1 ORDER BY tid, pid';
-
-    // Define formatters with the same column order and transformations as the legacy function
+    // Define formatters with the same column order and transformations as before
     const formatters = {
       timestamp: (row) => String(Math.floor(Number.parseInt(row.timestamp) / 1000)),
       datetime: (row) => formatDatetime(row.timestamp),
       'comment-id': (row) => String(row.tid),
       'voter-id': (row) => String(row.pid),
-      // Use -row.vote to match legacy behavior (inverting the sign)
       vote: (row) => String(-row.vote)
     };
 
@@ -197,10 +194,9 @@ export async function getVotesSummary(zid) {
     // Add the headers
     csvRows.push(formatCSVHeaders(formatters));
 
-    // Use streaming to process the data, just like the legacy function
-    stream_pgQueryP_readOnly(
-      query,
-      [zid],
+    // Use streaming to process the data
+    streamVotesForExport(
+      zid,
       // For each row, format it and add to our buffer
       (row) => {
         csvRows.push(formatCSVRow(row, formatters));
@@ -231,10 +227,7 @@ export async function getParticipantVotesSummary(zid) {
   }
 
   // Get all comments for this conversation to match legacy behavior
-  const commentRows = await pgQueryP_readOnly(
-    'SELECT tid, pid FROM comments WHERE zid = ($1) ORDER BY tid ASC, created ASC',
-    [zid]
-  );
+  const commentRows = await getCommentsForExport(zid);
   const commentIds = commentRows.map((row) => row.tid);
 
   // Calculate comment counts per participant (matching legacy behavior)
@@ -286,71 +279,78 @@ export async function getParticipantVotesSummary(zid) {
     return undefined;
   }
 
-  // Get all votes
-  const rows = await pgQueryP_readOnly('SELECT pid, tid, vote FROM votes WHERE zid = ($1) ORDER BY pid, tid', [zid]);
+  return new Promise((resolve, reject) => {
+    // Process votes by participant
+    const participantVotes = new Map();
 
-  // Process votes by participant
-  const participantVotes = new Map();
-  for (const row of rows) {
-    if (!participantVotes.has(row.pid)) {
-      participantVotes.set(row.pid, {
-        pid: row.pid,
-        votes: new Map(),
-        groupId: getGroupId(pca, row.pid),
-        commentCount: participantCommentCounts.get(row.pid) || 0
-      });
-    }
+    streamParticipantVotesForExport(
+      zid,
+      (row) => {
+        if (!participantVotes.has(row.pid)) {
+          participantVotes.set(row.pid, {
+            pid: row.pid,
+            votes: new Map(),
+            groupId: getGroupId(pca, row.pid),
+            commentCount: participantCommentCounts.get(row.pid) || 0
+          });
+        }
 
-    const participant = participantVotes.get(row.pid);
-    // Use -row.vote to match legacy behavior (inverting the sign)
-    participant.votes.set(row.tid, -row.vote);
-  }
+        const participant = participantVotes.get(row.pid);
+        // Use -row.vote to match legacy behavior (inverting the sign)
+        participant.votes.set(row.tid, -row.vote);
+      },
+      () => {
+        // Build CSV rows
+        const csvRows = [];
+        for (const participant of participantVotes.values()) {
+          // Calculate vote statistics (matching legacy behavior)
+          let agrees = 0;
+          let disagrees = 0;
+          for (const vote of participant.votes.values()) {
+            if (vote === 1) agrees += 1;
+            else if (vote === -1) disagrees += 1;
+          }
 
-  // Build CSV rows
-  const csvRows = [];
-  for (const participant of participantVotes.values()) {
-    // Calculate vote statistics (matching legacy behavior)
-    let agrees = 0;
-    let disagrees = 0;
-    for (const vote of participant.votes.values()) {
-      if (vote === 1) agrees += 1;
-      else if (vote === -1) disagrees += 1;
-    }
+          const csvRow = {
+            participant: participant.pid,
+            'group-id': participant.groupId,
+            'n-comments': participant.commentCount,
+            'n-votes': participant.votes.size,
+            'n-agree': agrees,
+            'n-disagree': disagrees
+          };
 
-    const csvRow = {
-      participant: participant.pid,
-      'group-id': participant.groupId,
-      'n-comments': participant.commentCount,
-      'n-votes': participant.votes.size,
-      'n-agree': agrees,
-      'n-disagree': disagrees
-    };
+          // Add a column for each comment ID
+          for (const commentId of commentIds) {
+            csvRow[`comment-${commentId}`] = participant.votes.get(commentId);
+          }
 
-    // Add a column for each comment ID
-    for (const commentId of commentIds) {
-      csvRow[`comment-${commentId}`] = participant.votes.get(commentId);
-    }
+          csvRows.push(csvRow);
+        }
 
-    csvRows.push(csvRow);
-  }
+        // Define column formatters
+        const colFns = {
+          participant: (row) => String(row.participant),
+          'group-id': (row) => (row['group-id'] === undefined ? '' : String(row['group-id'])),
+          'n-comments': (row) => String(row['n-comments']),
+          'n-votes': (row) => String(row['n-votes']),
+          'n-agree': (row) => String(row['n-agree']),
+          'n-disagree': (row) => String(row['n-disagree'])
+        };
 
-  // Define column formatters
-  const colFns = {
-    participant: (row) => String(row.participant),
-    'group-id': (row) => (row['group-id'] === undefined ? '' : String(row['group-id'])),
-    'n-comments': (row) => String(row['n-comments']),
-    'n-votes': (row) => String(row['n-votes']),
-    'n-agree': (row) => String(row['n-agree']),
-    'n-disagree': (row) => String(row['n-disagree'])
-  };
+        // Add formatters for each comment ID
+        for (const commentId of commentIds) {
+          colFns[`comment-${commentId}`] = (row) => String(row[`comment-${commentId}`] || '');
+        }
 
-  // Add formatters for each comment ID
-  for (const commentId of commentIds) {
-    // Using string concatenation to avoid template literal linter issues
-    colFns[`comment-${commentId}`] = (row) => String(row[`comment-${commentId}`] || '');
-  }
-
-  return formatCSV(colFns, csvRows);
+        resolve(formatCSV(colFns, csvRows));
+      },
+      (error) => {
+        logger.error('polis_err_report_participant_votes_csv', error);
+        reject(error);
+      }
+    );
+  });
 }
 
 /**
@@ -375,7 +375,7 @@ export async function getCommentGroupsSummary(zid, filterFN) {
   const groupAwareConsensus = pca.asPOJO['group-aware-consensus'];
   const commentExtremity = pca.asPOJO.pca?.['comment-extremity'] || [];
 
-  const commentRows = await pgQueryP_readOnly('SELECT tid, txt FROM comments WHERE zid = ($1)', [zid]);
+  const commentRows = await getCommentsForGroupExport(zid);
   const commentTexts = new Map(commentRows.map((row) => [row.tid, row.txt]));
 
   const commentStats = new Map();
