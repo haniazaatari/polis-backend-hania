@@ -5,16 +5,15 @@
 import _ from 'underscore';
 import { updateLastInteractionTimeForConversation } from '../db/conversationUpdates.js';
 import { getConversationInfo } from '../db/conversations.js';
-import { queryP } from '../db/pg-query.js';
-import { sql_participants_extended } from '../db/sql.js';
-import { addExtendedParticipantInfo } from '../repositories/participant/participantRepository.js';
+import { updateExtendedParticipantInfo } from '../db/participants.js';
 import { userHasAnsweredZeQuestions } from '../repositories/participant/participantRepository.js';
 import { COOKIES } from '../services/auth/constants.js';
 import { clearCookie } from '../services/auth/cookieService.js';
 import {
   getParticipant,
   joinConversation,
-  queryParticipantsByMetadata
+  queryParticipantsByMetadata,
+  updateParticipantExtendedInfo
 } from '../services/participant/participantService.js';
 import logger from '../utils/logger.js';
 import { isOwnerOrParticipant } from '../utils/participants.js';
@@ -68,7 +67,7 @@ async function handlePostParticipants(req, res) {
     if (existingPtpt) {
       // If participant exists, update extended info and return
       if (Object.keys(info).length > 0) {
-        await addExtendedParticipantInfo(zid, uid, info);
+        await updateExtendedParticipantInfo(zid, uid, info);
       }
 
       // Clear cookies and update last interaction time
@@ -129,12 +128,7 @@ async function handlePutParticipantsExtended(req, res) {
       return res.json({ status: 'ok' });
     }
 
-    const q = sql_participants_extended
-      .update(fields)
-      .where(sql_participants_extended.zid.equals(zid))
-      .and(sql_participants_extended.uid.equals(uid));
-
-    const result = await queryP(q.toString(), []);
+    const result = await updateParticipantExtendedInfo(zid, uid, fields);
     res.json(result);
   } catch (err) {
     fail(res, 500, 'polis_err_put_participants_extended', err);

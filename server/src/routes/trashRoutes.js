@@ -1,7 +1,7 @@
 import express from 'express';
 import { handlePostTrashes } from '../controllers/trashController.js';
+import { pidCache } from '../db/participants.js';
 import { auth, getPidForParticipant } from '../middlewares/index.js';
-import { pidCache } from '../repositories/participant/participantRepository.js';
 import {
   assignToP,
   assignToPCustom,

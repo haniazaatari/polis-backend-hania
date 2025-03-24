@@ -49,10 +49,4 @@ async function addEmailValidation(email) {
   await queryP('insert into email_validations (email) values ($1);', [email]);
 }
 
-export {
-  getEinviteInfo,
-  createEinvite,
-  deleteEinvite,
-  isEmailValidated,
-  addEmailValidation
-}; 
+export { getEinviteInfo, createEinvite, deleteEinvite, isEmailValidated, addEmailValidation };

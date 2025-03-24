@@ -7,12 +7,12 @@ import {
 } from '../../db/conversationUpdates.js';
 import { getConversationInfo } from '../../db/conversations.js';
 import { addParticipant, getSocialParticipants } from '../../db/participants.js';
+import { getParticipantId } from '../../db/participants.js';
 import { pgQueryP, query_readOnly } from '../../db/pg-query.js';
 import { sql_votes_latest_unique } from '../../db/sql.js';
 import { addStar } from '../../db/stars.js';
 import { getVotesForZidPidsWithTimestampCheck } from '../../db/votes-queries.js';
 import { votesPost } from '../../db/votes.js';
-import { getParticipantId } from '../../repositories/participant/participantRepository.js';
 import logger from '../../utils/logger.js';
 import { pullXInfoIntoSubObjects } from '../../utils/participants.js';
 import { getPca } from '../../utils/pca.js';

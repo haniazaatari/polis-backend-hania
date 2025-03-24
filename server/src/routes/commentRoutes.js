@@ -8,8 +8,8 @@ import {
   handlePostPtptCommentMod,
   handlePutComments
 } from '../controllers/commentController.js';
+import { pidCache } from '../db/participants.js';
 import { auth, authOptional, getPidForParticipant, moveToBody, resolveParticipantId } from '../middlewares/index.js';
-import { pidCache } from '../repositories/participant/participantRepository.js';
 import {
   assignToP,
   assignToPCustom,

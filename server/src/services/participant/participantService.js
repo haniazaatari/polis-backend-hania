@@ -3,13 +3,15 @@
  * Handles business logic for participants
  */
 import Config from '../../config.js';
-import { queryP_readOnly } from '../../db/pg-query.js';
-import { recordPermanentCookieZidJoin } from '../../repositories/cookie/permanentCookieRepository.js';
 import {
-  addExtendedParticipantInfo,
-  createParticipant,
+  addParticipant,
+  queryParticipantsByMetadata as dbQueryParticipantsByMetadata,
   getParticipantByUid,
   getParticipantId,
+  updateExtendedParticipantInfo
+} from '../../db/participants.js';
+import { recordPermanentCookieZidJoin } from '../../repositories/cookie/permanentCookieRepository.js';
+import {
   tryToJoinConversation,
   userHasAnsweredZeQuestions
 } from '../../repositories/participant/participantRepository.js';
@@ -131,7 +133,7 @@ async function addParticipantAndMetadata(zid, uid, req, permanent_cookie) {
 
         // Add extended info if needed
         if (Object.keys(info).length > 0) {
-          await addExtendedParticipantInfo(zid, uid, info);
+          await updateExtendedParticipantInfo(zid, uid, info);
         }
 
         return existingParticipant;
@@ -142,11 +144,11 @@ async function addParticipantAndMetadata(zid, uid, req, permanent_cookie) {
     }
 
     // Create participant and add extended info
-    const participant = await createParticipant(zid, uid);
+    const [participant] = await addParticipant(zid, uid);
 
     // Add extended info if needed
     if (Object.keys(info).length > 0) {
-      await addExtendedParticipantInfo(zid, uid, info);
+      await updateExtendedParticipantInfo(zid, uid, info);
     }
 
     return participant;
@@ -328,28 +330,22 @@ async function handlePostJoinWithInvite(req, res) {
  * @returns {Promise<Array<number>>} - Array of participant IDs
  */
 async function queryParticipantsByMetadata(zid, pmaids) {
-  try {
-    const query = `
-      SELECT pid FROM participants 
-      WHERE zid = ($1) 
-      AND pid NOT IN (
-        SELECT pid FROM participant_metadata_choices 
-        WHERE alive = TRUE 
-        AND pmaid IN (
-          SELECT pmaid FROM participant_metadata_answers 
-          WHERE alive = TRUE 
-          AND zid = ($2) 
-          AND pmaid NOT IN (${pmaids.join(',')})
-        )
-      )
-    `;
+  // Simple passthrough to DB module since this is a complex but single-purpose query
+  // No additional business logic needed at service layer
+  return dbQueryParticipantsByMetadata(zid, pmaids);
+}
 
-    const result = await queryP_readOnly(query, [zid, zid]);
-    return result.map((row) => row.pid);
-  } catch (err) {
-    logger.error('Error querying participants by metadata', { error: err, zid, pmaids });
-    throw err;
-  }
+/**
+ * Update participant extended info
+ * @param {number} zid - Conversation ID
+ * @param {number} uid - User ID
+ * @param {Object} fields - Fields to update
+ * @returns {Promise<Object>} - Update result
+ */
+async function updateParticipantExtendedInfo(zid, uid, fields) {
+  // Simple CRUD operation - directly use DB module
+  // Bypassing repository layer as this is a simple single-table update
+  return updateExtendedParticipantInfo(zid, uid, fields);
 }
 
 export {
@@ -358,5 +354,6 @@ export {
   addParticipantAndMetadata,
   joinWithZidOrSuzinvite,
   handlePostJoinWithInvite,
-  queryParticipantsByMetadata
+  queryParticipantsByMetadata,
+  updateParticipantExtendedInfo
 };

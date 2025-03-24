@@ -67,4 +67,4 @@ async function verifyEmail(einvite) {
   }
 }
 
-export { getEinviteInfo, sendEmailInvite, verifyEmail }; 
+export { getEinviteInfo, sendEmailInvite, verifyEmail };

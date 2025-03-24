@@ -3,13 +3,19 @@
  * Contains direct database operations for participants
  */
 import LruCache from 'lru-cache';
-import { queryP, queryP_metered_readOnly } from './pg-query.js';
+import { queryP, queryP_metered_readOnly, queryP_readOnly } from './pg-query.js';
 import { sql_participants_extended } from './sql.js';
 
 // Cache for social participants
 const socialParticipantsCache = new LruCache({
   maxAge: 1000 * 30, // 30 seconds
   max: 999
+});
+
+// Cache for participant IDs
+const pidCache = new LruCache({
+  max: 9000,
+  ttl: 1000 * 60 * 5 // 5 minutes
 });
 
 /**
@@ -23,15 +29,85 @@ async function addParticipant(zid, uid) {
 }
 
 /**
- * Add extended participant information
+ * Get participant by ID
+ * @param {number} pid - Participant ID
+ * @returns {Promise<Object|null>} - Participant object or null if not found
+ */
+async function getParticipantByPid(pid) {
+  const rows = await queryP_readOnly('SELECT * FROM participants WHERE pid = ($1);', [pid]);
+  return rows.length ? rows[0] : null;
+}
+
+/**
+ * Get participant by user ID and conversation ID
+ * @param {number} zid - Conversation ID
+ * @param {number} uid - User ID
+ * @returns {Promise<Object|null>} - Participant object or null if not found
+ */
+async function getParticipantByUid(zid, uid) {
+  const rows = await queryP_readOnly('SELECT * FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid]);
+  return rows.length ? rows[0] : null;
+}
+
+/**
+ * Get participant ID for a user in a conversation
+ * @param {number} zid - Conversation ID
+ * @param {number} uid - User ID
+ * @param {boolean} [usePrimary=false] - Whether to use primary database
+ * @returns {Promise<number>} - Participant ID or -1 if not found
+ */
+async function getParticipantId(zid, uid, usePrimary = false) {
+  const cacheKey = `${zid}_${uid}`;
+  const cachedPid = pidCache.get(cacheKey);
+
+  if (cachedPid !== undefined) {
+    return cachedPid;
+  }
+
+  const f = usePrimary ? queryP : queryP_readOnly;
+  const results = await f('SELECT pid FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid]);
+
+  if (!results || !results.length) {
+    return -1;
+  }
+
+  const pid = results[0].pid;
+  pidCache.set(cacheKey, pid);
+  return pid;
+}
+
+/**
+ * Get participant by external ID in a conversation
+ * @param {string} xid - External ID
+ * @param {number} zid - Conversation ID
+ * @returns {Promise<Object|string>} - Participant record or 'noXidRecord'
+ */
+async function getParticipantByXid(xid, zid) {
+  const results = await queryP_readOnly('SELECT * FROM xids WHERE xid = ($1) AND zid = ($2);', [xid, zid]);
+
+  if (!results || !results.length) {
+    return 'noXidRecord';
+  }
+
+  const xidRecord = results[0];
+  const pid = await getParticipantId(zid, xidRecord.uid, true);
+
+  return {
+    ...xidRecord,
+    pid
+  };
+}
+
+/**
+ * Add or update extended participant information
  * @param {number} zid - The conversation ID
  * @param {number} uid - The user ID
  * @param {Object} data - Extended participant data
- * @returns {Promise<void>}
+ * @returns {Promise<Object>} - Query result
  */
-async function addExtendedParticipantInfo(zid, uid, data) {
+async function updateExtendedParticipantInfo(zid, uid, data) {
   if (!data || !Object.keys(data).length) {
-    return Promise.resolve();
+    return { status: 'ok' };
   }
 
   const params = Object.assign({}, data, {
@@ -49,6 +125,63 @@ async function addExtendedParticipantInfo(zid, uid, data) {
   qString = qString.replace('9876543212345', 'now_as_millis()');
 
   return queryP(qString, []);
+}
+
+/**
+ * Get answers for a conversation
+ * @param {number} zid - Conversation ID
+ * @returns {Promise<Array>} - Array of answers
+ */
+async function getAnswersForConversation(zid) {
+  return queryP('SELECT * FROM participant_metadata_answers WHERE zid = ($1) AND alive = TRUE;', [zid]);
+}
+
+/**
+ * Save participant metadata choices
+ * @param {number} zid - Conversation ID
+ * @param {number} pid - Participant ID
+ * @param {Array|Object} answers - Answers to save
+ * @returns {Promise<void>}
+ */
+async function saveParticipantMetadataChoices(zid, pid, answers) {
+  if (!answers || (Array.isArray(answers) ? !answers.length : !Object.keys(answers).length)) {
+    return;
+  }
+
+  const answersArray = Array.isArray(answers) ? answers : Object.keys(answers).map((pmqid) => answers[pmqid]);
+
+  for (const answer of answersArray) {
+    await queryP(
+      'INSERT INTO participant_metadata_answers (zid, pid, pmqid, answer) VALUES ($1, $2, $3, $4) ON CONFLICT (zid, pid, pmqid) DO UPDATE SET answer = $4;',
+      [zid, pid, answer.pmqid || answer, answer.value || answer]
+    );
+  }
+}
+
+/**
+ * Query participants by metadata
+ * @param {number} zid - Conversation ID
+ * @param {Array<number>} pmaids - Participant metadata answer IDs
+ * @returns {Promise<Array<number>>} - Array of participant IDs
+ */
+async function queryParticipantsByMetadata(zid, pmaids) {
+  const query = `
+    SELECT pid FROM participants 
+    WHERE zid = ($1) 
+    AND pid NOT IN (
+      SELECT pid FROM participant_metadata_choices 
+      WHERE alive = TRUE 
+      AND pmaid IN (
+        SELECT pmaid FROM participant_metadata_answers 
+        WHERE alive = TRUE 
+        AND zid = ($2) 
+        AND pmaid NOT IN (${pmaids.join(',')})
+      )
+    )
+  `;
+
+  const result = await queryP_readOnly(query, [zid, zid]);
+  return result.map((row) => row.pid);
 }
 
 /**
@@ -106,4 +239,17 @@ async function getSocialParticipants(zid, uid, limit, mod, math_tick, authorUids
   return response;
 }
 
-export { addParticipant, addExtendedParticipantInfo, getSocialParticipants };
+export {
+  addParticipant,
+  getAnswersForConversation,
+  getParticipantByPid,
+  getParticipantByUid,
+  getParticipantByXid,
+  getParticipantId,
+  pidCache,
+  queryParticipantsByMetadata,
+  saveParticipantMetadataChoices,
+  socialParticipantsCache,
+  getSocialParticipants,
+  updateExtendedParticipantInfo
+};

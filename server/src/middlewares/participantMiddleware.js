@@ -1,6 +1,6 @@
 import _ from 'underscore';
 import { getPidPromise } from '../db/getPidPromise.js';
-import { getParticipantId } from '../repositories/participant/participantRepository.js';
+import { getParticipantId } from '../db/participants.js';
 import logger from '../utils/logger.js';
 import { extractFromBody, extractFromCookie, getInt } from '../utils/parameter.js';
 import { fail } from '../utils/responseHandlers.js';
@@ -97,20 +97,16 @@ function resolveParticipantId(paramName, assigner, context) {
         // Important: pidNumber can be 0, which is a valid pid but falsy in JavaScript
         if (pidNumber >= 0) {
           assigner(req, paramName, pidNumber);
-          logger.debug(`resolveParticipantId ${logContext} assigned pidNumber: ${pidNumber}`);
-        } else {
-          logger.debug(`resolveParticipantId ${logContext} pidNumber < 0: ${pidNumber}`);
         }
         return next();
       } catch (err) {
-        logger.error(`resolveParticipantId ${logContext} getInt error:`, err);
-        fail(res, 500, 'polis_err_pid_error', err);
+        logger.error(`resolveParticipantId ${logContext} error:`, err);
+        fail(res, 500, 'polis_err_numeric_resolve_error', err);
         return next(err);
       }
     }
-    // No value provided
+    // Handle undefined values
     else {
-      logger.debug(`resolveParticipantId ${logContext} no existing value`);
       return next();
     }
   });

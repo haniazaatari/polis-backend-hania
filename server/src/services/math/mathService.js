@@ -1,6 +1,7 @@
 import _ from 'underscore';
 import Config from '../../config.js';
 import { isModerator } from '../../db/authorization.js';
+import { getParticipantId } from '../../db/participants.js';
 import {
   addXidWhitelist,
   checkMathTaskExists,
@@ -10,7 +11,6 @@ import {
   getXids,
   hasCommentSelections
 } from '../../repositories/math/mathRepository.js';
-import { getParticipantId } from '../../repositories/participant/participantRepository.js';
 import { getZidForRid } from '../../repositories/report/reportRepository.js';
 import logger from '../../utils/logger.js';
 import { getBidIndexToPidMapping } from '../../utils/participants.js';
