@@ -13,14 +13,10 @@ function need(name, parserWhichReturnsPromise, assigner) {
     const queryHasParam = req.query && !_.isUndefined(req.query[name]);
     const paramsHasParam = req.params && !_.isUndefined(req.params[name]);
     if (!bodyHasParam && !queryHasParam && !paramsHasParam) {
-      // Return specific error codes for known parameters to match legacy server
-      if (name === 'password') {
-        fail(res, 400, 'polis_err_param_missing_password');
-      } else if (name === 'email') {
-        fail(res, 400, 'polis_err_param_missing_email');
-      } else {
-        fail(res, 400, 'polis_err_param_missing', { param: name });
-      }
+      const errorString = `polis_err_param_missing_${name}`;
+      logger.error(errorString);
+      res.status(400);
+      next(errorString);
       return;
     }
     const paramValue = bodyHasParam ? req.body[name] : queryHasParam ? req.query[name] : req.params[name];
@@ -30,7 +26,8 @@ function need(name, parserWhichReturnsPromise, assigner) {
         next();
       })
       .catch((err) => {
-        fail(res, 400, 'polis_err_param_parse_failed', { param: name, err: err });
+        res.status(400);
+        next(`polis_err_param_parse_failed_${name}: ${err}`);
       });
   };
 }

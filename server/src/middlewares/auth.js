@@ -2,7 +2,6 @@ import { asyncMiddleware } from '../middlewares/utilityMiddleware.js';
 import { authenticateUser } from '../services/auth/authService.js';
 import * as sessionService from '../services/auth/sessionService.js';
 import logger from '../utils/logger.js';
-import { fail } from '../utils/responseHandlers.js';
 
 /**
  * Middleware to authenticate requests (required authentication)
@@ -56,7 +55,7 @@ function _auth(assigner, isOptional) {
           } catch (sessionErr) {
             res.status(500);
             logger.error('polis_err_auth_token_error_2343', sessionErr);
-            return fail(res, 500, 'polis_err_auth_token_error_2343');
+            return next('polis_err_auth_token_error_2343');
           }
         }
 
@@ -65,7 +64,10 @@ function _auth(assigner, isOptional) {
 
       // If there's a specific error in the authentication result, handle it
       if (authResult?.error) {
-        res.status(authResult.status || 403);
+        // Use status code from result if provided
+        if (authResult.status) {
+          res.status(authResult.status);
+        }
         return next(authResult.error);
       }
 
@@ -75,9 +77,13 @@ function _auth(assigner, isOptional) {
       }
 
       // Authentication is required but failed
-      res.status(401);
-      return fail(res, 401, 'polis_err_auth_token_not_supplied');
+      // IMPORTANT: Legacy behavior used status 500 for auth token not supplied errors
+      // This is not RESTful but needed for test compatibility
+      res.status(500);
+      return next('polis_err_auth_token_not_supplied');
     } catch (err) {
+      // IMPORTANT: In the legacy code, the doAuth().catch() would always set status 500
+      // This overrides any previous status that might have been set
       res.status(500);
       logger.error('polis_err_auth_error_432', err);
       return next(err || 'polis_err_auth_error_432');

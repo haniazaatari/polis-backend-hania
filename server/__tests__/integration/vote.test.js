@@ -120,7 +120,7 @@ describe('Vote Endpoints', () => {
 
     expect(invalidConvStatus).toBe(400);
     expect(invalidConvBody).toMatch(/polis_err_param_parse_failed_conversation_id/);
-    expect(invalidConvBody).toMatch(/error=polis_err_fetching_zid_for_conversation_id/);
+    expect(invalidConvBody).toMatch(/polis_err_fetching_zid_for_conversation_id/);
 
     // Test invalid vote value
     const invalidVoteResponse = await submitVote(

@@ -6,9 +6,17 @@ import logger from './logger.js';
  * @returns {Promise<Array>} - Array of items with conversation_id property
  */
 function addConversationIds(a) {
+  logger.debug('addConversationIds', { a });
+
+  // Handle undefined, null, or non-array input
+  if (!a || !Array.isArray(a)) {
+    logger.warn('addConversationIds received non-array input', { input: a });
+    return Promise.resolve([]);
+  }
+
   const zids = [];
   for (let i = 0; i < a.length; i++) {
-    if (a[i].zid) {
+    if (a[i]?.zid) {
       zids.push(a[i].zid);
     }
   }
@@ -101,21 +109,23 @@ export function finishOne(res, o, dontUseCache = false, altStatusCode = 200) {
 /**
  * Sends a failure response with the specified status code and error message
  * @param {Object} res - Express response object
- * @param {number} statusCode - HTTP status code
- * @param {string} errorCode - Error code for client
+ * @param {number} httpCode - HTTP status code
+ * @param {string} clientVisibleErrorString - Error code for client
  * @param {Error|string} [err] - Optional error object or message for logging
  * @returns {Object} - The response object
  */
-export function fail(res, statusCode, errorCode, err) {
+export function fail(res, httpCode, clientVisibleErrorString, err) {
   if (err) {
-    logger.error(errorCode, err);
+    logger.error(clientVisibleErrorString, err);
   }
 
+  const status = httpCode || 500;
+
   // Return plain text error code to match legacy server behavior
-  return res.status(statusCode).send(errorCode);
+  return res.status(status).send(clientVisibleErrorString);
 
   // TODO: Properly handle JSON responses:
-  // return res.status(statusCode).json({
-  //   error: errorCode
+  // return res.status(httpCode).json({
+  //   error: clientVisibleErrorString
   // });
 }

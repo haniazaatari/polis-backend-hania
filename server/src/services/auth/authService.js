@@ -109,7 +109,7 @@ async function authenticateUser(req) {
     // Check for agid - create anonymous user
     if (req.body?.agid) {
       try {
-        const uid = await createDummyUser();
+        const uid = await createAnonymousUser();
         return {
           isAuthenticated: true,
           uid,
@@ -117,7 +117,12 @@ async function authenticateUser(req) {
         };
       } catch (err) {
         logger.error('Error creating anonymous user', err);
-        throw err;
+        // The legacy code returns an error code but doesn't set a status,
+        // which will be handled in the catch block of _auth
+        return {
+          isAuthenticated: false,
+          error: 'polis_err_auth_token_error_1241'
+        };
       }
     }
 
@@ -125,7 +130,12 @@ async function authenticateUser(req) {
     return { isAuthenticated: false };
   } catch (error) {
     logger.error('Error authenticating user', error);
-    throw error;
+    // In legacy code, errors are passed to the onDone callback without explicit status codes
+    // The status is then set in the catch block of the _auth middleware
+    return {
+      isAuthenticated: false,
+      error: error.message || 'polis_err_auth_error_432'
+    };
   }
 }
 
@@ -137,38 +147,26 @@ async function authenticateUser(req) {
  */
 async function authenticateWithCredentials(email, password) {
   try {
-    logger.debug(`Authenticating with credentials for email: ${email}`);
-
     // Get user by email
     const user = await userRepository.getUserByEmail(email);
     if (!user) {
-      logger.debug(`Authentication failed: user not found for email ${email}`);
       return { success: false, error: 'user_not_found' };
     }
 
-    logger.debug(`Found user for email ${email}: uid=${user.uid}`);
-
     // Get password hash from auth repository (jianiuevyew table)
-    logger.debug(`Getting password hash from auth repository for user ${user.uid}`);
     const hashedPassword = await authRepository.getPasswordHash(user.uid);
 
     if (!hashedPassword) {
-      logger.debug(`No password hash found for user ${user.uid}`);
       return { success: false, error: 'password_not_set' };
     }
-
-    logger.debug(`Found password hash for user ${user.uid}, verifying password`);
 
     // Verify password
     const isPasswordValid = await verifyPassword(password, hashedPassword);
     if (!isPasswordValid) {
-      logger.debug(`Authentication failed: invalid password for user ${user.uid}`);
       return { success: false, error: 'invalid_password' };
     }
 
     // Authentication successful
-    logger.debug(`Authentication successful for user ${user.uid}`);
-
     return {
       success: true,
       isAuthenticated: true,
@@ -408,7 +406,7 @@ async function authenticateWithBasicAuth(authHeader) {
  * Create an anonymous user
  * @returns {Promise<number>} - Created user ID
  */
-async function createDummyUser() {
+async function createAnonymousUser() {
   try {
     // Create a dummy user
     const uid = await userRepository.createDummyUser();

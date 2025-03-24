@@ -4,6 +4,7 @@
  */
 import LruCache from 'lru-cache';
 import { queryP, queryP_readOnly } from '../../db/pg-query.js';
+import { sql_participants_extended } from '../../db/sql.js';
 import logger from '../../utils/logger.js';
 
 // Cache for participant IDs
@@ -206,50 +207,34 @@ async function createParticipant(zid, uid) {
  * Add extended participant info
  * @param {number} zid - Conversation ID
  * @param {number} uid - User ID
- * @param {Object} info - Extended participant info
+ * @param {Object} data - Extended participant info
  * @returns {Promise<void>}
  */
-async function addExtendedParticipantInfo(zid, uid, info) {
-  if (!info || !Object.keys(info).length) {
-    return;
+async function addExtendedParticipantInfo(zid, uid, data) {
+  if (!data || !Object.keys(data).length) {
+    return Promise.resolve();
   }
 
   try {
-    // First get the existing participant to get the pid
-    const existingParticipant = await queryP('SELECT * FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid]);
+    // Create params with zid, uid, and modified timestamp
+    const params = Object.assign({}, data, {
+      zid: zid,
+      uid: uid,
+      modified: 9876543212345 // Placeholder that will be replaced with now_as_millis()
+    });
 
-    if (!existingParticipant || !existingParticipant.length) {
-      logger.warn('Cannot add extended info - participant not found', { zid, uid });
-      return;
-    }
+    // Build the update query using the SQL builder
+    const qUpdate = sql_participants_extended
+      .update(params)
+      .where(sql_participants_extended.zid.equals(zid))
+      .and(sql_participants_extended.uid.equals(uid));
 
-    // These are the fields that exist in the participants table (not participants_extended)
-    // Using individual updates to avoid SQL syntax errors from invalid column names
-    const validFields = [
-      'parent_url',
-      'referrer',
-      'encrypted_ip_address',
-      'encrypted_x_forwarded_for',
-      'permanent_cookie',
-      'origin'
-    ];
+    // Convert to string and replace the timestamp placeholder
+    let qString = qUpdate.toString();
+    qString = qString.replace('9876543212345', 'now_as_millis()');
 
-    for (const key of validFields) {
-      if (info[key] !== undefined) {
-        try {
-          // Use a separate query for each field to avoid syntax errors if one field doesn't exist
-          await queryP(`UPDATE participants SET ${key} = $1 WHERE zid = $2 AND uid = $3;`, [info[key], zid, uid]);
-        } catch (fieldError) {
-          // Log but continue trying other fields - don't throw for one field error
-          logger.warn(`Could not update field "${key}" for participant`, {
-            zid,
-            uid,
-            error: fieldError,
-            errorCode: fieldError.code
-          });
-        }
-      }
-    }
+    // Execute the query
+    await queryP(qString, []);
   } catch (error) {
     logger.error('Error adding extended participant info', { error, zid, uid });
     // Don't rethrow - the legacy code doesn't propagate this error

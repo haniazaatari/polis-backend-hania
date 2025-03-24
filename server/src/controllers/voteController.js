@@ -19,6 +19,7 @@ export const handleGetVotes = async (req, res) => {
     const votes = await getVotesForSingleParticipant(req.p);
     finishArray(res, votes);
   } catch (err) {
+    logger.error('handleGetVotes error', { error: err });
     fail(res, 500, 'polis_err_votes_get', err);
   }
 };

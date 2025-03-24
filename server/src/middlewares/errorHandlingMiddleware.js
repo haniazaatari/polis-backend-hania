@@ -58,17 +58,33 @@ export function initializeErrorHandlers() {
  */
 export function errorMiddleware(err, req, res, next) {
   logger.error('Express error handler caught:', {
-    error: err.message,
-    stack: err.stack,
-    url: req.originalUrl,
+    ip: req.ip,
     method: req.method,
-    ip: req.ip
+    url: req.url
   });
 
-  // Send appropriate status code based on error type
-  if (err.status) {
-    res.status(err.status).json({ error: err.message || 'Internal server error' });
-  } else {
-    res.status(500).json({ error: 'Internal server error' });
+  // Don't modify the response if headers have already been sent
+  if (res.headersSent) {
+    return next(err);
   }
+
+  // If the response has a status code set, use that
+  const statusCode = res.statusCode !== 200 ? res.statusCode : 500;
+
+  // For compatibility with legacy code, handle string errors specially
+  if (typeof err === 'string' && err.startsWith('polis_err_')) {
+    logger.warn(`errorMiddleware: string error ${statusCode}`, { err });
+    // return res.status(statusCode).send(err);
+  }
+
+  // If the error has a status property, use that
+  if (err.status) {
+    logger.warn(`errorMiddleware: status error ${statusCode}`, { err });
+    // return res.status(err.status).send(err.message || 'Internal server error');
+  }
+
+  // Default to 500 with the error message
+  logger.warn(`errorMiddleware: default error ${statusCode}`, { err });
+  // res.status(statusCode).send(err.message || 'Internal server error');
+  return next(err);
 }

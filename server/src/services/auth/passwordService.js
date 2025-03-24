@@ -53,21 +53,15 @@ async function updatePassword(uid, password) {
  */
 async function checkPassword(uid, password) {
   try {
-    logger.debug(`Checking password for user ${uid}`);
-
     // Get the password hash from the auth repository (jianiuevyew table)
     const hashedPassword = await getPasswordHash(uid);
-    logger.debug(`Password hash for user ${uid}: ${hashedPassword ? 'found' : 'not found'}`);
 
     if (!hashedPassword) {
-      logger.debug(`No password hash found for user ${uid}`);
       return null; // User not found or no password set
     }
 
     // Compare the provided password with the stored hash
-    logger.debug(`Comparing password with hash for user ${uid}`);
     const result = await bcrypt.compare(password, hashedPassword);
-    logger.debug(`Password comparison result for user ${uid}: ${result ? 'match' : 'no match'}`);
     return result ? 'ok' : 0;
   } catch (error) {
     logger.error(`Error checking password for user ${uid}:`, error);
@@ -83,9 +77,7 @@ async function checkPassword(uid, password) {
  */
 async function verifyPassword(password, hash) {
   try {
-    logger.debug(`Verifying password against hash: ${hash.substring(0, 10)}...`);
     const result = await bcrypt.compare(password, hash);
-    logger.debug(`Password verification result: ${result ? 'match' : 'no match'}`);
     return result;
   } catch (error) {
     logger.error(`Error verifying password: ${error.message}`, error);

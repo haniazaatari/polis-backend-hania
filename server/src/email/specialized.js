@@ -1,4 +1,6 @@
+import _ from 'underscore';
 import Config from '../config.js';
+import { pgQueryP } from '../db/pg-query.js';
 import { polisFromAddress, sendMultipleTextEmails, sendTextEmail } from './senders.js';
 
 const serverUrl = Config.serverUrl;
@@ -30,14 +32,12 @@ Thank you for using Polis`;
 function sendSuzinviteEmail(email, conversation_id, suzinvite) {
   const body = `Welcome to pol.is!
 
-You've been invited to join the conversation "${conversation_id}".
+Click this link to open your account:
 
-Click this link to join:
-
-${serverUrl}/${conversation_id}/${suzinvite}
+${serverUrl}/ot/${conversation_id}/${suzinvite}
 
 Thank you for using Polis`;
-  return sendTextEmail(polisFromAddress, email, `Join the conversation: ${conversation_id}`, body);
+  return sendTextEmail(polisFromAddress, email, 'Join the pol.is conversation!', body);
 }
 
 /**
@@ -47,20 +47,16 @@ Thank you for using Polis`;
  * @returns {Promise<void>}
  */
 function sendCreatedLinkToEmail(email, conversation_id) {
-  const body = `Your conversation is ready.
+  const body = `Hi there,
 
-You can view your conversation here:
+Here's a link to the conversation you just created. Use it to invite participants to the conversation. Share it by whatever network you prefer - Gmail, Facebook, Twitter, etc., or just post it to your website or blog. Try it now! Click this link to go to your conversation:
+
 ${serverUrl}/${conversation_id}
 
-You can moderate your conversation here:
-${serverUrl}/${conversation_id}/m
+With gratitude,
 
-You can see the results here:
-${serverUrl}/${conversation_id}/r
-
-Share this link on Twitter, Facebook, or by email:
-${serverUrl}/${conversation_id}`;
-  return sendTextEmail(polisFromAddress, email, 'Your pol.is conversation is ready!', body);
+The team at pol.is`;
+  return sendTextEmail(polisFromAddress, email, `Link: ${serverUrl}/${conversation_id}`, body);
 }
 
 /**
@@ -81,8 +77,7 @@ ${serverUrl}/api/v3/dataExport/results?filename=${filename}&conversation_id=${co
 
 Please let us know if you have any questions about the data.
 
-Thanks for using Polis!
-`;
+Thanks for using Polis!`;
   return sendTextEmail(fromAddress, email, subject, body);
 }
 
@@ -96,14 +91,32 @@ Thanks for using Polis!
  * @returns {Promise<void>}
  */
 function sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, seedUrl) {
-  return sendMultipleTextEmails(
-    polisFromAddress,
-    Config.adminEmailsForImplicitPolis,
-    `Implicit conversation created for site: ${site_id} page: ${page_id}`,
-    `Conversation URL: ${url}
-Moderate URL: ${modUrl}
-Seed URL: ${seedUrl}`
-  );
+  const body = `Conversation created!
+
+You can find the conversation here:
+${url}
+You can moderate the conversation here:
+${modUrl}
+
+We recommend you add 2-3 short statements to start things off. These statements should be easy to agree or disagree with. Here are some examples:
+ "I think the proposal is good"
+ "This topic matters a lot"
+ or "The bike shed should have a metal roof"
+
+You can add statements here:
+${seedUrl}
+
+Feel free to reply to this email if you have questions.
+
+Additional info: 
+site_id: "${site_id}"
+page_id: "${page_id}"
+`;
+
+  return pgQueryP('select email from users where site_id = ($1)', [site_id]).then((rows) => {
+    const emails = _.pluck(rows, 'email');
+    return sendMultipleTextEmails(polisFromAddress, emails, 'Polis conversation created', body);
+  });
 }
 
 export {

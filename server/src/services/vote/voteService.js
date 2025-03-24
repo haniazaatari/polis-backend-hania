@@ -39,9 +39,10 @@ async function getVotesForMe(zid, uid) {
     // Get the votes for the participant
     const result = await query_readOnly('SELECT * FROM votes WHERE zid = ($1) AND pid = ($2);', [zid, pid]);
 
-    // Normalize the weight
-    return result.rows.map((vote) => {
-      vote.weight = vote.weight / 32767;
+    // Normalize the weight - result is already the array of votes
+    return result.map((vote) => {
+      // Use weight_x_32767 which is the actual field name in the database
+      vote.weight = vote.weight_x_32767 / 32767;
       return vote;
     });
   } catch (err) {
@@ -225,7 +226,12 @@ function getVotesForSingleParticipant(p) {
     q = q.where(sql_votes_latest_unique.tid.equals(p.tid));
   }
 
-  return query_readOnly(q.toString()).then((results) => results.rows);
+  return query_readOnly(q.toString()).then((results) => {
+    if (Array.isArray(results)) {
+      return results;
+    }
+    return [];
+  });
 }
 
 /**

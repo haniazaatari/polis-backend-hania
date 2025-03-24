@@ -19,14 +19,9 @@ async function login(req, res) {
   try {
     const { email, password } = req.p;
 
-    logger.debug('Login attempt:', { email, passwordLength: password?.length });
-
     // Get user by email first to log the UID
     const user = await getUserByEmail(email);
-    if (user) {
-      logger.debug(`Found user for email ${email}: uid=${user.uid}`);
-    } else {
-      logger.debug(`No user found for email ${email}`);
+    if (!user) {
       // Return 403 for missing email to match legacy server
       return fail(res, 403, 'polis_err_login_unknown_user_or_password_noresults');
     }
@@ -34,18 +29,9 @@ async function login(req, res) {
     // Authenticate user
     const result = await authenticateWithCredentials(email, password);
 
-    logger.debug('Authentication result:', {
-      success: result.success,
-      isAuthenticated: result.isAuthenticated,
-      hasUid: !!result.uid,
-      error: result.error
-    });
-
     if (result.success || result.isAuthenticated) {
-      // Start session and add cookies
-      logger.debug(`Starting session for user ${result.uid}`);
-      await startSessionAndAddCookies(result.uid, res);
-      logger.debug(`Session started for user ${result.uid}`);
+      // Start session and add cookies - pass req to ensure all cookies are set
+      const token = await startSessionAndAddCookies(result.uid, res, req);
 
       // Return user info
       res.status(200).json({
@@ -54,7 +40,6 @@ async function login(req, res) {
         hname: result.hname
       });
     } else {
-      logger.debug(`Login failed: ${result.error}`);
       fail(res, 401, 'polis_err_login_invalid_credentials');
     }
   } catch (error) {
@@ -70,18 +55,7 @@ async function login(req, res) {
  */
 async function register(req, res) {
   try {
-    logger.debug('Registration request.p:', req.p);
-    logger.debug('Registration request body:', req.body);
-
     const { email, password, password2, hname, zinvite, oinvite, gatekeeperTosPrivacy, encodedParams } = req.p;
-
-    // Log all inputs
-    logger.debug('Registration inputs:', {
-      hasEmail: !!email,
-      hasPassword: !!password,
-      hasHname: !!hname,
-      hasGatekeeper: !!gatekeeperTosPrivacy
-    });
 
     // Input validation
     if (password2 && password !== password2) {
@@ -130,7 +104,6 @@ async function register(req, res) {
     }
 
     // Create user first
-    logger.debug('Creating user record...');
     const user = await createUser({
       email,
       hname,
@@ -141,23 +114,15 @@ async function register(req, res) {
     logger.debug('User record created:', { uid: user.uid });
 
     // Generate and store password hash
-    logger.debug('Generating password hash...');
     const hashedPassword = await generateHashedPassword(password);
-    logger.debug(`Generated password hash for user ${user.uid}: ${hashedPassword.substring(0, 10)}...`);
-
-    logger.debug('Storing password hash in auth repository...');
     await storePasswordHash(user.uid, hashedPassword);
-    logger.debug('Password hash stored in auth repository');
 
-    // Start session
-    logger.debug('Creating session...');
+    // Start session and add cookies - use addCookies to set all cookies
     const token = await createSession(user.uid);
-    logger.debug('Session created');
-
-    // Add cookies
-    logger.debug('Adding cookies...');
     await addCookies(req, res, token, user.uid);
-    logger.debug('Cookies added');
+
+    // Also set x-polis header to match legacy behavior
+    res.header('x-polis', token);
 
     // Return success
     res.json({
@@ -189,8 +154,8 @@ async function resetPassword(req, res) {
     const result = await resetUserPassword(token, password);
 
     if (result.success) {
-      // Start session and add cookies
-      await startSessionAndAddCookies(result.uid, res);
+      // Start session and add cookies - pass req to ensure all cookies are set
+      await startSessionAndAddCookies(result.uid, res, req);
 
       res.status(200).json({ success: true });
     } else {

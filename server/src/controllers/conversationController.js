@@ -104,64 +104,64 @@ async function handleGetConversations(req, res) {
         const courseResult = await conversationService.getCourseIdFromInvite(req.p.course_invite);
         req.p.course_id = courseResult.course_id;
       } catch (err) {
-        logger.error('Error getting course id from invite', err);
+        logger.warn('Error getting course id from invite', err);
         // Continue without course_id if lookup fails
       }
-    }
-
-    // Check authentication
-    if (!req.p.uid && !req.p.context) {
-      return fail(res, 403, 'polis_err_need_auth');
     }
 
     // If zid is provided, get a single conversation
     if (req.p.zid) {
       try {
-        // Get language from cookies if available
-        const lang = cookieService.getLanguage(req.cookies, req.headers);
-        const conversation = await conversationService.getOneConversation(req.p.zid, req.p.uid, lang);
-
+        const conversation = await conversationService.getOneConversation(req.p.zid, req.p.uid, null);
         // Return the single conversation response
         return res.status(200).json(conversation);
       } catch (err) {
         logger.error('Error getting single conversation', err);
         return fail(res, 500, 'polis_err_get_conversations_2', err);
       }
+    } else if (req.p.uid || req.p.context) {
+      // Otherwise, get multiple conversations
+      const options = {
+        uid: req.p.uid,
+        zid: req.p.zid,
+        xid: req.p.xid,
+        includeAllConversationsIAmIn: req.p.include_all_conversations_i_am_in,
+        wantModUrl: req.p.want_mod_url,
+        wantUpvoted: req.p.want_upvoted,
+        wantInboxItemAdminUrl: req.p.want_inbox_item_admin_url,
+        wantInboxItemParticipantUrl: req.p.want_inbox_item_participant_url,
+        wantInboxItemAdminHtml: req.p.want_inbox_item_admin_html,
+        wantInboxItemParticipantHtml: req.p.want_inbox_item_participant_html,
+        context: req.p.context,
+        courseInvite: req.p.course_invite,
+        courseId: req.p.course_id,
+        isActive: req.p.is_active,
+        isDraft: req.p.is_draft,
+        limit: req.p.limit
+      };
+
+      // Log the options to help debug
+      logger.debug('Conversation options:', {
+        uid: options.uid,
+        zid: options.zid,
+        cookies: req.cookies,
+        headers: req.headers,
+        p: req.p
+      });
+
+      try {
+        const conversations = await conversationService.getConversations(options, req);
+        res.status(200).json(conversations);
+      } catch (err) {
+        logger.error('Error getting conversations', err);
+        fail(res, 500, 'polis_err_get_conversations', err);
+      }
+    } else {
+      // If neither uid nor context is provided, return 403 to match legacy behavior
+      return fail(res, 403, 'polis_err_need_auth');
     }
-
-    // Otherwise, get multiple conversations
-    const options = {
-      uid: req.p.uid,
-      zid: req.p.zid,
-      xid: req.p.xid,
-      includeAllConversationsIAmIn: req.p.include_all_conversations_i_am_in,
-      wantModUrl: req.p.want_mod_url,
-      wantUpvoted: req.p.want_upvoted,
-      wantInboxItemAdminUrl: req.p.want_inbox_item_admin_url,
-      wantInboxItemParticipantUrl: req.p.want_inbox_item_participant_url,
-      wantInboxItemAdminHtml: req.p.want_inbox_item_admin_html,
-      wantInboxItemParticipantHtml: req.p.want_inbox_item_participant_html,
-      context: req.p.context,
-      courseInvite: req.p.course_invite,
-      courseId: req.p.course_id,
-      isActive: req.p.is_active,
-      isDraft: req.p.is_draft,
-      limit: req.p.limit
-    };
-
-    // Log the options to help debug
-    logger.debug('Conversation options:', {
-      uid: options.uid,
-      zid: options.zid,
-      cookies: req.cookies,
-      headers: req.headers,
-      p: req.p
-    });
-
-    const conversations = await conversationService.getConversations(options, req);
-    res.status(200).json(conversations);
   } catch (err) {
-    logger.error('Error getting conversations', err);
+    logger.error('Error in handleGetConversations', err);
     fail(res, 500, 'polis_err_get_conversations', err);
   }
 }

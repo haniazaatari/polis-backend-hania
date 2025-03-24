@@ -1,19 +1,31 @@
 import { createSessionToken } from '../../repositories/auth/tokenRepository.js';
 import { generateToken } from '../../utils/crypto.js';
 import logger from '../../utils/logger.js';
-import { addAuthCookies, clearAuthCookies } from './cookieService.js';
+import { addAuthCookies, addCookies, clearAuthCookies } from './cookieService.js';
 import * as tokenService from './tokenService.js';
 
 /**
  * Start a new session and add cookies to the response
  * @param {number} uid - User ID
  * @param {Object} res - Express response object
+ * @param {Object} [req] - Express request object (optional, for domain cookies)
  * @returns {Promise<string>} - Session token
  */
-async function startSessionAndAddCookies(uid, res) {
+async function startSessionAndAddCookies(uid, res, req = null) {
   try {
     const token = await createSession(uid);
-    addAuthCookies(res, token, uid);
+
+    // If we have a request object, use the full cookie setting with domain info
+    if (req) {
+      await addCookies(req, res, token, uid);
+    } else {
+      // Otherwise use the simpler method - this also sets fewer cookies
+      addAuthCookies(res, token, uid);
+    }
+
+    // Always set the x-polis header with the token, as the legacy server does
+    res.header('x-polis', token);
+
     return token;
   } catch (error) {
     logger.error('Error starting session and adding cookies', error);

@@ -183,10 +183,10 @@ describe('User Management Endpoints', () => {
       }
 
       // Verify email content
-      expect(email1.subject).toMatch(/Join the Pol.is conversation!/i);
+      expect(email1.subject).toMatch(/Join the pol.is conversation!/i);
       expect(email1.html || email1.text).toContain(conversationId);
 
-      expect(email2.subject).toMatch(/Join the Pol.is conversation!/i);
+      expect(email2.subject).toMatch(/Join the pol.is conversation!/i);
       expect(email2.html || email2.text).toContain(conversationId);
     });
 

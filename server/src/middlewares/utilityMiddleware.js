@@ -10,9 +10,10 @@ export function asyncMiddleware(asyncFn) {
     Promise.resolve(asyncFn(req, res, next)).catch((err) => {
       // Log the error to the server logs
       logger.error('Async middleware error:', err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Internal server error' });
-      }
+
+      // Pass the error to the next middleware in the chain
+      // This allows the Express error handler to handle it properly
+      next(err);
     });
   };
 }
