@@ -35,7 +35,6 @@ describe('Math and Analysis Endpoints', () => {
       for (let j = 0; j < NUM_COMMENTS; j++) {
         // Different voting patterns for different participants
         const vote = ((i + j) % 3) - 1; // -1, 0, or 1
-        console.log(`participant ${i} voting on comment ${j} with vote ${vote}`);
 
         const {
           cookies: voteCookies,
@@ -119,7 +118,6 @@ describe('Math and Analysis Endpoints', () => {
 
     // Correlation matrix should be an array or object with correlation data
     if (response.body) {
-      console.log(Object.keys(response.body));
       // Check for structure - could be:
       // 1. A 2D array/matrix
       // 2. An object with correlation data

@@ -46,7 +46,7 @@ async function getParticipation(zid, uid, strict) {
 
     // Helper function to get or create an entry for a pid
     function getOrCreateEntry(pid) {
-      if (!result[pid]) {
+      if (_.isUndefined(result[pid])) {
         result[pid] = { votes: 0, comments: 0 };
       }
       return result[pid];
@@ -145,10 +145,9 @@ async function getParticipationInit(params) {
         acceptLanguage: params.acceptLanguage
       };
 
-      // If no conversation_id was provided, set conversation to undefined instead of null
-      // to match legacy behavior expected by tests
-      if (!conversation_id) {
-        result.conversation = undefined;
+      // If no conversation_id was provided, set conversation to null to match legacy behavior
+      if (_.isUndefined(conversation_id)) {
+        result.conversation = null;
       }
       // Clean up sensitive or unnecessary data
       else if (result.conversation) {
