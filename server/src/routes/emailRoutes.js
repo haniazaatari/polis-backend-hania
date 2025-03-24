@@ -6,7 +6,7 @@ import {
   handleSendEmailExportReady
 } from '../controllers/emailController.js';
 import { handleNotificationsSubscribe, handleNotificationsUnsubscribe } from '../controllers/notificationController.js';
-import { handleGetVerification } from '../controllers/verificationController.js';
+import { handleVerification } from '../controllers/verificationController.js';
 import { auth, moveToBody } from '../middlewares/index.js';
 import { HMAC_SIGNATURE_PARAM_NAME } from '../utils/hmac.js';
 import {
@@ -74,7 +74,7 @@ router.get(
  * @desc Verify a user's email
  * @access Public
  */
-router.get('/verify', moveToBody, need('email', getStringLimitLength(1, 1000), assignToP), handleGetVerification);
+router.get('/verify', moveToBody, need('email', getStringLimitLength(1, 1000), assignToP), handleVerification);
 
 // Einvite routes
 router.post('/einvites', need('email', getEmail, assignToP), handlePostEinvites);
