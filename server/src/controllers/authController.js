@@ -175,7 +175,7 @@ async function resetPassword(req, res) {
 async function deregister(req, res) {
   // Ensure req.p exists (legacy behavior)
   req.p = req.p || {};
-  
+
   const token = req.cookies[COOKIES.TOKEN];
   clearCookies(req, res);
 

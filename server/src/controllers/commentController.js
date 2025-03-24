@@ -8,23 +8,21 @@ import {
   updateVoteCount
 } from '../db/conversationUpdates.js';
 import { getConversationInfo } from '../db/conversations.js';
+import { createCrowdModerationRecord } from '../db/crowdModeration.js';
 import { getPidPromise } from '../db/getPidPromise.js';
 import { createNotificationTask } from '../db/notifications.js';
 import { addParticipant } from '../db/participants.js';
-import { pgQueryP, pgQueryP_readOnly } from '../db/pg-query.js';
+import { getReportCommentSelections } from '../db/reports.js';
+import { getUsersForModerationEmails } from '../db/users.js';
 import { votesPost } from '../db/votes.js';
 import { getXidStuff } from '../db/xid.js';
 import { sendCommentModerationEmail } from '../email/commentModeration.js';
+import * as commentRepository from '../repositories/comment/commentRepository.js';
 import { getDemographicsForVotersOnComments } from '../repositories/demographics/demographicsRepository.js';
-import {
-  getComment,
-  getComments,
-  getNextComment,
-  translateAndStoreComment
-} from '../services/comment/commentService.js';
+import * as commentService from '../services/comment/commentService.js';
 import { detectLanguage } from '../services/translation/translationService.js';
 import { createXidRecordByZid } from '../services/xid/xidService.js';
-import { analyzeComment, commentExists, hasBadWords, isSpam } from '../utils/commentUtils.js';
+import { analyzeComment, hasBadWords, isSpam } from '../utils/commentUtils.js';
 import logger from '../utils/logger.js';
 import polisTypes from '../utils/polisTypes.js';
 import { fail, finishArray, finishOne } from '../utils/responseHandlers.js';
@@ -96,7 +94,7 @@ async function handlePostComments(req, res) {
       const newPid = await doGetPid();
       return newPid;
     })();
-    const commentExistsPromise = commentExists(zid, txt);
+    const commentExistsPromise = commentService.commentExists(zid, txt);
     const [finalPid, conv, is_moderator, commentExistsAlready, spammy, jigsawResponse] = await Promise.all([
       pidPromise,
       conversationInfoPromise,
@@ -153,23 +151,29 @@ async function handlePostComments(req, res) {
     const detection = Array.isArray(detections) ? detections[0] : detections;
     const lang = detection.language;
     const lang_confidence = detection.confidence;
-    const insertedComment = await pgQueryP(
-      `INSERT INTO COMMENTS
-      (pid, zid, txt, velocity, active, mod, uid, anon, is_seed, created, tid, lang, lang_confidence)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, default, null, $10, $11)
-      RETURNING *;`,
-      [finalPid, zid, txt, velocity, active, mod, uid, anon || false, is_seed || false, lang, lang_confidence]
-    );
-    const comment = insertedComment[0];
+
+    // Use createComment from the commentService
+    const comment = await commentService.createComment({
+      pid: finalPid,
+      zid,
+      txt,
+      velocity,
+      active,
+      mod,
+      uid,
+      anon: anon || false,
+      is_seed: is_seed || false,
+      lang,
+      lang_confidence
+    });
+
     const tid = comment.tid;
     if (bad || spammy || conv.strict_moderation) {
       try {
         const n = await getNumberOfCommentsWithModerationStatus(zid, polisTypes.mod.unmoderated);
         if (n !== 0) {
-          const users = await pgQueryP_readOnly(
-            'SELECT * FROM users WHERE site_id = (SELECT site_id FROM page_ids WHERE zid = $1) UNION SELECT * FROM users WHERE uid = $2;',
-            [zid, conv.owner]
-          );
+          // Use getUsersForModerationEmails from the users.js module
+          const users = await getUsersForModerationEmails(zid, conv.owner);
           const uids = users.map((user) => user.uid);
           for (const uid of uids) {
             sendCommentModerationEmail(req, Number(uid), zid, n);
@@ -243,12 +247,12 @@ function handleGetComments(req, res) {
   const rid = `${req?.headers?.['x-request-id']} ${req?.headers?.['user-agent']}`;
   logger.debug('getComments begin', { rid });
   const isReportQuery = !_.isUndefined(req.p.rid);
-  getComments(req.p)
+  commentService
+    .getComments(req.p)
     .then((comments) => {
       if (req.p.rid) {
-        return pgQueryP_readOnly('select tid, selection from report_comment_selections where rid = ($1);', [
-          req.p.rid
-        ]).then((selections) => {
+        // Use getReportCommentSelections from the reports.js module
+        return getReportCommentSelections(req.p.rid).then((selections) => {
           const tidToSelection = _.indexBy(selections, 'tid');
           const commentsWithReportStatus = comments.map((c) => {
             return {
@@ -303,22 +307,13 @@ function handleGetComments(req, res) {
  * @param {boolean} is_meta - Whether the comment is meta
  * @returns {Promise<Object>} - Result of the moderation
  */
-function moderateComment(zid, tid, active, mod, is_meta) {
-  return new Promise((resolve, reject) => {
-    const query = 'UPDATE comments SET active = $1, mod = $2, is_meta = $3 WHERE zid = $4 AND tid = $5';
-    const params = [active, mod, is_meta, zid, tid];
-    logger.debug('Executing query:', { query });
-    logger.debug('With parameters:', { params });
-    pgQueryP(query, params)
-      .then((result) => {
-        logger.debug('moderateComment executed successfully');
-        resolve(result);
-      })
-      .catch((err) => {
-        logger.error('moderateComment error:', err);
-        reject(err);
-      });
-  });
+async function moderateComment(zid, tid, active, mod, is_meta) {
+  try {
+    return await commentService.moderateComment(zid, tid, active, mod, is_meta);
+  } catch (error) {
+    logger.error('Error in moderateComment', error);
+    throw error;
+  }
 }
 
 /**
@@ -340,7 +335,7 @@ async function handleGetCommentsTranslations(req, res) {
 
     const firstTwoCharsOfLang = req.p.lang.substr(0, 2);
 
-    const comment = await getComment(zid, tid);
+    const comment = await commentService.getComment(zid, tid);
 
     // If comment doesn't exist, return empty array
     if (!comment) {
@@ -350,20 +345,18 @@ async function handleGetCommentsTranslations(req, res) {
     }
 
     // Check for existing translations
-    const existingTranslations = await pgQueryP_readOnly(
-      "SELECT * FROM comment_translations WHERE zid = ($1) AND tid = ($2) AND lang LIKE ($3 || '%');",
-      [zid, tid, firstTwoCharsOfLang]
-    );
+    const existingTranslations = await commentRepository.getCommentTranslations(zid, tid);
+    const matchingTranslations = existingTranslations.filter((t) => t.lang.startsWith(firstTwoCharsOfLang));
 
-    // If translations exist, return them
-    if (existingTranslations?.length) {
-      res.status(200).json(existingTranslations);
+    // If matching translations exist, return them
+    if (matchingTranslations.length) {
+      res.status(200).json(matchingTranslations);
       return;
     }
 
     // Otherwise, translate and store the comment
-    const translations = await translateAndStoreComment(zid, tid, comment.txt, req.p.lang);
-    res.status(200).json(translations || []);
+    const translations = await commentService.translateAndStoreComment(zid, tid, comment.txt, req.p.lang);
+    res.status(200).json(translations ? [translations] : []);
   } catch (err) {
     fail(res, 500, 'polis_err_get_comments_translations', err);
   }
@@ -380,7 +373,7 @@ async function handleGetNextComment(req, res) {
   }
 
   try {
-    const comment = await getNextComment(
+    const comment = await commentService.getNextComment(
       req.p.zid,
       req.p.not_voted_by_pid,
       req.p.without,
@@ -423,51 +416,22 @@ async function handlePostPtptCommentMod(req, res) {
     const pid = req.p.pid;
     const uid = req.p.uid;
 
-    // Insert crowd moderation record
-    const createdTime = await pgQueryP(
-      'INSERT INTO crowd_mod (' +
-        'zid, ' +
-        'pid, ' +
-        'tid, ' +
-        'as_abusive, ' +
-        'as_factual, ' +
-        'as_feeling, ' +
-        'as_important, ' +
-        'as_notfact, ' +
-        'as_notgoodidea, ' +
-        'as_notmyfeeling, ' +
-        'as_offtopic, ' +
-        'as_spam, ' +
-        'as_unsure) VALUES (' +
-        '$1, ' +
-        '$2, ' +
-        '$3, ' +
-        '$4, ' +
-        '$5, ' +
-        '$6, ' +
-        '$7, ' +
-        '$8, ' +
-        '$9, ' +
-        '$10, ' +
-        '$11, ' +
-        '$12, ' +
-        '$13);',
-      [
-        req.p.zid,
-        req.p.pid,
-        req.p.tid,
-        req.p.as_abusive,
-        req.p.as_factual,
-        req.p.as_feeling,
-        req.p.as_important,
-        req.p.as_notfact,
-        req.p.as_notgoodidea,
-        req.p.as_notmyfeeling,
-        req.p.as_offtopic,
-        req.p.as_spam,
-        req.p.unsure
-      ]
-    );
+    // Use createCrowdModerationRecord from the crowdModeration.js module
+    const createdTime = await createCrowdModerationRecord({
+      zid: req.p.zid,
+      pid: req.p.pid,
+      tid: req.p.tid,
+      as_abusive: req.p.as_abusive,
+      as_factual: req.p.as_factual,
+      as_feeling: req.p.as_feeling,
+      as_important: req.p.as_important,
+      as_notfact: req.p.as_notfact,
+      as_notgoodidea: req.p.as_notgoodidea,
+      as_notmyfeeling: req.p.as_notmyfeeling,
+      as_offtopic: req.p.as_offtopic,
+      as_spam: req.p.as_spam,
+      as_unsure: req.p.unsure
+    });
 
     // Update conversation modified time
     setTimeout(() => {
@@ -476,7 +440,7 @@ async function handlePostPtptCommentMod(req, res) {
     }, 100);
 
     // Get next comment
-    const nextComment = await getNextComment(req.p.zid, pid, [], true, req.p.lang);
+    const nextComment = await commentService.getNextComment(req.p.zid, pid, [], true, req.p.lang);
 
     // Prepare result
     const result = {};

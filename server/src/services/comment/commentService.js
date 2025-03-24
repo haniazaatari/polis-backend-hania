@@ -21,6 +21,39 @@ async function getComment(zid, tid) {
 }
 
 /**
+ * Check if a comment exists in the conversation
+ * @param {number} zid - Conversation ID
+ * @param {string} txt - Comment text
+ * @returns {Promise<boolean>} - True if comment exists
+ */
+async function commentExists(zid, txt) {
+  try {
+    return await commentRepository.commentExists(zid, txt);
+  } catch (error) {
+    logger.error('Error checking if comment exists', error);
+    throw error;
+  }
+}
+
+/**
+ * Update a comment's moderation status
+ * @param {number} zid - Conversation ID
+ * @param {number} tid - Comment ID
+ * @param {boolean} active - Whether the comment is active
+ * @param {number} mod - Moderation status
+ * @param {boolean} is_meta - Whether the comment is meta
+ * @returns {Promise<Object>} - Result of the moderation
+ */
+async function moderateComment(zid, tid, active, mod, is_meta) {
+  try {
+    return await commentRepository.moderateComment(zid, tid, active, mod, is_meta);
+  } catch (error) {
+    logger.error('Error moderating comment', error);
+    throw error;
+  }
+}
+
+/**
  * Get comments with various filters
  * @param {Object} options - Query options
  * @param {number} options.zid - Conversation ID
@@ -81,50 +114,6 @@ async function getComments(options) {
     return formattedComments;
   } catch (error) {
     logger.error('Error getting comments', error);
-    throw error;
-  }
-}
-
-/**
- * Get comments for moderation
- * @param {Object} options - Query options
- * @returns {Promise<Array>} - Comments for moderation
- */
-async function getCommentsForModeration(options) {
-  try {
-    // Check if strict moderation is enabled
-    let strictModeration = false;
-    if (options.modIn !== undefined) {
-      const conversation = await getConversationInfo(options.zid);
-      strictModeration = conversation.strict_moderation;
-    }
-
-    return await commentRepository.getCommentsForModeration({
-      ...options,
-      strict_moderation: strictModeration
-    });
-  } catch (error) {
-    logger.error('Error getting comments for moderation', error);
-    throw error;
-  }
-}
-
-/**
- * Get comments list
- * @param {Object} options - Query options
- * @returns {Promise<Array>} - Comments list
- */
-async function getCommentsList(options) {
-  try {
-    const conversation = await getConversationInfo(options.zid);
-
-    return await commentRepository.getCommentsList({
-      ...options,
-      strict_moderation: conversation.strict_moderation,
-      prioritize_seed: conversation.prioritize_seed
-    });
-  } catch (error) {
-    logger.error('Error getting comments list', error);
     throw error;
   }
 }
@@ -217,7 +206,7 @@ async function getNextPrioritizedComment(zid, pid, withoutTids, include_social) 
 
   try {
     const [comments, math, numberOfCommentsRemainingRows] = await Promise.all([
-      getCommentsList(params),
+      commentRepository.getCommentsList(params),
       getPca(zid, 0),
       getNumberOfCommentsRemaining(zid, pid)
     ]);
@@ -294,13 +283,38 @@ async function getNextComment(zid, pid, withoutTids, include_social, lang) {
   }
 }
 
+/**
+ * Create a new comment
+ * @param {Object} params - Comment parameters
+ * @param {number} params.pid - The participant ID
+ * @param {number} params.zid - The conversation ID
+ * @param {string} params.txt - The comment text
+ * @param {number} params.velocity - The comment velocity
+ * @param {boolean} params.active - Whether the comment is active
+ * @param {number} params.mod - The moderation status
+ * @param {number} params.uid - The user ID
+ * @param {boolean} params.anon - Whether the comment is anonymous
+ * @param {boolean} params.is_seed - Whether the comment is a seed
+ * @param {string} params.lang - The comment language
+ * @param {number} params.lang_confidence - The language detection confidence
+ * @returns {Promise<Object>} - The created comment
+ */
+async function createComment(params) {
+  try {
+    return await commentRepository.createComment(params);
+  } catch (error) {
+    logger.error('Error creating comment', error);
+    throw error;
+  }
+}
+
 export {
   getComment,
   getComments,
-  getCommentsForModeration,
-  getCommentsList,
   getNumberOfCommentsRemaining,
   translateAndStoreComment,
-  getNextPrioritizedComment,
-  getNextComment
+  getNextComment,
+  commentExists,
+  moderateComment,
+  createComment
 };

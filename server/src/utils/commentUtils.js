@@ -2,7 +2,6 @@ import akismetLib from 'akismet';
 import badwords from 'badwords';
 import { google } from 'googleapis';
 import Config from '../config.js';
-import { pgQueryP_readOnly } from '../db/pg-query.js';
 import logger from './logger.js';
 import { MPromise } from './metered.js';
 
@@ -36,17 +35,6 @@ function hasBadWords(txt) {
     }
   }
   return false;
-}
-
-/**
- * Check if a comment already exists in the conversation
- * @param {number} zid - The conversation ID
- * @param {string} txt - The comment text
- * @returns {Promise<boolean>} - True if the comment already exists
- */
-async function commentExists(zid, txt) {
-  const rows = await pgQueryP_readOnly('SELECT zid FROM comments WHERE zid = ($1) AND txt = ($2);', [zid, txt]);
-  return !!rows?.length;
 }
 
 const GOOGLE_DISCOVERY_URL = 'https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1';
@@ -106,4 +94,4 @@ function isSpam(options) {
   });
 }
 
-export { hasBadWords, commentExists, analyzeComment, isSpam };
+export { hasBadWords, analyzeComment, isSpam };
