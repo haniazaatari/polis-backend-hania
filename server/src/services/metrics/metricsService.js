@@ -1,4 +1,4 @@
-import { queryP } from '../../db/pg-query.js';
+import { recordMetricsData } from '../../db/metrics.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -45,19 +45,19 @@ function recordMetrics(uid, types, durs, clientTimestamp, permanentCookie) {
 
   const entries = [];
   for (let i = 0; i < timesInTermsOfServerTime.length; i++) {
-    entries.push(`(${[uid || 'null', types[i], processedDurs[i], hashedPc, timesInTermsOfServerTime[i]].join(',')})`);
+    entries.push({
+      uid,
+      type: types[i],
+      dur: processedDurs[i],
+      hashedPc,
+      created: timesInTermsOfServerTime[i]
+    });
   }
 
-  if (entries.length === 0) {
-    return Promise.resolve();
-  }
-
-  return queryP(`insert into metrics (uid, type, dur, hashedPc, created) values ${entries.join(',')};`, []).catch(
-    (err) => {
-      logger.error('Error recording metrics', err);
-      throw err;
-    }
-  );
+  return recordMetricsData(entries).catch((err) => {
+    logger.error('Error recording metrics', err);
+    throw err;
+  });
 }
 
 export { recordMetrics, hashStringToInt32 };

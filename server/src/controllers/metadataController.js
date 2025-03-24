@@ -1,250 +1,170 @@
 import {
   checkDeleteAuthorization,
   checkMetadataAccess,
-  createMetadataQuestion,
-  createOrUpdateMetadataAnswer,
-  deleteMetadataAnswer,
-  deleteMetadataQuestionAndAnswers,
-  getAllMetadata,
-  getChoicesForConversation,
-  getMetadataAnswers,
-  getMetadataQuestions,
-  getZidForAnswer,
-  getZidForQuestion
+  createMetadataQuestionForConversation,
+  createOrUpdateMetadataAnswerForQuestion,
+  deleteMetadataAnswerById,
+  deleteMetadataQuestionAndAnswersById,
+  getAllMetadataForConversation,
+  getChoicesForConversationById,
+  getMetadataAnswersForConversation,
+  getMetadataQuestionsForConversation,
+  getZidForMetadataAnswer,
+  getZidForMetadataQuestion
 } from '../services/metadata/metadataService.js';
-import { fail, finishArray, finishOne } from '../utils/responseHandlers.js';
+import logger from '../utils/logger.js';
 
 /**
- * Handle DELETE request for metadata questions
- * @param {object} req - Express request object
- * @param {object} res - Express response object
+ * Get metadata for a conversation
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<void>}
  */
-export const handleDeleteMetadataQuestion = async (req, res) => {
-  const uid = req.p.uid;
-  const pmqid = req.p.pmqid;
+async function getMetadata(req, res) {
+  const { zid, zinvite, suzinvite } = req.p;
 
   try {
-    // Get the conversation ID for the question
-    const zid = await getZidForQuestion(pmqid);
-
-    // Check if the user is authorized to delete the question
-    await checkDeleteAuthorization(zid, uid);
-
-    // Delete the question and its answers
-    await deleteMetadataQuestionAndAnswers(pmqid);
-
-    res.status(200).end();
-  } catch (err) {
-    if (err.message === 'polis_err_get_zid_for_question') {
-      fail(res, 500, 'polis_err_delete_participant_metadata_questions_zid', err);
-    } else if (err.message === 'polis_err_delete_metadata_auth') {
-      fail(res, 403, 'polis_err_delete_participant_metadata_questions_auth', err);
-    } else {
-      fail(res, 500, 'polis_err_delete_participant_metadata_question', err);
-    }
-  }
-};
-
-/**
- * Handle DELETE request for metadata answers
- * @param {object} req - Express request object
- * @param {object} res - Express response object
- */
-export const handleDeleteMetadataAnswer = async (req, res) => {
-  const uid = req.p.uid;
-  const pmaid = req.p.pmaid;
-
-  try {
-    // Get the conversation ID for the answer
-    const zid = await getZidForAnswer(pmaid);
-
-    // Check if the user is authorized to delete the answer
-    await checkDeleteAuthorization(zid, uid);
-
-    // Delete the answer
-    await deleteMetadataAnswer(pmaid);
-
-    res.status(200).end();
-  } catch (err) {
-    if (err.message === 'polis_err_get_zid_for_answer') {
-      fail(res, 500, 'polis_err_delete_participant_metadata_answer_zid', err);
-    } else if (err.message === 'polis_err_delete_metadata_auth') {
-      fail(res, 403, 'polis_err_delete_participant_metadata_answer_auth', err);
-    } else {
-      fail(res, 500, 'polis_err_delete_participant_metadata_answer', err);
-    }
-  }
-};
-
-/**
- * Handle GET request for metadata questions
- * @param {object} req - Express request object
- * @param {object} res - Express response object
- */
-export const handleGetMetadataQuestions = async (req, res) => {
-  const zid = req.p.zid;
-  const zinvite = req.p.zinvite;
-  const suzinvite = req.p.suzinvite;
-
-  try {
-    // Check if the user has access to the metadata
     await checkMetadataAccess(zid, zinvite, suzinvite);
 
-    // Get the metadata questions
-    const questions = await getMetadataQuestions(zid);
+    const [questions, answers] = await Promise.all([
+      getMetadataQuestionsForConversation(zid),
+      getMetadataAnswersForConversation(zid)
+    ]);
 
-    // Add zid to each question for finishArray to process
-    for (const q of questions) {
-      q.zid = zid;
-    }
-
-    finishArray(res, questions);
+    res.status(200).json({
+      questions,
+      answers
+    });
   } catch (err) {
-    if (err.message === 'polis_err_get_participant_metadata_auth') {
-      fail(res, 403, 'polis_err_get_participant_metadata_auth', err);
-    } else {
-      fail(res, 500, 'polis_err_get_participant_metadata_questions', err);
-    }
+    logger.error('Error getting metadata', err);
+    res.status(500).json({
+      error: err.message
+    });
   }
-};
+}
 
 /**
- * Handle POST request for metadata questions
- * @param {object} req - Express request object
- * @param {object} res - Express response object
+ * Get metadata choices for a conversation
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<void>}
  */
-export const handlePostMetadataQuestion = async (req, res) => {
-  const zid = req.p.zid;
-  const key = req.p.key;
-  const uid = req.p.uid;
+async function getMetadataChoices(req, res) {
+  const { zid } = req.p;
 
   try {
-    // Check if the user is authorized to create a question
-    await checkDeleteAuthorization(zid, uid);
-
-    // Create the question
-    const question = await createMetadataQuestion(zid, key);
-
-    // The question already has zid from the database
-    finishOne(res, question);
+    const choices = await getChoicesForConversationById(zid);
+    res.status(200).json(choices);
   } catch (err) {
-    if (err.message === 'polis_err_delete_metadata_auth') {
-      fail(res, 403, 'polis_err_post_participant_metadata_auth', err);
-    } else {
-      fail(res, 500, 'polis_err_post_participant_metadata_key', err);
-    }
+    logger.error('Error getting metadata choices', err);
+    res.status(500).json({
+      error: err.message
+    });
   }
-};
+}
 
 /**
- * Handle POST request for metadata answers
- * @param {object} req - Express request object
- * @param {object} res - Express response object
+ * Get all metadata for a conversation
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<void>}
  */
-export const handlePostMetadataAnswer = async (req, res) => {
-  const zid = req.p.zid;
-  const uid = req.p.uid;
-  const pmqid = req.p.pmqid;
-  const value = req.p.value;
+async function getAllMetadata(req, res) {
+  const { zid } = req.p;
 
   try {
-    // Check if the user is authorized to create an answer
-    await checkDeleteAuthorization(zid, uid);
-
-    // Create or update the answer
-    const answer = await createOrUpdateMetadataAnswer(pmqid, zid, value);
-
-    // The answer already has zid from the database
-    finishOne(res, answer);
-  } catch (err) {
-    if (err.message === 'polis_err_delete_metadata_auth') {
-      fail(res, 403, 'polis_err_post_participant_metadata_auth', err);
-    } else {
-      fail(res, 500, 'polis_err_post_participant_metadata_value', err);
-    }
-  }
-};
-
-/**
- * Handle GET request for metadata choices
- * @param {object} req - Express request object
- * @param {object} res - Express response object
- */
-export const handleGetMetadataChoices = async (req, res) => {
-  const zid = req.p.zid;
-
-  try {
-    // Get the metadata choices
-    const choices = await getChoicesForConversation(zid);
-
-    // Add zid to each choice for finishArray to process
-    for (const c of choices) {
-      c.zid = zid;
-    }
-
-    finishArray(res, choices);
-  } catch (err) {
-    fail(res, 500, 'polis_err_get_participant_metadata_choices', err);
-  }
-};
-
-/**
- * Handle GET request for metadata answers
- * @param {object} req - Express request object
- * @param {object} res - Express response object
- */
-export const handleGetMetadataAnswers = async (req, res) => {
-  const zid = req.p.zid;
-  const zinvite = req.p.zinvite;
-  const suzinvite = req.p.suzinvite;
-  const pmqid = req.p.pmqid;
-
-  try {
-    // Check if the user has access to the metadata
-    await checkMetadataAccess(zid, zinvite, suzinvite);
-
-    // Get the metadata answers
-    const answers = await getMetadataAnswers(zid, pmqid);
-
-    // Add zid to each answer for finishArray to process
-    for (const a of answers) {
-      a.zid = zid;
-    }
-
-    finishArray(res, answers);
-  } catch (err) {
-    if (err.message === 'polis_err_get_participant_metadata_auth') {
-      fail(res, 403, 'polis_err_get_participant_metadata_auth', err);
-    } else {
-      fail(res, 500, 'polis_err_get_participant_metadata_answers', err);
-    }
-  }
-};
-
-/**
- * Handle GET request for all metadata
- * @param {object} req - Express request object
- * @param {object} res - Express response object
- */
-export const handleGetAllMetadata = async (req, res) => {
-  const zid = req.p.zid;
-  const zinvite = req.p.zinvite;
-  const suzinvite = req.p.suzinvite;
-
-  try {
-    // Check if the user has access to the metadata
-    await checkMetadataAccess(zid, zinvite, suzinvite);
-
-    // Get all metadata
-    const metadata = await getAllMetadata(zid);
-
-    // Since this is a custom format, we don't use finishArray or finishOne
+    const metadata = await getAllMetadataForConversation(zid);
     res.status(200).json(metadata);
   } catch (err) {
-    if (err.message === 'polis_err_get_participant_metadata_auth') {
-      fail(res, 403, 'polis_err_get_participant_metadata_auth', err);
-    } else {
-      fail(res, 500, 'polis_err_get_participant_metadata', err);
-    }
+    logger.error('Error getting all metadata', err);
+    res.status(500).json({
+      error: err.message
+    });
   }
-};
+}
+
+/**
+ * Create a metadata question
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<void>}
+ */
+async function createQuestion(req, res) {
+  const { zid, key } = req.p;
+
+  try {
+    const question = await createMetadataQuestionForConversation(zid, key);
+    res.status(201).json(question);
+  } catch (err) {
+    logger.error('Error creating metadata question', err);
+    res.status(500).json({
+      error: err.message
+    });
+  }
+}
+
+/**
+ * Create a metadata answer
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<void>}
+ */
+async function createAnswer(req, res) {
+  const { pmqid, zid, value } = req.p;
+
+  try {
+    const answer = await createOrUpdateMetadataAnswerForQuestion(pmqid, zid, value);
+    res.status(201).json(answer);
+  } catch (err) {
+    logger.error('Error creating metadata answer', err);
+    res.status(500).json({
+      error: err.message
+    });
+  }
+}
+
+/**
+ * Delete a metadata answer
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<void>}
+ */
+async function deleteAnswer(req, res) {
+  const { pmaid, uid } = req.p;
+
+  try {
+    const zid = await getZidForMetadataAnswer(pmaid);
+    await checkDeleteAuthorization(zid, uid);
+    await deleteMetadataAnswerById(pmaid);
+    res.status(200).json({ status: 'success' });
+  } catch (err) {
+    logger.error('Error deleting metadata answer', err);
+    res.status(500).json({
+      error: err.message
+    });
+  }
+}
+
+/**
+ * Delete a metadata question
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<void>}
+ */
+async function deleteQuestion(req, res) {
+  const { pmqid, uid } = req.p;
+
+  try {
+    const zid = await getZidForMetadataQuestion(pmqid);
+    await checkDeleteAuthorization(zid, uid);
+    await deleteMetadataQuestionAndAnswersById(pmqid);
+    res.status(200).json({ status: 'success' });
+  } catch (err) {
+    logger.error('Error deleting metadata question', err);
+    res.status(500).json({
+      error: err.message
+    });
+  }
+}
+
+export { getMetadata, getMetadataChoices, getAllMetadata, createQuestion, createAnswer, deleteAnswer, deleteQuestion };

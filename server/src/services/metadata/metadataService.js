@@ -1,5 +1,15 @@
-import { queryP, query_readOnly } from '../../db/pg-query.js';
-import { sql_participant_metadata_answers } from '../../db/sql.js';
+import {
+  createMetadataQuestion,
+  createOrUpdateMetadataAnswer,
+  deleteMetadataAnswer,
+  deleteMetadataQuestionAndAnswers,
+  getAllMetadata,
+  getChoicesForConversation,
+  getMetadataAnswers,
+  getMetadataQuestions,
+  getZidForAnswer,
+  getZidForQuestion
+} from '../../db/metadata.js';
 import { isConversationOwner, isSuzinviteValid, isZinviteValid } from '../zinvite/zinviteService.js';
 
 /**
@@ -7,8 +17,8 @@ import { isConversationOwner, isSuzinviteValid, isZinviteValid } from '../zinvit
  * @param {number} pmaid - Participant metadata answer ID
  * @returns {Promise<number>} - Conversation ID
  */
-async function getZidForAnswer(pmaid) {
-  const result = await queryP('SELECT zid FROM participant_metadata_answers WHERE pmaid = ($1)', [pmaid]);
+async function getZidForMetadataAnswer(pmaid) {
+  const result = await getZidForAnswer(pmaid);
   if (!result || !result.rows || !result.rows.length) {
     throw new Error('polis_err_get_zid_for_answer');
   }
@@ -20,8 +30,8 @@ async function getZidForAnswer(pmaid) {
  * @param {number} pmqid - Participant metadata question ID
  * @returns {Promise<number>} - Conversation ID
  */
-async function getZidForQuestion(pmqid) {
-  const result = await queryP('SELECT zid FROM participant_metadata_questions WHERE pmqid = ($1)', [pmqid]);
+async function getZidForMetadataQuestion(pmqid) {
+  const result = await getZidForQuestion(pmqid);
   if (!result || !result.rows || !result.rows.length) {
     throw new Error('polis_err_get_zid_for_question');
   }
@@ -33,8 +43,8 @@ async function getZidForQuestion(pmqid) {
  * @param {number} pmaid - Participant metadata answer ID
  * @returns {Promise<void>}
  */
-async function deleteMetadataAnswer(pmaid) {
-  await queryP('UPDATE participant_metadata_answers SET alive = FALSE WHERE pmaid = ($1)', [pmaid]);
+async function deleteMetadataAnswerById(pmaid) {
+  await deleteMetadataAnswer(pmaid);
 }
 
 /**
@@ -42,9 +52,8 @@ async function deleteMetadataAnswer(pmaid) {
  * @param {number} pmqid - Participant metadata question ID
  * @returns {Promise<void>}
  */
-async function deleteMetadataQuestionAndAnswers(pmqid) {
-  await queryP('UPDATE participant_metadata_questions SET alive = FALSE WHERE pmqid = ($1)', [pmqid]);
-  await queryP('UPDATE participant_metadata_answers SET alive = FALSE WHERE pmqid = ($1)', [pmqid]);
+async function deleteMetadataQuestionAndAnswersById(pmqid) {
+  await deleteMetadataQuestionAndAnswers(pmqid);
 }
 
 /**
@@ -70,8 +79,8 @@ async function checkDeleteAuthorization(zid, uid) {
  * @param {number} zid - Conversation ID
  * @returns {Promise<Array>} - Metadata questions
  */
-async function getMetadataQuestions(zid) {
-  const result = await queryP('SELECT * FROM participant_metadata_questions WHERE alive = true AND zid = ($1);', [zid]);
+async function getMetadataQuestionsForConversation(zid) {
+  const result = await getMetadataQuestions(zid);
   return result.rows.map((r) => {
     r.required = true;
     return r;
@@ -84,11 +93,8 @@ async function getMetadataQuestions(zid) {
  * @param {string} key - Question key
  * @returns {Promise<Object>} - Created question
  */
-async function createMetadataQuestion(zid, key) {
-  const result = await queryP(
-    'INSERT INTO participant_metadata_questions (pmqid, zid, key) VALUES (default, $1, $2) RETURNING *;',
-    [zid, key]
-  );
+async function createMetadataQuestionForConversation(zid, key) {
+  const result = await createMetadataQuestion(zid, key);
   if (!result || !result.rows || !result.rows.length) {
     throw new Error('polis_err_post_participant_metadata_key');
   }
@@ -102,23 +108,15 @@ async function createMetadataQuestion(zid, key) {
  * @param {string} value - Answer value
  * @returns {Promise<Object>} - Created or updated answer
  */
-async function createOrUpdateMetadataAnswer(pmqid, zid, value) {
+async function createOrUpdateMetadataAnswerForQuestion(pmqid, zid, value) {
   try {
-    const result = await queryP(
-      'INSERT INTO participant_metadata_answers (pmqid, zid, value, pmaid) VALUES ($1, $2, $3, default) RETURNING *;',
-      [pmqid, zid, value]
-    );
-    return result.rows[0];
-  } catch (_err) {
-    // If insert fails, try to update
-    const updateResult = await queryP(
-      'UPDATE participant_metadata_answers set alive = TRUE where pmqid = ($1) AND zid = ($2) AND value = ($3) RETURNING *;',
-      [pmqid, zid, value]
-    );
-    if (!updateResult || !updateResult.rows || !updateResult.rows.length) {
+    const result = await createOrUpdateMetadataAnswer(pmqid, zid, value);
+    if (!result || !result.rows || !result.rows.length) {
       throw new Error('polis_err_post_participant_metadata_value');
     }
-    return updateResult.rows[0];
+    return result.rows[0];
+  } catch (error) {
+    throw new Error('polis_err_post_participant_metadata_value');
   }
 }
 
@@ -127,8 +125,8 @@ async function createOrUpdateMetadataAnswer(pmqid, zid, value) {
  * @param {number} zid - Conversation ID
  * @returns {Promise<Array>} - Choices
  */
-async function getChoicesForConversation(zid) {
-  const result = await queryP('SELECT * FROM participant_metadata_choices WHERE zid = ($1);', [zid]);
+async function getChoicesForConversationById(zid) {
+  const result = await getChoicesForConversation(zid);
   return result.rows;
 }
 
@@ -138,17 +136,8 @@ async function getChoicesForConversation(zid) {
  * @param {number} [pmqid] - Optional question ID to filter by
  * @returns {Promise<Array>} - Metadata answers
  */
-async function getMetadataAnswers(zid, pmqid) {
-  let query = sql_participant_metadata_answers
-    .select(sql_participant_metadata_answers.star())
-    .where(sql_participant_metadata_answers.zid.equals(zid))
-    .and(sql_participant_metadata_answers.alive.equals(true));
-
-  if (pmqid) {
-    query = query.where(sql_participant_metadata_answers.pmqid.equals(pmqid));
-  }
-
-  const result = await query_readOnly(query.toString());
+async function getMetadataAnswersForConversation(zid, pmqid) {
+  const result = await getMetadataAnswers(zid, pmqid);
   return result.rows.map((r) => {
     r.is_exclusive = true;
     return r;
@@ -160,16 +149,8 @@ async function getMetadataAnswers(zid, pmqid) {
  * @param {number} zid - Conversation ID
  * @returns {Promise<Object>} - All metadata
  */
-async function getAllMetadata(zid) {
-  const [keysResult, valsResult, choicesResult] = await Promise.all([
-    queryP('SELECT * FROM participant_metadata_questions WHERE zid = ($1);', [zid]),
-    queryP('SELECT * FROM participant_metadata_answers WHERE zid = ($1);', [zid]),
-    queryP('SELECT * FROM participant_metadata_choices WHERE zid = ($1);', [zid])
-  ]);
-
-  const keys = keysResult.rows;
-  const vals = valsResult.rows;
-  const choices = choicesResult.rows;
+async function getAllMetadataForConversation(zid) {
+  const { keys, vals, choices } = await getAllMetadata(zid);
 
   if (!keys || !keys.length) {
     return {};
@@ -234,16 +215,16 @@ async function checkMetadataAccess(zid, zinvite, suzinvite) {
 }
 
 export {
-  getZidForAnswer,
-  getZidForQuestion,
-  deleteMetadataAnswer,
-  deleteMetadataQuestionAndAnswers,
+  getZidForMetadataAnswer,
+  getZidForMetadataQuestion,
+  deleteMetadataAnswerById,
+  deleteMetadataQuestionAndAnswersById,
   checkDeleteAuthorization,
-  getMetadataQuestions,
-  createMetadataQuestion,
-  createOrUpdateMetadataAnswer,
-  getChoicesForConversation,
-  getMetadataAnswers,
-  getAllMetadata,
+  getMetadataQuestionsForConversation,
+  createMetadataQuestionForConversation,
+  createOrUpdateMetadataAnswerForQuestion,
+  getChoicesForConversationById,
+  getMetadataAnswersForConversation,
+  getAllMetadataForConversation,
   checkMetadataAccess
 };

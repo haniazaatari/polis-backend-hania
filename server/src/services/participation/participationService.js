@@ -3,7 +3,7 @@
  * Handles business logic for participation-related operations
  */
 import _ from 'underscore';
-import { queryP_readOnly } from '../../db/pg-query.js';
+import { getCommentCounts, getVoteCounts } from '../../db/participation.js';
 import { getNextComment } from '../../services/comment/commentService.js';
 import { getOneConversation } from '../../services/conversation/conversationService.js';
 import { getXids } from '../../services/math/mathService.js';
@@ -31,8 +31,8 @@ async function getParticipation(zid, uid, strict) {
 
     // Get vote counts, comment counts, and XIDs
     const [voteCountRows, commentCountRows, pidXidRows] = await Promise.all([
-      queryP_readOnly('select pid, count(*) from votes where zid = ($1) group by pid;', [zid]),
-      queryP_readOnly('select pid, count(*) from comments where zid = ($1) group by pid;', [zid]),
+      getVoteCounts(zid),
+      getCommentCounts(zid),
       getXids(zid)
     ]);
 

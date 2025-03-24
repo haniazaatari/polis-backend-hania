@@ -12,7 +12,7 @@ function initializeApplication() {
   if (!Config.backfillCommentLangDetection) {
     return;
   }
-  
+
   logger.debug('Starting application initialization');
 
   // Initialize core services

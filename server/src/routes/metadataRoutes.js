@@ -1,13 +1,12 @@
 import express from 'express';
 import {
-  handleDeleteMetadataAnswer,
-  handleDeleteMetadataQuestion,
-  handleGetAllMetadata,
-  handleGetMetadataAnswers,
-  handleGetMetadataChoices,
-  handleGetMetadataQuestions,
-  handlePostMetadataAnswer,
-  handlePostMetadataQuestion
+  createAnswer,
+  createQuestion,
+  deleteAnswer,
+  deleteQuestion,
+  getAllMetadata,
+  getMetadata,
+  getMetadataChoices
 } from '../controllers/metadataController.js';
 import { auth, authOptional, moveToBody } from '../middlewares/index.js';
 import {
@@ -27,26 +26,14 @@ const router = express();
  * @desc Delete a metadata question
  * @access Private
  */
-router.delete(
-  '/questions/:pmqid',
-  moveToBody,
-  auth(assignToP),
-  need('pmqid', getInt, assignToP),
-  handleDeleteMetadataQuestion
-);
+router.delete('/questions/:pmqid', moveToBody, auth(assignToP), need('pmqid', getInt, assignToP), deleteQuestion);
 
 /**
  * @route DELETE /answers/:pmaid
  * @desc Delete a metadata answer
  * @access Private
  */
-router.delete(
-  '/answers/:pmaid',
-  moveToBody,
-  auth(assignToP),
-  need('pmaid', getInt, assignToP),
-  handleDeleteMetadataAnswer
-);
+router.delete('/answers/:pmaid', moveToBody, auth(assignToP), need('pmaid', getInt, assignToP), deleteAnswer);
 
 /**
  * @route GET /questions
@@ -60,7 +47,7 @@ router.get(
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
   want('suzinvite', getOptionalStringLimitLength(32), assignToP),
   want('zinvite', getOptionalStringLimitLength(300), assignToP),
-  handleGetMetadataQuestions
+  getMetadata
 );
 
 /**
@@ -74,7 +61,7 @@ router.post(
   auth(assignToP),
   need('key', getOptionalStringLimitLength(999), assignToP),
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
-  handlePostMetadataQuestion
+  createQuestion
 );
 
 /**
@@ -89,7 +76,7 @@ router.post(
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
   need('pmqid', getInt, assignToP),
   need('value', getOptionalStringLimitLength(999), assignToP),
-  handlePostMetadataAnswer
+  createAnswer
 );
 
 /**
@@ -102,7 +89,7 @@ router.get(
   moveToBody,
   auth(assignToP),
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
-  handleGetMetadataChoices
+  getMetadataChoices
 );
 
 /**
@@ -118,7 +105,7 @@ router.get(
   want('pmqid', getInt, assignToP),
   want('suzinvite', getOptionalStringLimitLength(32), assignToP),
   want('zinvite', getOptionalStringLimitLength(300), assignToP),
-  handleGetMetadataAnswers
+  getMetadata
 );
 
 /**
@@ -133,7 +120,7 @@ router.get(
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
   want('zinvite', getOptionalStringLimitLength(300), assignToP),
   want('suzinvite', getOptionalStringLimitLength(32), assignToP),
-  handleGetAllMetadata
+  getAllMetadata
 );
 
 export default router;
