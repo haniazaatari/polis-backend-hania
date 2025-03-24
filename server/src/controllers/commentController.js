@@ -1,7 +1,7 @@
 import _ from 'underscore';
 import Config from '../config.js';
 import { isModerator } from '../db/authorization.js';
-import { addNoMoreCommentsRecord, getComments, getNumberOfCommentsWithModerationStatus } from '../db/comments.js';
+import { addNoMoreCommentsRecord, getNumberOfCommentsWithModerationStatus } from '../db/comments.js';
 import {
   updateConversationModifiedTime,
   updateLastInteractionTimeForConversation,
@@ -16,7 +16,12 @@ import { votesPost } from '../db/votes.js';
 import { getXidStuff } from '../db/xid.js';
 import { sendCommentModerationEmail } from '../email/commentModeration.js';
 import { getDemographicsForVotersOnComments } from '../repositories/demographics/demographicsRepository.js';
-import { getComment, getNextComment, translateAndStoreComment } from '../services/comment/commentService.js';
+import {
+  getComment,
+  getComments,
+  getNextComment,
+  translateAndStoreComment
+} from '../services/comment/commentService.js';
 import { detectLanguage } from '../services/translation/translationService.js';
 import { createXidRecordByZid } from '../services/xid/xidService.js';
 import { analyzeComment, commentExists, hasBadWords, isSpam } from '../utils/commentUtils.js';

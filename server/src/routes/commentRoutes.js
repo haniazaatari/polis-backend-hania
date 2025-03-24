@@ -20,6 +20,7 @@ import {
   getIntInRange,
   getNumberInRange,
   getOptionalStringLimitLength,
+  getReportIdFetchRid,
   getStringLimitLength,
   getUrlLimitLength,
   need,
@@ -91,21 +92,20 @@ router.post(
  */
 router.get(
   '/comments',
-  auth(assignToP),
+  moveToBody,
+  authOptional(assignToP),
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
-  want('pid', getIntInRange(0, 999999), assignToP),
-  want('tids', getOptionalStringLimitLength(999), assignToP, (tids) => {
-    return tids.split(',').map((tid) => Number(tid));
-  }),
-  want('not_voted_by_pid', getIntInRange(0, 999999), assignToP),
-  want('withoutTids', getOptionalStringLimitLength(999), assignToP, (withoutTids) => {
-    return withoutTids.split(',').map((tid) => Number(tid));
-  }),
-  want('mod', getIntInRange(-1, 9), assignToP),
-  want('random', getBool, assignToP),
-  want('limit', getIntInRange(1, 999), assignToP),
-  want('include_demographics', getBool, assignToP),
+  want('report_id', getReportIdFetchRid, assignToPCustom('rid')),
+  want('tids', getArrayOfInt, assignToP),
   want('moderation', getBool, assignToP),
+  want('mod', getInt, assignToP),
+  want('modIn', getBool, assignToP),
+  want('mod_gt', getInt, assignToP),
+  want('include_social', getBool, assignToP),
+  want('include_demographics', getBool, assignToP),
+  want('include_voting_patterns', getBool, assignToP, false),
+  resolveParticipantId('not_voted_by_pid', assignToP, 'get:comments:not_voted_by_pid'),
+  resolveParticipantId('pid', assignToP, 'get:comments:pid'),
   handleGetComments
 );
 
@@ -123,6 +123,9 @@ router.get(
  */
 router.get(
   '/comments/translations',
+  // NOTE: The legacy route does not use moveToBody, but it is broken.
+  // Commenting out to maintain the (broken) legacy behavior, for now.
+  // moveToBody,
   auth(assignToP),
   need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
   want('tid', getInt, assignToP),

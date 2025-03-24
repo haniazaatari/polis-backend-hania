@@ -1,5 +1,5 @@
 import * as cookieService from '../services/auth/cookieService.js';
-import { generateHashedPassword, updatePassword } from '../services/auth/passwordService.js';
+import { updatePassword } from '../services/auth/passwordService.js';
 import * as tokenService from '../services/auth/tokenService.js';
 import { sendPasswordResetEmail, sendPasswordResetEmailFailure } from '../services/email/emailService.js';
 import * as userService from '../services/user/userService.js';
@@ -20,14 +20,12 @@ async function handlePasswordReset(req, res) {
     const uid = await tokenService.getUserIdForPasswordResetToken(pwresettoken);
 
     if (!uid) {
-      throw new Error("Couldn't find matching pwresettoken");
+      fail(res, 500, "Password Reset failed. Couldn't find matching pwresettoken.");
+      return;
     }
 
-    // Generate hashed password
-    const hashedPassword = await generateHashedPassword(newPassword);
-
-    // Update password
-    await updatePassword(uid, hashedPassword);
+    // Update password - no need to pre-hash as updatePassword handles hashing
+    await updatePassword(uid, newPassword);
 
     // Clear token
     await tokenService.clearPasswordResetToken(pwresettoken);

@@ -41,7 +41,6 @@ function setCookie(req, res, name, value, options) {
   const parsedOrigin = url.parse(origin);
   opts.secure = parsedOrigin.protocol === 'https:';
   opts.domain = cookieDomain(req);
-  logger.debug(`setCookie name: ${name}, value: ${value}, opts: ${JSON.stringify(opts)}`);
   res.cookie(name, value, opts);
 }
 

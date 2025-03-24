@@ -39,51 +39,29 @@ async function getComment(zid, tid) {
  */
 async function getComments(options) {
   try {
-    // Get conversation info
+    // First get the conversation info
     const conversation = await getConversationInfo(options.zid);
 
-    // Get comments based on moderation flag
-    let comments;
-    if (options.moderation) {
-      // Check if strict moderation is enabled
-      let strictModeration = false;
-      if (options.modIn !== undefined) {
-        strictModeration = conversation.strict_moderation;
-      }
-      logger.debug('getComments: strictModeration', strictModeration);
+    // Then get the comments with the conversation info
+    const rawComments = await (options.moderation
+      ? commentRepository.getCommentsForModeration({
+          ...options,
+          strict_moderation: options.modIn ? conversation.strict_moderation : false
+        })
+      : commentRepository.getCommentsList({
+          ...options,
+          strict_moderation: conversation.strict_moderation,
+          prioritize_seed: conversation.prioritize_seed
+        }));
 
-      // Get comments for moderation
-      comments = await commentRepository.getCommentsForModeration({
-        ...options,
-        strict_moderation: strictModeration
-      });
-    } else {
-      // Get regular comments list
-      comments = await commentRepository.getCommentsList({
-        ...options,
-        strict_moderation: conversation.strict_moderation,
-        prioritize_seed: conversation.prioritize_seed
-      });
-    }
-
-    logger.debug(`getComments: found ${comments.length} comments`);
-
-    // Select and format columns
+    // Rest of the function remains the same
     const cols = ['txt', 'tid', 'created', 'uid', 'quote_src_url', 'anon', 'is_seed', 'is_meta', 'lang', 'pid'];
 
     if (options.moderation) {
-      cols.push('velocity');
-      cols.push('zid');
-      cols.push('mod');
-      cols.push('active');
-      cols.push('agree_count');
-      cols.push('disagree_count');
-      cols.push('pass_count');
-      cols.push('count');
+      cols.push('velocity', 'zid', 'mod', 'active', 'agree_count', 'disagree_count', 'pass_count', 'count');
     }
 
-    // Format comments
-    const formattedComments = comments.map((comment) => {
+    const formattedComments = rawComments.map((comment) => {
       const formattedComment = _.pick(comment, cols);
 
       // Convert count to number if defined

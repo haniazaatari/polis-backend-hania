@@ -7,20 +7,38 @@ import logger from './logger.js';
 import { MPromise } from './metered.js';
 import { fail } from './responseHandlers.js';
 
+/**
+ * Extract a parameter value from the request body only.
+ * This matches legacy behavior where parameters are only pulled from body.
+ * @param {Object} req - Express request object
+ * @param {string} name - Parameter name
+ * @returns {*} Parameter value or undefined
+ */
+function extractFromBody(req, name) {
+  if (!req.body) {
+    return void 0;
+  }
+  return req.body[name];
+}
+
+/**
+ * Require a parameter to be present in the request body.
+ * NOTE: Unlike a more modern implementation that might check req.query and req.params,
+ * this legacy-compatible version only checks req.body. This is why the moveToBody
+ * middleware is required for GET requests in the legacy codebase.
+ */
 function need(name, parserWhichReturnsPromise, assigner) {
   return (req, res, next) => {
-    const bodyHasParam = req.body && !_.isUndefined(req.body[name]);
-    const queryHasParam = req.query && !_.isUndefined(req.query[name]);
-    const paramsHasParam = req.params && !_.isUndefined(req.params[name]);
-    if (!bodyHasParam && !queryHasParam && !paramsHasParam) {
+    const val = extractFromBody(req, name);
+    if (_.isUndefined(val) || _.isNull(val)) {
       const errorString = `polis_err_param_missing_${name}`;
       logger.error(errorString);
       res.status(400);
       next(errorString);
       return;
     }
-    const paramValue = bodyHasParam ? req.body[name] : queryHasParam ? req.query[name] : req.params[name];
-    return parserWhichReturnsPromise(paramValue)
+
+    return parserWhichReturnsPromise(val)
       .then((parsed) => {
         assigner(req, name, parsed);
         next();
@@ -32,10 +50,35 @@ function need(name, parserWhichReturnsPromise, assigner) {
   };
 }
 
+/**
+ * Optionally accept a parameter from the request body.
+ * Like need(), this only checks req.body to match legacy behavior.
+ */
 function want(name, parserWhichReturnsPromise, assigner, defaultVal) {
+  return (req, res, next) => {
+    const val = extractFromBody(req, name);
+    if (!_.isUndefined(val) && !_.isNull(val)) {
+      return parserWhichReturnsPromise(val)
+        .then((parsed) => {
+          assigner(req, name, parsed);
+          next();
+        })
+        .catch((err) => {
+          res.status(400);
+          next(`polis_err_param_parse_failed_${name}: ${err}`);
+        });
+    }
+    if (!_.isUndefined(defaultVal)) {
+      assigner(req, name, defaultVal);
+    }
+    next();
+  };
+}
+
+function wantCookie(name, parserWhichReturnsPromise, assigner, defaultVal) {
   return buildCallback({
     name: name,
-    extractor: extractFromBody,
+    extractor: extractFromCookie,
     parserWhichReturnsPromise: parserWhichReturnsPromise,
     assigner: assigner,
     required: false,
@@ -53,17 +96,6 @@ function needCookie(name, parserWhichReturnsPromise, assigner) {
   });
 }
 
-function wantCookie(name, parserWhichReturnsPromise, assigner, defaultVal) {
-  return buildCallback({
-    name: name,
-    extractor: extractFromCookie,
-    parserWhichReturnsPromise: parserWhichReturnsPromise,
-    assigner: assigner,
-    required: false,
-    defaultVal: defaultVal
-  });
-}
-
 function wantHeader(name, parserWhichReturnsPromise, assigner, defaultVal) {
   return buildCallback({
     name: name,
@@ -73,13 +105,6 @@ function wantHeader(name, parserWhichReturnsPromise, assigner, defaultVal) {
     required: false,
     defaultVal: defaultVal
   });
-}
-
-function extractFromBody(req, name) {
-  if (!req.body) {
-    return void 0;
-  }
-  return req.body[name];
 }
 
 function extractFromCookie(req, name) {
