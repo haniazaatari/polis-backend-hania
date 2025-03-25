@@ -1,5 +1,5 @@
 import { updateConversationModifiedTime } from '../../db/conversationUpdates.js';
-import { queryP } from '../../db/pg-query.js';
+import { createTrashRecord } from '../../db/trash.js';
 
 /**
  * Create a trash record for a comment
@@ -10,11 +10,7 @@ import { queryP } from '../../db/pg-query.js';
  * @returns {Promise<Object>} - The created trash record
  */
 function createTrash(zid, tid, pid, trashed) {
-  const query =
-    'INSERT INTO trashes (pid, zid, tid, trashed, created) VALUES ($1, $2, $3, $4, default) RETURNING created;';
-  const params = [pid, zid, tid, trashed];
-
-  return queryP(query, params).then((result) => {
+  return createTrashRecord(pid, zid, tid, trashed).then((result) => {
     const createdTime = result.rows[0].created;
 
     // Update conversation modified time

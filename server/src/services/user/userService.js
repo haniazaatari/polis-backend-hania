@@ -1,4 +1,4 @@
-import * as pg from '../../db/pg-query.js';
+import { getUserRecordsByApiKey } from '../../db/apiKeys.js';
 import * as userRepository from '../../repositories/user/userRepository.js';
 import * as xidRepository from '../../repositories/xid/xidRepository.js';
 import logger from '../../utils/logger.js';
@@ -171,7 +171,7 @@ async function getUser(uid, zid_optional, xid_optional, owner_uid_optional) {
  */
 async function getUidForApiKey(apiKey) {
   try {
-    return await pg.queryP_readOnly('SELECT * FROM apikeysndvweifu WHERE apikey = ($1);', [apiKey]);
+    return await getUserRecordsByApiKey(apiKey);
   } catch (err) {
     logger.error('Error getting UID for API key', err);
     throw err;

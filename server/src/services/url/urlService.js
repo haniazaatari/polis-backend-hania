@@ -1,6 +1,6 @@
 import _ from 'underscore';
 import Config from '../../config.js';
-import { queryP } from '../../db/pg-query.js';
+import { createSuzinvite, replaceZinvite } from '../../db/urls.js';
 import logger from '../../utils/logger.js';
 import { generateRandomToken } from '../auth/tokenService.js';
 import { getZinvite } from '../zinvite/zinviteService.js';
@@ -82,6 +82,30 @@ function generateSingleUseUrl(conversation_id, suzinvite) {
 }
 
 /**
+ * Generate and replace a zinvite
+ * @param {number} zid - Conversation ID
+ * @param {boolean} generateShortZinvite - Whether to generate a short zinvite
+ * @returns {Promise<string>} - The new zinvite
+ */
+async function generateAndReplaceZinvite(zid, generateShortZinvite) {
+  let len = 12;
+  if (generateShortZinvite) {
+    len = 6;
+  }
+
+  try {
+    const zinvite = await generateRandomToken(len, false);
+    await replaceZinvite(zinvite, zid);
+    return zinvite;
+  } catch (err) {
+    if (err.message === 'polis_err_generating_token') {
+      throw new Error('polis_err_creating_zinvite');
+    }
+    throw err;
+  }
+}
+
+/**
  * Create a single-use invite URL
  * @param {string} xid - External ID
  * @param {number} zid - Conversation ID
@@ -92,12 +116,7 @@ async function createOneSuzinvite(xid, zid, owner) {
   const suzinviteArray = await generateSUZinvites(1);
   const suzinvite = suzinviteArray[0];
 
-  await queryP('INSERT INTO suzinvites (suzinvite, xid, zid, owner) VALUES ($1, $2, $3, $4);', [
-    suzinvite,
-    xid,
-    zid,
-    owner
-  ]);
+  await createSuzinvite(suzinvite, xid, zid, owner);
 
   const conversation_id = await getZinvite(zid);
 
@@ -151,30 +170,6 @@ function buildSeedUrl(conversation_id) {
  */
 function createModerationUrl(conversation_id) {
   return buildModerationUrl(conversation_id);
-}
-
-/**
- * Generate and replace a zinvite
- * @param {number} zid - Conversation ID
- * @param {boolean} generateShortZinvite - Whether to generate a short zinvite
- * @returns {Promise<string>} - The new zinvite
- */
-async function generateAndReplaceZinvite(zid, generateShortZinvite) {
-  let len = 12;
-  if (generateShortZinvite) {
-    len = 6;
-  }
-
-  try {
-    const zinvite = await generateRandomToken(len, false);
-    await queryP('update zinvites set zinvite = ($1) where zid = ($2);', [zinvite, zid]);
-    return zinvite;
-  } catch (err) {
-    if (err.message === 'polis_err_generating_token') {
-      throw new Error('polis_err_creating_zinvite');
-    }
-    throw err;
-  }
 }
 
 /**

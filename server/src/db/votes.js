@@ -2,6 +2,7 @@ import { isXidWhitelisted } from '../repositories/xid/xidRepository.js';
 import { isDuplicateKey } from '../utils/common.js';
 import logger from '../utils/logger.js';
 import { queryP, query_readOnly } from './pg-query.js';
+import { sql_votes_latest_unique } from './sql.js';
 
 /**
  * Insert a vote into the database
@@ -169,4 +170,52 @@ async function votesPost(uid, pid, zid, tid, xid, vote, weight, high_priority) {
   }
 }
 
-export { votesPost };
+/**
+ * Get votes for a participant
+ * @param {number} zid - Conversation ID
+ * @param {number} pid - Participant ID
+ * @returns {Promise<Array>} - Array of votes
+ */
+async function getVotesForParticipant(zid, pid) {
+  try {
+    const result = await query_readOnly('SELECT * FROM votes WHERE zid = ($1) AND pid = ($2);', [zid, pid]);
+    return result.map((vote) => {
+      vote.weight = vote.weight_x_32767 / 32767;
+      return vote;
+    });
+  } catch (err) {
+    logger.error('Error getting votes for participant', { error: err, zid, pid });
+    throw new Error('polis_err_getting_votes');
+  }
+}
+
+/**
+ * Get votes for a single participant with filters
+ * @param {Object} params - Query parameters
+ * @returns {Promise<Array>} - Array of votes
+ */
+async function getFilteredVotesForParticipant(params) {
+  // Early return if pid is undefined, matching legacy behavior
+  if (params.pid === undefined) {
+    return [];
+  }
+
+  // Use the sql_votes_latest_unique view to match original behavior
+  let q = sql_votes_latest_unique
+    .select(sql_votes_latest_unique.star())
+    .where(sql_votes_latest_unique.zid.equals(params.zid));
+
+  // Use explicit undefined check instead of truthy check to handle pid=0 correctly
+  if (params.pid !== undefined) {
+    q = q.where(sql_votes_latest_unique.pid.equals(params.pid));
+  }
+
+  if (params.tid !== undefined) {
+    q = q.where(sql_votes_latest_unique.tid.equals(params.tid));
+  }
+
+  const results = await query_readOnly(q.toString());
+  return Array.isArray(results) ? results : [];
+}
+
+export { getVotesForParticipant, getFilteredVotesForParticipant, votesPost };

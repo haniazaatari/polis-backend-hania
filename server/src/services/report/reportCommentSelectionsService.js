@@ -1,5 +1,5 @@
 import { isModerator } from '../../db/authorization.js';
-import { queryP } from '../../db/pg-query.js';
+import { createOrUpdateSelection, deleteCorrelationMatrix } from '../../db/reportCommentSelections.js';
 
 /**
  * Create or update a report comment selection
@@ -11,14 +11,10 @@ import { queryP } from '../../db/pg-query.js';
  */
 async function createOrUpdateReportCommentSelection(rid, tid, selection, zid) {
   // Insert or update the selection
-  await queryP(
-    'insert into report_comment_selections (rid, tid, selection, zid, modified) values ($1, $2, $3, $4, now_as_millis()) ' +
-      'on conflict (rid, tid) do update set selection = ($3), zid = ($4), modified = now_as_millis();',
-    [rid, tid, selection, zid]
-  );
+  await createOrUpdateSelection(rid, tid, selection, zid);
 
   // Delete any existing correlation matrix for this report
-  await queryP('delete from math_report_correlationmatrix where rid = ($1);', [rid]);
+  await deleteCorrelationMatrix(rid);
 }
 
 /**

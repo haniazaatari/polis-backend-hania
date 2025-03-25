@@ -1,5 +1,5 @@
 import Config from '../../config.js';
-import { queryP } from '../../db/pg-query.js';
+import { getWorkerTasksByTypeAndBucket } from '../../db/workerTasks.js';
 import { emailBadProblemTime } from '../../email/senders.js';
 import { doAddDataExportTask } from '../../utils/common.js';
 import logger from '../../utils/logger.js';
@@ -27,9 +27,7 @@ export function scheduleExportTests() {
     doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket).then(() => {
       setTimeout(
         () => {
-          queryP("select * from worker_tasks where task_type = 'generate_export_data' and task_bucket = ($1);", [
-            task_bucket
-          ]).then((rows) => {
+          getWorkerTasksByTypeAndBucket('generate_export_data', task_bucket).then((rows) => {
             const ok = rows?.length;
             let newOk;
             if (ok) {

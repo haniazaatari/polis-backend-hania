@@ -300,6 +300,22 @@ async function updateCommentLanguage(language, confidence, zid, tid) {
   ]);
 }
 
+/**
+ * Get author UIDs for featured comments
+ * @param {number} zid - Conversation ID
+ * @param {Array<number>} tids - Array of comment IDs
+ * @returns {Promise<Array<number>>} - Array of author UIDs
+ */
+async function getAuthorUidsForComments(zid, tids) {
+  if (!tids || tids.length === 0) {
+    return [];
+  }
+
+  const q = `with authors as (select distinct(uid) from comments where zid = ($1) and tid in (${tids.join(',')}) order by uid) select authors.uid from authors union select authors.uid from authors inner join xids on xids.uid = authors.uid order by uid;`;
+  const comments = await queryP(q, [zid]);
+  return comments.map((c) => c.uid);
+}
+
 export {
   getNumberOfCommentsWithModerationStatus,
   addNoMoreCommentsRecord,
@@ -313,5 +329,6 @@ export {
   storeCommentTranslationInDb,
   getCommentTranslationsFromDb,
   getCommentsWithoutLanguage,
-  updateCommentLanguage
+  updateCommentLanguage,
+  getAuthorUidsForComments
 };

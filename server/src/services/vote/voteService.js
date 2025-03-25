@@ -1,5 +1,5 @@
 import _ from 'underscore';
-import { addNoMoreCommentsRecord } from '../../db/comments.js';
+import { addNoMoreCommentsRecord, getAuthorUidsForComments } from '../../db/comments.js';
 import {
   updateConversationModifiedTime,
   updateLastInteractionTimeForConversation,
@@ -8,11 +8,9 @@ import {
 import { getConversationInfo } from '../../db/conversations.js';
 import { addParticipant, getSocialParticipants } from '../../db/participants.js';
 import { getParticipantId } from '../../db/participants.js';
-import { pgQueryP, query_readOnly } from '../../db/pg-query.js';
-import { sql_votes_latest_unique } from '../../db/sql.js';
 import { addStar } from '../../db/stars.js';
 import { getVotesForZidPidsWithTimestampCheck } from '../../db/votes-queries.js';
-import { votesPost } from '../../db/votes.js';
+import { getFilteredVotesForParticipant, getVotesForParticipant, votesPost } from '../../db/votes.js';
 import logger from '../../utils/logger.js';
 import { pullXInfoIntoSubObjects } from '../../utils/participants.js';
 import { getPca } from '../../utils/pca.js';
@@ -36,15 +34,7 @@ async function getVotesForMe(zid, uid) {
       throw new Error('polis_err_getting_pid');
     }
 
-    // Get the votes for the participant
-    const result = await query_readOnly('SELECT * FROM votes WHERE zid = ($1) AND pid = ($2);', [zid, pid]);
-
-    // Normalize the weight - result is already the array of votes
-    return result.map((vote) => {
-      // Use weight_x_32767 which is the actual field name in the database
-      vote.weight = vote.weight_x_32767 / 32767;
-      return vote;
-    });
+    return await getVotesForParticipant(zid, pid);
   } catch (err) {
     logger.error('Error getting votes for user', { error: err, zid, uid });
     throw new Error('polis_err_getting_votes');
@@ -93,18 +83,7 @@ async function getAuthorUidsOfFeaturedComments(zid) {
       return [];
     }
 
-    try {
-      const q = `with authors as (select distinct(uid) from comments where zid = ($1) and tid in (${featuredTids.join(',')}) order by uid) select authors.uid from authors union select authors.uid from authors inner join xids on xids.uid = authors.uid order by uid;`;
-      const comments = await pgQueryP(q, [zid]);
-
-      let uids = _.pluck(comments, 'uid');
-      uids = _.uniq(uids);
-
-      return uids;
-    } catch (err) {
-      logger.error(`SQL error getting author UIDs for zid ${zid}`, err);
-      return [];
-    }
+    return await getAuthorUidsForComments(zid, featuredTids);
   } catch (err) {
     logger.error('Error getting author UIDs of featured comments', err);
     return [];
@@ -207,31 +186,7 @@ async function submitVote(uid, pid, zid, tid, xid, voteType, weight, high_priori
  * @returns {Promise<Array>} - Array of votes
  */
 function getVotesForSingleParticipant(p) {
-  // Early return if pid is undefined, matching legacy behavior
-  if (p.pid === undefined) {
-    return Promise.resolve([]);
-  }
-
-  // Use the sql_votes_latest_unique view to match original behavior
-  let q = sql_votes_latest_unique
-    .select(sql_votes_latest_unique.star())
-    .where(sql_votes_latest_unique.zid.equals(p.zid));
-
-  // Use explicit undefined check instead of truthy check to handle pid=0 correctly
-  if (p.pid !== undefined) {
-    q = q.where(sql_votes_latest_unique.pid.equals(p.pid));
-  }
-
-  if (p.tid !== undefined) {
-    q = q.where(sql_votes_latest_unique.tid.equals(p.tid));
-  }
-
-  return query_readOnly(q.toString()).then((results) => {
-    if (Array.isArray(results)) {
-      return results;
-    }
-    return [];
-  });
+  return getFilteredVotesForParticipant(p);
 }
 
 /**

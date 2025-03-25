@@ -1,4 +1,4 @@
-import { queryP } from '../../db/pg-query.js';
+import { updateTutorialStep as dbUpdateTutorialStep } from '../../db/tutorial.js';
 
 /**
  * Update the tutorial step for a user
@@ -7,7 +7,7 @@ import { queryP } from '../../db/pg-query.js';
  * @returns {Promise<void>} - Resolves when the tutorial step is updated
  */
 function updateTutorialStep(uid, step) {
-  return queryP('update users set tut = ($1) where uid = ($2);', [step, uid]);
+  return dbUpdateTutorialStep(uid, step);
 }
 
 export { updateTutorialStep };
