@@ -2,7 +2,7 @@ import url from 'url';
 import _ from 'underscore';
 import Config from '../../config.js';
 import logger from '../../utils/logger.js';
-import { getUserInfoForUid2 } from '../user/userService.js';
+import { getUserInfoForUid2 } from '../userService.js';
 import { COOKIES, COOKIES_TO_CLEAR } from './constants.js';
 import { generateSessionToken } from './sessionService.js';
 

@@ -1,8 +1,8 @@
-import * as db from '../../db/index.js';
-import logger from '../../utils/logger.js';
-import { generateHashedPassword, updatePassword } from '../auth/passwordService.js';
-import * as tokenService from '../auth/tokenService.js';
+import * as db from '../db/index.js';
 import * as emailService from '../email/emailService.js';
+import logger from '../utils/logger.js';
+import { generateHashedPassword, updatePassword } from './auth/passwordService.js';
+import * as tokenService from './auth/tokenService.js';
 
 /**
  * Get user by email

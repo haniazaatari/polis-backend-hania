@@ -1,9 +1,9 @@
 import _ from 'underscore';
-import Config from '../../config.js';
-import { createSuzinvite, replaceZinvite } from '../../db/urls.js';
-import logger from '../../utils/logger.js';
-import { generateRandomToken } from '../auth/tokenService.js';
-import { getZinvite } from '../zinvite/zinviteService.js';
+import Config from '../config.js';
+import { createSuzinvite, replaceZinvite } from '../db/urls.js';
+import logger from '../utils/logger.js';
+import { generateRandomToken } from './auth/tokenService.js';
+import { getZinvite } from './zinvite/zinviteService.js';
 
 const serverUrl = Config.getServerNameWithProtocol();
 

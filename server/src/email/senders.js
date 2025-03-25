@@ -3,7 +3,7 @@ import AWS from 'aws-sdk';
 import nodemailer from 'nodemailer';
 import mg from 'nodemailer-mailgun-transport';
 import Config from '../config.js';
-import { getUserInfoForUid2 } from '../services/user/userService.js';
+import { getUserInfoForUid2 } from '../services/userService.js';
 import logger from '../utils/logger.js';
 
 AWS.config.update({ region: Config.awsRegion });

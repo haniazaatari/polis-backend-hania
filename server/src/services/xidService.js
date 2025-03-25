@@ -3,8 +3,8 @@
  * Handles business logic related to external IDs (XIDs)
  */
 
-import * as db from '../../db/index.js';
-import logger from '../../utils/logger.js';
+import * as db from '../db/index.js';
+import logger from '../utils/logger.js';
 
 /**
  * Create an XID record by ZID with business logic (including whitelist validation)

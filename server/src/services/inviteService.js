@@ -1,9 +1,9 @@
 import _ from 'underscore';
-import { createInviterRecord, createSuzInvites, deleteSuzInviteRecord, getSUZinviteRecord } from '../../db/invites.js';
-import { sendSuzinviteEmail } from '../../email/specialized.js';
-import logger from '../../utils/logger.js';
 import { getConversationInfo } from '../conversation/conversationService.js';
-import { generateSUZinvites } from '../url/urlService.js';
+import { createInviterRecord, createSuzInvites, deleteSuzInviteRecord, getSUZinviteRecord } from '../db/invites.js';
+import { sendSuzinviteEmail } from '../email/specialized.js';
+import logger from '../utils/logger.js';
+import { generateSUZinvites } from './urlService.js';
 
 /**
  * Get information about a single-use zid invite

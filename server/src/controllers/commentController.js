@@ -5,7 +5,7 @@ import { sendCommentModerationEmail } from '../email/commentModeration.js';
 import { getDemographicsForVotersOnComments } from '../repositories/demographicsRepository.js';
 import * as commentService from '../services/comment/commentService.js';
 import { detectLanguage } from '../services/translation/translationService.js';
-import { createXidRecordByZid } from '../services/xid/xidService.js';
+import { createXidRecordByZid } from '../services/xidService.js';
 import { analyzeComment, hasBadWords, isSpam } from '../utils/commentUtils.js';
 import logger from '../utils/logger.js';
 import polisTypes from '../utils/polisTypes.js';

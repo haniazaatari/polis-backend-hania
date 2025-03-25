@@ -3,16 +3,16 @@
  * Handles business logic for participation-related operations
  */
 import _ from 'underscore';
-import { getXids } from '../../db/index.js';
-import { getCommentCounts, getVoteCounts } from '../../db/participation.js';
-import { getNextComment } from '../../services/comment/commentService.js';
 import { getOneConversation } from '../../services/conversation/conversationService.js';
-import { getParticipant } from '../../services/participant/participantService.js';
-import { getUser } from '../../services/user/userService.js';
-import { doFamousQuery, getVotesForSingleParticipant } from '../../services/vote/voteService.js';
-import logger from '../../utils/logger.js';
-import { getPca } from '../../utils/pca.js';
-import { isConversationOwner } from '../zinvite/zinviteService.js';
+import { getXids } from '../db/index.js';
+import { getCommentCounts, getVoteCounts } from '../db/participation.js';
+import logger from '../utils/logger.js';
+import { getPca } from '../utils/pca.js';
+import { getNextComment } from './comment/commentService.js';
+import { getParticipant } from './participant/participantService.js';
+import { getUser } from './userService.js';
+import { doFamousQuery, getVotesForSingleParticipant } from './vote/voteService.js';
+import { isConversationOwner } from './zinvite/zinviteService.js';
 
 /**
  * Get participation data for a conversation

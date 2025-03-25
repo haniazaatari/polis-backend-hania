@@ -10,8 +10,8 @@ import logger from '../../utils/logger.js';
 import { fail } from '../../utils/responseHandlers.js';
 import { startSessionAndAddCookies } from '../auth/sessionService.js';
 import { getConversationInfo } from '../conversation/conversationService.js';
-import { deleteSuzinvite, getSUZinviteInfo } from '../invite/inviteService.js';
-import { createDummyUser, getUserInfoForUid2 } from '../user/userService.js';
+import { deleteSuzinvite, getSUZinviteInfo } from '../inviteService.js';
+import { createDummyUser, getUserInfoForUid2 } from '../userService.js';
 import { encrypt } from '../utils/encryptionService.js';
 
 /**
