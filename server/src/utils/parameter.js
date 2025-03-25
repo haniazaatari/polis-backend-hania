@@ -4,7 +4,6 @@ import { isUri } from 'valid-url';
 import { getRidFromReportId } from '../db/reports.js';
 import { getZidFromConversationId } from '../services/conversation/conversationService.js';
 import logger from './logger.js';
-import { fail } from './responseHandlers.js';
 
 /**
  * Extract a parameter value from the request body only.
@@ -27,25 +26,23 @@ function extractFromBody(req, name) {
  * middleware is required for GET requests in the legacy codebase.
  */
 function need(name, parserWhichReturnsPromise, assigner) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const val = extractFromBody(req, name);
     if (_.isUndefined(val) || _.isNull(val)) {
       const errorString = `polis_err_param_missing_${name}`;
       logger.error(errorString);
       res.status(400);
-      next(errorString);
-      return;
+      return next(errorString);
     }
 
-    return parserWhichReturnsPromise(val)
-      .then((parsed) => {
-        assigner(req, name, parsed);
-        next();
-      })
-      .catch((err) => {
-        res.status(400);
-        next(`polis_err_param_parse_failed_${name}: ${err}`);
-      });
+    try {
+      const parsed = await parserWhichReturnsPromise(val);
+      assigner(req, name, parsed);
+      next();
+    } catch (err) {
+      res.status(400);
+      next(`polis_err_param_parse_failed_${name}: ${err}`);
+    }
   };
 }
 
@@ -54,18 +51,17 @@ function need(name, parserWhichReturnsPromise, assigner) {
  * Like need(), this only checks req.body to match legacy behavior.
  */
 function want(name, parserWhichReturnsPromise, assigner, defaultVal) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const val = extractFromBody(req, name);
     if (!_.isUndefined(val) && !_.isNull(val)) {
-      return parserWhichReturnsPromise(val)
-        .then((parsed) => {
-          assigner(req, name, parsed);
-          next();
-        })
-        .catch((err) => {
-          res.status(400);
-          next(`polis_err_param_parse_failed_${name}: ${err}`);
-        });
+      try {
+        const parsed = await parserWhichReturnsPromise(val);
+        assigner(req, name, parsed);
+        return next();
+      } catch (err) {
+        res.status(400);
+        return next(`polis_err_param_parse_failed_${name}: ${err}`);
+      }
     }
     if (!_.isUndefined(defaultVal)) {
       assigner(req, name, defaultVal);
@@ -82,16 +78,6 @@ function wantCookie(name, parserWhichReturnsPromise, assigner, defaultVal) {
     assigner: assigner,
     required: false,
     defaultVal: defaultVal
-  });
-}
-
-function needCookie(name, parserWhichReturnsPromise, assigner) {
-  return buildCallback({
-    name: name,
-    extractor: extractFromCookie,
-    parserWhichReturnsPromise: parserWhichReturnsPromise,
-    assigner: assigner,
-    required: true
   });
 }
 
@@ -135,7 +121,7 @@ function buildCallback(config) {
     throw new Error('bad arg for parserWhichReturnsPromise');
   }
 
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const val = extractor(req, name);
 
     // Initialize req.p if it doesn't exist
@@ -149,25 +135,16 @@ function buildCallback(config) {
     }
 
     if (!_.isUndefined(val) && !_.isNull(val)) {
-      parserWhichReturnsPromise(val)
-        .then(
-          (parsed) => {
-            assigner(req, name, parsed);
-            next();
-          },
-          (err) => {
-            const s = `polis_err_param_parse_failed_${name} (val='${val}', error=${err})`;
-            logger.error(s, err);
-            res.status(400);
-            next(s);
-            return;
-          }
-        )
-        .catch((err) => {
-          logger.error(`Unexpected error parsing ${name}:`, err);
-          fail(res, 400, 'polis_err_misc', err);
-          return;
-        });
+      try {
+        const parsed = await parserWhichReturnsPromise(val);
+        assigner(req, name, parsed);
+        next();
+      } catch (err) {
+        const s = `polis_err_param_parse_failed_${name} (val='${val}', error=${err})`;
+        logger.error(s, err);
+        res.status(400);
+        next(s);
+      }
     } else if (!required) {
       if (typeof defaultVal !== 'undefined') {
         assigner(req, name, defaultVal);
@@ -207,13 +184,12 @@ function getPassword(s) {
   });
 }
 
-function getPasswordWithCreatePasswordRules(s) {
-  return getPassword(s).then((s) => {
-    if (typeof s !== 'string' || s.length < 6) {
-      throw new Error('polis_err_password_too_short');
-    }
-    return s;
-  });
+async function getPasswordWithCreatePasswordRules(s) {
+  const validatedPassword = await getPassword(s);
+  if (typeof validatedPassword !== 'string' || validatedPassword.length < 6) {
+    throw new Error('polis_err_password_too_short');
+  }
+  return validatedPassword;
 }
 
 function getOptionalStringLimitLength(limit) {
@@ -248,17 +224,12 @@ function getStringLimitLength(minLength, maxLength) {
 }
 
 function getUrlLimitLength(limit) {
-  return (s) => {
-    getStringLimitLength(limit)(s).then(
-      (s) =>
-        new Promise((resolve, reject) => {
-          if (isUri(s)) {
-            return resolve(s);
-          }
-
-          return reject('polis_fail_parse_url_invalid');
-        })
-    );
+  return async (s) => {
+    const validatedString = await getStringLimitLength(limit)(s);
+    if (isUri(validatedString)) {
+      return validatedString;
+    }
+    throw new Error('polis_fail_parse_url_invalid');
   };
 }
 
@@ -299,13 +270,13 @@ function getBool(s) {
 }
 
 function getIntInRange(min, max) {
-  return (s) =>
-    getInt(s).then((x) => {
-      if (x < min || max < x) {
-        throw new Error('polis_fail_parse_int_out_of_range');
-      }
-      return x;
-    });
+  return async (s) => {
+    const x = await getInt(s);
+    if (x < min || max < x) {
+      throw new Error('polis_fail_parse_int_out_of_range');
+    }
+    return x;
+  };
 }
 
 const reportIdToRidCache = new LruCache({
@@ -334,16 +305,18 @@ async function getRidFromReportIdWithCache(report_id) {
 
 const parseConversationId = getStringLimitLength(1, 100);
 
-function getConversationIdFetchZid(s) {
-  return parseConversationId(s).then((conversation_id) =>
-    getZidFromConversationId(conversation_id).then((zid) => Number(zid))
-  );
+async function getConversationIdFetchZid(s) {
+  const conversation_id = await parseConversationId(s);
+  const zid = await getZidFromConversationId(conversation_id);
+  return Number(zid);
 }
 
 const parseReportId = getStringLimitLength(1, 100);
 
-function getReportIdFetchRid(s) {
-  return parseReportId(s).then((report_id) => getRidFromReportIdWithCache(report_id).then((rid) => Number(rid)));
+async function getReportIdFetchRid(s) {
+  const report_id = await parseReportId(s);
+  const rid = await getRidFromReportIdWithCache(report_id);
+  return Number(rid);
 }
 
 function getNumber(s) {
@@ -360,13 +333,13 @@ function getNumber(s) {
 }
 
 function getNumberInRange(min, max) {
-  return (s) =>
-    getNumber(s).then((x) => {
-      if (x < min || max < x) {
-        throw new Error('polis_fail_parse_number_out_of_range');
-      }
-      return x;
-    });
+  return async (s) => {
+    const x = await getNumber(s);
+    if (x < min || max < x) {
+      throw new Error('polis_fail_parse_number_out_of_range');
+    }
+    return x;
+  };
 }
 
 function getArrayOfString(a, _maxStrings, _maxLength) {
@@ -439,9 +412,7 @@ export {
   assignToPCustom,
   extractFromBody,
   extractFromCookie,
-  extractFromHeader,
   getArrayOfInt,
-  getArrayOfString,
   getArrayOfStringNonEmpty,
   getArrayOfStringNonEmptyLimitLength,
   getBool,
@@ -457,7 +428,6 @@ export {
   getStringLimitLength,
   getUrlLimitLength,
   need,
-  needCookie,
   paramsToStringSortedByName,
   want,
   wantCookie,

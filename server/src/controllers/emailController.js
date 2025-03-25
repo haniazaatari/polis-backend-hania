@@ -8,19 +8,18 @@ import { fail } from '../utils/responseHandlers.js';
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-function handleSendCreatedLinkToEmail(req, res) {
+async function handleSendCreatedLinkToEmail(req, res) {
   if (!req.p.email) {
     fail(res, 400, 'polis_err_need_email');
     return;
   }
 
-  sendCreatedLinkToEmail(req.p.email, req.p.conversation_id)
-    .then(() => {
-      res.status(200).json({});
-    })
-    .catch((err) => {
-      fail(res, 500, 'polis_err_sending_created_link_to_email', err);
-    });
+  try {
+    await sendCreatedLinkToEmail(req.p.email, req.p.conversation_id);
+    res.status(200).json({});
+  } catch (err) {
+    fail(res, 500, 'polis_err_sending_created_link_to_email', err);
+  }
 }
 
 /**
@@ -28,18 +27,17 @@ function handleSendCreatedLinkToEmail(req, res) {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-function handleSendEmailExportReady(req, res) {
+async function handleSendEmailExportReady(req, res) {
   if (req.p.webserver_pass !== Config.webserverPass || req.p.webserver_username !== Config.webserverUsername) {
     return fail(res, 403, 'polis_err_sending_export_link_to_email_auth');
   }
 
-  sendEmailExportReady(req.p.email, req.p.conversation_id, req.p.filename)
-    .then(() => {
-      res.status(200).json({});
-    })
-    .catch((err) => {
-      fail(res, 500, 'polis_err_sending_export_link_to_email', err);
-    });
+  try {
+    await sendEmailExportReady(req.p.email, req.p.conversation_id, req.p.filename);
+    res.status(200).json({});
+  } catch (err) {
+    fail(res, 500, 'polis_err_sending_export_link_to_email', err);
+  }
 }
 
 /**
@@ -47,18 +45,17 @@ function handleSendEmailExportReady(req, res) {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-function handleNotifyTeam(req, res) {
+async function handleNotifyTeam(req, res) {
   if (req.p.webserver_pass !== Config.webserverPass || req.p.webserver_username !== Config.webserverUsername) {
     return fail(res, 403, 'polis_err_notifying_team_auth');
   }
 
-  emailTeam(req.p.subject, req.p.body)
-    .then(() => {
-      res.status(200).json({});
-    })
-    .catch((err) => {
-      fail(res, 500, 'polis_err_notifying_team', err);
-    });
+  try {
+    await emailTeam(req.p.subject, req.p.body);
+    res.status(200).json({});
+  } catch (err) {
+    fail(res, 500, 'polis_err_notifying_team', err);
+  }
 }
 
 export { handleSendCreatedLinkToEmail, handleSendEmailExportReady, handleNotifyTeam };

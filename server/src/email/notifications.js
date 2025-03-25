@@ -202,27 +202,25 @@ async function doNotificationsForZid(zid, timeOfLastEvent) {
  * Process a batch of notifications
  * @returns {Promise<void>}
  */
-function doNotificationBatch() {
-  return claimNextNotificationTask().then((task) => {
-    if (!task) {
-      return Promise.resolve();
-    }
-    return doNotificationsForZid(task.zid, task.modified).then((shouldTryAgain) => {
-      if (shouldTryAgain) {
-        maybeAddNotificationTask(task.zid, task.modified);
-      }
-    });
-  });
+async function doNotificationBatch() {
+  const task = await claimNextNotificationTask();
+  if (!task) {
+    return;
+  }
+
+  const shouldTryAgain = await doNotificationsForZid(task.zid, task.modified);
+  if (shouldTryAgain) {
+    await maybeAddNotificationTask(task.zid, task.modified);
+  }
 }
 
 /**
  * Start the notification processing loop
  */
-function doNotificationLoop() {
+async function doNotificationLoop() {
   logger.silly('doNotificationLoop');
-  doNotificationBatch().then(() => {
-    setTimeout(doNotificationLoop, 10000);
-  });
+  await doNotificationBatch();
+  setTimeout(doNotificationLoop, 10000);
 }
 
 /**

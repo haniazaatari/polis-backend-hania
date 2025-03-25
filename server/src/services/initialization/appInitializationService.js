@@ -34,29 +34,6 @@ export function initializeAWS() {
 }
 
 /**
- * Adds a hashCode method to the String prototype
- * This should be used carefully as extending native prototypes can cause conflicts
- */
-export function extendStringPrototype() {
-  if (!String.prototype.hashCode) {
-    String.prototype.hashCode = function () {
-      let hash = 0;
-      let i;
-      let character;
-      if (this.length === 0) {
-        return hash;
-      }
-      for (i = 0; i < this.length; i++) {
-        character = this.charCodeAt(i);
-        hash = (hash << 5) - hash + character;
-        hash = hash & hash;
-      }
-      return hash;
-    };
-  }
-}
-
-/**
  * Initializes PCA data caching
  */
 export function initializePcaDataCache() {
@@ -71,7 +48,6 @@ export function initializeApplicationServices() {
 
   initializeAWS();
   initializeAkismet();
-  extendStringPrototype();
   initializePcaDataCache();
 
   logger.debug('Application service initialization complete');

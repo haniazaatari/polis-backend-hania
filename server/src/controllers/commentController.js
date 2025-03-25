@@ -57,7 +57,6 @@ async function handlePostComments(req, res) {
     return Number(pid);
   }
   try {
-    logger.debug('Post comments txt', { zid, pid, txt });
     const ip =
       req.headers['x-forwarded-for'] ||
       req.connection?.remoteAddress ||
@@ -243,59 +242,46 @@ async function handlePostComments(req, res) {
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
  */
-function handleGetComments(req, res) {
+async function handleGetComments(req, res) {
   const rid = `${req?.headers?.['x-request-id']} ${req?.headers?.['user-agent']}`;
-  logger.debug('getComments begin', { rid });
   const isReportQuery = !_.isUndefined(req.p.rid);
-  commentService
-    .getComments(req.p)
-    .then((comments) => {
-      if (req.p.rid) {
-        // Use getReportCommentSelections from the reports.js module
-        return getReportCommentSelections(req.p.rid).then((selections) => {
-          const tidToSelection = _.indexBy(selections, 'tid');
-          const commentsWithReportStatus = comments.map((c) => {
-            return {
-              ...c,
-              includeInReport: tidToSelection[c.tid] && tidToSelection[c.tid].selection > 0
-            };
-          });
-          return commentsWithReportStatus;
-        });
-      }
 
-      return comments;
-    })
-    .then((comments) => {
-      const commentsWithSocialInfo = comments.map((c) => {
-        const newC = { ...c };
-        return newC;
-      });
-      if (req.p.include_demographics) {
-        isModerator(req.p.zid, req.p.uid)
-          .then((owner) => {
-            if (owner || isReportQuery) {
-              return getDemographicsForVotersOnComments(req.p.zid, commentsWithSocialInfo)
-                .then((commentsWithDemographics) => {
-                  finishArray(res, commentsWithDemographics);
-                })
-                .catch((err) => {
-                  fail(res, 500, 'polis_err_get_comments3', err);
-                });
-            }
+  try {
+    let comments = await commentService.getComments(req.p);
 
-            fail(res, 500, 'polis_err_get_comments_permissions');
-          })
-          .catch((err) => {
-            fail(res, 500, 'polis_err_get_comments2', err);
-          });
-      } else {
-        finishArray(res, commentsWithSocialInfo);
-      }
-    })
-    .catch((err) => {
-      fail(res, 500, 'polis_err_get_comments', err);
+    if (req.p.rid) {
+      // Use getReportCommentSelections from the reports.js module
+      const selections = await getReportCommentSelections(req.p.rid);
+      const tidToSelection = _.indexBy(selections, 'tid');
+      comments = comments.map((c) => ({
+        ...c,
+        includeInReport: tidToSelection[c.tid] && tidToSelection[c.tid].selection > 0
+      }));
+    }
+
+    const commentsWithSocialInfo = comments.map((c) => {
+      const newC = { ...c };
+      return newC;
     });
+
+    if (req.p.include_demographics) {
+      const owner = await isModerator(req.p.zid, req.p.uid);
+      if (owner || isReportQuery) {
+        try {
+          const commentsWithDemographics = await getDemographicsForVotersOnComments(req.p.zid, commentsWithSocialInfo);
+          finishArray(res, commentsWithDemographics);
+        } catch (err) {
+          fail(res, 500, 'polis_err_get_comments3', err);
+        }
+      } else {
+        fail(res, 500, 'polis_err_get_comments_permissions');
+      }
+    } else {
+      finishArray(res, commentsWithSocialInfo);
+    }
+  } catch (err) {
+    fail(res, 500, 'polis_err_get_comments', err);
+  }
 }
 
 /**
@@ -476,18 +462,12 @@ async function handlePutComments(req, res) {
     const active = req.p.active;
     const mod = req.p.mod;
     const is_meta = req.p.is_meta;
-
-    logger.debug(`Attempting to update comment. zid: ${zid}, tid: ${tid}, uid: ${uid}`);
-
     const isMod = await isModerator(zid, uid);
-    logger.debug(`isModerator result: ${isMod}`);
 
     if (isMod) {
       await moderateComment(zid, tid, active, mod, is_meta);
-      logger.debug('Comment moderated successfully');
       res.status(200).json({});
     } else {
-      logger.debug('User is not a moderator');
       fail(res, 403, 'polis_err_update_comment_auth');
     }
   } catch (err) {

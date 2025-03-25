@@ -10,9 +10,6 @@ const devMode = isTrue(process.env.DEV_MODE);
 const prodHostname = process.env.API_PROD_HOSTNAME || 'pol.is';
 const serverPort = Number.parseInt(process.env.API_SERVER_PORT || process.env.PORT || '5000', 10);
 const shouldUseTranslationAPI = isTrue(process.env.SHOULD_USE_TRANSLATION_API);
-import('source-map-support').then((sourceMapSupport) => {
-  sourceMapSupport.install();
-});
 
 /**
  * Configuration settings for the application
