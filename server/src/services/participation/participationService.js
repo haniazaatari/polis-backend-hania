@@ -3,10 +3,10 @@
  * Handles business logic for participation-related operations
  */
 import _ from 'underscore';
+import { getXids } from '../../db/index.js';
 import { getCommentCounts, getVoteCounts } from '../../db/participation.js';
 import { getNextComment } from '../../services/comment/commentService.js';
 import { getOneConversation } from '../../services/conversation/conversationService.js';
-import { getXids } from '../../services/math/mathService.js';
 import { getParticipant } from '../../services/participant/participantService.js';
 import { getUser } from '../../services/user/userService.js';
 import { doFamousQuery, getVotesForSingleParticipant } from '../../services/vote/voteService.js';

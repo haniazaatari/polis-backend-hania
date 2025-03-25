@@ -1,5 +1,4 @@
-import { storePasswordHash } from '../db/index.js';
-import { createUser, getUserByEmail } from '../repositories/user/userRepository.js';
+import * as db from '../db/index.js';
 import { authenticateWithCredentials } from '../services/auth/authService.js';
 import { COOKIES } from '../services/auth/constants.js';
 import { addCookies, clearCookies } from '../services/auth/cookieService.js';
@@ -20,7 +19,7 @@ async function login(req, res) {
     const { email, password } = req.p;
 
     // Get user by email first to log the UID
-    const user = await getUserByEmail(email);
+    const user = await db.getUserByEmail(email);
     if (!user) {
       // Return 403 for missing email to match legacy server
       return fail(res, 403, 'polis_err_login_unknown_user_or_password_noresults');
@@ -31,7 +30,7 @@ async function login(req, res) {
 
     if (result.success || result.isAuthenticated) {
       // Start session and add cookies - pass req to ensure all cookies are set
-      const token = await startSessionAndAddCookies(result.uid, res, req);
+      await startSessionAndAddCookies(result.uid, res, req);
 
       // Return user info
       res.status(200).json({
@@ -92,19 +91,19 @@ async function register(req, res) {
       try {
         const decodedParams = decodeParams(encodedParams);
         site_id = decodedParams.site_id;
-      } catch (_err) {
+      } catch {
         return fail(res, 400, 'polis_err_invalid_params');
       }
     }
 
     // Check if email exists
-    const existingUser = await getUserByEmail(email);
+    const existingUser = await db.getUserByEmail(email);
     if (existingUser) {
       return fail(res, 403, 'polis_err_reg_user_with_that_email_exists');
     }
 
     // Create user first
-    const user = await createUser({
+    const user = await db.createUser({
       email,
       hname,
       zinvite,
@@ -115,7 +114,7 @@ async function register(req, res) {
 
     // Generate and store password hash
     const hashedPassword = await generateHashedPassword(password);
-    await storePasswordHash(user.uid, hashedPassword);
+    await db.storePasswordHash(user.uid, hashedPassword);
 
     // Start session and add cookies - use addCookies to set all cookies
     const token = await createSession(user.uid);

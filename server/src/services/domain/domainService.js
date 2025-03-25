@@ -2,11 +2,7 @@
  * Domain Service
  * Handles business logic for domain-related operations
  */
-import {
-  createDomainWhitelistRecord,
-  getDomainWhitelistRecord,
-  updateDomainWhitelistRecord
-} from '../../repositories/domain/domainRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -18,16 +14,16 @@ import logger from '../../utils/logger.js';
 async function setDomainWhitelist(uid, newWhitelist) {
   try {
     // Check if a whitelist already exists for this user
-    const record = await getDomainWhitelistRecord(uid);
+    const record = await db.getDomainWhitelistRecord(uid);
 
     // If no whitelist exists, create a new one
     if (!record) {
-      await createDomainWhitelistRecord(uid, { domain_whitelist: newWhitelist });
+      await db.createDomainWhitelistRecord(uid, { domain_whitelist: newWhitelist });
       return;
     }
 
     // Otherwise, update the existing whitelist
-    await updateDomainWhitelistRecord(uid, { domain_whitelist: newWhitelist });
+    await db.updateDomainWhitelistRecord(uid, { domain_whitelist: newWhitelist });
   } catch (err) {
     logger.error('Error setting domain whitelist', { error: err, uid });
     throw err;
@@ -41,7 +37,7 @@ async function setDomainWhitelist(uid, newWhitelist) {
  */
 async function getDomainWhitelist(uid) {
   try {
-    const record = await getDomainWhitelistRecord(uid);
+    const record = await db.getDomainWhitelistRecord(uid);
 
     // If no whitelist exists, return an empty string
     if (!record) {
@@ -64,16 +60,16 @@ async function getDomainWhitelist(uid) {
 async function setDomainWhitelistOverrideKey(uid, overrideKey) {
   try {
     // Check if a whitelist already exists for this user
-    const record = await getDomainWhitelistRecord(uid);
+    const record = await db.getDomainWhitelistRecord(uid);
 
     // If no whitelist exists, create a new one
     if (!record) {
-      await createDomainWhitelistRecord(uid, { domain_whitelist_override_key: overrideKey });
+      await db.createDomainWhitelistRecord(uid, { domain_whitelist_override_key: overrideKey });
       return;
     }
 
     // Otherwise, update the existing whitelist
-    await updateDomainWhitelistRecord(uid, { domain_whitelist_override_key: overrideKey });
+    await db.updateDomainWhitelistRecord(uid, { domain_whitelist_override_key: overrideKey });
   } catch (err) {
     logger.error('Error setting domain whitelist override key', { error: err, uid });
     throw err;
@@ -87,7 +83,7 @@ async function setDomainWhitelistOverrideKey(uid, overrideKey) {
  */
 async function getDomainWhitelistOverrideKey(uid) {
   try {
-    const record = await getDomainWhitelistRecord(uid);
+    const record = await db.getDomainWhitelistRecord(uid);
 
     // If no whitelist exists, return an empty string
     if (!record) {

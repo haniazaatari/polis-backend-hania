@@ -1,4 +1,4 @@
-import * as locationRepository from '../../repositories/locationRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 import { geoCode } from '../geocoding/geocodingService.js';
 
@@ -8,7 +8,7 @@ import { geoCode } from '../geocoding/geocodingService.js';
  * @returns {Promise<Array>} - Array of participant location records
  */
 async function getLocationsForParticipants(zid) {
-  return locationRepository.getLocationsForParticipants(zid);
+  return db.getLocationsForParticipants(zid);
 }
 
 /**
@@ -22,7 +22,7 @@ async function getLocationsForParticipants(zid) {
 async function createParticipantLocationFromString(zid, uid, pid, locationString) {
   try {
     const { lat, lng } = await geoCode(locationString);
-    return locationRepository.createParticipantLocationRecord(zid, uid, pid, lat, lng, 'user_provided');
+    return db.createParticipantLocationRecord(zid, uid, pid, lat, lng, 'user_provided');
   } catch (error) {
     logger.error(`Error creating location from string: ${error.message}`);
     throw error;
@@ -40,7 +40,7 @@ async function createParticipantLocationFromString(zid, uid, pid, locationString
  * @returns {Promise<Object>} - The created location record
  */
 async function createParticipantLocation(zid, uid, pid, lat, lng, source) {
-  return locationRepository.createParticipantLocationRecord(zid, uid, pid, lat, lng, source);
+  return db.createParticipantLocationRecord(zid, uid, pid, lat, lng, source);
 }
 
 export { getLocationsForParticipants, createParticipantLocationFromString, createParticipantLocation };

@@ -3,19 +3,8 @@
  * Handles business logic for participants
  */
 import Config from '../../config.js';
-import {
-  addParticipant,
-  queryParticipantsByMetadata as dbQueryParticipantsByMetadata,
-  getParticipantByUid,
-  getParticipantId,
-  updateExtendedParticipantInfo
-} from '../../db/participants.js';
-import { recordPermanentCookieZidJoin } from '../../repositories/cookie/permanentCookieRepository.js';
-import {
-  tryToJoinConversation,
-  userHasAnsweredZeQuestions
-} from '../../repositories/participant/participantRepository.js';
-import { createXidEntry, isXidWhitelisted, xidExists } from '../../repositories/xid/xidRepository.js';
+import * as db from '../../db/index.js';
+import { tryToJoinConversation, userHasAnsweredZeQuestions } from '../../repositories/participantRepository.js';
 import { COOKIES } from '../../services/auth/constants.js';
 import logger from '../../utils/logger.js';
 import { fail } from '../../utils/responseHandlers.js';
@@ -32,7 +21,7 @@ import { encrypt } from '../utils/encryptionService.js';
  * @returns {Promise<Object|null>} - Participant object or null if not found
  */
 async function getParticipant(zid, uid) {
-  return getParticipantByUid(zid, uid);
+  return db.getParticipantByUid(zid, uid);
 }
 
 /**
@@ -46,7 +35,7 @@ async function getParticipant(zid, uid) {
 async function joinConversation(zid, uid, info, answers) {
   try {
     // Try to get participant ID first
-    const existingPid = await getParticipantId(zid, uid);
+    const existingPid = await db.getParticipantId(zid, uid);
 
     // If participant already exists, return early
     if (existingPid >= 0) {
@@ -133,22 +122,22 @@ async function addParticipantAndMetadata(zid, uid, req, permanent_cookie) {
 
         // Add extended info if needed
         if (Object.keys(info).length > 0) {
-          await updateExtendedParticipantInfo(zid, uid, info);
+          await db.updateExtendedParticipantInfo(zid, uid, info);
         }
 
         return existingParticipant;
       }
-    } catch (err) {
+    } catch {
       // If the participant doesn't exist, continue with creation
       logger.debug('Existing participant not found, creating new one', { zid, uid });
     }
 
     // Create participant and add extended info
-    const [participant] = await addParticipant(zid, uid);
+    const [participant] = await db.addParticipant(zid, uid);
 
     // Add extended info if needed
     if (Object.keys(info).length > 0) {
-      await updateExtendedParticipantInfo(zid, uid, info);
+      await db.updateExtendedParticipantInfo(zid, uid, info);
     }
 
     return participant;
@@ -237,13 +226,13 @@ async function joinWithZidOrSuzinvite(options) {
 
     // Step 7: Handle XID if provided
     if (o.xid) {
-      const exists = await xidExists(o.xid, o.conv.org_id, o.uid);
+      const exists = await db.xidExists(o.xid, o.conv.org_id, o.uid);
 
       if (!exists) {
-        const shouldCreateXidEntry = o.conv.use_xid_whitelist ? await isXidWhitelisted(o.conv.owner, o.xid) : true;
+        const shouldCreateXidEntry = o.conv.use_xid_whitelist ? await db.isXidWhitelisted(o.conv.owner, o.xid) : true;
 
         if (shouldCreateXidEntry) {
-          await createXidEntry(o.xid, o.conv.org_id, o.uid);
+          await db.createXidEntry(o.xid, o.conv.org_id, o.uid);
         } else {
           throw new Error('polis_err_xid_not_whitelisted');
         }
@@ -298,7 +287,7 @@ async function handlePostJoinWithInvite(req, res) {
     // Record permanent cookie zid join if provided
     if (result.permanentCookieToken) {
       try {
-        await recordPermanentCookieZidJoin(result.permanentCookieToken, result.zid);
+        await db.recordPermanentCookieZidJoin(result.permanentCookieToken, result.zid);
       } catch (error) {
         logger.error('Error recording permanent cookie zid join', { error });
         // Continue even if this fails
@@ -332,7 +321,7 @@ async function handlePostJoinWithInvite(req, res) {
 async function queryParticipantsByMetadata(zid, pmaids) {
   // Simple passthrough to DB module since this is a complex but single-purpose query
   // No additional business logic needed at service layer
-  return dbQueryParticipantsByMetadata(zid, pmaids);
+  return db.queryParticipantsByMetadata(zid, pmaids);
 }
 
 /**
@@ -345,7 +334,7 @@ async function queryParticipantsByMetadata(zid, pmaids) {
 async function updateParticipantExtendedInfo(zid, uid, fields) {
   // Simple CRUD operation - directly use DB module
   // Bypassing repository layer as this is a simple single-table update
-  return updateExtendedParticipantInfo(zid, uid, fields);
+  return db.updateExtendedParticipantInfo(zid, uid, fields);
 }
 
 export {

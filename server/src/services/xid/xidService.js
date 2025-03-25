@@ -3,7 +3,7 @@
  * Handles business logic related to external IDs (XIDs)
  */
 
-import * as xidRepository from '../../repositories/xid/xidRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -27,14 +27,14 @@ async function createXidRecordByZid(zid, uid, xid, x_profile_image_url, x_name, 
 
     // Check if XID is whitelisted if required
     if (conv?.use_xid_whitelist) {
-      const isWhitelisted = await xidRepository.isXidWhitelisted(conv.owner, xid);
+      const isWhitelisted = await db.isXidWhitelisted(conv.owner, xid);
       if (!isWhitelisted) {
         throw new Error('polis_err_xid_not_whitelisted_2');
       }
     }
 
     // Create XID record
-    return await xidRepository.createXidRecordByZid(zid, uid, xid, x_profile_image_url, x_name, x_email, returnRecord);
+    return await db.createXidRecordByZid(zid, uid, xid, x_profile_image_url, x_name, x_email, returnRecord);
   } catch (error) {
     logger.error('Error creating XID record by ZID', error);
     throw error;

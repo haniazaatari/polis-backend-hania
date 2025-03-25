@@ -1,17 +1,6 @@
 import _ from 'underscore';
 import Config from '../../config.js';
-import { isModerator } from '../../db/authorization.js';
-import { getParticipantId } from '../../db/participants.js';
-import {
-  addXidWhitelist,
-  checkMathTaskExists,
-  createMathUpdateTask,
-  createReportDataTask,
-  getCorrelationMatrix,
-  getXids,
-  hasCommentSelections
-} from '../../repositories/math/mathRepository.js';
-import { getZidForRid } from '../../repositories/report/reportRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 import { getBidIndexToPidMapping } from '../../utils/participants.js';
 import { getPca } from '../../utils/pca.js';
@@ -46,13 +35,13 @@ async function processPcaData(zid, math_tick) {
  * @returns {Promise} - Resolution of the update
  */
 async function updateMath(zid, uid, math_update_type) {
-  const hasPermission = await isModerator(zid, uid);
+  const hasPermission = await db.isModerator(zid, uid);
   if (!hasPermission) {
     throw new Error('polis_err_math_update_permission');
   }
 
   const math_env = Config.mathEnv;
-  await createMathUpdateTask(zid, math_update_type, math_env);
+  await db.createMathUpdateTask(zid, math_update_type, math_env);
   return true;
 }
 
@@ -64,19 +53,22 @@ async function updateMath(zid, uid, math_update_type) {
  */
 async function getCorrelationMatrixForReport(rid, math_tick) {
   const math_env = Config.mathEnv;
-  const [resultRows, zid] = await Promise.all([getCorrelationMatrix(rid, math_env, math_tick), getZidForRid(rid)]);
+  const [resultRows, zid] = await Promise.all([
+    db.getCorrelationMatrix(rid, math_env, math_tick),
+    db.getZidForRid(rid)
+  ]);
 
   if (!resultRows || !resultRows.length) {
-    const requestRows = await checkMathTaskExists(rid, math_env, math_tick);
+    const requestRows = await db.checkMathTaskExists(rid, math_env, math_tick);
     const shouldAddTask = !requestRows || !requestRows.length;
 
     if (shouldAddTask) {
-      const hasSelections = await hasCommentSelections(rid);
+      const hasSelections = await db.hasCommentSelections(rid);
       if (!hasSelections) {
         return { status: 'polis_report_needs_comment_selection' };
       }
 
-      await createReportDataTask(rid, zid, math_tick, math_env);
+      await db.createReportDataTask(rid, zid, math_tick, math_env);
     }
 
     return { status: 'pending' };
@@ -95,7 +87,7 @@ async function getBidToPidMapping(zid, math_tick) {
   try {
     const doc = await getBidIndexToPidMapping(zid, math_tick);
     return { bidToPid: doc.bidToPid || [] };
-  } catch (_err) {
+  } catch {
     return null;
   }
 }
@@ -112,7 +104,7 @@ async function getXidsForConversation(zid, uid) {
     throw new Error('polis_err_get_xids_not_authorized');
   }
 
-  return await getXids(zid);
+  return await db.getXids(zid);
 }
 
 /**
@@ -122,7 +114,7 @@ async function getXidsForConversation(zid, uid) {
  * @returns {Promise} - Resolution of the operation
  */
 async function addXidsToWhitelist(xid_whitelist, owner) {
-  await addXidWhitelist(xid_whitelist, owner);
+  await db.addXidWhitelist(xid_whitelist, owner);
   return true;
 }
 
@@ -182,7 +174,7 @@ async function getBidsForPids(zid, math_tick, pids) {
 async function getBidForParticipant(zid, uid, math_tick) {
   const [dataMapping, pid, mathResults] = await Promise.all([
     getBidIndexToPidMapping(zid, math_tick),
-    getParticipantId(zid, uid),
+    db.getParticipantId(zid, uid),
     getPca(zid, math_tick)
   ]);
 
@@ -218,7 +210,6 @@ export {
   getBidToPidMapping,
   getCorrelationMatrixForReport,
   getXidsForConversation,
-  getXids,
   processPcaData,
   updateMath
 };

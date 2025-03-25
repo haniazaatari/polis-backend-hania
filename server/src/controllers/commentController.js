@@ -2,7 +2,7 @@ import _ from 'underscore';
 import Config from '../config.js';
 import * as db from '../db/index.js';
 import { sendCommentModerationEmail } from '../email/commentModeration.js';
-import { getDemographicsForVotersOnComments } from '../repositories/demographics/demographicsRepository.js';
+import { getDemographicsForVotersOnComments } from '../repositories/demographicsRepository.js';
 import * as commentService from '../services/comment/commentService.js';
 import { detectLanguage } from '../services/translation/translationService.js';
 import { createXidRecordByZid } from '../services/xid/xidService.js';

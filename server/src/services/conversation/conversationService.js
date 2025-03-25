@@ -1,13 +1,7 @@
 import _ from 'underscore';
 import Config from '../../config.js';
-import {
-  getConversationMetadataQuestions,
-  getConversationTranslationsByLang,
-  getConversationWithOwner,
-  getCourseByInvite
-} from '../../db/conversations.js';
+import * as db from '../../db/index.js';
 import { sendCreatedLinkToEmail } from '../../email/specialized.js';
-import * as conversationRepository from '../../repositories/conversation/conversationRepository.js';
 import { ifDefinedFirstElseSecond } from '../../utils/common.js';
 import { DEFAULTS } from '../../utils/constants.js';
 import logger from '../../utils/logger.js';
@@ -25,7 +19,7 @@ const serverUrl = Config.getServerNameWithProtocol();
  */
 async function getConversationInfo(zid) {
   try {
-    return await conversationRepository.getConversationByZid(zid);
+    return await db.getConversationByZid(zid);
   } catch (error) {
     logger.error('Error getting conversation info', error);
     throw error;
@@ -39,7 +33,7 @@ async function getConversationInfo(zid) {
  */
 async function getConversationInfoByConversationId(conversationId) {
   try {
-    return await conversationRepository.getConversationByConversationId(conversationId);
+    return await db.getConversationByConversationId(conversationId);
   } catch (error) {
     logger.error('Error getting conversation info by conversation ID', error);
     throw error;
@@ -53,7 +47,7 @@ async function getConversationInfoByConversationId(conversationId) {
  */
 async function getZidFromConversationId(conversationId) {
   try {
-    return await conversationRepository.getZidFromConversationId(conversationId);
+    return await db.getZidFromConversationId(conversationId);
   } catch (error) {
     logger.error('Error getting ZID from conversation ID', error);
     throw error;
@@ -66,7 +60,7 @@ async function getZidFromConversationId(conversationId) {
  * @returns {Promise<void>}
  */
 async function verifyMetadataAnswersExistForEachQuestion(zid) {
-  return conversationRepository.verifyMetadataAnswersExistForEachQuestion(zid);
+  return db.verifyMetadataAnswersExistForEachQuestion(zid);
 }
 
 /**
@@ -83,7 +77,7 @@ async function updateConversation(zid, fields, options = {}) {
   }
 
   // Update conversation in database
-  const updatedConversation = await conversationRepository.updateConversation(zid, fields);
+  const updatedConversation = await db.updateConversation(zid, fields);
 
   // Generate short URL if needed
   if (options.generateShortUrl) {
@@ -100,7 +94,7 @@ async function updateConversation(zid, fields, options = {}) {
   }
 
   // Update modified time
-  await conversationRepository.updateConversationModifiedTime(zid);
+  await db.updateConversationModifiedTime(zid);
 
   // Mark as moderator
   updatedConversation.is_mod = true;
@@ -144,10 +138,7 @@ async function getConversations(options, req) {
       allOptions: options
     });
 
-    const participantInfo = await conversationRepository.getParticipantInfo(
-      options.uid,
-      options.includeAllConversationsIAmIn
-    );
+    const participantInfo = await db.getParticipantInfo(options.uid, options.includeAllConversationsIAmIn);
 
     logger.debug('Participant info result', participantInfo);
 
@@ -170,7 +161,7 @@ async function getConversations(options, req) {
     logger.debug('Query options for getConversations', queryOptions);
 
     // Get conversations from repository
-    const conversations = await conversationRepository.getConversations(queryOptions);
+    const conversations = await db.getConversations(queryOptions);
 
     logger.debug('Raw conversations result', {
       count: conversations.length,
@@ -337,7 +328,7 @@ async function processConversations(conversations, options) {
 async function getConversationsRecent(uid, sinceUnixTimestamp, field) {
   try {
     // Check if user is a developer (admin)
-    const isAdmin = await conversationRepository.isUserDeveloper(uid);
+    const isAdmin = await db.isUserDeveloper(uid);
     if (!isAdmin) {
       throw new Error('polis_err_no_access_for_this_user');
     }
@@ -351,7 +342,7 @@ async function getConversationsRecent(uid, sinceUnixTimestamp, field) {
     }
 
     // Get conversations
-    return await conversationRepository.getConversationsWithFieldGreaterThan(field, time);
+    return await db.getConversationsWithFieldGreaterThan(field, time);
   } catch (error) {
     logger.error('Error getting recent conversations', error);
     throw error;
@@ -367,10 +358,7 @@ async function getConversationsRecent(uid, sinceUnixTimestamp, field) {
 async function getConversationStats(zid, until) {
   try {
     // Get comments and votes
-    const [comments, votes] = await Promise.all([
-      conversationRepository.getCommentsForStats(zid, until),
-      conversationRepository.getVotesForStats(zid, until)
-    ]);
+    const [comments, votes] = await Promise.all([db.getCommentsForStats(zid, until), db.getVotesForStats(zid, until)]);
 
     // Cast timestamps to numbers
     const castTimestamp = (o) => {
@@ -490,14 +478,14 @@ async function getConversationStats(zid, until) {
 async function setConversationActive(zid, uid, isActive) {
   try {
     // Check if user is owner or admin
-    const conversation = await conversationRepository.getConversationForOwner(zid, uid);
+    const conversation = await db.getConversationForOwner(zid, uid);
 
     if (!conversation) {
       throw new Error('polis_err_closing_conversation_no_such_conversation');
     }
 
     // Update conversation
-    await conversationRepository.updateConversationActive(zid, isActive);
+    await db.updateConversationActive(zid, isActive);
 
     return;
   } catch (error) {
@@ -563,7 +551,7 @@ async function getConversationPreloadInfo(conversationId) {
 async function createConversation(conversationData, requestedConversationId, generateShortUrl) {
   try {
     // Create conversation in database
-    const conversation = await conversationRepository.createConversation(conversationData);
+    const conversation = await db.createConversation(conversationData);
     const zid = conversation.zid;
 
     // Generate zinvite (conversation ID)
@@ -601,7 +589,7 @@ async function createConversation(conversationData, requestedConversationId, gen
  */
 async function getPageId(site_id, page_id) {
   try {
-    return await conversationRepository.getPageId(site_id, page_id);
+    return await db.getPageId(site_id, page_id);
   } catch (error) {
     logger.error('Error getting page ID', error);
     throw error;
@@ -618,7 +606,7 @@ async function getPageId(site_id, page_id) {
 async function initializeImplicitConversation(site_id, page_id, options) {
   try {
     // Get site owner
-    const siteOwner = await conversationRepository.getSiteOwner(site_id);
+    const siteOwner = await db.getSiteOwner(site_id);
     if (!siteOwner) {
       throw new Error('polis_err_bad_site_id');
     }
@@ -642,11 +630,11 @@ async function initializeImplicitConversation(site_id, page_id, options) {
     };
 
     // Create conversation
-    const conversation = await conversationRepository.createConversation(conversationData);
+    const conversation = await db.createConversation(conversationData);
     const zid = conversation.zid;
 
     // Register page ID
-    await conversationRepository.registerPageId(site_id, page_id, zid);
+    await db.registerPageId(site_id, page_id, zid);
 
     // Generate zinvite
     const zinvite = await generateAndRegisterZinvite(zid, generateShortUrl);
@@ -711,7 +699,7 @@ function appendImplicitConversationParams(url, params) {
  */
 async function getConversationHasMetadata(zid) {
   try {
-    const rows = await getConversationMetadataQuestions(zid);
+    const rows = await db.getConversationMetadataQuestions(zid);
     return rows && rows.length > 0;
   } catch (err) {
     logger.error('Error checking if conversation has metadata', { error: err, zid });
@@ -727,7 +715,7 @@ async function getConversationHasMetadata(zid) {
  */
 async function getConversationTranslations(zid, lang) {
   try {
-    const rows = await getConversationTranslationsByLang(zid, lang);
+    const rows = await db.getConversationTranslationsByLang(zid, lang);
     return rows || [];
   } catch (err) {
     logger.error('Error getting conversation translations', { error: err, zid, lang });
@@ -771,10 +759,10 @@ async function getOneConversation(zid, uid, lang) {
   try {
     // Get all necessary data in parallel
     const [conversationRows, convHasMetadata, requestingUserInfo, translations] = await Promise.all([
-      getConversationWithOwner(zid),
-      getConversationHasMetadata(zid),
-      uid ? getUserInfoForUid2(uid) : Promise.resolve({}),
-      lang ? getConversationTranslationsMinimal(zid, lang) : Promise.resolve(null)
+      db.getConversationWithOwner(zid),
+      db.getConversationHasMetadata(zid),
+      uid ? db.getUserInfoForUid2(uid) : Promise.resolve({}),
+      lang ? db.getConversationTranslationsMinimal(zid, lang) : Promise.resolve(null)
     ]);
 
     // Check if conversation exists
@@ -827,7 +815,7 @@ async function getOneConversation(zid, uid, lang) {
  */
 async function getCourseIdFromInvite(courseInvite) {
   try {
-    const result = await getCourseByInvite(courseInvite);
+    const result = await db.getCourseByInvite(courseInvite);
 
     if (!result || !result.length) {
       throw new Error('polis_err_course_not_found');

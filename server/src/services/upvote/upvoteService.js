@@ -2,7 +2,7 @@
  * Upvote Service
  * Handles business logic for upvoting conversations
  */
-import * as upvoteRepository from '../../repositories/upvote/upvoteRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -13,7 +13,7 @@ import logger from '../../utils/logger.js';
  */
 async function hasUserUpvotedConversation(uid, zid) {
   try {
-    const upvotes = await upvoteRepository.getUpvoteByUserAndConversation(uid, zid);
+    const upvotes = await db.getUpvoteByUserAndConversation(uid, zid);
     return upvotes && upvotes.length > 0;
   } catch (error) {
     logger.error('Error checking if user has upvoted conversation', error);
@@ -29,7 +29,7 @@ async function hasUserUpvotedConversation(uid, zid) {
  */
 async function addUpvote(uid, zid) {
   try {
-    await upvoteRepository.createUpvote(uid, zid);
+    await db.createUpvote(uid, zid);
   } catch (error) {
     logger.error('Error adding upvote', error);
     throw error;
@@ -43,7 +43,7 @@ async function addUpvote(uid, zid) {
  */
 async function updateConversationUpvoteCount(zid) {
   try {
-    await upvoteRepository.updateConversationUpvoteCount(zid);
+    await db.updateConversationUpvoteCount(zid);
   } catch (error) {
     logger.error('Error updating conversation upvote count', error);
     throw error;
@@ -57,7 +57,7 @@ async function updateConversationUpvoteCount(zid) {
  */
 async function getUpvotesForUser(uid) {
   try {
-    return await upvoteRepository.getUpvotesByUser(uid);
+    return await db.getUpvotesByUser(uid);
   } catch (error) {
     logger.error('Error getting upvotes for user', error);
     throw error;

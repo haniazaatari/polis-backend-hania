@@ -1,7 +1,4 @@
-import { isModerator } from '../../db/authorization.js';
-import { isPolisDev } from '../../db/authorization.js';
-import * as conversationRepository from '../../repositories/conversation/conversationRepository.js';
-import * as participantModerationRepository from '../../repositories/participant/participantModerationRepository.js';
+import * as db from '../../db/index.js';
 import { removeNullOrUndefinedProperties } from '../../utils/common.js';
 import logger from '../../utils/logger.js';
 import { pullXInfoIntoSubObjects } from '../../utils/participants.js';
@@ -17,10 +14,10 @@ import { pullXInfoIntoSubObjects } from '../../utils/participants.js';
 async function getParticipantsWithModerationStatus(zid, mod, uid, conversationId) {
   try {
     // Get conversation info to check permissions
-    const conversation = await conversationRepository.getConversationInfo(zid);
+    const conversation = await db.getConversationInfo(zid);
 
     // Get participants with social info and moderation status
-    const participants = await participantModerationRepository.getSocialParticipantsForMod(
+    const participants = await db.getSocialParticipantsForMod(
       zid,
       99999, // Limit set to a high number as in original code
       mod,
@@ -29,7 +26,8 @@ async function getParticipantsWithModerationStatus(zid, mod, uid, conversationId
 
     // Check if user is allowed to see the data
     const isOwner = uid === conversation.owner;
-    const isAllowed = isOwner || isPolisDev(uid) || conversation.is_data_open;
+    const isPolisDev = await db.isPolisDev(uid);
+    const isAllowed = isOwner || isPolisDev || conversation.is_data_open;
 
     if (!isAllowed) {
       return [];
@@ -60,7 +58,7 @@ async function getParticipantsWithModerationStatus(zid, mod, uid, conversationId
 async function updateParticipantModerationStatus(zid, uid, pid, mod) {
   try {
     // Check if user is a moderator
-    const isMod = isModerator(zid, uid);
+    const isMod = await db.isModerator(zid, uid);
 
     if (!isMod) {
       const error = new Error('User is not a moderator');
@@ -70,7 +68,7 @@ async function updateParticipantModerationStatus(zid, uid, pid, mod) {
     }
 
     // Update participant moderation status
-    await participantModerationRepository.updateParticipantModerationStatus(zid, pid, mod);
+    await db.updateParticipantModerationStatus(zid, pid, mod);
   } catch (error) {
     logger.error('Error updating participant moderation status', error);
     throw error;

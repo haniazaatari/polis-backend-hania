@@ -124,7 +124,9 @@ async function main() {
         const content = fs.readFileSync(filePath, 'utf8');
         const functions = extractFunctions(file, content);
         allFunctions.push(...functions);
-      } catch (_err) {}
+      } catch (error) {
+        console.error(`Error reading file ${filePath}: ${error.message}`);
+      }
     }
 
     // Group functions by name

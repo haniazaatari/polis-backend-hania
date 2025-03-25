@@ -6,7 +6,7 @@ import _ from 'underscore';
 import { updateLastInteractionTimeForConversation } from '../db/conversationUpdates.js';
 import { getConversationInfo } from '../db/conversations.js';
 import { updateExtendedParticipantInfo } from '../db/participants.js';
-import { userHasAnsweredZeQuestions } from '../repositories/participant/participantRepository.js';
+import { userHasAnsweredZeQuestions } from '../repositories/participantRepository.js';
 import { COOKIES } from '../services/auth/constants.js';
 import { clearCookie } from '../services/auth/cookieService.js';
 import {

@@ -2,7 +2,7 @@
  * Zinvite Service
  * Handles business logic for zinvites (conversation invitations)
  */
-import * as zinviteRepository from '../../repositories/zinvite/zinviteRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 import { generateRandomToken } from '../auth/tokenService.js';
 
@@ -14,7 +14,7 @@ import { generateRandomToken } from '../auth/tokenService.js';
  */
 async function isConversationOwner(zid, uid) {
   try {
-    const result = await zinviteRepository.getConversationOwner(zid, uid);
+    const result = await db.getConversationOwner(zid, uid);
     return result && result.length > 0;
   } catch (error) {
     logger.error('Error checking conversation ownership', error);
@@ -29,7 +29,7 @@ async function isConversationOwner(zid, uid) {
  */
 async function getZinvitesForConversation(zid) {
   try {
-    return await zinviteRepository.getZinvitesForConversation(zid);
+    return await db.getZinvitesForConversation(zid);
   } catch (error) {
     logger.error('Error getting zinvites for conversation', error);
     throw error;
@@ -63,14 +63,14 @@ async function generateAndRegisterZinvite(zid, generateShort) {
     const zinvite = await generateZinviteCode(generateShort);
 
     // Check if there's an existing zinvite for this conversation
-    const existingZinvites = await zinviteRepository.getZinvitesForConversation(zid);
+    const existingZinvites = await db.getZinvitesForConversation(zid);
 
     if (existingZinvites && existingZinvites.length > 0) {
       // Update the existing zinvite
-      await zinviteRepository.updateZinvite(zid, zinvite);
+      await db.updateZinvite(zid, zinvite);
     } else {
       // Create a new zinvite
-      await zinviteRepository.createZinvite(zid, zinvite);
+      await db.createZinvite(zid, zinvite);
     }
 
     return zinvite;
@@ -88,7 +88,7 @@ async function generateAndRegisterZinvite(zid, generateShort) {
  */
 async function getZinvite(zid, dontUseCache = false) {
   try {
-    return await zinviteRepository.getZinvite(zid, dontUseCache);
+    return await db.getZinvite(zid, dontUseCache);
   } catch (error) {
     logger.error('Error getting zinvite', error);
     throw error;
@@ -102,7 +102,7 @@ async function getZinvite(zid, dontUseCache = false) {
  */
 async function getZinvites(zids) {
   try {
-    return await zinviteRepository.getZinvites(zids);
+    return await db.getZinvites(zids);
   } catch (error) {
     logger.error('Error getting zinvites', error);
     throw error;
@@ -117,7 +117,7 @@ async function getZinvites(zids) {
  */
 async function isZinviteValid(zid, zinvite) {
   try {
-    const result = await zinviteRepository.checkZinviteValidity(zid, zinvite);
+    const result = await db.checkZinviteValidity(zid, zinvite);
     return result;
   } catch (error) {
     logger.error('Error checking zinvite validity', error);
@@ -133,7 +133,7 @@ async function isZinviteValid(zid, zinvite) {
  */
 async function isSuzinviteValid(zid, suzinvite) {
   try {
-    const result = await zinviteRepository.checkSuzinviteValidity(zid, suzinvite);
+    const result = await db.checkSuzinviteValidity(zid, suzinvite);
     return result;
   } catch (error) {
     logger.error('Error checking suzinvite validity', error);

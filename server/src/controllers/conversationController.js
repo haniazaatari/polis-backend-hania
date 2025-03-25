@@ -398,8 +398,8 @@ async function handleCreateConversation(req, res) {
 async function handleImplicitConversationGeneration(req, res) {
   try {
     // Extract site_id and page_id from path
-    let site_id = /polis_site_id[^\/]*/.exec(req.path) || null;
-    let page_id = /\S\/([^\/]*)/.exec(req.path) || null;
+    let site_id = /polis_site_id[^/]*/.exec(req.path) || null;
+    let page_id = /\S\/([^/]*)/.exec(req.path) || null;
 
     if (!site_id?.length || (page_id && page_id?.length < 2)) {
       return fail(res, 404, 'polis_err_parsing_site_id_or_page_id');

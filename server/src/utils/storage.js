@@ -1,5 +1,4 @@
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { CreateTableCommand, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
+import { CreateTableCommand, DescribeTableCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DeleteCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import config from '../config.js';
 import logger from './logger.js';
@@ -8,7 +7,7 @@ import logger from './logger.js';
  * Service for interacting with DynamoDB
  * Used for storing and retrieving data from DynamoDB
  */
-export default class DynamoStorageService {
+export class DynamoStorageService {
   client;
   tableName;
   cacheDisabled;

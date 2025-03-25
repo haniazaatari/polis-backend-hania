@@ -1,6 +1,4 @@
-import { getUserRecordsByApiKey } from '../../db/index.js';
-import * as userRepository from '../../repositories/user/userRepository.js';
-import * as xidRepository from '../../repositories/xid/xidRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 import { generateHashedPassword, updatePassword } from '../auth/passwordService.js';
 import * as tokenService from '../auth/tokenService.js';
@@ -13,7 +11,7 @@ import * as emailService from '../email/emailService.js';
  */
 async function getUserByEmail(email) {
   try {
-    return await userRepository.getUserByEmail(email);
+    return await db.getUserByEmail(email);
   } catch (error) {
     logger.error('Error getting user by email', error);
     throw error;
@@ -46,7 +44,7 @@ async function createUser(userData) {
     }
 
     // Check if email already exists
-    const existingUser = await userRepository.getUserByEmail(userData.email);
+    const existingUser = await db.getUserByEmail(userData.email);
     if (existingUser) {
       return { success: false, error: 'polis_err_reg_user_with_that_email_exists' };
     }
@@ -55,7 +53,7 @@ async function createUser(userData) {
     const pwhash = await generateHashedPassword(userData.password);
 
     // Create user
-    const user = await userRepository.createUser({
+    const user = await db.createUser({
       email: userData.email,
       hname: userData.hname,
       pwhash,
@@ -115,7 +113,7 @@ async function resetPassword(token, password) {
  */
 async function getUserInfoForUid2(uid) {
   try {
-    return await userRepository.getUserById(uid);
+    return await db.getUserById(uid);
   } catch (err) {
     logger.error('Error getting user info', err);
     throw err;
@@ -137,7 +135,7 @@ async function getUser(uid, zid_optional, xid_optional, owner_uid_optional) {
 
   let xidInfoPromise = Promise.resolve(null);
   if (zid_optional && xid_optional) {
-    xidInfoPromise = xidRepository.getXidRecord(xid_optional, zid_optional);
+    xidInfoPromise = db.getXidRecord(xid_optional, zid_optional);
   } else if (xid_optional && owner_uid_optional) {
     xidInfoPromise = getXidRecordByXidOwnerId(xid_optional, owner_uid_optional, zid_optional);
   }
@@ -171,7 +169,7 @@ async function getUser(uid, zid_optional, xid_optional, owner_uid_optional) {
  */
 async function getUidForApiKey(apiKey) {
   try {
-    return await getUserRecordsByApiKey(apiKey);
+    return await db.getUserRecordsByApiKey(apiKey);
   } catch (err) {
     logger.error('Error getting UID for API key', err);
     throw err;
@@ -200,7 +198,7 @@ async function getXidRecordByXidOwnerId(
 ) {
   try {
     // Try to find existing record
-    const existing = await xidRepository.getXidRecordByXidOwnerId(owner);
+    const existing = await db.getXidRecordByXidOwnerId(owner);
 
     if (existing?.length) {
       return existing;
@@ -209,15 +207,7 @@ async function getXidRecordByXidOwnerId(
     // Create if missing and requested
     if (createIfMissing) {
       const uid = 1; // Default user ID for system
-      return await xidRepository.createXidRecord(
-        owner,
-        uid,
-        xid,
-        x_profile_image_url,
-        x_name,
-        x_email,
-        createIfMissing
-      );
+      return await db.createXidRecord(owner, uid, xid, x_profile_image_url, x_name, x_email, createIfMissing);
     }
 
     return null;
@@ -233,7 +223,7 @@ async function getXidRecordByXidOwnerId(
  */
 async function createDummyUser() {
   try {
-    return await userRepository.createDummyUser();
+    return await db.createDummyUser();
   } catch (err) {
     logger.error('Error creating dummy user', err);
     throw err;
@@ -248,7 +238,7 @@ async function createDummyUser() {
 async function getOrCreateUserByXid(xid) {
   try {
     // First try to get the user by XID
-    const existingUser = await xidRepository.getUserByXid(xid);
+    const existingUser = await db.getUserByXid(xid);
     if (existingUser?.uid) {
       return existingUser.uid;
     }
@@ -257,7 +247,7 @@ async function getOrCreateUserByXid(xid) {
     const uid = await createDummyUser();
 
     // Associate the XID with the new user (simplified call)
-    await xidRepository.createXidRecord(xid, uid);
+    await db.createXidRecord(xid, uid);
 
     return uid;
   } catch (error) {
@@ -274,7 +264,7 @@ async function getOrCreateUserByXid(xid) {
  */
 async function updateUser(uid, fields) {
   try {
-    return await userRepository.updateUser(uid, fields);
+    return await db.updateUser(uid, fields);
   } catch (error) {
     logger.error('Error updating user', error);
     throw error;

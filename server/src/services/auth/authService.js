@@ -1,6 +1,5 @@
 import _ from 'underscore';
-import { getPasswordHash } from '../../db/index.js';
-import * as userRepository from '../../repositories/user/userRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 import * as conversationService from '../conversation/conversationService.js';
 import * as userService from '../user/userService.js';
@@ -148,13 +147,13 @@ async function authenticateUser(req) {
 async function authenticateWithCredentials(email, password) {
   try {
     // Get user by email
-    const user = await userRepository.getUserByEmail(email);
+    const user = await db.getUserByEmail(email);
     if (!user) {
       return { success: false, error: 'user_not_found' };
     }
 
     // Get password hash from auth repository (jianiuevyew table)
-    const hashedPassword = await getPasswordHash(user.uid);
+    const hashedPassword = await db.getPasswordHash(user.uid);
 
     if (!hashedPassword) {
       return { success: false, error: 'password_not_set' };
@@ -409,7 +408,7 @@ async function authenticateWithBasicAuth(authHeader) {
 async function createAnonymousUser() {
   try {
     // Create a dummy user
-    const uid = await userRepository.createDummyUser();
+    const uid = await db.createDummyUser();
     return uid;
   } catch (error) {
     logger.error('Error creating anonymous user', error);

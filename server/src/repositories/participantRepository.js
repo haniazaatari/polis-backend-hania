@@ -2,13 +2,8 @@
  * Participant Repository
  * Handles complex database operations related to participants
  */
-import {
-  addParticipant,
-  getAnswersForConversation,
-  saveParticipantMetadataChoices,
-  updateExtendedParticipantInfo
-} from '../../db/participants.js';
-import logger from '../../utils/logger.js';
+import * as db from '../db/index.js';
+import logger from '../utils/logger.js';
 
 /**
  * Check if a user has answered the required questions for a conversation
@@ -25,7 +20,7 @@ async function userHasAnsweredZeQuestions(zid, answers) {
     }
 
     // Get all available answers for the conversation
-    const available_answers = await getAnswersForConversation(zid);
+    const available_answers = await db.getAnswersForConversation(zid);
 
     // Create indexes for quick lookup
     const q2a = {}; // Question ID to Answer mapping
@@ -73,18 +68,18 @@ async function userHasAnsweredZeQuestions(zid, answers) {
 async function tryToJoinConversation(zid, uid, info, answers) {
   try {
     // Add the participant
-    const [ptpt] = await addParticipant(zid, uid);
+    const [ptpt] = await db.addParticipant(zid, uid);
 
     // Add extended participant info if provided (as a separate operation)
     if (info && Object.keys(info).length > 0) {
       // Don't await this - the legacy code doesn't wait for it to complete
-      updateExtendedParticipantInfo(zid, uid, info);
+      db.updateExtendedParticipantInfo(zid, uid, info);
     }
 
     // Save metadata answers if provided (as a separate operation)
     if (answers && (Array.isArray(answers) ? answers.length : Object.keys(answers).length) > 0) {
       // Don't await this - the legacy code doesn't wait for it to complete
-      saveParticipantMetadataChoices(zid, ptpt.pid, answers);
+      db.saveParticipantMetadataChoices(zid, ptpt.pid, answers);
     }
 
     // Return the full participant object

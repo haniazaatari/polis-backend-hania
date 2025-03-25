@@ -8,11 +8,11 @@ import OpenAI from 'openai';
 import simpleXmlToJson from 'simple-xml-to-json';
 import { create } from 'xmlbuilder2';
 import config from '../../config.js';
+import * as db from '../../db/index.js';
 import { getTopicsFromRID } from '../../report_experimental/topics-example/index.js';
-import { getZidForRid } from '../../repositories/report/reportRepository.js';
 import { getCommentGroupsSummary } from '../../services/export/exportService.js';
 import logger from '../../utils/logger.js';
-import DynamoStorageService from '../../utils/storage.js';
+import { DynamoStorageService } from '../../utils/storage.js';
 
 const { convertXML } = simpleXmlToJson;
 const anthropic = config.anthropicApiKey ? new Anthropic({ apiKey: config.anthropicApiKey }) : null;
@@ -288,7 +288,7 @@ export async function initReportNarrativeService(rid, noCache = false) {
   const storage = new DynamoStorageService('report_narrative_store', noCache);
   await storage.initTable();
 
-  const zid = await getZidForRid(rid);
+  const zid = await db.getZidForRid(rid);
   if (!zid) {
     throw new Error('polis_error_report_narrative_notfound');
   }

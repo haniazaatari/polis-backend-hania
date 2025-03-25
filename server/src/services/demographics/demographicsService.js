@@ -1,5 +1,5 @@
 import _ from 'underscore';
-import * as demographicsRepository from '../../repositories/demographics/demographicsRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 import { getPidsForGid } from '../../utils/participants.js';
 import polisTypes from '../../utils/polisTypes.js';
@@ -27,8 +27,8 @@ async function getGroupDemographics(zid, isModerator, rid) {
         getPidsForGid(zid, 2, -1),
         getPidsForGid(zid, 3, -1),
         getPidsForGid(zid, 4, -1),
-        demographicsRepository.getParticipantDemographicsForConversation(zid),
-        demographicsRepository.getParticipantVotesForCommentsFlaggedWith_is_meta(zid)
+        db.getParticipantDemographicsForConversation(zid),
+        db.getParticipantVotesForCommentsFlaggedWith_is_meta(zid)
       ]);
 
     // Prepare group data

@@ -1,4 +1,4 @@
-import { isXidWhitelisted } from '../repositories/xid/xidRepository.js';
+import { isXidWhitelisted } from '../db/index.js';
 import { isDuplicateKey } from '../utils/common.js';
 import logger from '../utils/logger.js';
 import { queryP, query_readOnly } from './pg-query.js';

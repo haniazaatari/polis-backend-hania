@@ -1,11 +1,5 @@
 import { isModerator } from '../../db/authorization.js';
-import {
-  createReport as createReportInDb,
-  getReportById,
-  getReportsByConversationId,
-  getReportsByUserId,
-  updateReport
-} from '../../repositories/report/reportRepository.js';
+import * as db from '../../db/index.js';
 import { generateRandomToken } from '../auth/tokenService.js';
 import { getZinvite } from '../zinvite/zinviteService.js';
 
@@ -17,7 +11,7 @@ import { getZinvite } from '../zinvite/zinviteService.js';
 async function createReport(zid) {
   const token = await generateRandomToken(20, false);
   const report_id = `r${token}`;
-  return createReportInDb(zid, report_id);
+  return db.createReport(zid, report_id);
 }
 
 /**
@@ -41,7 +35,7 @@ async function getReportsByConversation(zid, uid) {
   if (!hasPermission) {
     throw new Error('polis_err_permissions');
   }
-  return getReportsByConversationId(zid);
+  return db.getReportsByConversationId(zid);
 }
 
 /**
@@ -50,7 +44,7 @@ async function getReportsByConversation(zid, uid) {
  * @returns {Promise<object>} - A promise that resolves with the report
  */
 async function getReport(rid) {
-  const reports = await getReportById(rid);
+  const reports = await db.getReportById(rid);
   if (!reports || reports.length === 0) {
     throw new Error('polis_err_report_not_found');
   }
@@ -63,7 +57,7 @@ async function getReport(rid) {
  * @returns {Promise<Array>} - A promise that resolves with the reports
  */
 async function getUserReports(uid) {
-  return getReportsByUserId(uid);
+  return db.getReportsByUserId(uid);
 }
 
 /**
@@ -87,7 +81,7 @@ async function updateReportFields(zid, rid, uid, updateFields) {
   // Copy the update fields to the fields object
   Object.assign(fields, updateFields);
 
-  return updateReport(rid, fields);
+  return db.updateReport(rid, fields);
 }
 
 /**

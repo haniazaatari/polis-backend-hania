@@ -2,7 +2,7 @@
  * Context Service
  * Handles business logic for contexts
  */
-import * as contextRepository from '../../repositories/context/contextRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -11,7 +11,7 @@ import logger from '../../utils/logger.js';
  */
 async function getPublicContexts() {
   try {
-    return await contextRepository.getPublicContexts();
+    return await db.getPublicContexts();
   } catch (error) {
     logger.error('Error getting public contexts', error);
     throw error;
@@ -25,7 +25,7 @@ async function getPublicContexts() {
  */
 async function contextExists(name) {
   try {
-    const context = await contextRepository.getContextByName(name);
+    const context = await db.getContextByName(name);
     return !!context;
   } catch (error) {
     logger.error('Error checking if context exists', error);
@@ -41,7 +41,7 @@ async function contextExists(name) {
  */
 async function createContext(name, uid) {
   try {
-    await contextRepository.createContext(name, uid);
+    await db.createContext(name, uid);
   } catch (error) {
     logger.error('Error creating context', error);
     throw error;
