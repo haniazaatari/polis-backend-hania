@@ -1,4 +1,4 @@
-import { storePasswordHash } from '../repositories/auth/authRepository.js';
+import { storePasswordHash } from '../db/index.js';
 import { createUser, getUserByEmail } from '../repositories/user/userRepository.js';
 import { authenticateWithCredentials } from '../services/auth/authService.js';
 import { COOKIES } from '../services/auth/constants.js';

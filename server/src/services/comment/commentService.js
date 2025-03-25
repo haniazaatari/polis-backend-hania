@@ -1,5 +1,5 @@
 import _ from 'underscore';
-import * as commentRepository from '../../repositories/comment/commentRepository.js';
+import * as db from '../../db/index.js';
 import logger from '../../utils/logger.js';
 import { getPca } from '../../utils/pca.js';
 import { getConversationInfo } from '../conversation/conversationService.js';
@@ -13,7 +13,7 @@ import { isTranslationEnabled, translateString } from '../translation/translatio
  */
 async function getComment(zid, tid) {
   try {
-    return await commentRepository.getCommentById(zid, tid);
+    return await db.getCommentById(zid, tid);
   } catch (error) {
     logger.error('Error getting comment', error);
     throw error;
@@ -28,7 +28,7 @@ async function getComment(zid, tid) {
  */
 async function commentExists(zid, txt) {
   try {
-    return await commentRepository.commentExists(zid, txt);
+    return await db.commentExists(zid, txt);
   } catch (error) {
     logger.error('Error checking if comment exists', error);
     throw error;
@@ -46,7 +46,7 @@ async function commentExists(zid, txt) {
  */
 async function moderateComment(zid, tid, active, mod, is_meta) {
   try {
-    return await commentRepository.moderateComment(zid, tid, active, mod, is_meta);
+    return await db.moderateComment(zid, tid, active, mod, is_meta);
   } catch (error) {
     logger.error('Error moderating comment', error);
     throw error;
@@ -77,11 +77,11 @@ async function getComments(options) {
 
     // Then get the comments with the conversation info
     const rawComments = await (options.moderation
-      ? commentRepository.getCommentsForModeration({
+      ? db.getCommentsForModeration({
           ...options,
           strict_moderation: options.modIn ? conversation.strict_moderation : false
         })
-      : commentRepository.getCommentsList({
+      : db.getCommentsList({
           ...options,
           strict_moderation: conversation.strict_moderation,
           prioritize_seed: conversation.prioritize_seed
@@ -126,7 +126,7 @@ async function getComments(options) {
  */
 async function getNumberOfCommentsRemaining(zid, pid) {
   try {
-    return await commentRepository.getNumberOfCommentsRemaining(zid, pid);
+    return await db.getNumberOfCommentsRemaining(zid, pid);
   } catch (error) {
     logger.error('Error getting number of comments remaining', error);
     throw error;
@@ -152,7 +152,7 @@ async function translateAndStoreComment(zid, tid, text, targetLang) {
     const translation = await translateString(text, targetLang);
 
     // Store the translation
-    return await commentRepository.storeCommentTranslation(zid, tid, translation, targetLang);
+    return await db.storeCommentTranslation(zid, tid, translation, targetLang);
   } catch (error) {
     logger.error('Error translating and storing comment', error);
     throw error;
@@ -206,7 +206,7 @@ async function getNextPrioritizedComment(zid, pid, withoutTids, include_social) 
 
   try {
     const [comments, math, numberOfCommentsRemainingRows] = await Promise.all([
-      commentRepository.getCommentsList(params),
+      db.getCommentsList(params),
       getPca(zid, 0),
       getNumberOfCommentsRemaining(zid, pid)
     ]);
@@ -259,7 +259,7 @@ async function getNextComment(zid, pid, withoutTids, include_social, lang) {
     // Add translations if language specified
     if (lang && c) {
       const firstTwoCharsOfLang = lang.substr(0, 2);
-      const translations = await commentRepository.getCommentTranslations(zid, c.tid);
+      const translations = await db.getCommentTranslations(zid, c.tid);
       c.translations = translations;
 
       const hasMatch = _.some(translations, (t) => {
@@ -301,7 +301,7 @@ async function getNextComment(zid, pid, withoutTids, include_social, lang) {
  */
 async function createComment(params) {
   try {
-    return await commentRepository.createComment(params);
+    return await db.createComment(params);
   } catch (error) {
     logger.error('Error creating comment', error);
     throw error;

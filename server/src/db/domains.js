@@ -152,10 +152,10 @@ function checkDomainPattern(domain, pattern) {
 }
 
 export {
-  getDomainWhitelistRecord,
+  checkDomainPattern,
   createDomainWhitelistRecord,
-  updateDomainWhitelistRecord,
   getDomainWhitelist,
   getDomainWhitelistForSite,
-  checkDomainPattern
+  getDomainWhitelistRecord,
+  updateDomainWhitelistRecord
 };

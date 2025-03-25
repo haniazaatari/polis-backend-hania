@@ -101,11 +101,11 @@ const sql_reports = sql.define({
 });
 
 export {
-  sql_conversations,
   sql_comments,
-  sql_votes_latest_unique,
+  sql_conversations,
   sql_participant_metadata_answers,
   sql_participants_extended,
   sql_reports,
-  sql_users
+  sql_users,
+  sql_votes_latest_unique
 };

@@ -130,11 +130,11 @@ function createReportDataTask(rid, zid, math_tick, math_env) {
 }
 
 export {
-  getXids,
   addXidWhitelist,
-  getCorrelationMatrix,
   checkMathTaskExists,
-  hasCommentSelections,
   createMathUpdateTask,
-  createReportDataTask
+  createReportDataTask,
+  getCorrelationMatrix,
+  getXids,
+  hasCommentSelections
 };

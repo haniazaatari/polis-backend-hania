@@ -1,4 +1,4 @@
-import { createSessionToken } from '../../repositories/auth/tokenRepository.js';
+import { createSessionToken } from '../../db/index.js';
 import { generateToken } from '../../utils/crypto.js';
 import logger from '../../utils/logger.js';
 import { addAuthCookies, addCookies, clearAuthCookies } from './cookieService.js';

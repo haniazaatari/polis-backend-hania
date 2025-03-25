@@ -146,10 +146,10 @@ function getVotesForZidPidsWithTimestampCheck(zid, pids, math_tick) {
 }
 
 export {
-  getVotesForZidPidWithTimestampCheck,
-  cacheVotesForZidPidWithTimestamp,
-  getVotesForZidPidsWithTimestampCheck,
-  getVotesForPids,
   aggregateVotesToPidVotesObj,
-  createEmptyVoteVector
+  cacheVotesForZidPidWithTimestamp,
+  createEmptyVoteVector,
+  getVotesForPids,
+  getVotesForZidPidsWithTimestampCheck,
+  getVotesForZidPidWithTimestampCheck
 };

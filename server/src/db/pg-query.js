@@ -147,16 +147,6 @@ function queryP(queryString, ...args) {
 function queryP_readOnly(queryString, ...args) {
   return queryP_impl(readPool, queryString, ...args);
 }
-function queryP_metered_impl(isReadOnly, name, queryString, params) {
-  const f = isReadOnly ? queryP_readOnly : queryP;
-  if (_.isUndefined(name) || _.isUndefined(queryString) || _.isUndefined(params)) {
-    throw new Error('polis_err_queryP_metered_impl missing params');
-  }
-  return f(queryString, params);
-}
-function queryP_metered_readOnly(name, queryString, params) {
-  return queryP_metered_impl(true, name, queryString, params);
-}
 function stream_queryP_readOnly(queryString, params, onRow, onEnd, onError) {
   const query = new QueryStream(queryString, params);
   readPool.connect((err, client, done) => {
@@ -178,4 +168,5 @@ function stream_queryP_readOnly(queryString, params, onRow, onEnd, onError) {
     });
   });
 }
-export { query_readOnly, queryP_metered_readOnly, queryP_readOnly, queryP, stream_queryP_readOnly };
+
+export { query_readOnly, queryP_readOnly, queryP, stream_queryP_readOnly };

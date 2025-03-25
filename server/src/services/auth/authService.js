@@ -1,5 +1,5 @@
 import _ from 'underscore';
-import * as authRepository from '../../repositories/auth/authRepository.js';
+import { getPasswordHash } from '../../db/index.js';
 import * as userRepository from '../../repositories/user/userRepository.js';
 import logger from '../../utils/logger.js';
 import * as conversationService from '../conversation/conversationService.js';
@@ -154,7 +154,7 @@ async function authenticateWithCredentials(email, password) {
     }
 
     // Get password hash from auth repository (jianiuevyew table)
-    const hashedPassword = await authRepository.getPasswordHash(user.uid);
+    const hashedPassword = await getPasswordHash(user.uid);
 
     if (!hashedPassword) {
       return { success: false, error: 'password_not_set' };

@@ -153,13 +153,13 @@ async function checkSuzinviteValidity(zid, suzinvite) {
 }
 
 export {
-  zidToZinviteCache,
-  getConversationOwner,
-  getZinvitesForConversation,
+  checkSuzinviteValidity,
+  checkZinviteValidity,
   createZinvite,
-  updateZinvite,
+  getConversationOwner,
   getZinvite,
   getZinvites,
-  checkZinviteValidity,
-  checkSuzinviteValidity
+  getZinvitesForConversation,
+  updateZinvite,
+  zidToZinviteCache
 };

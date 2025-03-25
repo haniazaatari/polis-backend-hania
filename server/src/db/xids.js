@@ -163,12 +163,12 @@ async function createXidEntry(xid, org_id, uid) {
 }
 
 export {
+  createXidEntry,
   createXidRecord,
   createXidRecordByZid,
-  isXidWhitelisted,
+  getUserByXid,
   getXidRecord,
   getXidRecordByXidOwnerId,
-  getUserByXid,
-  xidExists,
-  createXidEntry
+  isXidWhitelisted,
+  xidExists
 };

@@ -431,8 +431,13 @@ export {
   getConversationByConversationId,
   getConversationByZid,
   getConversationForOwner,
+  getConversationInfo,
+  getConversationMetadataQuestions,
   getConversations,
   getConversationsWithFieldGreaterThan,
+  getConversationTranslationsByLang,
+  getConversationWithOwner,
+  getCourseByInvite,
   getPageId,
   getParticipantInfo,
   getSiteOwner,
@@ -443,10 +448,5 @@ export {
   registerZinvite,
   updateConversation,
   updateConversationActive,
-  verifyMetadataAnswersExistForEachQuestion,
-  getConversationMetadataQuestions,
-  getConversationTranslationsByLang,
-  getConversationWithOwner,
-  getCourseByInvite,
-  getConversationInfo
+  verifyMetadataAnswersExistForEachQuestion
 };

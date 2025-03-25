@@ -304,18 +304,18 @@ async function getAuthorUidsForComments(zid, tids) {
 }
 
 export {
-  getNumberOfCommentsWithModerationStatus,
   addNoMoreCommentsRecord,
   commentExists,
   createComment,
+  getAuthorUidsForComments,
   getCommentByIdFromDb,
-  updateCommentModeration,
   getCommentsForModerationFromDb,
   getCommentsListFromDb,
-  getNumberOfCommentsRemainingFromDb,
-  storeCommentTranslationInDb,
-  getCommentTranslationsFromDb,
   getCommentsWithoutLanguage,
+  getCommentTranslationsFromDb,
+  getNumberOfCommentsRemainingFromDb,
+  getNumberOfCommentsWithModerationStatus,
+  storeCommentTranslationInDb,
   updateCommentLanguage,
-  getAuthorUidsForComments
+  updateCommentModeration
 };

@@ -1,8 +1,9 @@
 import crypto from 'crypto';
 import LruCache from 'lru-cache';
-import * as tokenRepository from '../../repositories/auth/tokenRepository.js';
 import { generateToken } from '../../utils/crypto.js';
 import logger from '../../utils/logger.js';
+
+import * as db from '../../db/index.js';
 
 // Cache for user tokens to avoid database lookups
 const userTokenCache = new LruCache({
@@ -83,7 +84,7 @@ async function getUserIdForToken(token) {
   }
 
   try {
-    const uid = await tokenRepository.getUserIdForToken(token);
+    const uid = await db.getUserIdForToken(token);
 
     if (uid) {
       // Cache the result
@@ -104,7 +105,7 @@ async function getUserIdForToken(token) {
  */
 async function getUserIdForPasswordResetToken(token) {
   try {
-    return await tokenRepository.getUserIdForPasswordResetToken(token);
+    return await db.getUserIdForPasswordResetToken(token);
   } catch (error) {
     logger.error('Error getting user ID for password reset token', error);
     return null;
@@ -118,7 +119,7 @@ async function getUserIdForPasswordResetToken(token) {
  */
 async function getUserIdForVerificationToken(token) {
   try {
-    return await tokenRepository.getUserIdForVerificationToken(token);
+    return await db.getUserIdForVerificationToken(token);
   } catch (error) {
     logger.error('Error getting user ID for verification token', error);
     return null;
@@ -133,7 +134,7 @@ async function getUserIdForVerificationToken(token) {
 async function createPasswordResetToken(uid) {
   try {
     const token = await generatePasswordResetToken();
-    await tokenRepository.createPasswordResetToken(uid, token);
+    await db.createPasswordResetToken(uid, token);
     return token;
   } catch (error) {
     logger.error('Error creating password reset token', error);
@@ -148,7 +149,7 @@ async function createPasswordResetToken(uid) {
  */
 async function clearPasswordResetToken(token) {
   try {
-    await tokenRepository.clearPasswordResetToken(token);
+    await db.clearPasswordResetToken(token);
   } catch (error) {
     logger.error('Error clearing password reset token', error);
     throw error;
@@ -163,7 +164,7 @@ async function clearPasswordResetToken(token) {
 async function createVerificationToken(uid) {
   try {
     const token = await generateVerificationToken();
-    await tokenRepository.createVerificationToken(uid, token);
+    await db.createVerificationToken(uid, token);
     return token;
   } catch (error) {
     logger.error('Error creating verification token', error);
@@ -178,7 +179,7 @@ async function createVerificationToken(uid) {
  */
 async function clearVerificationToken(token) {
   try {
-    await tokenRepository.clearVerificationToken(token);
+    await db.clearVerificationToken(token);
   } catch (error) {
     logger.error('Error clearing verification token', error);
     throw error;
@@ -196,7 +197,7 @@ async function deleteToken(token) {
     userTokenCache.del(token);
 
     // Delete from database
-    await tokenRepository.deleteToken(token);
+    await db.deleteToken(token);
   } catch (error) {
     logger.error('Error deleting token', error);
     throw error;

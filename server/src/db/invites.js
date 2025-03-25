@@ -14,7 +14,7 @@ async function getSUZinviteRecord(suzinvite) {
  * @param {string} suzinvite - Single-use invite token
  * @returns {Promise<void>}
  */
-async function deleteSUZinviteRecord(suzinvite) {
+async function deleteSuzInviteRecord(suzinvite) {
   await queryP('DELETE FROM suzinvites WHERE suzinvite = ($1);', [suzinvite]);
 }
 
@@ -33,7 +33,7 @@ async function createInviterRecord(inviter_uid, invited_email) {
  * @param {Array<{suzinvite: string, xid: string, zid: number, owner: number}>} invites - Array of invite data
  * @returns {Promise<void>}
  */
-async function createSUZinvites(invites) {
+async function createSuzInvites(invites) {
   if (!invites.length) return;
 
   const valuesStatements = invites.map(({ suzinvite, xid, zid, owner }) => {
@@ -48,16 +48,6 @@ async function createSUZinvites(invites) {
 }
 
 /**
- * Get einvite information
- * @param {string} einvite - The email invite code
- * @returns {Promise<Object|null>} - The einvite information or null if not found
- */
-async function getEinviteInfo(einvite) {
-  const rows = await queryP_readOnly('select * from einvites where einvite = ($1);', [einvite]);
-  return rows.length ? rows[0] : null;
-}
-
-/**
  * Get suzinvite information
  * @param {string} suzinvite - The single-use invite code
  * @returns {Promise<Object|null>} - The suzinvite information or null if not found
@@ -67,11 +57,4 @@ async function getSuzinviteInfo(suzinvite) {
   return rows.length ? rows[0] : null;
 }
 
-export {
-  getSUZinviteRecord,
-  deleteSUZinviteRecord,
-  createInviterRecord,
-  createSUZinvites,
-  getEinviteInfo,
-  getSuzinviteInfo
-};
+export { createInviterRecord, createSuzInvites, deleteSuzInviteRecord, getSuzinviteInfo, getSUZinviteRecord };

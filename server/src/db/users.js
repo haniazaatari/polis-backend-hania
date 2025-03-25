@@ -116,11 +116,11 @@ async function getSiteUserEmails(site_id) {
 }
 
 export {
+  createDummyUser,
+  createUser,
+  getSiteUserEmails,
   getUserByEmail,
   getUserById,
-  createUser,
-  createDummyUser,
-  updateUser,
   getUsersForModerationEmails,
-  getSiteUserEmails
+  updateUser
 };

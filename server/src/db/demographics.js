@@ -122,10 +122,10 @@ async function getVotesAndDemographics(zid) {
 }
 
 export {
-  getDemographicQuestions,
-  getDemographicAnswers,
-  createDemographicQuestion,
   createDemographicAnswer,
+  createDemographicQuestion,
+  getDemographicAnswers,
+  getDemographicQuestions,
   getParticipantDemographicsForConversation,
   getParticipantVotesForCommentsFlaggedWith_is_meta,
   getVotesAndDemographics

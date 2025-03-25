@@ -1,5 +1,5 @@
 import _ from 'underscore';
-import { createInviterRecord, createSUZinvites, deleteSUZinviteRecord, getSUZinviteRecord } from '../../db/invites.js';
+import { createInviterRecord, createSuzInvites, deleteSuzInviteRecord, getSUZinviteRecord } from '../../db/invites.js';
 import { sendSuzinviteEmail } from '../../email/specialized.js';
 import logger from '../../utils/logger.js';
 import { getConversationInfo } from '../conversation/conversationService.js';
@@ -35,7 +35,7 @@ async function getSUZinviteInfo(suzinvite) {
  */
 async function deleteSuzinvite(suzinvite) {
   try {
-    await deleteSUZinviteRecord(suzinvite);
+    await deleteSuzInviteRecord(suzinvite);
   } catch (error) {
     logger.error('Error deleting suzinvite', error);
     throw error;
@@ -86,7 +86,7 @@ async function inviteUsersToConversation(uid, emails, zid, conversation_id) {
     }));
 
     try {
-      await createSUZinvites(invites);
+      await createSuzInvites(invites);
     } catch (_) {
       throw new Error('polis_err_saving_invites');
     }

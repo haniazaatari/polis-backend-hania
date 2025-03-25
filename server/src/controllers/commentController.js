@@ -1,23 +1,7 @@
 import _ from 'underscore';
 import Config from '../config.js';
-import { isModerator } from '../db/authorization.js';
-import { addNoMoreCommentsRecord, getNumberOfCommentsWithModerationStatus } from '../db/comments.js';
-import {
-  updateConversationModifiedTime,
-  updateLastInteractionTimeForConversation,
-  updateVoteCount
-} from '../db/conversationUpdates.js';
-import { getConversationInfo } from '../db/conversations.js';
-import { createCrowdModerationRecord } from '../db/crowdModeration.js';
-import { getPidPromise } from '../db/getPidPromise.js';
-import { createNotificationTask } from '../db/notifications.js';
-import { addParticipant } from '../db/participants.js';
-import { getReportCommentSelections } from '../db/reports.js';
-import { getUsersForModerationEmails } from '../db/users.js';
-import { votesPost } from '../db/votes.js';
-import { getXidStuff } from '../db/xid.js';
+import * as db from '../db/index.js';
 import { sendCommentModerationEmail } from '../email/commentModeration.js';
-import * as commentRepository from '../repositories/comment/commentRepository.js';
 import { getDemographicsForVotersOnComments } from '../repositories/demographics/demographicsRepository.js';
 import * as commentService from '../services/comment/commentService.js';
 import { detectLanguage } from '../services/translation/translationService.js';
@@ -43,9 +27,9 @@ async function handlePostComments(req, res) {
   }
   async function doGetPid() {
     if (_.isUndefined(pid) || Number(pid) === -1) {
-      const newPid = await getPidPromise(zid, uid, true);
+      const newPid = await db.getPidPromise(zid, uid, true);
       if (newPid === -1) {
-        const rows = await addParticipant(zid, uid);
+        const rows = await db.addParticipant(zid, uid);
         const ptpt = rows[0];
         pid = ptpt.pid;
         currentPid = pid;
@@ -74,12 +58,12 @@ async function handlePostComments(req, res) {
       return false;
     });
     const jigsawModerationPromise = Config.googleJigsawPerspectiveApiKey ? analyzeComment(txt) : Promise.resolve(null);
-    const isModeratorPromise = isModerator(zid, uid);
-    const conversationInfoPromise = getConversationInfo(zid);
+    const isModeratorPromise = await db.isModerator(zid, uid);
+    const conversationInfoPromise = await db.getConversationInfo(zid);
     let shouldCreateXidRecord = false;
     const pidPromise = (async () => {
       if (xid) {
-        const xidUser = await getXidStuff(xid, zid);
+        const xidUser = await db.getXidStuff(xid, zid);
         shouldCreateXidRecord = xidUser === 'noXidRecord' || xidUser.pid === -1;
         if (typeof xidUser === 'object' && !shouldCreateXidRecord) {
           uid = xidUser.uid;
@@ -169,10 +153,10 @@ async function handlePostComments(req, res) {
     const tid = comment.tid;
     if (bad || spammy || conv.strict_moderation) {
       try {
-        const n = await getNumberOfCommentsWithModerationStatus(zid, polisTypes.mod.unmoderated);
+        const n = await db.getNumberOfCommentsWithModerationStatus(zid, polisTypes.mod.unmoderated);
         if (n !== 0) {
           // Use getUsersForModerationEmails from the users.js module
-          const users = await getUsersForModerationEmails(zid, conv.owner);
+          const users = await db.getUsersForModerationEmails(zid, conv.owner);
           const uids = users.map((user) => user.uid);
           for (const uid of uids) {
             sendCommentModerationEmail(req, Number(uid), zid, n);
@@ -182,7 +166,7 @@ async function handlePostComments(req, res) {
         logger.error('polis_err_getting_modstatus_comment_count', err);
       }
     } else {
-      createNotificationTask(zid);
+      await db.createNotificationTask(zid);
     }
     if (is_seed && _.isUndefined(vote) && Number(zid) <= 17037) {
       vote = 0;
@@ -190,7 +174,7 @@ async function handlePostComments(req, res) {
     let createdTime = comment.created;
     if (!_.isUndefined(vote)) {
       try {
-        const voteResult = await votesPost(uid, finalPid, zid, tid, xid, vote, 0, false);
+        const voteResult = await db.votesPost(uid, finalPid, zid, tid, xid, vote, 0, false);
         if (voteResult?.vote?.created) {
           createdTime = voteResult.vote.created;
         }
@@ -217,11 +201,15 @@ async function handlePostComments(req, res) {
         return;
       }
     }
-    setTimeout(() => {
-      updateConversationModifiedTime(zid, createdTime);
-      updateLastInteractionTimeForConversation(zid, uid);
-      if (!_.isUndefined(vote)) {
-        updateVoteCount(zid, finalPid);
+    setTimeout(async () => {
+      try {
+        await db.updateConversationModifiedTime(zid, createdTime);
+        await db.updateLastInteractionTimeForConversation(zid, uid);
+        if (!_.isUndefined(vote)) {
+          await db.updateVoteCount(zid, finalPid);
+        }
+      } catch (err) {
+        logger.error('Error in delayed conversation updates:', err);
       }
     }, 100);
     res.json({
@@ -250,8 +238,7 @@ async function handleGetComments(req, res) {
     let comments = await commentService.getComments(req.p);
 
     if (req.p.rid) {
-      // Use getReportCommentSelections from the reports.js module
-      const selections = await getReportCommentSelections(req.p.rid);
+      const selections = await db.getReportCommentSelections(req.p.rid);
       const tidToSelection = _.indexBy(selections, 'tid');
       comments = comments.map((c) => ({
         ...c,
@@ -265,7 +252,7 @@ async function handleGetComments(req, res) {
     });
 
     if (req.p.include_demographics) {
-      const owner = await isModerator(req.p.zid, req.p.uid);
+      const owner = await db.isModerator(req.p.zid, req.p.uid);
       if (owner || isReportQuery) {
         try {
           const commentsWithDemographics = await getDemographicsForVotersOnComments(req.p.zid, commentsWithSocialInfo);
@@ -331,7 +318,7 @@ async function handleGetCommentsTranslations(req, res) {
     }
 
     // Check for existing translations
-    const existingTranslations = await commentRepository.getCommentTranslations(zid, tid);
+    const existingTranslations = await db.getCommentTranslations(zid, tid);
     const matchingTranslations = existingTranslations.filter((t) => t.lang.startsWith(firstTwoCharsOfLang));
 
     // If matching translations exist, return them
@@ -402,8 +389,7 @@ async function handlePostPtptCommentMod(req, res) {
     const pid = req.p.pid;
     const uid = req.p.uid;
 
-    // Use createCrowdModerationRecord from the crowdModeration.js module
-    const createdTime = await createCrowdModerationRecord({
+    const createdTime = await db.createCrowdModerationRecord({
       zid: req.p.zid,
       pid: req.p.pid,
       tid: req.p.tid,
@@ -420,9 +406,13 @@ async function handlePostPtptCommentMod(req, res) {
     });
 
     // Update conversation modified time
-    setTimeout(() => {
-      updateConversationModifiedTime(req.p.zid, createdTime);
-      updateLastInteractionTimeForConversation(zid, uid);
+    setTimeout(async () => {
+      try {
+        await db.updateConversationModifiedTime(req.p.zid, createdTime);
+        await db.updateLastInteractionTimeForConversation(zid, uid);
+      } catch (err) {
+        logger.error('Error in delayed conversation updates:', err);
+      }
     }, 100);
 
     // Get next comment
@@ -433,7 +423,7 @@ async function handlePostPtptCommentMod(req, res) {
     if (nextComment) {
       result.nextComment = nextComment;
     } else {
-      await addNoMoreCommentsRecord(req.p.zid, pid);
+      await db.addNoMoreCommentsRecord(req.p.zid, pid);
     }
 
     result.currentPid = req.p.pid;
@@ -462,7 +452,7 @@ async function handlePutComments(req, res) {
     const active = req.p.active;
     const mod = req.p.mod;
     const is_meta = req.p.is_meta;
-    const isMod = await isModerator(zid, uid);
+    const isMod = await db.isModerator(zid, uid);
 
     if (isMod) {
       await moderateComment(zid, tid, active, mod, is_meta);

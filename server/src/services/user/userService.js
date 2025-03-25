@@ -1,4 +1,4 @@
-import { getUserRecordsByApiKey } from '../../db/apiKeys.js';
+import { getUserRecordsByApiKey } from '../../db/index.js';
 import * as userRepository from '../../repositories/user/userRepository.js';
 import * as xidRepository from '../../repositories/xid/xidRepository.js';
 import logger from '../../utils/logger.js';

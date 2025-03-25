@@ -93,11 +93,11 @@ async function getRidFromReportId(report_id) {
 
 export {
   createReport,
-  getReportsByConversationId,
   getReportById,
-  getReportsByUserId,
-  updateReport,
-  getZidForRid,
   getReportCommentSelections,
-  getRidFromReportId
+  getReportsByConversationId,
+  getReportsByUserId,
+  getRidFromReportId,
+  getZidForRid,
+  updateReport
 };

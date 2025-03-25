@@ -129,14 +129,14 @@ async function getAllMetadata(zid) {
 }
 
 export {
-  getZidForAnswer,
-  getZidForQuestion,
-  deleteMetadataAnswer,
-  deleteMetadataQuestionAndAnswers,
-  getMetadataQuestions,
   createMetadataQuestion,
   createOrUpdateMetadataAnswer,
+  deleteMetadataAnswer,
+  deleteMetadataQuestionAndAnswers,
+  getAllMetadata,
   getChoicesForConversation,
   getMetadataAnswers,
-  getAllMetadata
+  getMetadataQuestions,
+  getZidForAnswer,
+  getZidForQuestion
 };

@@ -88,13 +88,13 @@ async function clearVerificationToken(token) {
 }
 
 export {
-  getUserIdForToken,
-  deleteToken,
-  createSessionToken,
-  getUserIdForPasswordResetToken,
-  createPasswordResetToken,
   clearPasswordResetToken,
-  getUserIdForVerificationToken,
+  clearVerificationToken,
+  createPasswordResetToken,
+  createSessionToken,
   createVerificationToken,
-  clearVerificationToken
+  deleteToken,
+  getUserIdForPasswordResetToken,
+  getUserIdForToken,
+  getUserIdForVerificationToken
 };

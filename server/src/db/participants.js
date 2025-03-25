@@ -286,18 +286,18 @@ async function updateParticipantMetadata(pid, metadata) {
 
 export {
   addParticipant,
+  createParticipant,
   getAnswersForConversation,
+  getBidIndexToPidMapping,
   getParticipantByPid,
   getParticipantByUid,
   getParticipantByXid,
   getParticipantId,
+  getSocialParticipants,
   pidCache,
   queryParticipantsByMetadata,
   saveParticipantMetadataChoices,
   socialParticipantsCache,
-  getSocialParticipants,
   updateExtendedParticipantInfo,
-  getBidIndexToPidMapping,
-  createParticipant,
   updateParticipantMetadata
 };

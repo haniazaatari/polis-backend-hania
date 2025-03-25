@@ -114,13 +114,13 @@ async function updateLastNotificationTime(uid, zid) {
 }
 
 export {
-  subscribeToNotifications,
-  unsubscribeFromNotifications,
   addNotificationTask,
-  maybeAddNotificationTask,
   claimNextNotificationTask,
   getDbTime,
   getNotificationCandidates,
   getNotificationEmails,
+  maybeAddNotificationTask,
+  subscribeToNotifications,
+  unsubscribeFromNotifications,
   updateLastNotificationTime
 };
