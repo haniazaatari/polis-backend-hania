@@ -1,19 +1,11 @@
-/**
- * Context Repository
- * Handles database operations for contexts
- */
-import {
-  createContext as dbCreateContext,
-  getContextByName as dbGetContextByName,
-  getPublicContexts as dbGetPublicContexts
-} from '../../db/contexts.js';
+import { queryP, queryP_readOnly } from './pg-query.js';
 
 /**
  * Get all public contexts
  * @returns {Promise<Array>} - Array of public contexts
  */
 async function getPublicContexts() {
-  return dbGetPublicContexts();
+  return queryP_readOnly('SELECT name FROM contexts WHERE is_public = TRUE ORDER BY name;', []);
 }
 
 /**
@@ -22,7 +14,8 @@ async function getPublicContexts() {
  * @returns {Promise<Object|null>} - The context object or null if not found
  */
 async function getContextByName(name) {
-  return dbGetContextByName(name);
+  const results = await queryP_readOnly('SELECT * FROM contexts WHERE name = ($1);', [name]);
+  return results.length ? results[0] : null;
 }
 
 /**
@@ -32,7 +25,7 @@ async function getContextByName(name) {
  * @returns {Promise<void>}
  */
 async function createContext(name, uid) {
-  return dbCreateContext(name, uid);
+  await queryP('INSERT INTO contexts (name, creator, is_public) VALUES ($1, $2, $3);', [name, uid, true]);
 }
 
 export { getPublicContexts, getContextByName, createContext };

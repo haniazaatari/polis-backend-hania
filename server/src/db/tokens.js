@@ -1,14 +1,4 @@
-import {
-  clearPasswordResetToken as dbClearPasswordResetToken,
-  clearVerificationToken as dbClearVerificationToken,
-  createPasswordResetToken as dbCreatePasswordResetToken,
-  createSessionToken as dbCreateSessionToken,
-  createVerificationToken as dbCreateVerificationToken,
-  deleteToken as dbDeleteToken,
-  getUserIdForPasswordResetToken as dbGetUserIdForPasswordResetToken,
-  getUserIdForToken as dbGetUserIdForToken,
-  getUserIdForVerificationToken as dbGetUserIdForVerificationToken
-} from '../../db/tokens.js';
+import { queryP, queryP_readOnly } from './pg-query.js';
 
 /**
  * Get user ID for a session token
@@ -16,7 +6,8 @@ import {
  * @returns {Promise<number|null>} - The user ID or null if not found
  */
 async function getUserIdForToken(token) {
-  return dbGetUserIdForToken(token);
+  const results = await queryP_readOnly('SELECT uid FROM auth_tokens WHERE token = ($1);', [token]);
+  return results.length ? results[0].uid : null;
 }
 
 /**
@@ -25,7 +16,7 @@ async function getUserIdForToken(token) {
  * @returns {Promise<void>}
  */
 async function deleteToken(token) {
-  return dbDeleteToken(token);
+  await queryP('DELETE FROM auth_tokens WHERE token = ($1);', [token]);
 }
 
 /**
@@ -35,7 +26,7 @@ async function deleteToken(token) {
  * @returns {Promise<void>}
  */
 async function createSessionToken(uid, token) {
-  return dbCreateSessionToken(uid, token);
+  await queryP('INSERT INTO auth_tokens (uid, token, created) VALUES ($1, $2, default);', [uid, token]);
 }
 
 /**
@@ -44,7 +35,8 @@ async function createSessionToken(uid, token) {
  * @returns {Promise<number|null>} - The user ID or null if not found
  */
 async function getUserIdForPasswordResetToken(token) {
-  return dbGetUserIdForPasswordResetToken(token);
+  const results = await queryP_readOnly('SELECT uid FROM pwreset_tokens WHERE token = ($1);', [token]);
+  return results.length ? results[0].uid : null;
 }
 
 /**
@@ -54,7 +46,7 @@ async function getUserIdForPasswordResetToken(token) {
  * @returns {Promise<void>}
  */
 async function createPasswordResetToken(uid, token) {
-  return dbCreatePasswordResetToken(uid, token);
+  await queryP('INSERT INTO pwreset_tokens (uid, token, created) VALUES ($1, $2, default);', [uid, token]);
 }
 
 /**
@@ -63,7 +55,7 @@ async function createPasswordResetToken(uid, token) {
  * @returns {Promise<void>}
  */
 async function clearPasswordResetToken(token) {
-  return dbClearPasswordResetToken(token);
+  await queryP('DELETE FROM pwreset_tokens WHERE token = ($1);', [token]);
 }
 
 /**
@@ -72,7 +64,8 @@ async function clearPasswordResetToken(token) {
  * @returns {Promise<number|null>} - The user ID or null if not found
  */
 async function getUserIdForVerificationToken(token) {
-  return dbGetUserIdForVerificationToken(token);
+  const results = await queryP_readOnly('SELECT uid FROM einvites WHERE einvite = ($1);', [token]);
+  return results.length ? results[0].uid : null;
 }
 
 /**
@@ -82,7 +75,7 @@ async function getUserIdForVerificationToken(token) {
  * @returns {Promise<void>}
  */
 async function createVerificationToken(uid, token) {
-  return dbCreateVerificationToken(uid, token);
+  await queryP('INSERT INTO einvites (uid, einvite, created) VALUES ($1, $2, default);', [uid, token]);
 }
 
 /**
@@ -91,7 +84,7 @@ async function createVerificationToken(uid, token) {
  * @returns {Promise<void>}
  */
 async function clearVerificationToken(token) {
-  return dbClearVerificationToken(token);
+  await queryP('DELETE FROM einvites WHERE einvite = ($1);', [token]);
 }
 
 export {

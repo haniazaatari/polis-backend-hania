@@ -1,4 +1,4 @@
-import { queryP, queryP_readOnly } from '../db/pg-query.js';
+import { createParticipantLocation, getParticipantLocations } from '../db/locations.js';
 
 /**
  * Retrieves location data for participants in a conversation
@@ -6,7 +6,7 @@ import { queryP, queryP_readOnly } from '../db/pg-query.js';
  * @returns {Promise<Array>} - Array of participant location records
  */
 async function getLocationsForParticipants(zid) {
-  return queryP_readOnly('select * from participant_locations where zid = ($1);', [zid]);
+  return getParticipantLocations(zid);
 }
 
 /**
@@ -20,10 +20,7 @@ async function getLocationsForParticipants(zid) {
  * @returns {Promise<Object>} - The created location record
  */
 async function createParticipantLocationRecord(zid, uid, pid, lat, lng, source) {
-  return queryP(
-    'INSERT INTO participant_locations (zid, uid, pid, lat, lng, source) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *;',
-    [zid, uid, pid, lat, lng, source]
-  );
+  return createParticipantLocation(zid, uid, pid, lat, lng, source);
 }
 
 export { getLocationsForParticipants, createParticipantLocationRecord };

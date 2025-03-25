@@ -1,4 +1,8 @@
-import { queryP, queryP_readOnly } from '../../db/pg-query.js';
+import {
+  createApiKey as dbCreateApiKey,
+  deleteApiKey as dbDeleteApiKey,
+  getUserIdForApiKey as dbGetUserIdForApiKey
+} from '../../db/apiKeys.js';
 
 /**
  * Get user ID for an API key
@@ -6,8 +10,7 @@ import { queryP, queryP_readOnly } from '../../db/pg-query.js';
  * @returns {Promise<number|null>} - The user ID or null if not found
  */
 async function getUserIdForApiKey(apiKey) {
-  const results = await queryP_readOnly('SELECT uid FROM apikeysndvweifu WHERE apikey = ($1);', [apiKey]);
-  return results.length ? Number(results[0].uid) : null;
+  return dbGetUserIdForApiKey(apiKey);
 }
 
 /**
@@ -16,11 +19,7 @@ async function getUserIdForApiKey(apiKey) {
  * @returns {Promise<string>} - The created API key
  */
 async function createApiKey(uid) {
-  const results = await queryP('INSERT INTO apikeysndvweifu (uid, apikey) VALUES ($1, $2) RETURNING apikey;', [
-    uid,
-    makeApiKey()
-  ]);
-  return results[0].apikey;
+  return dbCreateApiKey(uid, makeApiKey());
 }
 
 /**
@@ -29,7 +28,7 @@ async function createApiKey(uid) {
  * @returns {Promise<void>}
  */
 async function deleteApiKey(apiKey) {
-  return queryP('DELETE FROM apikeysndvweifu WHERE apikey = ($1);', [apiKey]);
+  return dbDeleteApiKey(apiKey);
 }
 
 /**

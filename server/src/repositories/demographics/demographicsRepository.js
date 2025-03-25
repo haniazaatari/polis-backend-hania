@@ -1,4 +1,10 @@
 import _ from 'underscore';
+import {
+  createDemographicAnswer as dbCreateDemographicAnswer,
+  createDemographicQuestion as dbCreateDemographicQuestion,
+  getDemographicAnswers as dbGetDemographicAnswers,
+  getDemographicQuestions as dbGetDemographicQuestions
+} from '../../db/demographics.js';
 import { pgQueryP_readOnly } from '../../db/pg-query.js';
 import logger from '../../utils/logger.js';
 
@@ -131,8 +137,56 @@ function isGenderFemale(demo) {
   return demo.gender === 1;
 }
 
+/**
+ * Get demographic questions for a conversation
+ * @param {number} zid - Conversation ID
+ * @returns {Promise<Array>} Array of demographic questions
+ */
+async function getDemographicQuestions(zid) {
+  return dbGetDemographicQuestions(zid);
+}
+
+/**
+ * Get demographic answers for a conversation
+ * @param {number} zid - Conversation ID
+ * @returns {Promise<Array>} Array of demographic answers
+ */
+async function getDemographicAnswers(zid) {
+  return dbGetDemographicAnswers(zid);
+}
+
+/**
+ * Create a demographic question
+ * @param {Object} params - Question parameters
+ * @param {number} params.zid - Conversation ID
+ * @param {string} params.key - Question key
+ * @param {string} params.text - Question text
+ * @param {number} params.priority - Question priority
+ * @returns {Promise<Object>} Created question
+ */
+async function createDemographicQuestion(params) {
+  return dbCreateDemographicQuestion(params);
+}
+
+/**
+ * Create a demographic answer
+ * @param {Object} params - Answer parameters
+ * @param {number} params.zid - Conversation ID
+ * @param {number} params.pid - Participant ID
+ * @param {string} params.key - Question key
+ * @param {string} params.value - Answer value
+ * @returns {Promise<Object>} Created answer
+ */
+async function createDemographicAnswer(params) {
+  return dbCreateDemographicAnswer(params);
+}
+
 export {
   getParticipantDemographicsForConversation,
   getParticipantVotesForCommentsFlaggedWith_is_meta,
-  getDemographicsForVotersOnComments
+  getDemographicsForVotersOnComments,
+  getDemographicQuestions,
+  getDemographicAnswers,
+  createDemographicQuestion,
+  createDemographicAnswer
 };
