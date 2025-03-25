@@ -1,5 +1,5 @@
 import logger from '../utils/logger.js';
-import { pgQueryP_readOnly } from './pg-query.js';
+import { queryP_readOnly } from './pg-query.js';
 
 /**
  * Get XID information for a user in a conversation
@@ -9,7 +9,7 @@ import { pgQueryP_readOnly } from './pg-query.js';
  */
 async function getXidStuff(xid, zid) {
   try {
-    const rows = await pgQueryP_readOnly('SELECT * FROM xids WHERE xid = $1 AND zid = $2;', [xid, zid]);
+    const rows = await queryP_readOnly('SELECT * FROM xids WHERE xid = $1 AND zid = $2;', [xid, zid]);
 
     if (!rows?.length) {
       return 'noXidRecord';

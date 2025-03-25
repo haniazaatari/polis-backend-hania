@@ -2,7 +2,7 @@ import LruCache from 'lru-cache';
 import _ from 'underscore';
 import logger from '../utils/logger.js';
 import polisTypes from '../utils/polisTypes.js';
-import { pgQueryP } from './pg-query.js';
+import { queryP } from './pg-query.js';
 
 // Cache for votes with a max size of 5000 entries
 const votesForZidPidCache = new LruCache({
@@ -101,7 +101,7 @@ function getVotesForPids(zid, pids) {
   if (pids.length === 0) {
     return Promise.resolve([]);
   }
-  return pgQueryP(`select * from votes where zid = ($1) and pid in (${pids.join(',')}) order by pid, tid, created;`, [
+  return queryP(`select * from votes where zid = ($1) and pid in (${pids.join(',')}) order by pid, tid, created;`, [
     zid
   ]).then((votesRows) => {
     for (let i = 0; i < votesRows.length; i++) {

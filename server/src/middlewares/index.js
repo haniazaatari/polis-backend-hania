@@ -28,9 +28,6 @@ export { logRequestBody, logMiddlewareErrors } from './loggingMiddleware.js';
 // CORS middlewares
 export { checkIfOptions, addCorsHeader, hasWhitelistMatches } from './corsMiddleware.js';
 
-// Performance middlewares
-export { responseTimeStart } from './performanceMiddleware.js';
-
 // Participant middlewares
 export { getPidForParticipant, resolveParticipantId } from './participantMiddleware.js';
 

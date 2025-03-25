@@ -1,4 +1,4 @@
-import { pgQueryP_readOnly } from './pg-query.js';
+import { queryP_readOnly } from './pg-query.js';
 
 /**
  * Get the participant ID for a user in a conversation
@@ -9,7 +9,7 @@ import { pgQueryP_readOnly } from './pg-query.js';
  */
 async function getPidPromise(zid, uid, createIfNotExists = false) {
   // First try to find an existing participant
-  const existingParticipant = await pgQueryP_readOnly('SELECT pid FROM participants WHERE zid = $1 AND uid = $2;', [
+  const existingParticipant = await queryP_readOnly('SELECT pid FROM participants WHERE zid = $1 AND uid = $2;', [
     zid,
     uid
   ]);

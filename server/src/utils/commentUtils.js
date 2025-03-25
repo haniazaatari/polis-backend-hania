@@ -3,7 +3,6 @@ import badwords from 'badwords';
 import { google } from 'googleapis';
 import Config from '../config.js';
 import logger from './logger.js';
-import { MPromise } from './metered.js';
 
 // Initialize Akismet client
 const serverUrl = Config.getServerNameWithProtocol();
@@ -82,7 +81,7 @@ function isSpam(options) {
     return Promise.resolve(false);
   }
 
-  return MPromise('isSpam', (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     akismet.checkSpam(options, (err, spam) => {
       if (err) {
         logger.error('Error checking comment for spam with Akismet', err);

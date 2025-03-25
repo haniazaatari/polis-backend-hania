@@ -1,5 +1,4 @@
 import { escapeLiteral } from '../utils/common.js';
-import { MPromise } from '../utils/metered.js';
 import { queryP, query_readOnly } from './pg-query.js';
 
 /**
@@ -7,8 +6,8 @@ import { queryP, query_readOnly } from './pg-query.js';
  * @param {number} zid - The conversation ID
  * @returns {Promise<Array>} - Array of pid to xid mappings
  */
-function getXids(zid) {
-  return MPromise('getXids', (resolve, reject) => {
+async function getXids(zid) {
+  return new Promise((resolve, reject) => {
     query_readOnly(
       'select pid, xid from xids inner join ' +
         '(select * from participants where zid = ($1)) as p on xids.uid = p.uid ' +

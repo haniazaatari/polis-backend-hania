@@ -1,5 +1,5 @@
 import logger from '../utils/logger.js';
-import { pgQueryP } from './pg-query.js';
+import { queryP } from './pg-query.js';
 
 /**
  * Create a notification task in the database
@@ -8,7 +8,7 @@ import { pgQueryP } from './pg-query.js';
  */
 async function createNotificationTask(zid) {
   try {
-    await pgQueryP(
+    await queryP(
       'INSERT INTO notification_tasks (zid) VALUES ($1) ON CONFLICT (zid) DO UPDATE SET modified = now_as_millis();',
       [zid]
     );
@@ -26,7 +26,7 @@ async function createNotificationTask(zid) {
  */
 async function updateSubscription(zid, email, subscribed) {
   try {
-    await pgQueryP(
+    await queryP(
       'update participants set subscribed = ($3) where uid = (select uid from users where email = ($2)) and zid = ($1);',
       [zid, email, subscribed ? 1 : 0]
     );

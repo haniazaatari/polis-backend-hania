@@ -1,5 +1,5 @@
 import Config from '../config.js';
-import { pgQueryP_readOnly } from './pg-query.js';
+import { queryP_readOnly } from './pg-query.js';
 
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
 
@@ -31,7 +31,7 @@ async function isModerator(zid, uid) {
 
   // Check if the user is from the same site as the conversation owner
   // This replicates the original query logic
-  const rows = await pgQueryP_readOnly(
+  const rows = await queryP_readOnly(
     'SELECT COUNT(*) FROM conversations WHERE owner IN (SELECT uid FROM users WHERE site_id = (SELECT site_id FROM users WHERE uid = $2)) AND zid = $1;',
     [zid, uid]
   );

@@ -4,7 +4,6 @@ import { isUri } from 'valid-url';
 import { getRidFromReportId } from '../db/reports.js';
 import { getZidFromConversationId } from '../services/conversation/conversationService.js';
 import logger from './logger.js';
-import { MPromise } from './metered.js';
 import { fail } from './responseHandlers.js';
 
 /**
@@ -313,26 +312,24 @@ const reportIdToRidCache = new LruCache({
   max: 1000
 });
 
-function getRidFromReportIdWithCache(report_id) {
-  return MPromise('getRidFromReportId', async (resolve, reject) => {
-    const cachedRid = reportIdToRidCache.get(report_id);
-    if (cachedRid) {
-      resolve(cachedRid);
-      return;
-    }
-    try {
-      const rid = await getRidFromReportId(report_id);
-      if (!rid) {
-        reject('polis_err_fetching_rid_for_report_id');
-        return;
-      }
-      reportIdToRidCache.set(report_id, rid);
-      resolve(rid);
-    } catch (err) {
-      logger.error(`polis_err_fetching_rid_for_report_id ${report_id}`, err);
-      reject(err);
-    }
-  });
+/**
+ * Get report ID with caching
+ * @param {string} report_id - Report ID to look up
+ * @returns {Promise<number>} - The numeric report ID
+ */
+async function getRidFromReportIdWithCache(report_id) {
+  const cachedRid = reportIdToRidCache.get(report_id);
+  if (cachedRid) {
+    return cachedRid;
+  }
+
+  const rid = await getRidFromReportId(report_id);
+  if (!rid) {
+    throw new Error('polis_err_fetching_rid_for_report_id');
+  }
+
+  reportIdToRidCache.set(report_id, rid);
+  return rid;
 }
 
 const parseConversationId = getStringLimitLength(1, 100);

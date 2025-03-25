@@ -1,6 +1,5 @@
-import { MPromise } from '../utils/metered.js';
 import polisTypes from '../utils/polisTypes.js';
-import { pgQueryP_readOnly, queryP, queryP_metered_readOnly } from './pg-query.js';
+import { queryP, queryP_readOnly } from './pg-query.js';
 import * as SQL from './sql.js';
 
 /**
@@ -9,21 +8,14 @@ import * as SQL from './sql.js';
  * @param {number} mod - The moderation status
  * @returns {Promise<number>} - The number of comments
  */
-function getNumberOfCommentsWithModerationStatus(zid, mod) {
-  return MPromise('getNumberOfCommentsWithModerationStatus', (resolve, reject) => {
-    pgQueryP_readOnly('SELECT COUNT(*) FROM comments WHERE zid = ($1) AND mod = ($2);', [zid, mod])
-      .then((result) => {
-        let count = result?.[0]?.count;
-        count = Number(count);
-        if (Number.isNaN(count)) {
-          count = undefined;
-        }
-        resolve(count);
-      })
-      .catch((err) => {
-        reject(err);
-      });
-  });
+async function getNumberOfCommentsWithModerationStatus(zid, mod) {
+  const result = await queryP_readOnly('SELECT COUNT(*) FROM comments WHERE zid = ($1) AND mod = ($2);', [zid, mod]);
+  let count = result?.[0]?.count;
+  count = Number(count);
+  if (Number.isNaN(count)) {
+    return undefined;
+  }
+  return count;
 }
 
 /**
@@ -47,7 +39,7 @@ function addNoMoreCommentsRecord(zid, pid) {
  * @returns {Promise<boolean>} - True if the comment already exists
  */
 async function commentExists(zid, txt) {
-  const rows = await pgQueryP_readOnly('SELECT zid FROM comments WHERE zid = ($1) AND txt = ($2);', [zid, txt]);
+  const rows = await queryP_readOnly('SELECT zid FROM comments WHERE zid = ($1) AND txt = ($2);', [zid, txt]);
   return !!rows?.length;
 }
 
@@ -88,7 +80,7 @@ async function createComment(params) {
  * @returns {Promise<Object|null>} - Comment or null if not found
  */
 async function getCommentByIdFromDb(zid, tid) {
-  const results = await pgQueryP_readOnly('SELECT * FROM comments WHERE zid = ($1) AND tid = ($2);', [zid, tid]);
+  const results = await queryP_readOnly('SELECT * FROM comments WHERE zid = ($1) AND tid = ($2);', [zid, tid]);
   return results.length ? results[0] : null;
 }
 
@@ -139,15 +131,10 @@ async function getCommentsForModerationFromDb(options) {
   }
 
   if (!options.include_voting_patterns) {
-    return await queryP_metered_readOnly(
-      '_getCommentsForModerationList',
-      `SELECT * FROM comments WHERE comments.zid = ($1)${modClause}`,
-      params
-    );
+    return await queryP_readOnly(`SELECT * FROM comments WHERE comments.zid = ($1)${modClause}`, params);
   }
 
-  return await queryP_metered_readOnly(
-    '_getCommentsForModerationList',
+  return await queryP_readOnly(
     `SELECT * FROM (SELECT tid, vote, count(*) FROM votes_latest_unique WHERE zid = ($1) GROUP BY tid, vote) AS foo FULL OUTER JOIN comments ON foo.tid = comments.tid WHERE comments.zid = ($1)${modClause}`,
     params
   );
@@ -215,7 +202,7 @@ async function getCommentsListFromDb(options) {
     query = query.limit(999);
   }
 
-  const results = await pgQueryP_readOnly(query.toString(), []);
+  const results = await queryP_readOnly(query.toString(), []);
   return results || [];
 }
 
@@ -226,7 +213,7 @@ async function getCommentsListFromDb(options) {
  * @returns {Promise<Array>} - Remaining comments info
  */
 async function getNumberOfCommentsRemainingFromDb(zid, pid) {
-  const results = await pgQueryP_readOnly(
+  const results = await queryP_readOnly(
     'WITH ' +
       'v AS (SELECT * FROM votes_latest_unique WHERE zid = ($1) AND pid = ($2)), ' +
       'c AS (SELECT * FROM get_visible_comments($1)), ' +
@@ -272,7 +259,7 @@ async function storeCommentTranslationInDb(zid, tid, translation, lang, src) {
  * @returns {Promise<Array>} - Array of translations
  */
 async function getCommentTranslationsFromDb(zid, tid) {
-  return await pgQueryP_readOnly('select * from comment_translations where zid = ($1) and tid = ($2);', [zid, tid]);
+  return await queryP_readOnly('select * from comment_translations where zid = ($1) and tid = ($2);', [zid, tid]);
 }
 
 /**

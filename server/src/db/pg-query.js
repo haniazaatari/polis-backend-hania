@@ -4,7 +4,6 @@ import QueryStream from 'pg-query-stream';
 import _ from 'underscore';
 import Config from '../config.js';
 import logger from '../utils/logger.js';
-import { MPromise } from '../utils/metered.js';
 
 const { Pool } = pg;
 const { parse: parsePgConnectionString } = pgConnectionString;
@@ -123,9 +122,6 @@ function queryImpl(pool, queryString, ...args) {
 }
 const pgPoolLevelRanks = ['info', 'verbose'];
 const pgPoolLoggingLevel = -1;
-function query(queryString, ...args) {
-  return queryImpl(readWritePool, queryString, ...args);
-}
 function query_readOnly(queryString, ...args) {
   return queryImpl(readPool, queryString, ...args);
 }
@@ -151,26 +147,12 @@ function queryP(queryString, ...args) {
 function queryP_readOnly(queryString, ...args) {
   return queryP_impl(readPool, queryString, ...args);
 }
-function queryP_readOnly_wRetryIfEmpty(queryString, ...args) {
-  function retryIfEmpty(rows) {
-    if (!rows.length) {
-      return queryP(queryString, ...args);
-    }
-    return Promise.resolve(rows);
-  }
-  return queryP_impl(readPool, queryString, ...args).then(retryIfEmpty);
-}
 function queryP_metered_impl(isReadOnly, name, queryString, params) {
   const f = isReadOnly ? queryP_readOnly : queryP;
   if (_.isUndefined(name) || _.isUndefined(queryString) || _.isUndefined(params)) {
     throw new Error('polis_err_queryP_metered_impl missing params');
   }
-  return MPromise(name, (resolve, reject) => {
-    f(queryString, params).then(resolve, reject);
-  });
-}
-function queryP_metered(name, queryString, params) {
-  return queryP_metered_impl(false, name, queryString, params);
+  return f(queryString, params);
 }
 function queryP_metered_readOnly(name, queryString, params) {
   return queryP_metered_impl(true, name, queryString, params);
@@ -196,17 +178,4 @@ function stream_queryP_readOnly(queryString, params, onRow, onEnd, onError) {
     });
   });
 }
-export {
-  query,
-  query_readOnly,
-  queryP,
-  queryP_metered,
-  queryP_metered_readOnly,
-  queryP_readOnly,
-  queryP_readOnly_wRetryIfEmpty,
-  stream_queryP_readOnly,
-  queryP as pgQueryP,
-  queryP_readOnly as pgQueryP_readOnly,
-  queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty,
-  stream_queryP_readOnly as stream_pgQueryP_readOnly
-};
+export { query_readOnly, queryP_metered_readOnly, queryP_readOnly, queryP, stream_queryP_readOnly };

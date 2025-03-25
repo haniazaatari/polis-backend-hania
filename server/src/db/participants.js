@@ -3,7 +3,7 @@
  * Contains direct database operations for participants
  */
 import LruCache from 'lru-cache';
-import { queryP, queryP_metered_readOnly, queryP_readOnly } from './pg-query.js';
+import { queryP, queryP_readOnly } from './pg-query.js';
 import { sql_participants_extended } from './sql.js';
 
 // Cache for social participants
@@ -234,7 +234,7 @@ async function getSocialParticipants(zid, uid, limit, mod, math_tick, authorUids
     left join p on final_set.uid = p.uid;`;
 
   // Execute the query and cache the result
-  const response = await queryP_metered_readOnly('getSocialParticipants', q, [zid, uid, limit, mod]);
+  const response = await queryP_readOnly(q, [zid, uid, limit, mod]);
   socialParticipantsCache.set(cacheKey, response);
   return response;
 }

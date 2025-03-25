@@ -1,5 +1,5 @@
 import logger from '../utils/logger.js';
-import { pgQueryP } from './pg-query.js';
+import { queryP } from './pg-query.js';
 
 /**
  * Update the modified time for a conversation
@@ -22,7 +22,7 @@ async function updateConversationModifiedTime(zid, modified) {
       params = [zid];
     }
 
-    await pgQueryP(query, params);
+    await queryP(query, params);
   } catch (err) {
     logger.error('Error updating conversation modified time', { zid, error: err });
   }
@@ -36,7 +36,7 @@ async function updateConversationModifiedTime(zid, modified) {
  */
 async function updateLastInteractionTimeForConversation(zid, uid) {
   try {
-    await pgQueryP(
+    await queryP(
       'UPDATE participants SET last_interaction = now_as_millis(), vote_count = vote_count + 1 WHERE zid = ($1) AND uid = ($2);',
       [zid, uid]
     );
@@ -53,7 +53,7 @@ async function updateLastInteractionTimeForConversation(zid, uid) {
  */
 async function updateVoteCount(zid, pid) {
   try {
-    await pgQueryP('UPDATE participants SET vote_count = vote_count + 1 WHERE zid = ($1) AND pid = ($2);', [zid, pid]);
+    await queryP('UPDATE participants SET vote_count = vote_count + 1 WHERE zid = ($1) AND pid = ($2);', [zid, pid]);
   } catch (err) {
     logger.error('Error updating vote count', { zid, pid, error: err });
   }

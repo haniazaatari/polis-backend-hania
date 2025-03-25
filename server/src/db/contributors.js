@@ -1,4 +1,4 @@
-import { pgQueryP } from './pg-query.js';
+import { queryP } from './pg-query.js';
 
 /**
  * Create a contributor agreement record in the database
@@ -11,7 +11,7 @@ import { pgQueryP } from './pg-query.js';
  * @returns {Promise<void>}
  */
 async function createContributorAgreementRecord(uid, agreement_version, name, email, github_id, company_name) {
-  await pgQueryP(
+  await queryP(
     'insert into contributor_agreement_signatures (uid, agreement_version, github_id, name, email, company_name) ' +
       'values ($1, $2, $3, $4, $5, $6);',
     [uid, agreement_version, github_id, name, email, company_name]

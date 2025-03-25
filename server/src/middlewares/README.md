@@ -36,10 +36,6 @@ This directory contains middleware functions used throughout the application. Mi
 - `addCorsHeader`: Middleware to add CORS headers to the response with domain whitelist checks
 - `hasWhitelistMatches`: Helper function to check if a host matches any of the whitelisted domains
 
-### Performance Middlewares (`performanceMiddleware.js`)
-
-- `responseTimeStart`: Middleware to track response time for routes and store metrics
-
 ### Participant Middlewares (`participantMiddleware.js`)
 
 - `getParticipantIdMiddleware`: Middleware to get participant ID for a user and assign it to the request
