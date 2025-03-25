@@ -239,6 +239,51 @@ async function getSocialParticipants(zid, uid, limit, mod, math_tick, authorUids
   return response;
 }
 
+/**
+ * Gets the mapping from bid index to participant ID
+ * @param {number} zid - Conversation ID
+ * @param {string} math_env - Math environment
+ * @returns {Promise<Object|null>} - Mapping data or null if not found
+ */
+async function getBidIndexToPidMapping(zid, math_env) {
+  const rows = await queryP_readOnly('select * from math_bidtopid where zid = ($1) and math_env = ($2);', [
+    zid,
+    math_env
+  ]);
+
+  return rows?.length ? rows[0].data : null;
+}
+
+/**
+ * Creates a new participant
+ * @param {number} zid - Conversation ID
+ * @param {number} uid - User ID
+ * @returns {Promise<Object>} - The created participant
+ */
+async function createParticipant(zid, uid) {
+  const rows = await queryP('INSERT INTO participants (zid, uid, created) VALUES ($1, $2, now()) RETURNING *;', [
+    zid,
+    uid
+  ]);
+  return rows[0];
+}
+
+/**
+ * Updates participant metadata
+ * @param {number} pid - Participant ID
+ * @param {Object} metadata - Metadata to update
+ * @returns {Promise<void>}
+ */
+async function updateParticipantMetadata(pid, metadata) {
+  const keys = Object.keys(metadata);
+  if (!keys.length) return;
+
+  const sets = keys.map((key, i) => `${key} = ($${i + 2})`).join(', ');
+  const values = keys.map((key) => metadata[key]);
+
+  await queryP(`UPDATE participants SET ${sets} WHERE pid = ($1);`, [pid, ...values]);
+}
+
 export {
   addParticipant,
   getAnswersForConversation,
@@ -251,5 +296,8 @@ export {
   saveParticipantMetadataChoices,
   socialParticipantsCache,
   getSocialParticipants,
-  updateExtendedParticipantInfo
+  updateExtendedParticipantInfo,
+  getBidIndexToPidMapping,
+  createParticipant,
+  updateParticipantMetadata
 };

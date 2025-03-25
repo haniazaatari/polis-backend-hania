@@ -1,5 +1,6 @@
 import logger from '../utils/logger.js';
 import { queryP } from './pg-query.js';
+import { queryP_readOnly } from './pg-query.js';
 
 /**
  * Get domain whitelist record for a user
@@ -67,4 +68,94 @@ async function updateDomainWhitelistRecord(uid, data) {
   }
 }
 
-export { getDomainWhitelistRecord, createDomainWhitelistRecord, updateDomainWhitelistRecord };
+/**
+ * Get domain whitelist for a conversation
+ * @param {number} zid - Conversation ID
+ * @returns {Promise<Object|null>} - Domain whitelist info or null if not found
+ */
+async function getDomainWhitelist(zid) {
+  const rows = await queryP_readOnly(
+    'select * from site_domain_whitelist where site_id = ' +
+      '(select site_id from users where uid = ' +
+      '(select owner from conversations where zid = ($1)));',
+    [zid]
+  );
+
+  return rows?.length ? rows[0] : null;
+}
+
+/**
+ * Gets domain whitelist for a site
+ * @param {number} siteId - Site ID
+ * @returns {Promise<Array<string>>} - Array of whitelisted domain patterns
+ */
+async function getDomainWhitelistForSite(siteId) {
+  try {
+    const rows = await queryP_readOnly('SELECT domain_whitelist FROM site_domain_whitelist WHERE site_id = ($1);', [
+      siteId
+    ]);
+
+    if (!rows?.length || !rows[0].domain_whitelist?.length) {
+      return [];
+    }
+
+    return rows[0].domain_whitelist.split(',');
+  } catch (error) {
+    logger.error('Error getting domain whitelist', { error, siteId });
+    throw error;
+  }
+}
+
+/**
+ * Checks if a domain matches a pattern
+ * @param {string} domain - The domain to check
+ * @param {string} pattern - The pattern to match against
+ * @returns {boolean} - True if domain matches pattern
+ */
+function checkDomainPattern(domain, pattern) {
+  // No domain or pattern means no match
+  if (!domain || !pattern) {
+    return false;
+  }
+
+  const domainParts = domain.split('.');
+  const patternParts = pattern.split('.');
+
+  // Handle wildcard pattern (e.g., *.example.com)
+  if (patternParts[0] === '*') {
+    // If pattern is just "*", it matches everything
+    if (patternParts.length === 1) {
+      return true;
+    }
+
+    // For patterns like *.example.com, compare from right to left
+    // The domain must end with the pattern after the wildcard
+    const patternSuffix = patternParts.slice(1);
+    const domainSuffix = domainParts.slice(-patternSuffix.length);
+
+    // If domain doesn't have enough parts, it can't match
+    if (domainSuffix.length !== patternSuffix.length) {
+      return false;
+    }
+
+    // Compare each part
+    return patternSuffix.every((part, index) => part === domainSuffix[index]);
+  }
+
+  // For exact matches, domains must have the same number of parts
+  if (domainParts.length !== patternParts.length) {
+    return false;
+  }
+
+  // Compare each part
+  return patternParts.every((part, index) => part === domainParts[index]);
+}
+
+export {
+  getDomainWhitelistRecord,
+  createDomainWhitelistRecord,
+  updateDomainWhitelistRecord,
+  getDomainWhitelist,
+  getDomainWhitelistForSite,
+  checkDomainPattern
+};

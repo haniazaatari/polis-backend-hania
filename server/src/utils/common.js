@@ -2,7 +2,7 @@ import akismetLib from 'akismet';
 import pg from 'pg';
 import _ from 'underscore';
 import Config from '../config.js';
-import { queryP as pgQueryP } from '../db/pg-query.js';
+import { addDataExportTask } from '../db/exports.js';
 import logger from '../utils/logger.js';
 
 const serverUrl = Config.getServerNameWithProtocol();
@@ -42,18 +42,15 @@ function hexToStr(hexString) {
 }
 
 function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) {
-  return pgQueryP(
-    "insert into worker_tasks (math_env, task_data, task_type, task_bucket) values ($1, $2, 'generate_export_data', $3);",
-    [
-      math_env,
-      {
-        email: email,
-        zid: zid,
-        'at-date': atDate,
-        format: format
-      },
-      task_bucket
-    ]
+  return addDataExportTask(
+    math_env,
+    {
+      email: email,
+      zid: zid,
+      'at-date': atDate,
+      format: format
+    },
+    task_bucket
   );
 }
 

@@ -1,7 +1,7 @@
 import LruCache from 'lru-cache';
 import _ from 'underscore';
 import { isUri } from 'valid-url';
-import * as pg from '../db/pg-query.js';
+import { getRidFromReportId } from '../db/reports.js';
 import { getZidFromConversationId } from '../services/conversation/conversationService.js';
 import logger from './logger.js';
 import { MPromise } from './metered.js';
@@ -313,26 +313,25 @@ const reportIdToRidCache = new LruCache({
   max: 1000
 });
 
-function getRidFromReportId(report_id) {
-  return MPromise('getRidFromReportId', (resolve, reject) => {
+function getRidFromReportIdWithCache(report_id) {
+  return MPromise('getRidFromReportId', async (resolve, reject) => {
     const cachedRid = reportIdToRidCache.get(report_id);
     if (cachedRid) {
       resolve(cachedRid);
       return;
     }
-    pg.query_readOnly('select rid from reports where report_id = ($1);', [report_id], (err, results) => {
-      if (err) {
-        logger.error(`polis_err_fetching_rid_for_report_id ${report_id}`, err);
-        return reject(err);
+    try {
+      const rid = await getRidFromReportId(report_id);
+      if (!rid) {
+        reject('polis_err_fetching_rid_for_report_id');
+        return;
       }
-      if (!results || !results.rows || !results.rows.length) {
-        return reject('polis_err_fetching_rid_for_report_id');
-      }
-
-      const rid = results.rows[0].rid;
       reportIdToRidCache.set(report_id, rid);
-      return resolve(rid);
-    });
+      resolve(rid);
+    } catch (err) {
+      logger.error(`polis_err_fetching_rid_for_report_id ${report_id}`, err);
+      reject(err);
+    }
   });
 }
 
@@ -347,7 +346,7 @@ function getConversationIdFetchZid(s) {
 const parseReportId = getStringLimitLength(1, 100);
 
 function getReportIdFetchRid(s) {
-  return parseReportId(s).then((report_id) => getRidFromReportId(report_id).then((rid) => Number(rid)));
+  return parseReportId(s).then((report_id) => getRidFromReportIdWithCache(report_id).then((rid) => Number(rid)));
 }
 
 function getNumber(s) {

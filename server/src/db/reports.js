@@ -81,6 +81,16 @@ async function getZidForRid(rid) {
   return rows[0].zid;
 }
 
+/**
+ * Get report ID from report identifier
+ * @param {string} report_id - The report identifier
+ * @returns {Promise<number|null>} - The report ID or null if not found
+ */
+async function getRidFromReportId(report_id) {
+  const rows = await queryP_readOnly('select rid from reports where report_id = ($1);', [report_id]);
+  return rows?.length ? rows[0].rid : null;
+}
+
 export {
   createReport,
   getReportsByConversationId,
@@ -88,5 +98,6 @@ export {
   getReportsByUserId,
   updateReport,
   getZidForRid,
-  getReportCommentSelections
+  getReportCommentSelections,
+  getRidFromReportId
 };

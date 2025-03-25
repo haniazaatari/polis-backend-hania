@@ -1,6 +1,6 @@
 import _ from 'underscore';
 import Config from '../config.js';
-import { pgQueryP } from '../db/pg-query.js';
+import { getSiteUserEmails } from '../db/users.js';
 import { polisFromAddress, sendMultipleTextEmails, sendTextEmail } from './senders.js';
 
 const serverUrl = Config.serverUrl;
@@ -90,7 +90,7 @@ Thanks for using Polis!`;
  * @param {string} seedUrl - The seed URL
  * @returns {Promise<void>}
  */
-function sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, seedUrl) {
+async function sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, seedUrl) {
   const body = `Conversation created!
 
 You can find the conversation here:
@@ -113,10 +113,9 @@ site_id: "${site_id}"
 page_id: "${page_id}"
 `;
 
-  return pgQueryP('select email from users where site_id = ($1)', [site_id]).then((rows) => {
-    const emails = _.pluck(rows, 'email');
-    return sendMultipleTextEmails(polisFromAddress, emails, 'Polis conversation created', body);
-  });
+  const rows = await getSiteUserEmails(site_id);
+  const emails = _.pluck(rows, 'email');
+  return sendMultipleTextEmails(polisFromAddress, emails, 'Polis conversation created', body);
 }
 
 export {

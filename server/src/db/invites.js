@@ -1,4 +1,4 @@
-import { queryP } from './pg-query.js';
+import { queryP, queryP_readOnly } from './pg-query.js';
 
 /**
  * Get single-use invite information
@@ -47,4 +47,31 @@ async function createSUZinvites(invites) {
   await queryP(query, []);
 }
 
-export { getSUZinviteRecord, deleteSUZinviteRecord, createInviterRecord, createSUZinvites };
+/**
+ * Get einvite information
+ * @param {string} einvite - The email invite code
+ * @returns {Promise<Object|null>} - The einvite information or null if not found
+ */
+async function getEinviteInfo(einvite) {
+  const rows = await queryP_readOnly('select * from einvites where einvite = ($1);', [einvite]);
+  return rows.length ? rows[0] : null;
+}
+
+/**
+ * Get suzinvite information
+ * @param {string} suzinvite - The single-use invite code
+ * @returns {Promise<Object|null>} - The suzinvite information or null if not found
+ */
+async function getSuzinviteInfo(suzinvite) {
+  const rows = await queryP_readOnly('select * from suzinvites where suzinvite = ($1);', [suzinvite]);
+  return rows.length ? rows[0] : null;
+}
+
+export {
+  getSUZinviteRecord,
+  deleteSUZinviteRecord,
+  createInviterRecord,
+  createSUZinvites,
+  getEinviteInfo,
+  getSuzinviteInfo
+};

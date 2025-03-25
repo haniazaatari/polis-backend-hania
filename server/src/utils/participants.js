@@ -3,8 +3,13 @@
  * Contains utility functions for working with participants
  */
 import Config from '../config.js';
-import * as pg from '../db/pg-query.js';
-import { queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query.js';
+import {
+  createParticipant as dbCreateParticipant,
+  getBidIndexToPidMapping as dbGetBidIndexToPidMapping,
+  getParticipantByPid as dbGetParticipantByPid,
+  getParticipantByUid as dbGetParticipantByUid,
+  updateParticipantMetadata as dbUpdateParticipantMetadata
+} from '../db/participants.js';
 import { isConversationOwner } from '../services/zinvite/zinviteService.js';
 import logger from './logger.js';
 import { getPca } from './pca.js';
@@ -17,20 +22,17 @@ import { getPca } from './pca.js';
  */
 async function getBidIndexToPidMapping(zid, math_tick = -1) {
   try {
-    const rows = await pgQueryP_readOnly('select * from math_bidtopid where zid = ($1) and math_env = ($2);', [
-      zid,
-      Config.mathEnv
-    ]);
+    const data = await dbGetBidIndexToPidMapping(zid, Config.mathEnv);
 
-    if (!rows || !rows.length) {
+    if (!data) {
       return new Error('polis_err_get_pca_results_missing');
     }
 
-    if (rows[0].data.math_tick <= math_tick) {
+    if (data.math_tick <= math_tick) {
       return new Error('polis_err_get_pca_results_not_new');
     }
 
-    return rows[0].data;
+    return data;
   } catch (error) {
     logger.error('Error getting bid index to pid mapping', { error, zid, math_tick });
     throw error;
@@ -100,15 +102,8 @@ async function getPidsForGid(zid, gid, math_tick) {
  * @param {number} uid - User ID
  * @returns {Promise<Object|null>} - Participant object or null if not found
  */
-async function getParticipantByUid(zid, uid) {
-  try {
-    const rows = await pg.queryP_readOnly('SELECT * FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid]);
-
-    return rows.length ? rows[0] : null;
-  } catch (err) {
-    logger.error('Error getting participant by uid', err);
-    throw err;
-  }
+function getParticipantByUid(zid, uid) {
+  return dbGetParticipantByUid(zid, uid);
 }
 
 /**
@@ -116,15 +111,8 @@ async function getParticipantByUid(zid, uid) {
  * @param {number} pid - Participant ID
  * @returns {Promise<Object|null>} - Participant object or null if not found
  */
-async function getParticipantByPid(pid) {
-  try {
-    const rows = await pg.queryP_readOnly('SELECT * FROM participants WHERE pid = ($1);', [pid]);
-
-    return rows.length ? rows[0] : null;
-  } catch (err) {
-    logger.error('Error getting participant by pid', err);
-    throw err;
-  }
+function getParticipantByPid(pid) {
+  return dbGetParticipantByPid(pid);
 }
 
 /**
@@ -136,16 +124,11 @@ async function getParticipantByPid(pid) {
  */
 async function createParticipant(zid, uid, metadata = {}) {
   try {
-    const rows = await pg.queryP('INSERT INTO participants (zid, uid, created) VALUES ($1, $2, now()) RETURNING *;', [
-      zid,
-      uid
-    ]);
-
-    const participant = rows[0];
+    const participant = await dbCreateParticipant(zid, uid);
 
     // Add metadata if provided
     if (Object.keys(metadata).length > 0) {
-      await updateParticipantMetadata(participant.pid, metadata);
+      await dbUpdateParticipantMetadata(participant.pid, metadata);
     }
 
     return participant;
@@ -161,19 +144,8 @@ async function createParticipant(zid, uid, metadata = {}) {
  * @param {Object} metadata - Metadata to update
  * @returns {Promise<void>}
  */
-async function updateParticipantMetadata(pid, metadata) {
-  try {
-    const keys = Object.keys(metadata);
-    if (!keys.length) return;
-
-    const sets = keys.map((key, i) => `${key} = ($${i + 2})`).join(', ');
-    const values = keys.map((key) => metadata[key]);
-
-    await pg.queryP(`UPDATE participants SET ${sets} WHERE pid = ($1);`, [pid, ...values]);
-  } catch (err) {
-    logger.error('Error updating participant metadata', err);
-    throw err;
-  }
+function updateParticipantMetadata(pid, metadata) {
+  return dbUpdateParticipantMetadata(pid, metadata);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { queryP_readOnly, stream_queryP_readOnly } from './pg-query.js';
+import { queryP } from './pg-query.js';
 
 /**
  * Get conversation metadata
@@ -72,11 +73,26 @@ async function getCommentsForGroupExport(zid) {
   return await queryP_readOnly('SELECT tid, txt FROM comments WHERE zid = ($1)', [zid]);
 }
 
+/**
+ * Add a data export task
+ * @param {string} math_env - Math environment
+ * @param {Object} taskData - Task data including email, zid, at-date, and format
+ * @param {string} task_bucket - Task bucket
+ * @returns {Promise<void>}
+ */
+async function addDataExportTask(math_env, taskData, task_bucket) {
+  await queryP(
+    "insert into worker_tasks (math_env, task_data, task_type, task_bucket) values ($1, $2, 'generate_export_data', $3);",
+    [math_env, taskData, task_bucket]
+  );
+}
+
 export {
   getConversationMetadata,
   getCommenterCount,
   getCommentsForExport,
   streamVotesForExport,
   streamParticipantVotesForExport,
-  getCommentsForGroupExport
+  getCommentsForGroupExport,
+  addDataExportTask
 };

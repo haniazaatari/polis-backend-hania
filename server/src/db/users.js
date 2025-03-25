@@ -106,4 +106,21 @@ async function updateUser(uid, fields) {
   return queryP(q.toString(), []);
 }
 
-export { getUserByEmail, getUserById, createUser, createDummyUser, updateUser, getUsersForModerationEmails };
+/**
+ * Get emails for users of a site
+ * @param {number} site_id - The site ID
+ * @returns {Promise<Array>} - Array of user emails
+ */
+async function getSiteUserEmails(site_id) {
+  return queryP_readOnly('select email from users where site_id = ($1)', [site_id]);
+}
+
+export {
+  getUserByEmail,
+  getUserById,
+  createUser,
+  createDummyUser,
+  updateUser,
+  getUsersForModerationEmails,
+  getSiteUserEmails
+};
