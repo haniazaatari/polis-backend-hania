@@ -65,4 +65,68 @@ async function createDemographicAnswer({ zid, pid, key, value }) {
   }
 }
 
-export { getDemographicQuestions, getDemographicAnswers, createDemographicQuestion, createDemographicAnswer };
+/**
+ * Get participant demographics for a conversation
+ * @param {number} zid - Conversation ID
+ * @returns {Promise<Array>} - Array of participant demographics
+ */
+async function getParticipantDemographicsForConversation(zid) {
+  try {
+    return await queryP_readOnly(
+      'SELECT * FROM demographic_data LEFT JOIN participants ON participants.uid = demographic_data.uid WHERE zid = ($1);',
+      [zid]
+    );
+  } catch (error) {
+    logger.error('Error in getParticipantDemographicsForConversation', error);
+    throw error;
+  }
+}
+
+/**
+ * Get participant votes for comments flagged with is_meta
+ * @param {number} zid - Conversation ID
+ * @returns {Promise<Array>} - Array of votes
+ */
+async function getParticipantVotesForCommentsFlaggedWith_is_meta(zid) {
+  try {
+    return await queryP_readOnly(
+      'SELECT pid, tid, vote FROM votes_latest_unique v ' +
+        'JOIN comments c ON v.tid = c.tid ' +
+        'WHERE v.zid = ($1) AND c.is_meta = TRUE;',
+      [zid]
+    );
+  } catch (error) {
+    logger.error('Error in getParticipantVotesForCommentsFlaggedWith_is_meta', error);
+    throw error;
+  }
+}
+
+/**
+ * Get votes and demographics for a conversation
+ * @param {number} zid - Conversation ID
+ * @returns {Promise<Array>} - Array of votes with demographics
+ */
+async function getVotesAndDemographics(zid) {
+  try {
+    return await Promise.all([
+      queryP_readOnly('SELECT pid, tid, vote FROM votes_latest_unique WHERE zid = ($1);', [zid]),
+      queryP_readOnly(
+        'SELECT p.pid, d.* FROM participants p LEFT JOIN demographic_data d ON p.uid = d.uid WHERE p.zid = ($1);',
+        [zid]
+      )
+    ]);
+  } catch (error) {
+    logger.error('Error in getVotesAndDemographics', error);
+    throw error;
+  }
+}
+
+export {
+  getDemographicQuestions,
+  getDemographicAnswers,
+  createDemographicQuestion,
+  createDemographicAnswer,
+  getParticipantDemographicsForConversation,
+  getParticipantVotesForCommentsFlaggedWith_is_meta,
+  getVotesAndDemographics
+};

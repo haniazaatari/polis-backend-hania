@@ -1,14 +1,25 @@
-import LruCache from 'lru-cache';
-import _ from 'underscore';
-import { updateConversationModifiedTime as updateModifiedTime } from '../../db/conversationUpdates.js';
-import * as pg from '../../db/pg-query.js';
-import { sql_conversations } from '../../db/sql.js';
+import { updateConversationModifiedTime as dbUpdateConversationModifiedTime } from '../../db/conversationUpdates.js';
+import {
+  createConversation as dbCreateConversation,
+  getCommentsForStats as dbGetCommentsForStats,
+  getConversationByConversationId as dbGetConversationByConversationId,
+  getConversationByZid as dbGetConversationByZid,
+  getConversationForOwner as dbGetConversationForOwner,
+  getConversations as dbGetConversations,
+  getConversationsWithFieldGreaterThan as dbGetConversationsWithFieldGreaterThan,
+  getPageId as dbGetPageId,
+  getParticipantInfo as dbGetParticipantInfo,
+  getSiteOwner as dbGetSiteOwner,
+  getVotesForStats as dbGetVotesForStats,
+  getZidFromConversationId as dbGetZidFromConversationId,
+  isUserDeveloper as dbIsUserDeveloper,
+  registerPageId as dbRegisterPageId,
+  registerZinvite as dbRegisterZinvite,
+  updateConversation as dbUpdateConversation,
+  updateConversationActive as dbUpdateConversationActive,
+  verifyMetadataAnswersExistForEachQuestion as dbVerifyMetadataAnswersExistForEachQuestion
+} from '../../db/conversations.js';
 import logger from '../../utils/logger.js';
-
-// Cache for conversation ID to ZID mapping
-const conversationIdToZidCache = new LruCache({
-  max: 1000
-});
 
 /**
  * Get conversation information by ZID
@@ -17,8 +28,7 @@ const conversationIdToZidCache = new LruCache({
  */
 async function getConversationByZid(zid) {
   try {
-    const results = await pg.queryP_readOnly('SELECT * FROM conversations WHERE zid = ($1);', [zid]);
-    return results.length ? results[0] : null;
+    return await dbGetConversationByZid(zid);
   } catch (error) {
     logger.error('Error getting conversation by ZID', error);
     throw error;
@@ -32,11 +42,7 @@ async function getConversationByZid(zid) {
  */
 async function getConversationByConversationId(conversationId) {
   try {
-    const results = await pg.queryP_readOnly(
-      'SELECT * FROM conversations WHERE zid = (SELECT zid FROM zinvites WHERE zinvite = ($1));',
-      [conversationId]
-    );
-    return results.length ? results[0] : null;
+    return await dbGetConversationByConversationId(conversationId);
   } catch (error) {
     logger.error('Error getting conversation by conversation ID', error);
     throw error;
@@ -49,28 +55,8 @@ async function getConversationByConversationId(conversationId) {
  * @returns {Promise<number>} - ZID
  */
 async function getZidFromConversationId(conversationId) {
-  // Check cache first
-  const cachedZid = conversationIdToZidCache.get(conversationId);
-  if (cachedZid) {
-    return cachedZid;
-  }
-
   try {
-    logger.debug(`Looking up ZID for conversation ID: ${conversationId}`);
-    const results = await pg.queryP_readOnly('SELECT zid FROM zinvites WHERE zinvite = ($1);', [conversationId]);
-    logger.debug(`Results: ${JSON.stringify(results)}`);
-
-    // Check if the results array is empty
-    if (!results || results.length === 0) {
-      logger.error(`No results found for conversation ID: ${conversationId}`);
-      throw new Error('polis_err_fetching_zid_for_conversation_id');
-    }
-
-    // The results are an array of objects
-    const zid = results[0].zid;
-    logger.debug(`Found ZID ${zid} for conversation ID: ${conversationId}`);
-    conversationIdToZidCache.set(conversationId, zid);
-    return zid;
+    return await dbGetZidFromConversationId(conversationId);
   } catch (error) {
     logger.error(`Error getting ZID for conversation ID ${conversationId}`, error);
     throw error;
@@ -85,7 +71,7 @@ async function getZidFromConversationId(conversationId) {
  */
 async function registerZinvite(zid, zinvite) {
   try {
-    await pg.queryP('INSERT INTO zinvites (zid, zinvite, created) VALUES ($1, $2, default);', [zid, zinvite]);
+    await dbRegisterZinvite(zid, zinvite);
   } catch (error) {
     logger.error('Error registering zinvite', error);
     throw error;
@@ -100,22 +86,7 @@ async function registerZinvite(zid, zinvite) {
  */
 async function updateConversation(zid, fields) {
   try {
-    // Only proceed with update if there are fields to update
-    if (Object.keys(fields).length === 0) {
-      // If no fields to update, fetch and return the current conversation
-      const currentConversation = await getConversationByZid(zid);
-      return currentConversation;
-    }
-
-    const query = sql_conversations.update(fields).where(sql_conversations.zid.equals(zid)).returning('*');
-    const result = await pg.queryP(query.toString());
-
-    // Check if result is empty array
-    if (!result || result.length === 0) {
-      throw new Error(`Conversation with zid ${zid} not found or could not be updated`);
-    }
-
-    return result[0];
+    return await dbUpdateConversation(zid, fields);
   } catch (error) {
     logger.error('Error updating conversation', { error, zid, fields });
     throw error;
@@ -129,8 +100,7 @@ async function updateConversation(zid, fields) {
  * @returns {Promise<void>}
  */
 async function updateConversationModifiedTime(zid, modified) {
-  // Use the implementation from conversationUpdates.js
-  return updateModifiedTime(zid, modified);
+  return dbUpdateConversationModifiedTime(zid, modified);
 }
 
 /**
@@ -141,25 +111,7 @@ async function updateConversationModifiedTime(zid, modified) {
  */
 async function getParticipantInfo(uid, includeAllConversationsIAmIn) {
   try {
-    let participantInOrSiteAdminOf = [];
-    let isSiteAdmin = {};
-
-    if (uid && includeAllConversationsIAmIn) {
-      const results = await pg.queryP_readOnly('SELECT zid, mod FROM participants WHERE uid = ($1);', [uid]);
-
-      if (results?.length) {
-        participantInOrSiteAdminOf = results.map((p) => p.zid);
-        isSiteAdmin = results.reduce((o, p) => {
-          o[p.zid] = p.mod;
-          return o;
-        }, {});
-      }
-    }
-
-    return {
-      participantInOrSiteAdminOf,
-      isSiteAdmin
-    };
+    return await dbGetParticipantInfo(uid, includeAllConversationsIAmIn);
   } catch (error) {
     logger.error('Error getting participant info', error);
     throw error;
@@ -173,72 +125,7 @@ async function getParticipantInfo(uid, includeAllConversationsIAmIn) {
  */
 async function getConversations(options) {
   try {
-    let query = sql_conversations.select(sql_conversations.star());
-    let isRootsQuery = false;
-    let orClauses;
-
-    logger.debug('Building getConversations query with options', options);
-
-    // Build WHERE clauses
-    if (!_.isUndefined(options.context)) {
-      if (options.context === '/') {
-        orClauses = sql_conversations.is_public.equals(true);
-        isRootsQuery = true;
-      } else {
-        orClauses = sql_conversations.context.equals(options.context);
-      }
-    } else {
-      orClauses = sql_conversations.owner.equals(options.uid);
-      if (options.participantInOrSiteAdminOf?.length) {
-        orClauses = orClauses.or(sql_conversations.zid.in(options.participantInOrSiteAdminOf));
-      }
-    }
-
-    query = query.where(orClauses);
-
-    // Add additional filters
-    if (!_.isUndefined(options.courseInvite)) {
-      query = query.and(sql_conversations.course_id.equals(options.courseId));
-    }
-
-    if (!_.isUndefined(options.isActive)) {
-      query = query.and(sql_conversations.is_active.equals(options.isActive));
-    }
-
-    if (!_.isUndefined(options.isDraft)) {
-      query = query.and(sql_conversations.is_draft.equals(options.isDraft));
-    }
-
-    if (!_.isUndefined(options.zid)) {
-      query = query.and(sql_conversations.zid.equals(options.zid));
-    }
-
-    if (isRootsQuery) {
-      query = query.and(sql_conversations.context.isNotNull());
-    }
-
-    // Order and limit
-    query = query.order(sql_conversations.created.descending);
-    query = query.limit(options.limit || 999);
-
-    const queryString = query.toString();
-    logger.debug('Final SQL query for getConversations', { query: queryString });
-
-    try {
-      const result = await pg.queryP_readOnly(queryString);
-      logger.debug('Query result for getConversations', {
-        count: Array.isArray(result) ? result.length : 0
-      });
-
-      return result || [];
-    } catch (sqlError) {
-      logger.error('SQL error in getConversations', {
-        error: sqlError,
-        query: queryString,
-        options
-      });
-      throw sqlError;
-    }
+    return await dbGetConversations(options);
   } catch (error) {
     logger.error('Error in getConversations repository', error);
     throw error;
@@ -251,48 +138,7 @@ async function getConversations(options) {
  * @returns {Promise<void>}
  */
 async function verifyMetadataAnswersExistForEachQuestion(zid) {
-  const errorcode = 'polis_err_missing_metadata_answers';
-
-  // Query for question IDs from participant_metadata_questions
-  const questionsResult = await pg.queryP_readOnly(
-    'SELECT pmqid FROM participant_metadata_questions WHERE zid = ($1);',
-    [zid]
-  );
-
-  // If no questions found, resolve successfully
-  if (!questionsResult || questionsResult.length === 0) {
-    return;
-  }
-
-  // Extract question IDs
-  const pmqids = questionsResult.map((row) => Number(row.pmqid));
-
-  // Query for answers that match these question IDs
-  const answersResult = await pg.queryP_readOnly(
-    `SELECT pmaid, pmqid FROM participant_metadata_answers WHERE pmqid IN (${pmqids.join(',')}) AND alive = TRUE AND zid = ($1);`,
-    [zid]
-  );
-
-  // If no answers found at all, throw error
-  if (!answersResult || answersResult.length === 0) {
-    throw new Error(errorcode);
-  }
-
-  // Create a dictionary of all question IDs
-  const questions = {};
-  for (const pmqid of pmqids) {
-    questions[pmqid] = 1;
-  }
-
-  // Remove questions that have answers
-  for (const row of answersResult) {
-    delete questions[row.pmqid];
-  }
-
-  // If any questions remain (no answers for them), throw error
-  if (Object.keys(questions).length) {
-    throw new Error(errorcode);
-  }
+  return dbVerifyMetadataAnswersExistForEachQuestion(zid);
 }
 
 /**
@@ -302,8 +148,7 @@ async function verifyMetadataAnswersExistForEachQuestion(zid) {
  */
 async function isUserDeveloper(uid) {
   try {
-    const results = await pg.queryP_readOnly('SELECT * FROM users WHERE uid = ($1) AND is_polis_admin = TRUE;', [uid]);
-    return results.length > 0;
+    return await dbIsUserDeveloper(uid);
   } catch (error) {
     logger.error('Error checking if user is developer', error);
     throw error;
@@ -318,8 +163,7 @@ async function isUserDeveloper(uid) {
  */
 async function getConversationsWithFieldGreaterThan(field, value) {
   try {
-    const results = await pg.queryP_readOnly(`SELECT * FROM conversations WHERE ${field} >= ($1);`, [value]);
-    return results;
+    return await dbGetConversationsWithFieldGreaterThan(field, value);
   } catch (error) {
     logger.error('Error getting conversations with field greater than value', error);
     throw error;
@@ -334,17 +178,7 @@ async function getConversationsWithFieldGreaterThan(field, value) {
  */
 async function getCommentsForStats(zid, until) {
   try {
-    const args = [zid];
-    const query = until
-      ? 'SELECT created, pid, mod FROM comments WHERE zid = ($1) AND created < ($2) ORDER BY created;'
-      : 'SELECT created, pid, mod FROM comments WHERE zid = ($1) ORDER BY created;';
-
-    if (until) {
-      args.push(until);
-    }
-
-    const results = await pg.queryP_readOnly(query, args);
-    return results;
+    return await dbGetCommentsForStats(zid, until);
   } catch (error) {
     logger.error('Error getting comments for stats', error);
     throw error;
@@ -359,17 +193,7 @@ async function getCommentsForStats(zid, until) {
  */
 async function getVotesForStats(zid, until) {
   try {
-    const args = [zid];
-    const query = until
-      ? 'SELECT created, pid FROM votes WHERE zid = ($1) AND created < ($2) ORDER BY created;'
-      : 'SELECT created, pid FROM votes WHERE zid = ($1) ORDER BY created;';
-
-    if (until) {
-      args.push(until);
-    }
-
-    const results = await pg.queryP_readOnly(query, args);
-    return results;
+    return await dbGetVotesForStats(zid, until);
   } catch (error) {
     logger.error('Error getting votes for stats', error);
     throw error;
@@ -384,9 +208,7 @@ async function getVotesForStats(zid, until) {
  */
 async function getConversationForOwner(zid, uid) {
   try {
-    const query = 'SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);';
-    const results = await pg.queryP_readOnly(query, [zid, uid]);
-    return results.length ? results[0] : null;
+    return await dbGetConversationForOwner(zid, uid);
   } catch (error) {
     logger.error('Error getting conversation for owner', error);
     throw error;
@@ -401,7 +223,7 @@ async function getConversationForOwner(zid, uid) {
  */
 async function updateConversationActive(zid, isActive) {
   try {
-    await pg.queryP('UPDATE conversations SET is_active = ($1) WHERE zid = ($2);', [isActive, zid]);
+    await dbUpdateConversationActive(zid, isActive);
   } catch (error) {
     logger.error('Error updating conversation active status', error);
     throw error;
@@ -415,9 +237,7 @@ async function updateConversationActive(zid, isActive) {
  */
 async function createConversation(conversationData) {
   try {
-    const query = sql_conversations.insert(conversationData).returning('*').toString();
-    const results = await pg.queryP(query, []);
-    return results[0];
+    return await dbCreateConversation(conversationData);
   } catch (error) {
     logger.error('Error creating conversation', error);
     throw error;
@@ -431,10 +251,7 @@ async function createConversation(conversationData) {
  */
 async function getSiteOwner(site_id) {
   try {
-    const results = await pg.queryP_readOnly('SELECT uid FROM users WHERE site_id = ($1) AND site_owner = TRUE;', [
-      site_id
-    ]);
-    return results.length ? results[0] : null;
+    return await dbGetSiteOwner(site_id);
   } catch (error) {
     logger.error('Error getting site owner', error);
     throw error;
@@ -450,7 +267,7 @@ async function getSiteOwner(site_id) {
  */
 async function registerPageId(site_id, page_id, zid) {
   try {
-    await pg.queryP('INSERT INTO page_ids (site_id, page_id, zid) VALUES ($1, $2, $3);', [site_id, page_id, zid]);
+    await dbRegisterPageId(site_id, page_id, zid);
   } catch (error) {
     logger.error('Error registering page ID', error);
     throw error;
@@ -465,11 +282,7 @@ async function registerPageId(site_id, page_id, zid) {
  */
 async function getPageId(site_id, page_id) {
   try {
-    const results = await pg.queryP_readOnly('SELECT * FROM page_ids WHERE site_id = ($1) AND page_id = ($2);', [
-      site_id,
-      page_id
-    ]);
-    return results.length ? results[0] : null;
+    return await dbGetPageId(site_id, page_id);
   } catch (error) {
     logger.error('Error getting page ID', error);
     throw error;
@@ -477,7 +290,6 @@ async function getPageId(site_id, page_id) {
 }
 
 export {
-  conversationIdToZidCache,
   createConversation,
   getCommentsForStats,
   getConversationByConversationId,

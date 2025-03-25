@@ -3,9 +3,11 @@ import {
   createDemographicAnswer as dbCreateDemographicAnswer,
   createDemographicQuestion as dbCreateDemographicQuestion,
   getDemographicAnswers as dbGetDemographicAnswers,
-  getDemographicQuestions as dbGetDemographicQuestions
+  getDemographicQuestions as dbGetDemographicQuestions,
+  getParticipantDemographicsForConversation as dbGetParticipantDemographicsForConversation,
+  getParticipantVotesForCommentsFlaggedWith_is_meta as dbGetParticipantVotesForCommentsFlaggedWith_is_meta,
+  getVotesAndDemographics as dbGetVotesAndDemographics
 } from '../../db/demographics.js';
-import { pgQueryP_readOnly } from '../../db/pg-query.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -14,15 +16,7 @@ import logger from '../../utils/logger.js';
  * @returns {Promise<Array>} - Array of participant demographics
  */
 async function getParticipantDemographicsForConversation(zid) {
-  try {
-    return await pgQueryP_readOnly(
-      'SELECT * FROM demographic_data LEFT JOIN participants ON participants.uid = demographic_data.uid WHERE zid = ($1);',
-      [zid]
-    );
-  } catch (error) {
-    logger.error('Error in getParticipantDemographicsForConversation', error);
-    throw error;
-  }
+  return dbGetParticipantDemographicsForConversation(zid);
 }
 
 /**
@@ -31,17 +25,7 @@ async function getParticipantDemographicsForConversation(zid) {
  * @returns {Promise<Array>} - Array of votes
  */
 async function getParticipantVotesForCommentsFlaggedWith_is_meta(zid) {
-  try {
-    return await pgQueryP_readOnly(
-      'SELECT pid, tid, vote FROM votes_latest_unique v ' +
-        'JOIN comments c ON v.tid = c.tid ' +
-        'WHERE v.zid = ($1) AND c.is_meta = TRUE;',
-      [zid]
-    );
-  } catch (error) {
-    logger.error('Error in getParticipantVotesForCommentsFlaggedWith_is_meta', error);
-    throw error;
-  }
+  return dbGetParticipantVotesForCommentsFlaggedWith_is_meta(zid);
 }
 
 /**
@@ -52,13 +36,7 @@ async function getParticipantVotesForCommentsFlaggedWith_is_meta(zid) {
  */
 async function getDemographicsForVotersOnComments(zid, comments) {
   try {
-    const [votes, demo] = await Promise.all([
-      pgQueryP_readOnly('SELECT pid, tid, vote FROM votes_latest_unique WHERE zid = ($1);', [zid]),
-      pgQueryP_readOnly(
-        'SELECT p.pid, d.* FROM participants p LEFT JOIN demographic_data d ON p.uid = d.uid WHERE p.zid = ($1);',
-        [zid]
-      )
-    ]);
+    const [votes, demo] = await dbGetVotesAndDemographics(zid);
 
     const processedDemo = demo.map((d) => {
       return {

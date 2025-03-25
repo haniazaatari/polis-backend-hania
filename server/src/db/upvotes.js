@@ -1,14 +1,5 @@
-/**
- * Upvote Repository
- * Handles database operations for upvotes
- */
-import {
-  createUpvote as dbCreateUpvote,
-  getUpvoteByUserAndConversation as dbGetUpvoteByUserAndConversation,
-  getUpvotesByUser as dbGetUpvotesByUser,
-  updateConversationUpvoteCount as dbUpdateConversationUpvoteCount
-} from '../../db/upvotes.js';
-import logger from '../../utils/logger.js';
+import logger from '../utils/logger.js';
+import { queryP, queryP_readOnly } from './pg-query.js';
 
 /**
  * Get upvote by user and conversation
@@ -18,7 +9,7 @@ import logger from '../../utils/logger.js';
  */
 async function getUpvoteByUserAndConversation(uid, zid) {
   try {
-    return await dbGetUpvoteByUserAndConversation(uid, zid);
+    return await queryP_readOnly('SELECT * FROM upvotes WHERE uid = ($1) AND zid = ($2);', [uid, zid]);
   } catch (error) {
     logger.error('Error getting upvote by user and conversation', error);
     throw error;
@@ -33,7 +24,7 @@ async function getUpvoteByUserAndConversation(uid, zid) {
  */
 async function createUpvote(uid, zid) {
   try {
-    return await dbCreateUpvote(uid, zid);
+    await queryP('INSERT INTO upvotes (uid, zid) VALUES ($1, $2);', [uid, zid]);
   } catch (error) {
     logger.error('Error creating upvote', error);
     throw error;
@@ -47,7 +38,10 @@ async function createUpvote(uid, zid) {
  */
 async function updateConversationUpvoteCount(zid) {
   try {
-    return await dbUpdateConversationUpvoteCount(zid);
+    await queryP(
+      'UPDATE conversations SET upvotes = (SELECT COUNT(*) FROM upvotes WHERE zid = ($1)) WHERE zid = ($1);',
+      [zid]
+    );
   } catch (error) {
     logger.error('Error updating conversation upvote count', error);
     throw error;
@@ -61,7 +55,7 @@ async function updateConversationUpvoteCount(zid) {
  */
 async function getUpvotesByUser(uid) {
   try {
-    return await dbGetUpvotesByUser(uid);
+    return await queryP_readOnly('SELECT * FROM upvotes WHERE uid = ($1);', [uid]);
   } catch (error) {
     logger.error('Error getting upvotes by user', error);
     throw error;
