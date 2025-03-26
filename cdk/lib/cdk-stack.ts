@@ -14,6 +14,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 
 interface PolisStackProps extends cdk.StackProps {
@@ -59,7 +60,12 @@ export class CdkStack extends cdk.Stack {
     const instanceTypeWeb = ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM);
     const machineImageWeb = new ec2.AmazonLinuxImage({ generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023 });
     const instanceTypeMathWorker = ec2.InstanceType.of(ec2.InstanceClass.R8G, ec2.InstanceSize.XLARGE4);
+    const instanceTypeDelphiWorker = ec2.InstanceType.of(ec2.InstanceClass.R8G, ec2.InstanceSize.LARGE);
     const machineImageMathWorker = new ec2.AmazonLinuxImage({
+      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023,
+      cpuType: ec2.AmazonLinuxCpuType.ARM_64,
+    });
+    const machineImageDelphiWorker = new ec2.AmazonLinuxImage({
       generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023,
       cpuType: ec2.AmazonLinuxCpuType.ARM_64,
     });
@@ -164,8 +170,26 @@ export class CdkStack extends cdk.Stack {
       ],
     }));
 
+    const ecrDelphiRepository = new ecr.Repository(this, 'PolisRepositoryMath', {
+      repositoryName: 'polis/math',
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      imageScanOnPush: true,
+    });
+
+    ecrDelphiRepository.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowPublicPull',
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.AnyPrincipal()],
+      actions: [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+      ],
+    }));
+
     ecrWebRepository.grantPull(instanceRole);
     ecrMathRepository.grantPull(instanceRole);
+    ecrDelphiRepository.grantPull(instanceRole);
 
     const imageTagParameter = new ssm.StringParameter(this, 'ImageTagParameter', {
       parameterName: '/polis/image-tag',
@@ -281,6 +305,15 @@ EOF`,
       role: instanceRole,
     });
 
+    const delphiWorkerLaunchTemplate = new ec2.LaunchTemplate(this, 'DelphiWorkerLaunchTemplate', {
+      machineImage: machineImageDelphiWorker,
+      userData: usrdata(logGroup.logGroupName, "delphi"),
+      instanceType: instanceTypeDelphiWorker,
+      securityGroup: mathWorkerSecurityGroup,
+      keyPair: props.enableSSHAccess ? mathWorkerKeyPair : undefined,
+      role: instanceRole,
+    });
+
     const asgWeb = new autoscaling.AutoScalingGroup(this, 'Asg', {
       vpc,
       launchTemplate: webLaunchTemplate,
@@ -300,6 +333,19 @@ EOF`,
       },
       healthCheck: autoscaling.HealthCheck.ec2({ grace: cdk.Duration.minutes(2) }),
     });
+
+    const asgDelphiWorker = new autoscaling.AutoScalingGroup(this, 'AsgDelphiWorker', {
+      vpc,
+      launchTemplate: delphiWorkerLaunchTemplate,
+      minCapacity: 1,
+      maxCapacity: 5,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
+      healthCheck: autoscaling.HealthCheck.ec2({ grace: cdk.Duration.minutes(2) }),
+    });
+
+    // adding metrics for delphi later
 
     const mathWorkerCpuMetric = new cloudwatch.Metric({
       namespace: 'AWS/EC2',
@@ -336,7 +382,7 @@ EOF`,
     const deploymentGroup = new codedeploy.ServerDeploymentGroup(this, 'DeploymentGroup', {
       application,
       deploymentGroupName: 'PolisDeploymentGroup',
-      autoScalingGroups: [asgWeb, asgMathWorker],
+      autoScalingGroups: [asgWeb, asgMathWorker, asgDelphiWorker],
       deploymentConfig: codedeploy.ServerDeploymentConfig.ONE_AT_A_TIME,
       role: codeDeployRole,
       installAgent: true,
@@ -345,6 +391,7 @@ EOF`,
     // Allow traffic from the web ASG to the database
     db.connections.allowFrom(asgWeb, ec2.Port.tcp(5432), 'Allow database access from web ASG');
     db.connections.allowFrom(asgMathWorker, ec2.Port.tcp(5432), 'Allow database access from math ASG');
+    db.connections.allowFrom(asgDelphiWorker, ec2.Port.tcp(5432), 'Allow database access from math ASG');
 
     // ELB
     const lb = new elbv2.ApplicationLoadBalancer(this, 'Lb', {
@@ -399,7 +446,42 @@ EOF`,
     asgWeb.node.addDependency(webAppEnvVarsSecret);
     asgMathWorker.node.addDependency(logGroup);
     asgMathWorker.node.addDependency(webAppEnvVarsSecret);
+    asgDelphiWorker.node.addDependency(logGroup);
+    asgDelphiWorker.node.addDependency(webAppEnvVarsSecret);
     asgWeb.node.addDependency(db);
     asgMathWorker.node.addDependency(db);
+    asgDelphiWorker.node.addDependency(db);
+
+    // delphi db
+    const partitionKeyAttribute: dynamodb.Attribute = {
+      name: 'pk', // <-- TODO: CHANGE THIS to actual partition key name
+      type: dynamodb.AttributeType.STRING // <-- TODO: CHANGE THIS
+    };
+
+    // Optional: Define a sort key if needed
+    const sortKeyAttribute: dynamodb.Attribute = {
+       name: 'sk', // <-- TODO: CHANGE THIS (e.g., 'timestamp', 'itemId') or remove if not needed
+       type: dynamodb.AttributeType.STRING // <-- TODO: CHANGE THIS (STRING, NUMBER, or BINARY)
+    };
+
+    const delphiTable = new dynamodb.Table(this, 'DelphiTable', {
+      tableName: 'delphi-data',
+      partitionKey: partitionKeyAttribute,
+      // sortKey: sortKeyAttribute, // <-- Uncomment this line if define a sortKeyAttribute
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: true,
+      deletionProtection: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    new cdk.CfnOutput(this, 'DelphiTableName', {
+      value: delphiTable.tableName,
+      description: 'Name of the Delphi DynamoDB table',
+    });
+
+    new cdk.CfnOutput(this, 'DelphiTableArn', {
+      value: delphiTable.tableArn,
+      description: 'ARN of the Delphi DynamoDB table',
+    });
   }
 }
