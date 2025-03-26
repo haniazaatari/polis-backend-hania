@@ -54,7 +54,6 @@ jobs:
         env:
           EMBED_SERVICE_HOSTNAME: pol.is
           GA_TRACKING_ID: G-WVP78N35QR
-          SERVICE_URL: https://pol.is
         run: |
           docker compose create --build --force-recreate file-server
           CONTAINER_ID=$(docker ps -qaf name=file-server)

@@ -56,7 +56,6 @@ services:
       - "1080:1080"
       # SMTP port
       - "1025:1025"
-
   # TODO: Add individual entries for each of the clients, with hot-code reloading set up
   # Either:
   #   * configure environment variables here so that the ports the server points to for these assets are the

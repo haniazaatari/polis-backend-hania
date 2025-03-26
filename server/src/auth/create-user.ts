@@ -170,7 +170,7 @@ function doSendVerification(req: any, email: any) {
 }
 
 function sendVerificationEmail(req: any, email: any, einvite: any) {
-  let serverName = Config.getServerNameWithProtocol(req);
+  let serverName = Config.getServerUrl();
   let body = `Welcome to pol.is!
 
 Click this link to verify your email address:

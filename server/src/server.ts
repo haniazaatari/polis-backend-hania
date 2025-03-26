@@ -134,7 +134,8 @@ function isPolisDev(uid?: any) {
 
 const polisFromAddress = Config.polisFromAddress;
 
-const serverUrl = Config.getServerUrl(); // typically https://pol.is or http://localhost:5000
+// typically https://pol.is or http://localhost:5000
+const serverUrl = Config.getServerUrl();
 
 let akismet = akismetLib.client({
   blog: serverUrl,
@@ -212,8 +213,6 @@ DD.prototype.s = DA.prototype.s = function (k: string | number, v: any) {
 // function emptyArray() {
 //   return [];
 // }
-
-const domainOverride = Config.domainOverride;
 
 function haltOnTimeout(req: { timedout: any }, res: any, next: () => void) {
   if (req.timedout) {
@@ -939,6 +938,11 @@ function initializePolisHelpers() {
   ];
 
   function hasWhitelistMatches(host: string) {
+    // In development mode, skip whitelist checks entirely.
+    if (devMode) {
+      return true;
+    }
+
     let hostWithoutProtocol = host;
     if (host.startsWith("http://")) {
       hostWithoutProtocol = host.slice(7);
@@ -967,7 +971,6 @@ function initializePolisHelpers() {
   }
   function addCorsHeader(
     req: {
-      protocol: string;
       get: (arg0: string) => any;
       path: any;
       headers: Headers;
@@ -975,46 +978,34 @@ function initializePolisHelpers() {
     res: { header: (arg0: string, arg1: string | boolean) => void },
     next: (arg0?: string) => any
   ) {
-    let host = "";
-    if (domainOverride) {
-      host = req.protocol + "://" + domainOverride;
-    } else {
-      // TODO does it make sense for this middleware to look
-      // at origin || referer? is Origin for CORS preflight?
-      // or for everything?
-      // Origin was missing from FF, so added Referer.
-      host = req.get("Origin") || req.get("Referer") || "";
-    }
+    // Get the requesting origin.  'Origin' is the standard header for CORS,
+    // but we fall back to 'Referer' for older browsers (IE).
+    const origin = req.get("Origin") || req.get("Referer") || "";
 
-    // Somehow the fragment identifier is being sent by IE10????
-    // Remove unexpected fragment identifier
-    host = host.replace(/#.*$/, "");
+    // Sanitize the origin:
+    // 1. Remove any fragment identifier (#...).  This shouldn't be sent by browsers,
+    //    but some older versions of IE might.
+    // 2. Keep only the protocol and hostname (scheme + host), removing any path, query, etc.
+    const sanitizedOrigin = origin.replace(/#.*$/, "").match(/^[^\/]*\/\/[^\/]*/)?.[0] || "";
 
-    // Remove characters starting with the first slash following the double slash at the beginning.
-    let result = /^[^\/]*\/\/[^\/]*/.exec(host);
-    if (result && result[0]) {
-      host = result[0];
-    }
-    // check if the route is on a special list that allows it to be called cross domain (by polisHost.js for example)
-    let routeIsWhitelistedForAnyDomain = _.some(
-      whitelistedCrossDomainRoutes,
-      function (regex: { test: (arg0: any) => any }) {
-        return regex.test(req.path);
-      }
+    // Check if the route is specifically whitelisted for cross-domain access.
+    const routeIsWhitelistedForAnyDomain = whitelistedCrossDomainRoutes.some(
+      (regex) => regex.test(req.path)
     );
 
+    // Check if the origin is allowed.
     if (
-      !domainOverride &&
-      !hasWhitelistMatches(host) &&
+      !hasWhitelistMatches(sanitizedOrigin) &&
       !routeIsWhitelistedForAnyDomain
     ) {
       logger.info("not whitelisted", { headers: req.headers, path: req.path });
-      return next("unauthorized domain: " + host);
+      return next("unauthorized domain: " + sanitizedOrigin);
     }
-    if (host === "") {
-      // API
-    } else {
-      res.header("Access-Control-Allow-Origin", host);
+
+    // If the origin is empty (e.g., a direct API call, not from a browser),
+    // we don't need to set CORS headers.  Otherwise, set the appropriate headers.
+    if (sanitizedOrigin) {
+      res.header("Access-Control-Allow-Origin", sanitizedOrigin);
       res.header(
         "Access-Control-Allow-Headers",
         "Cache-Control, Pragma, Origin, Authorization, Content-Type, X-Requested-With"
@@ -1023,8 +1014,9 @@ function initializePolisHelpers() {
         "Access-Control-Allow-Methods",
         "GET, PUT, POST, DELETE, OPTIONS"
       );
-      res.header("Access-Control-Allow-Credentials", true);
+      res.header("Access-Control-Allow-Credentials", "true");
     }
+
     return next();
   }
 
@@ -1142,8 +1134,6 @@ function initializePolisHelpers() {
     };
     setInterval(runExportTest, 6 * 60 * 60 * 1000); // every 6 hours
   }
-
-  const getServerNameWithProtocol = Config.getServerNameWithProtocol;
 
   function sendPasswordResetEmailFailure(email: any, server: any) {
     let body = `We were unable to find a pol.is account registered with the email address: ${email}
@@ -2292,12 +2282,11 @@ ${serverName}/pwreset/${pwresettoken}
   setInterval(trySendingBackupEmailTest, 1000 * 60 * 60 * 23); // try every 23 hours (so it should only try roughly once a day)
   trySendingBackupEmailTest();
   function sendEinviteEmail(req: any, email: any, einvite: any) {
-    let serverName = getServerNameWithProtocol(req);
     const body = `Welcome to pol.is!
 
 Click this link to open your account:
 
-${serverName}/welcome/${einvite}
+${serverUrl}/welcome/${einvite}
 
 Thank you for using Polis`;
 
@@ -2979,8 +2968,7 @@ Email verified! You can close this tab or hit the back button.
     // @ts-ignore
     params[HMAC_SIGNATURE_PARAM_NAME] = createHmacForQueryParams(path, params);
 
-    let server = Config.getServerUrl();
-    return server + "/" + path + "?" + paramsToStringSortedByName(params);
+    return serverUrl + "/" + path + "?" + paramsToStringSortedByName(params);
   }
 
   function createNotificationsSubscribeUrl(conversation_id: any, email: any) {
@@ -2994,8 +2982,7 @@ Email verified! You can close this tab or hit the back button.
     // @ts-ignore
     params[HMAC_SIGNATURE_PARAM_NAME] = createHmacForQueryParams(path, params);
 
-    let server = Config.getServerUrl();
-    return server + "/" + path + "?" + paramsToStringSortedByName(params);
+    return serverUrl + "/" + path + "?" + paramsToStringSortedByName(params);
   }
 
   function handle_GET_notifications_subscribe(
@@ -4346,7 +4333,7 @@ Email verified! You can close this tab or hit the back button.
       .then(function (zinvite: string) {
         // NOTE: the counter goes in the email body so it doesn't create a new email thread (in Gmail, etc)
 
-        body += createProdModerationUrl(zinvite);
+        body += createModerationUrl(zinvite);
 
         body += "\n\nThank you for using Polis.";
 
@@ -4365,24 +4352,10 @@ Email verified! You can close this tab or hit the back button.
       });
   }
 
-  function createProdModerationUrl(zinvite: string) {
-    return "https://pol.is/m/" + zinvite;
-  }
-
   function createModerationUrl(
-    req: { p?: ConversationType; protocol?: string; headers?: Headers },
     zinvite: string
   ) {
-    let server = Config.getServerUrl();
-    if (domainOverride) {
-      server = req?.protocol + "://" + domainOverride;
-    }
-
-    if (req?.headers?.host?.includes("preprod.pol.is")) {
-      server = "https://preprod.pol.is";
-    }
-    let url = server + "/m/" + zinvite;
-    return url;
+    return serverUrl + "/m/" + zinvite;
   }
 
   function moderateComment(
@@ -6796,34 +6769,32 @@ Email verified! You can close this tab or hit the back button.
                       context?: string;
                     }) {
                       conv.is_owner = conv.owner === uid;
-                      let root = getServerNameWithProtocol(req);
 
                       if (want_mod_url) {
                         // TODO make this into a moderation invite URL so others can join Issue #618
                         conv.mod_url = createModerationUrl(
-                          req,
                           conv.conversation_id
                         );
                       }
                       if (want_inbox_item_admin_url) {
                         conv.inbox_item_admin_url =
-                          root + "/iim/" + conv.conversation_id;
+                          serverUrl + "/iim/" + conv.conversation_id;
                       }
                       if (want_inbox_item_participant_url) {
                         conv.inbox_item_participant_url =
-                          root + "/iip/" + conv.conversation_id;
+                          serverUrl + "/iip/" + conv.conversation_id;
                       }
                       if (want_inbox_item_admin_html) {
                         conv.inbox_item_admin_html =
                           "<a href='" +
-                          root +
+                          serverUrl +
                           "/" +
                           conv.conversation_id +
                           "'>" +
                           (conv.topic || conv.created) +
                           "</a>" +
                           " <a href='" +
-                          root +
+                          serverUrl +
                           "/m/" +
                           conv.conversation_id +
                           "'>moderate</a>";
@@ -6836,7 +6807,7 @@ Email verified! You can close this tab or hit the back button.
                       if (want_inbox_item_participant_html) {
                         conv.inbox_item_participant_html =
                           "<a href='" +
-                          root +
+                          serverUrl +
                           "/" +
                           conv.conversation_id +
                           "'>" +
@@ -7439,8 +7410,7 @@ Email verified! You can close this tab or hit the back button.
           [req.p.zid],
           function (err: any, results: { rows: { zinvite: any }[] }) {
             let zinvite = results.rows[0].zinvite;
-            let server = getServerNameWithProtocol(req);
-            let createdLink = server + "/#" + req.p.zid + "/" + zinvite;
+            let createdLink = serverUrl + "/#" + req.p.zid + "/" + zinvite;
             let body =
               "" +
               "Hi " +
@@ -7529,7 +7499,6 @@ Email verified! You can close this tab or hit the back button.
       return fail(res, 403, "polis_err_sending_export_link_to_email_auth");
     }
 
-    const serverUrl = Config.getServerUrl();
     const email = req.p.email;
     const subject =
       "Polis data export for conversation pol.is/" + req.p.conversation_id;
@@ -8321,7 +8290,7 @@ Thanks for using Polis!
     suzinvite: string
   ) {
     return (
-      getServerNameWithProtocol(req) +
+      serverUrl +
       "/ot/" +
       conversation_id +
       "/" +
@@ -8329,15 +8298,15 @@ Thanks for using Polis!
     );
   }
   function buildConversationUrl(req: any, zinvite: string | null) {
-    return getServerNameWithProtocol(req) + "/" + zinvite;
+    return serverUrl + "/" + zinvite;
   }
 
   function buildConversationDemoUrl(req: any, zinvite: string) {
-    return getServerNameWithProtocol(req) + "/demo/" + zinvite;
+    return serverUrl + "/demo/" + zinvite;
   }
 
   function buildModerationUrl(req: any, zinvite: string) {
-    return getServerNameWithProtocol(req) + "/m/" + zinvite;
+    return serverUrl + "/m/" + zinvite;
   }
 
   function buildSeedUrl(req: any, zinvite: any) {
@@ -8427,14 +8396,13 @@ Thanks for using Polis!
     conversation_id: string,
     suzinvite: string
   ) {
-    let serverName = getServerNameWithProtocol(req);
     let body =
       "" +
       "Welcome to pol.is!\n" +
       "\n" +
       "Click this link to open your account:\n" +
       "\n" +
-      serverName +
+      serverUrl +
       "/ot/" +
       conversation_id +
       "/" +
@@ -9360,7 +9328,7 @@ Thanks for using Polis!
         return fetchIndexForAdminPage(req, res);
       } else {
         // user not signed in, redirect to landing page
-        let url = getServerNameWithProtocol(req) + "/home";
+        let url = serverUrl + "/home";
         res.redirect(url);
       }
     };

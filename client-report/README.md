@@ -38,9 +38,6 @@ get very far. Still it can be useful for developing and debugging builds.
 
 The following environment variable can be set when building and running this application. If using the top-level `docker compose` configuration, it can be found in the `.env` file there.
 
-**`SERVICE_URL`**: (Optional) The URL of your API Server. Set this value if your API Server is not on the same domain as your client-report.
-Currently this is only used in development.
-
 You will also need to have AWS credentials set up at `.polis_s3_creds_client.json` if you are using S3
 buckets for deployment.
 
@@ -57,6 +54,12 @@ This will run the webpack dev server which will rebuild as you make changes.
 
 ```sh
 npm start
+```
+
+By default, the application will make API calls to `localhost:5000`. If you are running the API on a different host, you can set the `API_DEV_HOSTNAME` environment variable to the hostname of the API.
+
+```sh
+API_DEV_HOSTNAME=localhost:5001 npm start
 ```
 
 Now you can see the web interface at [http://localhost:5010]. You will still need to run the rest of the Polis

@@ -4,7 +4,6 @@ import isTrue from "boolean";
 
 const devHostname: string = process.env.API_DEV_HOSTNAME || "localhost:5000";
 const devMode: boolean = isTrue(process.env.DEV_MODE);
-const domainOverride: string | null = process.env.DOMAIN_OVERRIDE || null;
 const prodHostname: string = process.env.API_PROD_HOSTNAME || "pol.is";
 const serverPort: number = parseInt(
   process.env.API_SERVER_PORT || process.env.PORT || "5000",
@@ -19,28 +18,15 @@ import("source-map-support").then((sourceMapSupport) => {
 });
 
 export default {
-  domainOverride,
   isDevMode: devMode,
   serverPort,
 
-  getServerNameWithProtocol: (req: any): string => {
+  getServerUrl: (): string => {
     if (devMode) {
-      // usually localhost:5000
-      return `${req.protocol}://${req.headers.host}`;
+      // Use API_DEV_HOSTNAME, which should include the port.
+      return `http://${devHostname}`;
     }
-    if (domainOverride) {
-      return `${req.protocol}://${domainOverride}`;
-    }
-    if (req.headers.host.includes("preprod.pol.is")) {
-      return "https://preprod.pol.is";
-    }
-    if (req.headers.host.includes("embed.pol.is")) {
-      return "https://embed.pol.is";
-    }
-    if (req.headers.host.includes("survey.pol.is")) {
-      return "https://survey.pol.is";
-    }
-
+    // Always use https in production.
     return `https://${prodHostname}`;
   },
 
@@ -48,18 +34,7 @@ export default {
     if (devMode) {
       return devHostname;
     }
-    if (domainOverride) {
-      return domainOverride;
-    }
     return prodHostname;
-  },
-
-  getServerUrl: (): string => {
-    if (devMode) {
-      return `http://${devHostname}`;
-    } else {
-      return `https://${prodHostname}`;
-    }
   },
 
   adminEmailDataExport: process.env.ADMIN_EMAIL_DATA_EXPORT as string,

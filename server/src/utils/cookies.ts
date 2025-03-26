@@ -52,10 +52,6 @@ function cookieDomain(req: any) {
     return "localhost";
   }
 
-  if (Config.domainOverride) {
-    return `.${Config.domainOverride}`;
-  }
-
   return `.${Config.getServerHostname()}`;
 }
 

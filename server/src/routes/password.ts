@@ -15,7 +15,7 @@ const sendTextEmail = emailSenders.sendTextEmail;
 
 const getUidForPwResetToken = Session.getUidForPwResetToken;
 const clearPwResetToken = Session.clearPwResetToken;
-const getServerNameWithProtocol = Config.getServerNameWithProtocol;
+const getServerUrl = Config.getServerUrl;
 const setupPwReset = Session.setupPwReset;
 const polisFromAddress = Config.polisFromAddress;
 const getUserInfoForUid = User.getUserInfoForUid;
@@ -90,8 +90,8 @@ function handle_POST_auth_password(
       arg0: number
     ) => {
       (): any;
-      new (): any;
-      json: { (arg0: string): void; new (): any };
+      new(): any;
+      json: { (arg0: string): void; new(): any };
     };
   }
 ) {
@@ -121,8 +121,8 @@ function handle_POST_auth_password(
         function (err: any, hashedPassword: any) {
           return pgQueryP(
             "insert into jianiuevyew (uid, pwhash) values " +
-              "($1, $2) on conflict (uid) " +
-              "do update set pwhash = excluded.pwhash;",
+            "($1, $2) on conflict (uid) " +
+            "do update set pwhash = excluded.pwhash;",
             [uid, hashedPassword]
           ).then(
             (rows: any) => {
@@ -150,14 +150,14 @@ function handle_POST_auth_pwresettoken(
       arg0: number
     ) => {
       (): any;
-      new (): any;
-      json: { (arg0: string): void; new (): any };
+      new(): any;
+      json: { (arg0: string): void; new(): any };
     };
   }
 ) {
   let email = req.p.email;
 
-  let server = getServerNameWithProtocol(req);
+  let server = getServerUrl();
 
   // let's clear the cookies here, in case something is borked.
   cookies.clearCookies(req, res);

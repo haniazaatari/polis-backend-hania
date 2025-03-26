@@ -42,8 +42,6 @@ services:
       - "file-server"
     networks:
       - "polis-net"
-    # Scale the server container to a given number of instances.
-    scale: 1
     volumes:
       # Persist logs to a volume, so they can be accessed after the container is stopped.
       - server-logs:/app/logs
@@ -109,7 +107,6 @@ services:
         GA_TRACKING_ID: ${GA_TRACKING_ID}
         GIT_HASH: "${GIT_HASH:-placeholder}"
         NODE_ENV: production
-        SERVICE_URL: ${SERVICE_URL}
     environment:
       - PORT=${STATIC_FILES_PORT:-8080}
     networks:
@@ -129,6 +126,9 @@ services:
 
 networks:
   polis-net:
+    name: polis-net-${TAG:-dev}
+    external: true
+
 
 
 volumes:
