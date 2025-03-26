@@ -55,11 +55,15 @@ echo_vars:
 pull: echo_vars ## Pull most recent Docker container builds (nightlies)
 	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} pull
 
-start: echo_vars ## Start all Docker containers
+ensure-network: echo_vars ## Ensure the Docker network exists
+	@echo 'ensuring network polis-net-${TAG} exists'
+	@-docker network inspect polis-net-${TAG} >/dev/null 2>&1 || docker network create polis-net-${TAG}
+
+start: echo_vars ensure-network ## Start all Docker containers
 	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} up ${DETACH_ARG}
 
 stop: echo_vars ## Stop all Docker containers
-	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} down
+	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} down --remove-orphans
 
 rm-containers: echo_vars ## Remove Docker containers where (polis_tag="${TAG}")
 	@echo 'removing filtered containers (polis_tag="${TAG}")'
@@ -73,7 +77,11 @@ rm-images: echo_vars ## Remove Docker images where (polis_tag="${TAG}")
 	@echo 'removing filtered images (polis_tag="${TAG}")'
 	@-docker rmi -f $(shell docker images -q --filter "label=polis_tag=${TAG}")
 
-rm-ALL: rm-containers rm-volumes rm-images ## Remove Docker containers, volumes, and images (including db) where (polis_tag="${TAG}")
+rm-networks: echo_vars ## Remove Docker networks related to this project
+	@echo 'removing networks for polis-net-${TAG}'
+	@-docker network rm polis-net-${TAG}
+
+rm-ALL: rm-containers rm-volumes rm-images rm-networks ## Remove Docker containers, volumes, images, and networks where (polis_tag="${TAG}")
 	@echo Done.
 
 hash: ## Show current short hash
@@ -85,17 +93,15 @@ build: echo_vars ## [Re]Build all Docker containers
 build-no-cache: echo_vars ## Build all Docker containers without cache
 	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} build --no-cache
 
-start-recreate: echo_vars ## Start all Docker containers with recreated environments
+start-recreate: echo_vars ensure-network ## Start all Docker containers with recreated environments
 	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} up ${DETACH_ARG} --force-recreate
 
-start-rebuild: echo_vars ## Start all Docker containers, [re]building as needed
+start-rebuild: echo_vars ensure-network ## Start all Docker containers, [re]building as needed
 	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} up ${DETACH_ARG} --build
 
-start-FULL-REBUILD: echo_vars stop rm-ALL ## Remove and restart all Docker containers, volumes, and images (including db), as with rm-ALL
+start-FULL-REBUILD: echo_vars stop rm-ALL ensure-network ## Remove and restart all Docker containers, volumes, and images (including db), as with rm-ALL
 	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} build --no-cache
-	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} down
-	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} up ${DETACH_ARG} --build
-	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} down
+	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} down --remove-orphans
 	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} up ${DETACH_ARG} --build
 
 rebuild-web: echo_vars ## Rebuild and restart just the file-server container and its static assets
@@ -127,9 +133,9 @@ rbs: start-rebuild
 %:
 	@true
 
-.PHONY: help pull start stop rm-containers rm-volumes rm-images rm-ALL hash build-no-cache start-rebuild \
+.PHONY: help pull start stop rm-containers rm-volumes rm-images rm-networks rm-ALL hash build-no-cache start-rebuild \
 	start-recreate start-FULL-REBUILD rebuild-web e2e-install e2e-run e2e-run-all e2e-run-interactive \
-	build-web-assets extract-web-assets
+	build-web-assets extract-web-assets ensure-network
 
 
 help:
