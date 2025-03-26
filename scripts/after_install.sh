@@ -95,6 +95,8 @@ if [ "$SERVICE_FROM_FILE" == "server" ]; then
 elif [ "$SERVICE_FROM_FILE" == "math" ]; then
   echo "Starting docker-compose up for 'math' service"
   /usr/local/bin/docker-compose up -d math --build --force-recreate
+elif [ "$SERVICE_FROM_FILE" == "delphi" ]; then
+  echo "Starting no services yet ;)"
 else
   echo "Error: Unknown service type: [$SERVICE_FROM_FILE]. Starting all services (default docker-compose up -d)"
   /usr/local/bin/docker-compose up -d --build --force-recreate # Fallback
