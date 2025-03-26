@@ -4547,14 +4547,10 @@ Email verified! You can close this tab or hit the back button.
         return false;
       });
 
-      logger.debug(5471);
-
       // Only analyze comments if we have a Jigsaw API key
       const jigsawModerationPromise = Config.googleJigsawPerspectiveApiKey
         ? analyzeComment(txt)
         : Promise.resolve(null);
-
-      logger.debug(5478);
 
       const isModeratorPromise = isModerator(zid!, uid!);
       const conversationInfoPromise = getConversationInfo(zid!);
@@ -4617,8 +4613,6 @@ Email verified! You can close this tab or hit the back button.
         return;
       }
 
-      logger.debug(5541);
-
       const bad = hasBadWords(txt);
 
       const velocity = 1;
@@ -4660,11 +4654,7 @@ Email verified! You can close this tab or hit the back button.
         active = true;
       }
 
-      logger.debug(5584);
-
       const [detections] = await Promise.all([detectLanguage(txt)]);
-
-      logger.debug(5588);
 
       const detection = Array.isArray(detections) ? detections[0] : detections;
       const lang = detection.language;
@@ -9402,7 +9392,9 @@ Thanks for using Polis!
         }
         b = JSON.stringify(temp);
       }
-      logger.debug("middleware_log_request_body", { path: req.path, body: b });
+      if (req.path !== "/api/v3/math/pca2") {
+        logger.debug("middleware_log_request_body", { path: req.path, body: b });
+      }
     } else {
       // don't log the route or params, since Heroku does that for us.
     }
