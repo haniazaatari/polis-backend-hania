@@ -86,9 +86,46 @@ import {
   handle_POST_auth_new
 } from './src/icebergs/auth.js';
 
+import {
+  handle_DELETE_metadata_questions,
+  handle_GET_metadata,
+  handle_GET_metadata_answers,
+  handle_GET_metadata_choices,
+  handle_GET_metadata_questions,
+  handle_POST_metadata_answers,
+  handle_POST_metadata_questions
+} from './src/icebergs/metadata.js';
+
+import {
+  handle_GET_votes,
+  handle_GET_votes_me,
+  handle_POST_stars,
+  handle_POST_upvotes,
+  handle_POST_votes
+} from './src/icebergs/vote.js';
+
 import { handle_POST_notifyTeam } from './src/icebergs/notification.js';
 
 import { handle_GET_ptptois, handle_GET_votes_famous, handle_PUT_ptptois } from './src/icebergs/social.js';
+
+import { handle_DELETE_metadata_answers } from './src/routes/metadataAnswers.js';
+
+import { handle_GET_dataExport, handle_GET_dataExport_results } from './src/routes/dataExport.js';
+import { handle_GET_reportExport } from './src/routes/export.js';
+import handle_GET_launchPrep from './src/routes/launchPrep.js';
+import {
+  handle_GET_bid,
+  handle_GET_bidToPid,
+  handle_GET_math_correlationMatrix,
+  handle_GET_math_pca,
+  handle_GET_math_pca2,
+  handle_GET_xids,
+  handle_POST_math_update,
+  handle_POST_xidWhitelist
+} from './src/routes/math.js';
+import { handle_POST_auth_password, handle_POST_auth_pwresettoken } from './src/routes/password.js';
+import { handle_GET_reportNarrative } from './src/routes/reportNarrative.js';
+import handle_GET_tryCookie from './src/routes/tryCookie.js';
 
 const app = express();
 app.use(
@@ -120,53 +157,24 @@ helpersInitialized.then(
       redirectIfNotHttps,
       timeout,
       writeDefaultHead,
-      handle_DELETE_metadata_answers,
-      handle_DELETE_metadata_questions,
-      handle_GET_bid,
-      handle_GET_bidToPid,
       handle_GET_contexts,
-      handle_GET_math_correlationMatrix,
-      handle_GET_dataExport,
-      handle_GET_dataExport_results,
-      handle_GET_reportNarrative,
-      handle_GET_reportExport,
       handle_GET_dummyButton,
       handle_GET_einvites,
-      handle_GET_launchPrep,
       handle_GET_locations,
-      handle_GET_math_pca,
-      handle_GET_math_pca2,
-      handle_GET_metadata,
-      handle_GET_metadata_answers,
-      handle_GET_metadata_choices,
-      handle_GET_metadata_questions,
       handle_GET_perfStats,
       handle_GET_reports,
       handle_GET_snapshot,
       handle_GET_testConnection,
       handle_GET_testDatabase,
-      handle_GET_tryCookie,
       handle_GET_users,
-      handle_GET_votes,
-      handle_GET_votes_me,
-      handle_GET_xids,
       handle_GET_zinvites,
-      handle_POST_auth_password,
-      handle_POST_auth_pwresettoken,
       handle_POST_contexts,
       handle_POST_contributors,
       handle_POST_einvites,
-      handle_POST_math_update,
-      handle_POST_metadata_answers,
-      handle_POST_metadata_questions,
       handle_POST_metrics,
       handle_POST_reports,
-      handle_POST_stars,
       handle_POST_trashes,
       handle_POST_tutorial,
-      handle_POST_upvotes,
-      handle_POST_votes,
-      handle_POST_xidWhitelist,
       handle_POST_zinvites,
       handle_PUT_reports,
       handle_PUT_users

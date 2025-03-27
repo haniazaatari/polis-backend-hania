@@ -1,5 +1,4 @@
 import akismetLib from 'akismet';
-import async from 'async';
 import AWS from 'aws-sdk';
 import { Promise as BluebirdPromise } from 'bluebird';
 import timeout from 'connect-timeout';
@@ -15,24 +14,6 @@ import {
   query_readOnly as pgQuery_readOnly
 } from './db/pg-query.js';
 import SQL from './db/sql.js';
-import { handle_GET_dataExport, handle_GET_dataExport_results } from './routes/dataExport.js';
-import { handle_GET_reportExport } from './routes/export.js';
-import handle_GET_launchPrep from './routes/launchPrep.js';
-import {
-  handle_GET_bid,
-  handle_GET_bidToPid,
-  handle_GET_math_correlationMatrix,
-  handle_GET_math_pca,
-  handle_GET_math_pca2,
-  handle_GET_xids,
-  handle_POST_math_update,
-  handle_POST_xidWhitelist
-} from './routes/math.js';
-import handle_DELETE_metadata_answers from './routes/metadataAnswers.js';
-import { handle_POST_auth_password, handle_POST_auth_pwresettoken } from './routes/password.js';
-import { handle_GET_reportNarrative } from './routes/reportNarrative.js';
-import handle_GET_tryCookie from './routes/tryCookie.js';
-import { getVotesForSingleParticipant, votesPost } from './routes/votes.js';
 import User from './user.js';
 import Utils from './utils/common.js';
 import cookies from './utils/cookies.js';
@@ -42,35 +23,25 @@ import { METRICS_IN_RAM } from './utils/metered.js';
 import { getPidsForGid } from './utils/participants.js';
 import { fetchAndCacheLatestPcaData } from './utils/pca.js';
 
-import { addNoMoreCommentsRecord, getNextComment } from './icebergs/comment.js';
-import {
-  updateConversationModifiedTime,
-  updateLastInteractionTimeForConversation,
-  updateVoteCount
-} from './icebergs/conversation.js';
+import { updateConversationModifiedTime } from './icebergs/conversation.js';
 import { doSendEinvite, emailBadProblemTime, emailFeatureRequest, emailTeam, sendTextEmail } from './icebergs/email.js';
 import { doNotificationLoop } from './icebergs/notification.js';
-import { addParticipant, addParticipantAndMetadata } from './icebergs/participant.js';
-import { finishArray, finishOne } from './icebergs/response.js';
+import { finishArray } from './icebergs/response.js';
 
 const COOKIES = cookies.COOKIES;
 const detectLanguage = Comment.detectLanguage;
 const devMode = Config.isDevMode;
 const generateAndRegisterZinvite = CreateUser.generateAndRegisterZinvite;
 const generateTokenP = Password.generateTokenP;
-const getPermanentCookieAndEnsureItIsSet = cookies.getPermanentCookieAndEnsureItIsSet;
-const getPid = User.getPid;
 const getPidForParticipant = User.getPidForParticipant;
 const getUser = User.getUser;
 const HMAC_SIGNATURE_PARAM_NAME = 'signature';
 const isModerator = Utils.isModerator;
 const isPolisDev = Utils.isPolisDev;
 const pidCache = User.pidCache;
-const polisTypes = Utils.polisTypes;
-const isConversationOwner = Utils.isConversationOwner;
+const isDuplicateKey = Utils.isDuplicateKey;
 const serverUrl = Config.getServerUrl();
 const shouldSendNotifications = !devMode;
-const sql_participant_metadata_answers = SQL.sql_participant_metadata_answers;
 const sql_reports = SQL.sql_reports;
 const sql_users = SQL.sql_users;
 
@@ -332,43 +303,6 @@ function initializePolisHelpers() {
       }
     );
   }
-  function checkZinviteCodeValidity(zid, zinvite, callback) {
-    pgQuery_readOnly('SELECT * FROM zinvites WHERE zid = ($1) AND zinvite = ($2);', [zid, zinvite], (err, results) => {
-      if (err || !results || !results.rows || !results.rows.length) {
-        callback(1);
-      } else {
-        callback(null);
-      }
-    });
-  }
-  function checkSuzinviteCodeValidity(zid, suzinvite, callback) {
-    pgQuery('SELECT * FROM suzinvites WHERE zid = ($1) AND suzinvite = ($2);', [zid, suzinvite], (err, results) => {
-      if (err || !results || !results.rows || !results.rows.length) {
-        callback(1);
-      } else {
-        callback(null);
-      }
-    });
-  }
-  function getChoicesForConversation(zid) {
-    return new Promise((resolve, reject) => {
-      pgQuery_readOnly(
-        'select * from participant_metadata_choices where zid = ($1) and alive = TRUE;',
-        [zid],
-        (err, x) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          if (!x || !x.rows) {
-            resolve([]);
-            return;
-          }
-          resolve(x.rows);
-        }
-      );
-    });
-  }
   function handle_GET_dummyButton(req, res) {
     const message = `${req.p.button} ${req.p.uid}`;
     emailFeatureRequest(message);
@@ -416,197 +350,6 @@ function initializePolisHelpers() {
         fail(res, 500, 'polis_err_getting_user_info', err);
       });
   }
-  function isDuplicateKey(err) {
-    const isdup =
-      err.code === 23505 ||
-      err.code === '23505' ||
-      err.sqlState === 23505 ||
-      err.sqlState === '23505' ||
-      err.messagePrimary?.includes('duplicate key value');
-    return isdup;
-  }
-  function handle_GET_votes_me(req, res) {
-    getPid(req.p.zid, req.p.uid, (err, pid) => {
-      if (err || pid < 0) {
-        fail(res, 500, 'polis_err_getting_pid', err);
-        return;
-      }
-      pgQuery_readOnly('SELECT * FROM votes WHERE zid = ($1) AND pid = ($2);', [req.p.zid, req.p.pid], (err, docs) => {
-        if (err) {
-          fail(res, 500, 'polis_err_get_votes_by_me', err);
-          return;
-        }
-        for (let i = 0; i < docs.rows.length; i++) {
-          docs.rows[i].weight = docs.rows[i].weight / 32767;
-        }
-        finishArray(res, docs.rows);
-      });
-    });
-  }
-  function handle_GET_votes(req, res) {
-    getVotesForSingleParticipant(req.p).then(
-      (votes) => {
-        finishArray(res, votes);
-      },
-      (err) => {
-        fail(res, 500, 'polis_err_votes_get', err);
-      }
-    );
-  }
-  function handle_POST_votes(req, res) {
-    const uid = req.p.uid;
-    const zid = req.p.zid;
-    let pid = req.p.pid;
-    const lang = req.p.lang;
-    const token = req.cookies[COOKIES.TOKEN];
-    const apiToken = req?.headers?.authorization || '';
-    const xPolisHeaderToken = req?.headers?.['x-polis'];
-    if (!uid && !token && !apiToken && !xPolisHeaderToken) {
-      fail(res, 403, 'polis_err_vote_noauth');
-      return;
-    }
-    const permanent_cookie = getPermanentCookieAndEnsureItIsSet(req, res);
-    const pidReadyPromise = _.isUndefined(req.p.pid)
-      ? addParticipantAndMetadata(req.p.zid, req.p.uid, req, permanent_cookie).then((rows) => {
-          const ptpt = rows[0];
-          pid = ptpt.pid;
-        })
-      : Promise.resolve();
-    pidReadyPromise
-      .then(() => {
-        let vote;
-        const pidReadyPromise = _.isUndefined(pid)
-          ? addParticipant(zid, uid).then((rows) => {
-              const ptpt = rows[0];
-              pid = ptpt.pid;
-            })
-          : Promise.resolve();
-        return pidReadyPromise
-          .then(() => votesPost(uid, pid, zid, req.p.tid, req.p.xid, req.p.vote, req.p.weight, req.p.high_priority))
-          .then((o) => {
-            vote = o.vote;
-            const createdTime = vote.created;
-            setTimeout(() => {
-              updateConversationModifiedTime(zid, createdTime);
-              updateLastInteractionTimeForConversation(zid, uid);
-              updateVoteCount(zid, pid);
-            }, 100);
-            if (_.isUndefined(req.p.starred)) {
-              return;
-            }
-            return addStar(zid, req.p.tid, pid, req.p.starred, createdTime);
-          })
-          .then(() => getNextComment(zid, pid, [], true, lang))
-          .then((nextComment) => {
-            logger.debug('handle_POST_votes nextComment:', {
-              zid,
-              pid,
-              nextComment
-            });
-            const result = {};
-            if (nextComment) {
-              result.nextComment = nextComment;
-            } else {
-              addNoMoreCommentsRecord(zid, pid);
-            }
-            result.currentPid = pid;
-            if (result.shouldMod) {
-              result.modOptions = {};
-              if (req.p.vote === polisTypes.reactions.pull) {
-                result.modOptions.as_important = true;
-                result.modOptions.as_factual = true;
-                result.modOptions.as_feeling = true;
-              } else if (req.p.vote === polisTypes.reactions.push) {
-                result.modOptions.as_notmyfeeling = true;
-                result.modOptions.as_notgoodidea = true;
-                result.modOptions.as_notfact = true;
-                result.modOptions.as_abusive = true;
-              } else if (req.p.vote === polisTypes.reactions.pass) {
-                result.modOptions.as_unsure = true;
-                result.modOptions.as_spam = true;
-                result.modOptions.as_abusive = true;
-              }
-            }
-            finishOne(res, result);
-          });
-      })
-      .catch((err) => {
-        if (err === 'polis_err_vote_duplicate') {
-          fail(res, 406, 'polis_err_vote_duplicate', err);
-        } else if (err === 'polis_err_conversation_is_closed') {
-          fail(res, 403, 'polis_err_conversation_is_closed', err);
-        } else if (err === 'polis_err_post_votes_social_needed') {
-          fail(res, 403, 'polis_err_post_votes_social_needed', err);
-        } else if (err === 'polis_err_xid_not_whitelisted') {
-          fail(res, 403, 'polis_err_xid_not_whitelisted', err);
-        } else {
-          fail(res, 500, 'polis_err_vote', err);
-        }
-      });
-  }
-  function handle_POST_upvotes(req, res) {
-    const uid = req.p.uid;
-    const zid = req.p.zid;
-    pgQueryP('select * from upvotes where uid = ($1) and zid = ($2);', [uid, zid]).then(
-      (rows) => {
-        if (rows?.length) {
-          fail(res, 403, 'polis_err_upvote_already_upvoted');
-        } else {
-          pgQueryP('insert into upvotes (uid, zid) VALUES ($1, $2);', [uid, zid]).then(
-            () => {
-              pgQueryP(
-                'update conversations set upvotes = (select count(*) from upvotes where zid = ($1)) where zid = ($1);',
-                [zid]
-              ).then(
-                () => {
-                  res.status(200).json({});
-                },
-                (err) => {
-                  fail(res, 500, 'polis_err_upvote_update', err);
-                }
-              );
-            },
-            (err) => {
-              fail(res, 500, 'polis_err_upvote_insert', err);
-            }
-          );
-        }
-      },
-      (err) => {
-        fail(res, 500, 'polis_err_upvote_check', err);
-      }
-    );
-  }
-  function addStar(zid, tid, pid, starred, created) {
-    starred = starred ? 1 : 0;
-    let query =
-      'INSERT INTO stars (pid, zid, tid, starred, created) VALUES ($1, $2, $3, $4, default) RETURNING created;';
-    const params = [pid, zid, tid, starred];
-    if (!_.isUndefined(created)) {
-      query = 'INSERT INTO stars (pid, zid, tid, starred, created) VALUES ($1, $2, $3, $4, $5) RETURNING created;';
-      params.push(created);
-    }
-    return pgQueryP(query, params);
-  }
-  function handle_POST_stars(req, res) {
-    addStar(req.p.zid, req.p.tid, req.p.pid, req.p.starred)
-      .then((result) => {
-        const createdTime = result.rows[0].created;
-        setTimeout(() => {
-          updateConversationModifiedTime(req.p.zid, createdTime);
-        }, 100);
-        res.status(200).json({});
-      })
-      .catch((err) => {
-        if (err) {
-          if (isDuplicateKey(err)) {
-            fail(res, 406, 'polis_err_vote_duplicate', err);
-          } else {
-            fail(res, 500, 'polis_err_vote', err);
-          }
-        }
-      });
-  }
   function handle_POST_trashes(req, res) {
     const query = 'INSERT INTO trashes (pid, zid, tid, trashed, created) VALUES ($1, $2, $3, $4, default);';
     const params = [req.p.pid, req.p.zid, req.p.tid, req.p.trashed];
@@ -646,273 +389,6 @@ function initializePolisHelpers() {
       .catch((err) => {
         fail(res, 500, 'polis_err_put_user', err);
       });
-  }
-  function handle_DELETE_metadata_questions(req, res) {
-    const uid = req.p.uid;
-    const pmqid = req.p.pmqid;
-    getZidForQuestion(pmqid, (err, zid) => {
-      if (err) {
-        fail(res, 500, 'polis_err_delete_participant_metadata_questions_zid', err);
-        return;
-      }
-      isConversationOwner(zid, uid, (err) => {
-        if (err) {
-          fail(res, 403, 'polis_err_delete_participant_metadata_questions_auth', err);
-          return;
-        }
-        deleteMetadataQuestionAndAnswers(pmqid, (err) => {
-          if (err) {
-            fail(res, 500, 'polis_err_delete_participant_metadata_question', new Error(err));
-            return;
-          }
-          res.send(200);
-        });
-      });
-    });
-  }
-  function getZidForQuestion(pmqid, callback) {
-    pgQuery('SELECT zid FROM participant_metadata_questions WHERE pmqid = ($1);', [pmqid], (err, result) => {
-      if (err) {
-        logger.error('polis_err_zid_missing_for_question', err);
-        callback(err);
-        return;
-      }
-      if (!result.rows || !result.rows.length) {
-        callback('polis_err_zid_missing_for_question');
-        return;
-      }
-      callback(null, result.rows[0].zid);
-    });
-  }
-  function deleteMetadataQuestionAndAnswers(pmqid, callback) {
-    pgQuery('update participant_metadata_answers set alive = FALSE where pmqid = ($1);', [pmqid], (err) => {
-      if (err) {
-        callback(err);
-        return;
-      }
-      pgQuery('update participant_metadata_questions set alive = FALSE where pmqid = ($1);', [pmqid], (err) => {
-        if (err) {
-          callback(err);
-          return;
-        }
-        callback(null);
-      });
-    });
-  }
-  function handle_GET_metadata_questions(req, res) {
-    const zid = req.p.zid;
-    const zinvite = req.p.zinvite;
-    const suzinvite = req.p.suzinvite;
-    function doneChecking(err, _foo) {
-      if (err) {
-        fail(res, 403, 'polis_err_get_participant_metadata_auth', err);
-        return;
-      }
-      async.parallel(
-        [
-          (callback) => {
-            pgQuery_readOnly(
-              'SELECT * FROM participant_metadata_questions WHERE alive = true AND zid = ($1);',
-              [zid],
-              callback
-            );
-          }
-        ],
-        (err, result) => {
-          if (err) {
-            fail(res, 500, 'polis_err_get_participant_metadata_questions', err);
-            return;
-          }
-          let rows = result[0]?.rows;
-          rows = rows.map((r) => {
-            r.required = true;
-            return r;
-          });
-          finishArray(res, rows);
-        }
-      );
-    }
-    if (zinvite) {
-      checkZinviteCodeValidity(zid, zinvite, doneChecking);
-    } else if (suzinvite) {
-      checkSuzinviteCodeValidity(zid, suzinvite, doneChecking);
-    } else {
-      doneChecking(false);
-    }
-  }
-  function handle_POST_metadata_questions(req, res) {
-    const zid = req.p.zid;
-    const key = req.p.key;
-    const uid = req.p.uid;
-    function doneChecking(err, _foo) {
-      if (err) {
-        fail(res, 403, 'polis_err_post_participant_metadata_auth', err);
-        return;
-      }
-      pgQuery(
-        'INSERT INTO participant_metadata_questions (pmqid, zid, key) VALUES (default, $1, $2) RETURNING *;',
-        [zid, key],
-        (err, results) => {
-          if (err || !results || !results.rows || !results.rows.length) {
-            fail(res, 500, 'polis_err_post_participant_metadata_key', err);
-            return;
-          }
-          finishOne(res, results.rows[0]);
-        }
-      );
-    }
-    isConversationOwner(zid, uid, doneChecking);
-  }
-  function handle_POST_metadata_answers(req, res) {
-    const zid = req.p.zid;
-    const uid = req.p.uid;
-    const pmqid = req.p.pmqid;
-    const value = req.p.value;
-    function doneChecking(err, _foo) {
-      if (err) {
-        fail(res, 403, 'polis_err_post_participant_metadata_auth', err);
-        return;
-      }
-      pgQuery(
-        'INSERT INTO participant_metadata_answers (pmqid, zid, value, pmaid) VALUES ($1, $2, $3, default) RETURNING *;',
-        [pmqid, zid, value],
-        (err, results) => {
-          if (err || !results || !results.rows || !results.rows.length) {
-            pgQuery(
-              'UPDATE participant_metadata_answers set alive = TRUE where pmqid = ($1) AND zid = ($2) AND value = ($3) RETURNING *;',
-              [pmqid, zid, value],
-              (err, results) => {
-                if (err) {
-                  fail(res, 500, 'polis_err_post_participant_metadata_value', err);
-                  return;
-                }
-                finishOne(res, results.rows[0]);
-              }
-            );
-          } else {
-            finishOne(res, results.rows[0]);
-          }
-        }
-      );
-    }
-    isConversationOwner(zid, uid, doneChecking);
-  }
-  function handle_GET_metadata_choices(req, res) {
-    const zid = req.p.zid;
-    getChoicesForConversation(zid).then(
-      (choices) => {
-        finishArray(res, choices);
-      },
-      (err) => {
-        fail(res, 500, 'polis_err_get_participant_metadata_choices', err);
-      }
-    );
-  }
-  function handle_GET_metadata_answers(req, res) {
-    const zid = req.p.zid;
-    const zinvite = req.p.zinvite;
-    const suzinvite = req.p.suzinvite;
-    const pmqid = req.p.pmqid;
-    function doneChecking(err, _foo) {
-      if (err) {
-        fail(res, 403, 'polis_err_get_participant_metadata_auth', err);
-        return;
-      }
-      let query = sql_participant_metadata_answers
-        .select(sql_participant_metadata_answers.star())
-        .where(sql_participant_metadata_answers.zid.equals(zid))
-        .and(sql_participant_metadata_answers.alive.equals(true));
-      if (pmqid) {
-        query = query.where(sql_participant_metadata_answers.pmqid.equals(pmqid));
-      }
-      pgQuery_readOnly(query.toString(), (err, result) => {
-        if (err) {
-          fail(res, 500, 'polis_err_get_participant_metadata_answers', err);
-          return;
-        }
-        const rows = result.rows.map((r) => {
-          r.is_exclusive = true;
-          return r;
-        });
-        finishArray(res, rows);
-      });
-    }
-    if (zinvite) {
-      checkZinviteCodeValidity(zid, zinvite, doneChecking);
-    } else if (suzinvite) {
-      checkSuzinviteCodeValidity(zid, suzinvite, doneChecking);
-    } else {
-      doneChecking(false);
-    }
-  }
-  function handle_GET_metadata(req, res) {
-    const zid = req.p.zid;
-    const zinvite = req.p.zinvite;
-    const suzinvite = req.p.suzinvite;
-    function doneChecking(err) {
-      if (err) {
-        fail(res, 403, 'polis_err_get_participant_metadata_auth', err);
-        return;
-      }
-      async.parallel(
-        [
-          (callback) => {
-            pgQuery_readOnly('SELECT * FROM participant_metadata_questions WHERE zid = ($1);', [zid], callback);
-          },
-          (callback) => {
-            pgQuery_readOnly('SELECT * FROM participant_metadata_answers WHERE zid = ($1);', [zid], callback);
-          },
-          (callback) => {
-            pgQuery_readOnly('SELECT * FROM participant_metadata_choices WHERE zid = ($1);', [zid], callback);
-          }
-        ],
-        (err, result) => {
-          if (err) {
-            fail(res, 500, 'polis_err_get_participant_metadata', err);
-            return;
-          }
-          const keys = result[0]?.rows;
-          const vals = result[1]?.rows;
-          const choices = result[2]?.rows;
-          const o = {};
-          const keyNames = {};
-          const valueNames = {};
-          let i;
-          let k;
-          let v;
-          if (!keys || !keys.length) {
-            res.status(200).json({});
-            return;
-          }
-          for (i = 0; i < keys.length; i++) {
-            k = keys[i];
-            o[k.pmqid] = {};
-            keyNames[k.pmqid] = k.key;
-          }
-          for (i = 0; i < vals.length; i++) {
-            k = vals[i];
-            v = vals[i];
-            o[k.pmqid][v.pmaid] = [];
-            valueNames[v.pmaid] = v.value;
-          }
-          for (i = 0; i < choices.length; i++) {
-            o[choices[i].pmqid][choices[i].pmaid] = choices[i].pid;
-          }
-          res.status(200).json({
-            kvp: o,
-            keys: keyNames,
-            values: valueNames
-          });
-        }
-      );
-    }
-    if (zinvite) {
-      checkZinviteCodeValidity(zid, zinvite, doneChecking);
-    } else if (suzinvite) {
-      checkSuzinviteCodeValidity(zid, suzinvite, doneChecking);
-    } else {
-      doneChecking(false);
-    }
   }
   function createReport(zid) {
     return generateTokenP(20, false).then((report_id) => {
@@ -1227,53 +703,24 @@ function initializePolisHelpers() {
     sendTextEmail,
     timeout,
     writeDefaultHead,
-    handle_DELETE_metadata_answers,
-    handle_DELETE_metadata_questions,
-    handle_GET_bid,
-    handle_GET_bidToPid,
     handle_GET_contexts,
-    handle_GET_math_correlationMatrix,
-    handle_GET_dataExport,
-    handle_GET_dataExport_results,
-    handle_GET_reportExport,
     handle_GET_dummyButton,
     handle_GET_einvites,
-    handle_GET_launchPrep,
     handle_GET_locations,
-    handle_GET_math_pca,
-    handle_GET_math_pca2,
-    handle_GET_metadata,
-    handle_GET_metadata_answers,
-    handle_GET_metadata_choices,
-    handle_GET_metadata_questions,
     handle_GET_perfStats,
     handle_GET_reports,
-    handle_GET_reportNarrative,
     handle_GET_snapshot,
     handle_GET_testConnection,
     handle_GET_testDatabase,
-    handle_GET_tryCookie,
     handle_GET_users,
-    handle_GET_votes,
-    handle_GET_votes_me,
-    handle_GET_xids,
     handle_GET_zinvites,
-    handle_POST_auth_password,
-    handle_POST_auth_pwresettoken,
     handle_POST_contexts,
     handle_POST_contributors,
     handle_POST_einvites,
-    handle_POST_math_update,
-    handle_POST_metadata_answers,
-    handle_POST_metadata_questions,
     handle_POST_metrics,
     handle_POST_reports,
-    handle_POST_stars,
     handle_POST_trashes,
     handle_POST_tutorial,
-    handle_POST_upvotes,
-    handle_POST_votes,
-    handle_POST_xidWhitelist,
     handle_POST_zinvites,
     handle_PUT_reports,
     handle_PUT_users
