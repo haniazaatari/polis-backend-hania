@@ -10,6 +10,13 @@ import server from './src/server.js';
 import logger from './src/utils/logger.js';
 
 import {
+  addCorsHeader,
+  denyIfNotFromWhitelistedDomain,
+  handle_GET_domainWhitelist,
+  handle_POST_domainWhitelist
+} from './src/icebergs/domain.js';
+
+import {
   handle_GET_notifications_subscribe,
   handle_GET_notifications_unsubscribe,
   handle_GET_verification,
@@ -17,6 +24,16 @@ import {
   handle_POST_sendEmailExportReady,
   handle_POST_users_invite
 } from './src/icebergs/email.js';
+
+import {
+  handle_GET_comments,
+  handle_GET_comments_translations,
+  handle_GET_nextComment,
+  handle_POST_comments,
+  handle_POST_ptptCommentMod,
+  handle_POST_reportCommentSelections,
+  handle_PUT_comments
+} from './src/icebergs/comment.js';
 
 const app = express();
 app.use(
@@ -31,11 +48,9 @@ const helpersInitialized = new BluebirdPromise((resolve, _reject) => {
 helpersInitialized.then(
   (o) => {
     const {
-      addCorsHeader,
       auth,
       authOptional,
       COOKIES,
-      denyIfNotFromWhitelistedDomain,
       devMode,
       fetchThirdPartyCookieTestPt1,
       fetchThirdPartyCookieTestPt2,
@@ -65,8 +80,6 @@ helpersInitialized.then(
       handle_DELETE_metadata_questions,
       handle_GET_bid,
       handle_GET_bidToPid,
-      handle_GET_comments,
-      handle_GET_comments_translations,
       handle_GET_conditionalIndexFetcher,
       handle_GET_contexts,
       handle_GET_conversationPreloadInfo,
@@ -79,7 +92,6 @@ helpersInitialized.then(
       handle_GET_dataExport_results,
       handle_GET_reportNarrative,
       handle_GET_reportExport,
-      handle_GET_domainWhitelist,
       handle_GET_dummyButton,
       handle_GET_einvites,
       handle_GET_iim_conversation,
@@ -93,7 +105,6 @@ helpersInitialized.then(
       handle_GET_metadata_answers,
       handle_GET_metadata_choices,
       handle_GET_metadata_questions,
-      handle_GET_nextComment,
       handle_GET_participants,
       handle_GET_participation,
       handle_GET_participationInit,
@@ -115,14 +126,12 @@ helpersInitialized.then(
       handle_POST_auth_new,
       handle_POST_auth_password,
       handle_POST_auth_pwresettoken,
-      handle_POST_comments,
       handle_POST_contexts,
       handle_POST_contributors,
       handle_POST_conversation_close,
       handle_POST_conversation_reopen,
       handle_POST_conversations,
       handle_POST_convSubscriptions,
-      handle_POST_domainWhitelist,
       handle_POST_einvites,
       handle_POST_joinWithInvite,
       handle_POST_math_update,
@@ -131,9 +140,7 @@ helpersInitialized.then(
       handle_POST_metrics,
       handle_POST_notifyTeam,
       handle_POST_participants,
-      handle_POST_ptptCommentMod,
       handle_POST_query_participants_by_metadata,
-      handle_POST_reportCommentSelections,
       handle_POST_reports,
       handle_POST_reserve_conversation_id,
       handle_POST_stars,
@@ -143,7 +150,6 @@ helpersInitialized.then(
       handle_POST_votes,
       handle_POST_xidWhitelist,
       handle_POST_zinvites,
-      handle_PUT_comments,
       handle_PUT_conversations,
       handle_PUT_participants_extended,
       handle_PUT_ptptois,

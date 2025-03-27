@@ -1,11 +1,9 @@
 import akismetLib from 'akismet';
 import async from 'async';
 import AWS from 'aws-sdk';
-import badwords from 'badwords/object';
 import bcrypt from 'bcryptjs';
 import { Promise as BluebirdPromise } from 'bluebird';
 import timeout from 'connect-timeout';
-import { google } from 'googleapis';
 import { encode } from 'html-entities';
 import httpProxy from 'http-proxy';
 import { LRUCache } from 'lru-cache';
@@ -15,15 +13,18 @@ import responseTime from 'response-time';
 import _ from 'underscore';
 import CreateUser from './auth/create-user.js';
 import Password from './auth/password.js';
+import Comment from './comment.js';
 import Config from './config.js';
-import dbPgQuery, {
+import Conversation from './conversation.js';
+import {
   query as pgQuery,
-  query_readOnly as pgQuery_readOnly,
   queryP as pgQueryP,
   queryP_metered_readOnly as pgQueryP_metered_readOnly,
   queryP_readOnly as pgQueryP_readOnly,
-  queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty
+  queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty,
+  query_readOnly as pgQuery_readOnly
 } from './db/pg-query.js';
+import SQL from './db/sql.js';
 import { handle_GET_dataExport, handle_GET_dataExport_results } from './routes/dataExport.js';
 import { handle_GET_reportExport } from './routes/export.js';
 import handle_GET_launchPrep from './routes/launchPrep.js';
@@ -43,12 +44,25 @@ import handle_DELETE_metadata_answers from './routes/metadataAnswers.js';
 import { handle_POST_auth_password, handle_POST_auth_pwresettoken } from './routes/password.js';
 import { handle_GET_reportNarrative } from './routes/reportNarrative.js';
 import handle_GET_tryCookie from './routes/tryCookie.js';
+import { votesPost } from './routes/votes.js';
+import Session from './session.js';
+import User from './user.js';
+import Utils from './utils/common.js';
+import constants from './utils/constants.js';
+import cookies from './utils/cookies.js';
 import fail from './utils/fail.js';
+import logger from './utils/logger.js';
 import { METRICS_IN_RAM, MPromise, addInRamMetric } from './utils/metered.js';
 import { getPidsForGid } from './utils/participants.js';
 import { fetchAndCacheLatestPcaData, getPca } from './utils/pca.js';
-import { getZinvite, getZinvites } from './utils/zinvite.js';
+import { getZinvite } from './utils/zinvite.js';
 
+import { addNoMoreCommentsRecord, createModerationUrl, getNextComment } from './icebergs/comment.js';
+import {
+  updateConversationModifiedTime,
+  updateLastInteractionTimeForConversation,
+  updateVoteCount
+} from './icebergs/conversation.js';
 import {
   createOneSuzinvite,
   doSendEinvite,
@@ -60,25 +74,17 @@ import {
   sendNotificationEmail,
   sendTextEmail
 } from './icebergs/email.js';
+import { addParticipant } from './icebergs/participant.js';
+import { addConversationIds, finishArray, finishOne } from './icebergs/response.js';
 
 AWS.config.update({ region: Config.awsRegion });
 const devMode = Config.isDevMode;
-
 const generateAndRegisterZinvite = CreateUser.generateAndRegisterZinvite;
 const generateToken = Password.generateToken;
 const generateTokenP = Password.generateTokenP;
-import cookies from './utils/cookies.js';
 const COOKIES = cookies.COOKIES;
 const COOKIES_TO_CLEAR = cookies.COOKIES_TO_CLEAR;
-import constants from './utils/constants.js';
 const DEFAULTS = constants.DEFAULTS;
-import Comment from './comment.js';
-import Conversation from './conversation.js';
-import SQL from './db/sql.js';
-import Session from './session.js';
-import User from './user.js';
-import Utils from './utils/common.js';
-import logger from './utils/logger.js';
 
 if (devMode) {
   BluebirdPromise.longStackTraces();
@@ -104,18 +110,6 @@ akismet.verifyKey((_err, verified) => {
     logger.debug('Akismet: Unable to verify API key.');
   }
 });
-function isSpam(o) {
-  return new MPromise('isSpam', (resolve, reject) => {
-    akismet.checkSpam(o, (err, spam) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(spam);
-      }
-    });
-  });
-}
-let _INFO;
 function DD(f) {
   this.m = {};
   this.f = f;
@@ -277,10 +271,8 @@ String.prototype.hashCode = function () {
 };
 function initializePolisHelpers() {
   const polisTypes = Utils.polisTypes;
-  const _setCookie = cookies.setCookie;
   const setParentReferrerCookie = cookies.setParentReferrerCookie;
   const setParentUrlCookie = cookies.setParentUrlCookie;
-  const _setPermanentCookie = cookies.setPermanentCookie;
   const setCookieTestCookie = cookies.setCookieTestCookie;
   const addCookies = cookies.addCookies;
   const getPermanentCookieAndEnsureItIsSet = cookies.getPermanentCookieAndEnsureItIsSet;
@@ -288,6 +280,7 @@ function initializePolisHelpers() {
   const getPid = User.getPid;
   const getPidPromise = User.getPidPromise;
   const getPidForParticipant = User.getPidForParticipant;
+  const isModerator = Utils.isModerator;
   function recordPermanentCookieZidJoin(permanentCookieToken, zid) {
     function doInsert() {
       return pgQueryP('insert into permanentCookieZidJoins (cookie, zid) values ($1, $2);', [
@@ -336,54 +329,6 @@ function initializePolisHelpers() {
       }
       doNext();
     });
-  }
-  function doVotesPost(_uid, pid, conv, tid, voteType, weight, high_priority) {
-    const zid = conv?.zid;
-    weight = weight || 0;
-    const weight_x_32767 = Math.trunc(weight * 32767);
-    return new Promise((resolve, reject) => {
-      const query =
-        'INSERT INTO votes (pid, zid, tid, vote, weight_x_32767, high_priority, created) VALUES ($1, $2, $3, $4, $5, $6, default) RETURNING *;';
-      const params = [pid, zid, tid, voteType, weight_x_32767, high_priority];
-      pgQuery(query, params, (err, result) => {
-        if (err) {
-          if (isDuplicateKey(err)) {
-            reject('polis_err_vote_duplicate');
-          } else {
-            logger.error('polis_err_vote_other', err);
-            reject('polis_err_vote_other');
-          }
-          return;
-        }
-        const vote = result.rows[0];
-        resolve({
-          conv: conv,
-          vote: vote
-        });
-      });
-    });
-  }
-  function votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
-    return pgQueryP_readOnly('select * from conversations where zid = ($1);', [zid])
-      .then((rows) => {
-        if (!rows || !rows.length) {
-          throw 'polis_err_unknown_conversation';
-        }
-        const conv = rows[0];
-        if (!conv.is_active) {
-          throw 'polis_err_conversation_is_closed';
-        }
-        if (conv.use_xid_whitelist) {
-          return isXidWhitelisted(conv.owner, xid).then((is_whitelisted) => {
-            if (is_whitelisted) {
-              return conv;
-            }
-            throw 'polis_err_xid_not_whitelisted';
-          });
-        }
-        return conv;
-      })
-      .then((conv) => doVotesPost(uid, pid, conv, tid, voteType, weight, high_priority));
   }
   function getVotesForSingleParticipant(p) {
     if (_.isUndefined(p.pid)) {
@@ -571,57 +516,6 @@ function initializePolisHelpers() {
   function enableAgid(req, _res, next) {
     req.body.agid = 1;
     next();
-  }
-  const whitelistedCrossDomainRoutes = [/^\/api\/v[0-9]+\/launchPrep/, /^\/api\/v[0-9]+\/setFirstCookie/];
-  const whitelistedDomains = [
-    Config.getServerHostname(),
-    ...Config.whitelistItems,
-    'localhost:5000',
-    'localhost:5001',
-    'localhost:5010',
-    ''
-  ];
-  function hasWhitelistMatches(host) {
-    if (devMode) {
-      return true;
-    }
-    let hostWithoutProtocol = host;
-    if (host.startsWith('http://')) {
-      hostWithoutProtocol = host.slice(7);
-    } else if (host.startsWith('https://')) {
-      hostWithoutProtocol = host.slice(8);
-    }
-    for (let i = 0; i < whitelistedDomains.length; i++) {
-      const w = whitelistedDomains[i];
-      if (hostWithoutProtocol.endsWith(w || '')) {
-        if (hostWithoutProtocol === w) {
-          return true;
-        }
-        if (hostWithoutProtocol[hostWithoutProtocol.length - ((w || '').length + 1)] === '.') {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-  function addCorsHeader(req, res, next) {
-    const origin = req.get('Origin') || req.get('Referer') || '';
-    const sanitizedOrigin = origin.replace(/#.*$/, '').match(/^[^/]*\/\/[^/]*/)?.[0] || '';
-    const routeIsWhitelistedForAnyDomain = whitelistedCrossDomainRoutes.some((regex) => regex.test(req.path));
-    if (!hasWhitelistMatches(sanitizedOrigin) && !routeIsWhitelistedForAnyDomain) {
-      logger.info('not whitelisted', { headers: req.headers, path: req.path });
-      return next(`unauthorized domain: ${sanitizedOrigin}`);
-    }
-    if (sanitizedOrigin) {
-      res.header('Access-Control-Allow-Origin', sanitizedOrigin);
-      res.header(
-        'Access-Control-Allow-Headers',
-        'Cache-Control, Pragma, Origin, Authorization, Content-Type, X-Requested-With'
-      );
-      res.header('Access-Control-Allow-Methods', 'GET, PUT, POST, DELETE, OPTIONS');
-      res.header('Access-Control-Allow-Credentials', 'true');
-    }
-    return next();
   }
   fetchAndCacheLatestPcaData();
   function redirectIfHasZidButNoConversationId(req, res, next) {
@@ -826,7 +720,6 @@ function initializePolisHelpers() {
       }
     );
   }
-
   function handle_POST_zinvites(req, res) {
     const generateShortUrl = req.p.short_url;
     pgQuery(
@@ -857,71 +750,6 @@ function initializePolisHelpers() {
         callback(null);
       }
     });
-  }
-  function addConversationId(o, dontUseCache) {
-    if (!o.zid) {
-      return Promise.resolve(o);
-    }
-    return getZinvite(o.zid, dontUseCache).then((conversation_id) => {
-      o.conversation_id = conversation_id;
-      return o;
-    });
-  }
-  function addConversationIds(a) {
-    const zids = [];
-    for (let i = 0; i < a.length; i++) {
-      if (a[i].zid) {
-        zids.push(a[i].zid);
-      }
-    }
-    if (!zids.length) {
-      return Promise.resolve(a);
-    }
-    return getZinvites(zids).then((zid2conversation_id) =>
-      a.map((o) => {
-        o.conversation_id = zid2conversation_id[o.zid];
-        return o;
-      })
-    );
-  }
-  function finishOne(res, o, dontUseCache, altStatusCode) {
-    addConversationId(o, dontUseCache)
-      .then(
-        (item) => {
-          if (item.zid) {
-            item.zid = undefined;
-          }
-          const statusCode = altStatusCode || 200;
-          res.status(statusCode).json(item);
-        },
-        (err) => {
-          fail(res, 500, 'polis_err_finishing_responseA', err);
-        }
-      )
-      .catch((err) => {
-        fail(res, 500, 'polis_err_finishing_response', err);
-      });
-  }
-  function finishArray(res, a) {
-    addConversationIds(a)
-      .then(
-        (items) => {
-          if (items) {
-            for (let i = 0; i < items.length; i++) {
-              if (items[i].zid) {
-                items[i].zid = undefined;
-              }
-            }
-          }
-          res.status(200).json(items);
-        },
-        (err) => {
-          fail(res, 500, 'polis_err_finishing_response2A', err);
-        }
-      )
-      .catch((err) => {
-        fail(res, 500, 'polis_err_finishing_response2', err);
-      });
   }
   function checkSuzinviteCodeValidity(zid, suzinvite, callback) {
     pgQuery('SELECT * FROM suzinvites WHERE zid = ($1) AND suzinvite = ($2);', [zid, suzinvite], (err, results) => {
@@ -1027,11 +855,6 @@ function initializePolisHelpers() {
       source
     ]);
   }
-  const _LOCATION_SOURCES = {
-    HTML5: 200,
-    IP: 100,
-    manual_entry: 1
-  };
   function getUsersLocationName(_uid) {
     return Promise.resolve(null);
   }
@@ -1056,12 +879,6 @@ function initializePolisHelpers() {
       .catch((err) => {
         logger.error('polis_err_fetching_user_location_name', err);
       });
-  }
-  function updateLastInteractionTimeForConversation(zid, uid) {
-    return pgQueryP(
-      'update participants set last_interaction = now_as_millis(), nsli = 0 where zid = ($1) and uid = ($2);',
-      [zid, uid]
-    );
   }
   function addExtendedParticipantInfo(zid, uid, data) {
     if (!data || !_.keys(data).length) {
@@ -1182,15 +999,6 @@ function initializePolisHelpers() {
   }
   function isOwner(zid, uid) {
     return getConversationInfo(zid).then((info) => info.owner === uid);
-  }
-  function isModerator(zid, uid) {
-    if (isPolisDev(uid)) {
-      return Promise.resolve(true);
-    }
-    return pgQueryP_readOnly(
-      'select count(*) from conversations where owner in (select uid from users where site_id = (select site_id from users where uid = ($2))) and zid = ($1);',
-      [zid, uid]
-    ).then((rows) => rows[0].count >= 1);
   }
   function getParticipant(zid, uid) {
     return new MPromise('getParticipant', (resolve, reject) => {
@@ -1382,12 +1190,6 @@ function initializePolisHelpers() {
       type
     ]).then((_rows) => type);
   }
-  function addNotificationTask(zid) {
-    return pgQueryP(
-      'insert into notification_tasks (zid) values ($1) on conflict (zid) do update set modified = now_as_millis();',
-      [zid]
-    );
-  }
   function maybeAddNotificationTask(zid, timeInMillis) {
     return pgQueryP('insert into notification_tasks (zid, modified) values ($1, $2) on conflict (zid) do nothing;', [
       zid,
@@ -1518,7 +1320,6 @@ function initializePolisHelpers() {
   if (shouldSendNotifications) {
     doNotificationLoop();
   }
-
   function handle_POST_convSubscriptions(req, res) {
     const zid = req.p.zid;
     const uid = req.p.uid;
@@ -1753,149 +1554,6 @@ function initializePolisHelpers() {
     }
     return firstVotes;
   }
-  function isParentDomainWhitelisted(domain, zid, isWithinIframe, domain_whitelist_override_key) {
-    return pgQueryP_readOnly(
-      'select * from site_domain_whitelist where site_id = ' +
-        '(select site_id from users where uid = ' +
-        '(select owner from conversations where zid = ($1)));',
-      [zid]
-    ).then((rows) => {
-      logger.debug('isParentDomainWhitelisted', {
-        domain,
-        zid,
-        isWithinIframe
-      });
-      if (!rows || !rows.length || !rows[0].domain_whitelist.length) {
-        logger.debug('isParentDomainWhitelisted : no whitelist');
-        return true;
-      }
-      const whitelist = rows[0].domain_whitelist;
-      const wdomains = whitelist.split(',');
-      if (!isWithinIframe && wdomains.indexOf('*.pol.is') >= 0) {
-        logger.debug('isParentDomainWhitelisted : *.pol.is');
-        return true;
-      }
-      if (domain_whitelist_override_key && rows[0].domain_whitelist_override_key === domain_whitelist_override_key) {
-        return true;
-      }
-      let ok = false;
-      for (let i = 0; i < wdomains.length; i++) {
-        const w = wdomains[i];
-        let wParts = w.split('.');
-        let parts = domain.split('.');
-        if (wParts.length && wParts[0] === '*') {
-          let bad = false;
-          wParts = wParts.reverse();
-          parts = parts.reverse();
-          for (let p = 0; p < wParts.length - 1; p++) {
-            if (wParts[p] !== parts[p]) {
-              bad = true;
-              break;
-            }
-          }
-          ok = !bad;
-        } else {
-          let bad2 = false;
-          if (wParts.length !== parts.length) {
-            bad2 = true;
-          }
-          for (let p2 = 0; p2 < wParts.length; p2++) {
-            if (wParts[p2] !== parts[p2]) {
-              bad2 = true;
-              break;
-            }
-          }
-          ok = !bad2;
-        }
-        if (ok) {
-          break;
-        }
-      }
-      logger.debug(`isParentDomainWhitelisted : ${ok}`);
-      return ok;
-    });
-  }
-  function denyIfNotFromWhitelistedDomain(req, res, next) {
-    const isWithinIframe = req.headers?.referrer?.includes('parent_url');
-    const ref = req?.headers?.referrer;
-    let refParts = [];
-    let resultRef = '';
-    if (isWithinIframe) {
-      if (ref) {
-        const decodedRefString = decodeURIComponent(ref.replace(/.*parent_url=/, '').replace(/&.*/, ''));
-        if (decodedRefString?.length) refParts = decodedRefString.split('/');
-        resultRef = (refParts && refParts.length >= 3 && refParts[2]) || '';
-      }
-    } else {
-      if (ref?.length) refParts = ref.split('/');
-      if (refParts && refParts.length >= 3) resultRef = refParts[2] || '';
-    }
-    const zid = req.p.zid;
-    isParentDomainWhitelisted(resultRef, zid, isWithinIframe, req.p.domain_whitelist_override_key)
-      .then((isOk) => {
-        if (isOk) {
-          next();
-        } else {
-          res.send(403, 'polis_err_domain');
-          next('polis_err_domain');
-        }
-      })
-      .catch((err) => {
-        logger.error('error in isParentDomainWhitelisted', err);
-        res.send(403, 'polis_err_domain');
-        next('polis_err_domain_misc');
-      });
-  }
-  function setDomainWhitelist(uid, newWhitelist) {
-    return pgQueryP(
-      'select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));',
-      [uid]
-    ).then((rows) => {
-      if (!rows || !rows.length) {
-        return pgQueryP(
-          'insert into site_domain_whitelist (site_id, domain_whitelist) values ((select site_id from users where uid = ($1)), $2);',
-          [uid, newWhitelist]
-        );
-      }
-      return pgQueryP(
-        'update site_domain_whitelist set domain_whitelist = ($2) where site_id = (select site_id from users where uid = ($1));',
-        [uid, newWhitelist]
-      );
-    });
-  }
-  function getDomainWhitelist(uid) {
-    return pgQueryP(
-      'select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));',
-      [uid]
-    ).then((rows) => {
-      if (!rows || !rows.length) {
-        return '';
-      }
-      return rows[0].domain_whitelist;
-    });
-  }
-  function handle_GET_domainWhitelist(req, res) {
-    getDomainWhitelist(req.p.uid)
-      .then((whitelist) => {
-        res.json({
-          domain_whitelist: whitelist
-        });
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_get_domainWhitelist_misc', err);
-      });
-  }
-  function handle_POST_domainWhitelist(req, res) {
-    setDomainWhitelist(req.p.uid, req.p.domain_whitelist)
-      .then(() => {
-        res.json({
-          domain_whitelist: req.p.domain_whitelist
-        });
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_post_domainWhitelist_misc', err);
-      });
-  }
   function handle_GET_conversationStats(req, res) {
     const zid = req.p.zid;
     const uid = req.p.uid;
@@ -2026,7 +1684,6 @@ function initializePolisHelpers() {
       });
   }
   const getUser = User.getUser;
-  const getComments = Comment.getComments;
   const getNumberOfCommentsRemaining = Comment.getNumberOfCommentsRemaining;
   function handle_GET_participation(req, res) {
     const zid = req.p.zid;
@@ -2098,59 +1755,6 @@ function initializePolisHelpers() {
         fail(res, 500, 'polis_err_get_participation_misc', err);
       });
   }
-  const translateAndStoreComment = Comment.translateAndStoreComment;
-  function handle_GET_comments_translations(req, res) {
-    const zid = req.p.zid;
-    const tid = req.p.tid;
-    const firstTwoCharsOfLang = req.p.lang.substr(0, 2);
-    getComment(zid, tid)
-      .then((comment) => {
-        return dbPgQuery
-          .queryP("select * from comment_translations where zid = ($1) and tid = ($2) and lang LIKE '$3%';", [
-            zid,
-            tid,
-            firstTwoCharsOfLang
-          ])
-          .then((existingTranslations) => {
-            if (existingTranslations) {
-              return existingTranslations;
-            }
-            return translateAndStoreComment(zid, tid, comment.txt, req.p.lang);
-          })
-          .then((rows) => {
-            res.status(200).json(rows || []);
-          });
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_get_comments_translations', err);
-      });
-  }
-  function handle_GET_comments(req, res) {
-    const rid = `${req?.headers?.['x-request-id']} ${req?.headers?.['user-agent']}`;
-    logger.debug('getComments begin', { rid });
-    getComments(req.p)
-      .then((comments) => {
-        if (req.p.rid) {
-          return pgQueryP('select tid, selection from report_comment_selections where rid = ($1);', [req.p.rid]).then(
-            (selections) => {
-              const tidToSelection = _.indexBy(selections, 'tid');
-              comments = comments.map((c) => {
-                c.includeInReport = tidToSelection[c.tid] && tidToSelection[c.tid].selection > 0;
-                return c;
-              });
-              return comments;
-            }
-          );
-        }
-        return comments;
-      })
-      .then((comments) => {
-        finishArray(res, comments);
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_get_comments', err);
-      });
-  }
   function isDuplicateKey(err) {
     const isdup =
       err.code === 23505 ||
@@ -2164,283 +1768,6 @@ function initializePolisHelpers() {
     res.setHeader('Retry-After', 0);
     logger.warn('failWithRetryRequest');
     res.writeHead(500).send(57493875);
-  }
-  function getNumberOfCommentsWithModerationStatus(zid, mod) {
-    return new MPromise('getNumberOfCommentsWithModerationStatus', (resolve, reject) => {
-      pgQuery_readOnly('select count(*) from comments where zid = ($1) and mod = ($2);', [zid, mod], (err, result) => {
-        if (err) {
-          reject(err);
-        } else {
-          let count = result?.rows?.[0]?.count;
-          count = Number(count);
-          if (Number.isNaN(count)) {
-            count = void 0;
-          }
-          resolve(count);
-        }
-      });
-    });
-  }
-  function sendCommentModerationEmail(_req, uid, zid, unmoderatedCommentCount) {
-    if (_.isUndefined(unmoderatedCommentCount)) {
-      unmoderatedCommentCount = '';
-    }
-    let body = unmoderatedCommentCount;
-    if (unmoderatedCommentCount === 1) {
-      body += ' Statement is waiting for your review here: ';
-    } else {
-      body += ' Statements are waiting for your review here: ';
-    }
-    getZinvite(zid)
-      .catch((err) => {
-        logger.error('polis_err_getting_zinvite', err);
-        return void 0;
-      })
-      .then((zinvite) => {
-        body += createModerationUrl(zinvite);
-        body += '\n\nThank you for using Polis.';
-        return sendEmailByUid(uid, `Waiting for review (conversation ${zinvite})`, body);
-      })
-      .catch((err) => {
-        logger.error('polis_err_sending_email', err);
-      });
-  }
-  function createModerationUrl(zinvite) {
-    return `${serverUrl}/m/${zinvite}`;
-  }
-  function moderateComment(zid, tid, active, mod, is_meta) {
-    return new Promise((resolve, reject) => {
-      const query = 'UPDATE comments SET active = $1, mod = $2, is_meta = $3 WHERE zid = $4 AND tid = $5';
-      const params = [active, mod, is_meta, zid, tid];
-      logger.debug('Executing query:', { query });
-      logger.debug('With parameters:', { params });
-      pgQuery(query, params, (err, result) => {
-        if (err) {
-          logger.error('moderateComment pgQuery error:', err);
-          reject(err);
-        } else {
-          logger.debug('moderateComment pgQuery executed successfully');
-          resolve(result);
-        }
-      });
-    });
-  }
-  const getComment = Comment.getComment;
-  function hasBadWords(txt) {
-    txt = txt.toLowerCase();
-    const tokens = txt.split(' ');
-    for (let i = 0; i < tokens.length; i++) {
-      if (badwords[tokens[i]]) {
-        return true;
-      }
-    }
-    return false;
-  }
-  function commentExists(zid, txt) {
-    return pgQueryP('select zid from comments where zid = ($1) and txt = ($2);', [zid, txt]).then(
-      (rows) => rows?.length
-    );
-  }
-  const GOOGLE_DISCOVERY_URL = 'https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1';
-  async function analyzeComment(txt) {
-    try {
-      const client = await google.discoverAPI(GOOGLE_DISCOVERY_URL);
-      const analyzeRequest = {
-        comment: {
-          text: txt
-        },
-        requestedAttributes: {
-          TOXICITY: {}
-        }
-      };
-      const response = await client.comments.analyze({
-        key: Config.googleJigsawPerspectiveApiKey,
-        resource: analyzeRequest
-      });
-      return response.data;
-    } catch (err) {
-      logger.error('analyzeComment error', err);
-    }
-  }
-  async function handle_POST_comments(req, res) {
-    let { zid, xid, uid, txt, pid: initialPid, vote, anon, is_seed } = req.p;
-    let pid = initialPid;
-    let currentPid = pid;
-    const mustBeModerator = anon;
-    if (!txt || txt === '') {
-      fail(res, 400, 'polis_err_param_missing_txt');
-      return;
-    }
-    async function doGetPid() {
-      if (_.isUndefined(pid) || Number(pid) === -1) {
-        const newPid = await getPidPromise(zid, uid, true);
-        if (newPid === -1) {
-          const rows = await addParticipant(zid, uid);
-          const ptpt = rows[0];
-          pid = ptpt.pid;
-          currentPid = pid;
-          return Number(pid);
-        }
-        return newPid;
-      }
-      return Number(pid);
-    }
-    try {
-      logger.debug('Post comments txt', { zid, pid, txt });
-      const ip =
-        req.headers['x-forwarded-for'] ||
-        req.connection?.remoteAddress ||
-        req.socket?.remoteAddress ||
-        req.connection?.socket?.remoteAddress;
-      const isSpamPromise = isSpam({
-        comment_content: txt,
-        comment_author: uid,
-        permalink: `https://pol.is/${zid}`,
-        user_ip: ip,
-        user_agent: req.headers['user-agent'],
-        referrer: req.headers.referer
-      }).catch((err) => {
-        logger.error('isSpam failed', err);
-        return false;
-      });
-      const jigsawModerationPromise = Config.googleJigsawPerspectiveApiKey
-        ? analyzeComment(txt)
-        : Promise.resolve(null);
-      const isModeratorPromise = isModerator(zid, uid);
-      const conversationInfoPromise = getConversationInfo(zid);
-      let shouldCreateXidRecord = false;
-      const pidPromise = (async () => {
-        if (xid) {
-          const xidUser = await getXidStuff(xid, zid);
-          shouldCreateXidRecord = xidUser === 'noXidRecord' || xidUser.pid === -1;
-          if (typeof xidUser === 'object' && !shouldCreateXidRecord) {
-            uid = xidUser.uid;
-            pid = xidUser.pid;
-            return pid;
-          }
-        }
-        if (shouldCreateXidRecord) {
-          await createXidRecordByZid(zid, uid, xid, null, null, null);
-        }
-        const newPid = await doGetPid();
-        return newPid;
-      })();
-      const commentExistsPromise = commentExists(zid, txt);
-      const [finalPid, conv, is_moderator, commentExistsAlready, spammy, jigsawResponse] = await Promise.all([
-        pidPromise,
-        conversationInfoPromise,
-        isModeratorPromise,
-        commentExistsPromise,
-        isSpamPromise,
-        jigsawModerationPromise
-      ]);
-      if (!is_moderator && mustBeModerator) {
-        fail(res, 403, 'polis_err_post_comment_auth');
-        return;
-      }
-      if (finalPid && finalPid < 0) {
-        fail(res, 500, 'polis_err_post_comment_bad_pid');
-        return;
-      }
-      if (commentExistsAlready) {
-        fail(res, 409, 'polis_err_post_comment_duplicate');
-        return;
-      }
-      if (!conv.is_active) {
-        fail(res, 403, 'polis_err_conversation_is_closed');
-        return;
-      }
-      const bad = hasBadWords(txt);
-      const velocity = 1;
-      const jigsawToxicityThreshold = 0.8;
-      let active = true;
-      const classifications = [];
-      const toxicityScore = jigsawResponse?.attributeScores?.TOXICITY?.summaryScore?.value;
-      if (typeof toxicityScore === 'number' && !Number.isNaN(toxicityScore)) {
-        logger.debug(`Jigsaw toxicity Score for comment "${txt}": ${toxicityScore}`);
-        if (toxicityScore > jigsawToxicityThreshold && conv.profanity_filter) {
-          active = false;
-          classifications.push('bad');
-          logger.info('active=false because (jigsawToxicity && conv.profanity_filter)');
-        }
-      } else if (bad && conv.profanity_filter) {
-        active = false;
-        classifications.push('bad');
-        logger.info('active=false because (bad && conv.profanity_filter)');
-      }
-      if (spammy && conv.spam_filter) {
-        active = false;
-        classifications.push('spammy');
-        logger.info('active=false because (spammy && conv.spam_filter)');
-      }
-      let mod = 0;
-      if (is_moderator && is_seed) {
-        mod = polisTypes.mod.ok;
-        active = true;
-      }
-      const [detections] = await Promise.all([detectLanguage(txt)]);
-      const detection = Array.isArray(detections) ? detections[0] : detections;
-      const lang = detection.language;
-      const lang_confidence = detection.confidence;
-      const insertedComment = await pgQueryP(
-        `INSERT INTO COMMENTS
-        (pid, zid, txt, velocity, active, mod, uid, anon, is_seed, created, tid, lang, lang_confidence)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, default, null, $10, $11)
-        RETURNING *;`,
-        [finalPid, zid, txt, velocity, active, mod, uid, anon || false, is_seed || false, lang, lang_confidence]
-      );
-      const comment = insertedComment[0];
-      const tid = comment.tid;
-      if (bad || spammy || conv.strict_moderation) {
-        try {
-          const n = await getNumberOfCommentsWithModerationStatus(zid, polisTypes.mod.unmoderated);
-          if (n !== 0) {
-            const users = await pgQueryP_readOnly(
-              'SELECT * FROM users WHERE site_id = (SELECT site_id FROM page_ids WHERE zid = $1) UNION SELECT * FROM users WHERE uid = $2;',
-              [zid, conv.owner]
-            );
-            const uids = users.map((user) => user.uid);
-            uids.forEach((uid) => sendCommentModerationEmail(req, Number(uid), zid, n));
-          }
-        } catch (err) {
-          logger.error('polis_err_getting_modstatus_comment_count', err);
-        }
-      } else {
-        addNotificationTask(zid);
-      }
-      if (is_seed && _.isUndefined(vote) && Number(zid) <= 17037) {
-        vote = 0;
-      }
-      let createdTime = comment.created;
-      if (!_.isUndefined(vote)) {
-        try {
-          const voteResult = await votesPost(uid, finalPid, zid, tid, xid, vote, 0, false);
-          if (voteResult?.vote?.created) {
-            createdTime = voteResult.vote.created;
-          }
-        } catch (err) {
-          fail(res, 500, 'polis_err_vote_on_create', err);
-          return;
-        }
-      }
-      setTimeout(() => {
-        updateConversationModifiedTime(zid, createdTime);
-        updateLastInteractionTimeForConversation(zid, uid);
-        if (!_.isUndefined(vote)) {
-          updateVoteCount(zid, finalPid);
-        }
-      }, 100);
-      res.json({
-        tid: tid,
-        currentPid: currentPid
-      });
-    } catch (err) {
-      if (err.code === '23505' || err.code === 23505) {
-        fail(res, 409, 'polis_err_post_comment_duplicate', err);
-      } else {
-        fail(res, 500, 'polis_err_post_comment', err);
-      }
-    }
   }
   function handle_GET_votes_me(req, res) {
     getPid(req.p.zid, req.p.uid, (err, pid) => {
@@ -2469,131 +1796,6 @@ function initializePolisHelpers() {
         fail(res, 500, 'polis_err_votes_get', err);
       }
     );
-  }
-  function selectProbabilistically(comments, priorities, _nTotal, _nRemaining) {
-    const lookup = _.reduce(
-      comments,
-      (o, comment) => {
-        const lookup_val = o.lastCount + (priorities[comment.tid] || 1);
-        o.lookup.push([lookup_val, comment]);
-        o.lastCount = lookup_val;
-        return o;
-      },
-      { lastCount: 0, lookup: [] }
-    );
-    const randomN = Math.random() * lookup.lastCount;
-    const result = _.find(lookup.lookup, (x) => x[0] > randomN);
-    const c = result?.[1];
-    c.randomN = randomN;
-    return c;
-  }
-  function getNextPrioritizedComment(zid, pid, withoutTids, include_social) {
-    const params = {
-      zid: zid,
-      not_voted_by_pid: pid,
-      include_social: include_social
-    };
-    if (!_.isUndefined(withoutTids) && withoutTids.length) {
-      params.withoutTids = withoutTids;
-    }
-    return Promise.all([getComments(params), getPca(zid, 0), getNumberOfCommentsRemaining(zid, pid)]).then(
-      (results) => {
-        const comments = results[0];
-        const math = results[1];
-        const numberOfCommentsRemainingRows = results[2];
-        logger.debug('getNextPrioritizedComment intermediate results:', {
-          zid,
-          pid,
-          numberOfCommentsRemainingRows
-        });
-        if (!comments || !comments.length) {
-          return null;
-        }
-        if (!numberOfCommentsRemainingRows || !numberOfCommentsRemainingRows.length) {
-          throw new Error(`polis_err_getNumberOfCommentsRemaining_${zid}_${pid}`);
-        }
-        const commentPriorities = math ? math.asPOJO['comment-priorities'] || {} : {};
-        const nTotal = Number(numberOfCommentsRemainingRows[0].total);
-        const nRemaining = Number(numberOfCommentsRemainingRows[0].remaining);
-        const c = selectProbabilistically(comments, commentPriorities, nTotal, nRemaining);
-        c.remaining = nRemaining;
-        c.total = nTotal;
-        return c;
-      }
-    );
-  }
-  function getCommentTranslations(zid, tid) {
-    return dbPgQuery.queryP('select * from comment_translations where zid = ($1) and tid = ($2);', [zid, tid]);
-  }
-  function getNextComment(zid, pid, withoutTids, include_social, lang) {
-    return getNextPrioritizedComment(zid, pid, withoutTids, include_social).then((c) => {
-      if (lang && c) {
-        const firstTwoCharsOfLang = lang.substr(0, 2);
-        return getCommentTranslations(zid, c.tid).then((translations) => {
-          c.translations = translations;
-          const hasMatch = _.some(translations, (t) => {
-            return t.lang.startsWith(firstTwoCharsOfLang);
-          });
-          if (!hasMatch) {
-            return translateAndStoreComment(zid, c.tid, c.txt, lang).then((translation) => {
-              if (translation) {
-                c.translations.push(translation);
-              }
-              return c;
-            });
-          }
-          return c;
-        });
-      }
-      if (c) {
-        c.translations = [];
-      }
-      return c;
-    });
-  }
-  function addNoMoreCommentsRecord(zid, pid) {
-    return pgQueryP(
-      'insert into event_ptpt_no_more_comments (zid, pid, votes_placed) values ($1, $2, ' +
-        '(select count(*) from votes where zid = ($1) and pid = ($2)))',
-      [zid, pid]
-    );
-  }
-  function handle_GET_nextComment(req, res) {
-    if (req.timedout) {
-      return;
-    }
-    getNextComment(req.p.zid, req.p.not_voted_by_pid, req.p.without, req.p.include_social, req.p.lang)
-      .then(
-        (c) => {
-          if (req.timedout) {
-            return;
-          }
-          if (c) {
-            if (!_.isUndefined(req.p.not_voted_by_pid)) {
-              c.currentPid = req.p.not_voted_by_pid;
-            }
-            finishOne(res, c);
-          } else {
-            const o = {};
-            if (!_.isUndefined(req.p.not_voted_by_pid)) {
-              o.currentPid = req.p.not_voted_by_pid;
-            }
-            res.status(200).json(o);
-          }
-        },
-        (err) => {
-          if (req.timedout) {
-            return;
-          }
-          fail(res, 500, 'polis_err_get_next_comment2', err);
-        }
-      )
-      .catch((err) => {
-        if (req.timedout) {
-          return;
-        }
-        fail(res, 500, 'polis_err_get_next_comment', err);
-      });
   }
   function handle_GET_participationInit(req, res) {
     logger.info('handle_GET_participationInit');
@@ -2662,18 +1864,6 @@ function initializePolisHelpers() {
         fail(res, 500, 'polis_err_get_participationInit', err);
       });
   }
-  function updateConversationModifiedTime(zid, t) {
-    const modified = _.isUndefined(t) ? Date.now() : Number(t);
-    let query = 'update conversations set modified = ($2) where zid = ($1) and modified < ($2);';
-    let params = [zid, modified];
-    if (_.isUndefined(t)) {
-      query = 'update conversations set modified = now_as_millis() where zid = ($1);';
-      params = [zid];
-    }
-    return pgQueryP(query, params);
-  }
-  const createXidRecordByZid = Conversation.createXidRecordByZid;
-  const getXidStuff = User.getXidStuff;
   function handle_PUT_participants_extended(req, res) {
     const zid = req.p.zid;
     const uid = req.p.uid;
@@ -2781,81 +1971,6 @@ function initializePolisHelpers() {
           fail(res, 403, 'polis_err_xid_not_whitelisted', err);
         } else {
           fail(res, 500, 'polis_err_vote', err);
-        }
-      });
-  }
-  function handle_POST_ptptCommentMod(req, res) {
-    const zid = req.p.zid;
-    const pid = req.p.pid;
-    const uid = req.p.uid;
-    return pgQueryP(
-      'insert into crowd_mod (' +
-        'zid, ' +
-        'pid, ' +
-        'tid, ' +
-        'as_abusive, ' +
-        'as_factual, ' +
-        'as_feeling, ' +
-        'as_important, ' +
-        'as_notfact, ' +
-        'as_notgoodidea, ' +
-        'as_notmyfeeling, ' +
-        'as_offtopic, ' +
-        'as_spam, ' +
-        'as_unsure) values (' +
-        '$1, ' +
-        '$2, ' +
-        '$3, ' +
-        '$4, ' +
-        '$5, ' +
-        '$6, ' +
-        '$7, ' +
-        '$8, ' +
-        '$9, ' +
-        '$10, ' +
-        '$11, ' +
-        '$12, ' +
-        '$13);',
-      [
-        req.p.zid,
-        req.p.pid,
-        req.p.tid,
-        req.p.as_abusive,
-        req.p.as_factual,
-        req.p.as_feeling,
-        req.p.as_important,
-        req.p.as_notfact,
-        req.p.as_notgoodidea,
-        req.p.as_notmyfeeling,
-        req.p.as_offtopic,
-        req.p.as_spam,
-        req.p.unsure
-      ]
-    )
-      .then((createdTime) => {
-        setTimeout(() => {
-          updateConversationModifiedTime(req.p.zid, createdTime);
-          updateLastInteractionTimeForConversation(zid, uid);
-        }, 100);
-      })
-      .then(() => getNextComment(req.p.zid, pid, [], true, req.p.lang))
-      .then((nextComment) => {
-        const result = {};
-        if (nextComment) {
-          result.nextComment = nextComment;
-        } else {
-          addNoMoreCommentsRecord(req.p.zid, pid);
-        }
-        result.currentPid = req.p.pid;
-        finishOne(res, result);
-      })
-      .catch((err) => {
-        if (err === 'polis_err_ptptCommentMod_duplicate') {
-          fail(res, 406, 'polis_err_ptptCommentMod_duplicate', err);
-        } else if (err === 'polis_err_conversation_is_closed') {
-          fail(res, 403, 'polis_err_conversation_is_closed', err);
-        } else {
-          fail(res, 500, 'polis_err_ptptCommentMod', err);
         }
       });
   }
@@ -2986,65 +2101,6 @@ function initializePolisHelpers() {
         );
       });
     });
-  }
-  function handle_PUT_comments(req, res) {
-    const uid = req.p.uid;
-    const zid = req.p.zid;
-    const tid = req.p.tid;
-    const active = req.p.active;
-    const mod = req.p.mod;
-    const is_meta = req.p.is_meta;
-    logger.debug(`Attempting to update comment. zid: ${zid}, tid: ${tid}, uid: ${uid}`);
-    isModerator(zid, uid)
-      .then((isModerator) => {
-        logger.debug(`isModerator result: ${isModerator}`);
-        if (isModerator) {
-          moderateComment(zid, tid, active, mod, is_meta).then(
-            () => {
-              logger.debug('Comment moderated successfully');
-              res.status(200).json({});
-            },
-            (err) => {
-              logger.error('Error in moderateComment:', err);
-              fail(res, 500, 'polis_err_update_comment', err);
-            }
-          );
-        } else {
-          logger.debug('User is not a moderator');
-          fail(res, 403, 'polis_err_update_comment_auth');
-        }
-      })
-      .catch((err) => {
-        logger.error('Error in isModerator:', err);
-        fail(res, 500, 'polis_err_update_comment', err);
-      });
-  }
-  function handle_POST_reportCommentSelections(req, res) {
-    const uid = req.p.uid;
-    const zid = req.p.zid;
-    const rid = req.p.rid;
-    const tid = req.p.tid;
-    const selection = req.p.include ? 1 : -1;
-    isModerator(zid, uid)
-      .then((isMod) => {
-        if (!isMod) {
-          return fail(res, 403, 'polis_err_POST_reportCommentSelections_auth');
-        }
-        return pgQueryP(
-          'insert into report_comment_selections (rid, tid, selection, zid, modified) values ($1, $2, $3, $4, now_as_millis()) ' +
-            'on conflict (rid, tid) do update set selection = ($3), zid  = ($4), modified = now_as_millis();',
-          [rid, tid, selection, zid]
-        )
-          .then(() => {
-            return pgQueryP('delete from math_report_correlationmatrix where rid = ($1);', [rid]);
-          })
-          .then(() => {
-            res.json({});
-          });
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_POST_reportCommentSelections_misc', err);
-      });
   }
   function generateAndReplaceZinvite(zid, generateShortZinvite) {
     let len = 12;
@@ -4080,13 +3136,6 @@ function initializePolisHelpers() {
         return fail(res, 500, 'polis_err_notifyTeam', err);
       });
   }
-  const addParticipant = async (zid, uid) => {
-    await pgQueryP('INSERT INTO participants_extended (zid, uid) VALUES ($1, $2);', [zid, uid]);
-    return pgQueryP('INSERT INTO participants (pid, zid, uid, created) VALUES (NULL, $1, $2, default) RETURNING *;', [
-      zid,
-      uid
-    ]);
-  };
   function getSocialParticipantsForMod_timed(zid, limit, mod, convOwner) {
     const _start = Date.now();
     return getSocialParticipantsForMod.apply(null, [zid, limit, mod, convOwner]).then((results) => results);
@@ -4121,12 +3170,6 @@ function initializePolisHelpers() {
       socialParticipantsCache.set(cacheKey, response);
       return response;
     });
-  }
-  function updateVoteCount(zid, pid) {
-    return pgQueryP(
-      'update participants set vote_count = (select count(*) from votes where zid = ($1) and pid = ($2)) where zid = ($1) and pid = ($2)',
-      [zid, pid]
-    );
   }
   const votesForZidPidCache = new LRUCache({
     max: 5000
@@ -5023,11 +4066,9 @@ function initializePolisHelpers() {
   });
   logger.debug('end initializePolisHelpers');
   const returnObject = {
-    addCorsHeader,
     auth,
     authOptional,
     COOKIES,
-    denyIfNotFromWhitelistedDomain,
     devMode,
     enableAgid,
     fail,
@@ -5061,8 +4102,6 @@ function initializePolisHelpers() {
     handle_DELETE_metadata_questions,
     handle_GET_bid,
     handle_GET_bidToPid,
-    handle_GET_comments,
-    handle_GET_comments_translations,
     handle_GET_conditionalIndexFetcher,
     handle_GET_contexts,
     handle_GET_conversationPreloadInfo,
@@ -5074,7 +4113,6 @@ function initializePolisHelpers() {
     handle_GET_dataExport,
     handle_GET_dataExport_results,
     handle_GET_reportExport,
-    handle_GET_domainWhitelist,
     handle_GET_dummyButton,
     handle_GET_einvites,
     handle_GET_iim_conversation,
@@ -5088,7 +4126,6 @@ function initializePolisHelpers() {
     handle_GET_metadata_answers,
     handle_GET_metadata_choices,
     handle_GET_metadata_questions,
-    handle_GET_nextComment,
     handle_GET_participants,
     handle_GET_participation,
     handle_GET_participationInit,
@@ -5111,14 +4148,12 @@ function initializePolisHelpers() {
     handle_POST_auth_new,
     handle_POST_auth_password,
     handle_POST_auth_pwresettoken,
-    handle_POST_comments,
     handle_POST_contexts,
     handle_POST_contributors,
     handle_POST_conversation_close,
     handle_POST_conversation_reopen,
     handle_POST_conversations,
     handle_POST_convSubscriptions,
-    handle_POST_domainWhitelist,
     handle_POST_einvites,
     handle_POST_joinWithInvite,
     handle_POST_math_update,
@@ -5127,9 +4162,7 @@ function initializePolisHelpers() {
     handle_POST_metrics,
     handle_POST_notifyTeam,
     handle_POST_participants,
-    handle_POST_ptptCommentMod,
     handle_POST_query_participants_by_metadata,
-    handle_POST_reportCommentSelections,
     handle_POST_reports,
     handle_POST_reserve_conversation_id,
     handle_POST_stars,
@@ -5139,7 +4172,6 @@ function initializePolisHelpers() {
     handle_POST_votes,
     handle_POST_xidWhitelist,
     handle_POST_zinvites,
-    handle_PUT_comments,
     handle_PUT_conversations,
     handle_PUT_participants_extended,
     handle_PUT_ptptois,
