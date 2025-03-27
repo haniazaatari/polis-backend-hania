@@ -120,29 +120,41 @@ function isDuplicateKey(err) {
     err.messagePrimary?.includes('duplicate key value');
   return isdup;
 }
+function ifDefinedFirstElseSecond(first, second) {
+  return _.isUndefined(first) ? second : first;
+}
+function ifDefinedSet(name, source, dest) {
+  if (!_.isUndefined(source[name])) {
+    dest[name] = source[name];
+  }
+}
 export {
-  strToHex,
+  doAddDataExportTask,
+  escapeLiteral,
   hexToStr,
-  polisTypes,
+  ifDefinedFirstElseSecond,
+  ifDefinedSet,
   isConversationOwner,
+  isDuplicateKey,
   isModerator,
+  isOwner,
   isPolisDev,
   isSpam,
-  doAddDataExportTask,
-  isOwner,
-  escapeLiteral,
-  isDuplicateKey
+  polisTypes,
+  strToHex
 };
 export default {
-  strToHex,
+  doAddDataExportTask,
+  escapeLiteral,
   hexToStr,
-  polisTypes,
+  ifDefinedFirstElseSecond,
+  ifDefinedSet,
   isConversationOwner,
+  isDuplicateKey,
   isModerator,
+  isOwner,
   isPolisDev,
   isSpam,
-  doAddDataExportTask,
-  isOwner,
-  escapeLiteral,
-  isDuplicateKey
+  polisTypes,
+  strToHex
 };

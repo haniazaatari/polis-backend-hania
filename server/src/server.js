@@ -4,10 +4,7 @@ import AWS from 'aws-sdk';
 import bcrypt from 'bcryptjs';
 import { Promise as BluebirdPromise } from 'bluebird';
 import timeout from 'connect-timeout';
-import { encode } from 'html-entities';
-import httpProxy from 'http-proxy';
 import { LRUCache } from 'lru-cache';
-import replaceStream from 'replacestream';
 import request from 'request-promise';
 import responseTime from 'response-time';
 import _ from 'underscore';
@@ -48,7 +45,6 @@ import { votesPost } from './routes/votes.js';
 import Session from './session.js';
 import User from './user.js';
 import Utils from './utils/common.js';
-import constants from './utils/constants.js';
 import cookies from './utils/cookies.js';
 import fail from './utils/fail.js';
 import logger from './utils/logger.js';
@@ -57,52 +53,75 @@ import { getPidsForGid } from './utils/participants.js';
 import { fetchAndCacheLatestPcaData, getPca } from './utils/pca.js';
 import { getZinvite } from './utils/zinvite.js';
 
-import { addNoMoreCommentsRecord, createModerationUrl, getNextComment } from './icebergs/comment.js';
+import { addNoMoreCommentsRecord, getNextComment } from './icebergs/comment.js';
 import {
+  getOneConversation,
   updateConversationModifiedTime,
   updateLastInteractionTimeForConversation,
   updateVoteCount
 } from './icebergs/conversation.js';
 import {
-  createOneSuzinvite,
   doSendEinvite,
   emailBadProblemTime,
   emailFeatureRequest,
   emailTeam,
-  sendEmailByUid,
-  sendImplicitConversationCreatedEmails,
   sendNotificationEmail,
   sendTextEmail
 } from './icebergs/email.js';
 import { addParticipant } from './icebergs/participant.js';
-import { addConversationIds, finishArray, finishOne } from './icebergs/response.js';
+import { finishArray, finishOne } from './icebergs/response.js';
 
-AWS.config.update({ region: Config.awsRegion });
-const devMode = Config.isDevMode;
-const generateAndRegisterZinvite = CreateUser.generateAndRegisterZinvite;
-const generateToken = Password.generateToken;
-const generateTokenP = Password.generateTokenP;
+const addCookies = cookies.addCookies;
 const COOKIES = cookies.COOKIES;
 const COOKIES_TO_CLEAR = cookies.COOKIES_TO_CLEAR;
-const DEFAULTS = constants.DEFAULTS;
-
-if (devMode) {
-  BluebirdPromise.longStackTraces();
-}
-BluebirdPromise.onPossiblyUnhandledRejection((err) => {
-  logger.error('onPossiblyUnhandledRejection', err);
-});
-
-const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
-function isPolisDev(uid) {
-  return polisDevs.indexOf(uid) >= 0;
-}
-
+const createDummyUser = User.createDummyUser;
+const detectLanguage = Comment.detectLanguage;
+const devMode = Config.isDevMode;
+const encrypt = Session.encrypt;
+const endSession = Session.endSession;
+const generateAndRegisterZinvite = CreateUser.generateAndRegisterZinvite;
+const generateTokenP = Password.generateTokenP;
+const getConversationInfo = Conversation.getConversationInfo;
+const getConversationInfoByConversationId = Conversation.getConversationInfoByConversationId;
+const getNumberOfCommentsRemaining = Comment.getNumberOfCommentsRemaining;
+const getPermanentCookieAndEnsureItIsSet = cookies.getPermanentCookieAndEnsureItIsSet;
+const getPid = User.getPid;
+const getPidForParticipant = User.getPidForParticipant;
+const getPidPromise = User.getPidPromise;
+const getUser = User.getUser;
+const getUserInfoForSessionToken = Session.getUserInfoForSessionToken;
+const getUserInfoForUid2 = User.getUserInfoForUid2;
+const getXidRecordByXidOwnerId = User.getXidRecordByXidOwnerId;
+const HMAC_SIGNATURE_PARAM_NAME = 'signature';
+const isModerator = Utils.isModerator;
+const isPolisDev = Utils.isPolisDev;
+const isXidWhitelisted = Conversation.isXidWhitelisted;
+const pidCache = User.pidCache;
+const polisTypes = Utils.polisTypes;
 const serverUrl = Config.getServerUrl();
+const shouldSendNotifications = !devMode;
+const sql_participant_metadata_answers = SQL.sql_participant_metadata_answers;
+const sql_participants_extended = SQL.sql_participants_extended;
+const sql_reports = SQL.sql_reports;
+const sql_users = SQL.sql_users;
+const sql_votes_latest_unique = SQL.sql_votes_latest_unique;
+const startSession = Session.startSession;
+
 const akismet = akismetLib.client({
   blog: serverUrl,
   apiKey: Config.akismetAntispamApiKey
 });
+
+AWS.config.update({ region: Config.awsRegion });
+
+if (devMode) {
+  BluebirdPromise.longStackTraces();
+}
+
+BluebirdPromise.onPossiblyUnhandledRejection((err) => {
+  logger.error('onPossiblyUnhandledRejection', err);
+});
+
 akismet.verifyKey((_err, verified) => {
   if (verified) {
     logger.debug('Akismet: API key successfully verified.');
@@ -136,27 +155,7 @@ function haltOnTimeout(req, res, next) {
     next();
   }
 }
-function ifDefinedSet(name, source, dest) {
-  if (!_.isUndefined(source[name])) {
-    dest[name] = source[name];
-  }
-}
-const sql_votes_latest_unique = SQL.sql_votes_latest_unique;
-const sql_conversations = SQL.sql_conversations;
-const sql_participant_metadata_answers = SQL.sql_participant_metadata_answers;
-const sql_participants_extended = SQL.sql_participants_extended;
-const sql_reports = SQL.sql_reports;
-const sql_users = SQL.sql_users;
-const encrypt = Session.encrypt;
-const getUserInfoForSessionToken = Session.getUserInfoForSessionToken;
-const startSession = Session.startSession;
-const endSession = Session.endSession;
-const getUserInfoForUid2 = User.getUserInfoForUid2;
-const HMAC_SIGNATURE_PARAM_NAME = 'signature';
 
-function hasAuthToken(req) {
-  return !!req.cookies[COOKIES.TOKEN];
-}
 function getUidForApiKey(apikey) {
   return pgQueryP_readOnly_wRetryIfEmpty('select uid from apikeysndvweifu WHERE apikey = ($1);', [apikey]);
 }
@@ -185,11 +184,6 @@ function doApiKeyAuth(assigner, apikey, _isOptional, req, res, next) {
       next('polis_err_auth_no_such_api_token2');
     });
 }
-const createDummyUser = User.createDummyUser;
-const getConversationInfo = Conversation.getConversationInfo;
-const getConversationInfoByConversationId = Conversation.getConversationInfoByConversationId;
-const isXidWhitelisted = Conversation.isXidWhitelisted;
-const getXidRecordByXidOwnerId = User.getXidRecordByXidOwnerId;
 function doXidApiKeyAuth(assigner, apikey, xid, isOptional, req, res, next) {
   getUidForApiKey(apikey)
     .then(
@@ -270,17 +264,6 @@ String.prototype.hashCode = function () {
   return hash;
 };
 function initializePolisHelpers() {
-  const polisTypes = Utils.polisTypes;
-  const setParentReferrerCookie = cookies.setParentReferrerCookie;
-  const setParentUrlCookie = cookies.setParentUrlCookie;
-  const setCookieTestCookie = cookies.setCookieTestCookie;
-  const addCookies = cookies.addCookies;
-  const getPermanentCookieAndEnsureItIsSet = cookies.getPermanentCookieAndEnsureItIsSet;
-  const pidCache = User.pidCache;
-  const getPid = User.getPid;
-  const getPidPromise = User.getPidPromise;
-  const getPidForParticipant = User.getPidForParticipant;
-  const isModerator = Utils.isModerator;
   function recordPermanentCookieZidJoin(permanentCookieToken, zid) {
     function doInsert() {
       return pgQueryP('insert into permanentCookieZidJoins (cookie, zid) values ($1, $2);', [
@@ -305,7 +288,6 @@ function initializePolisHelpers() {
       }
     );
   }
-  const detectLanguage = Comment.detectLanguage;
   if (Config.backfillCommentLangDetection) {
     pgQueryP('select tid, txt, zid from comments where lang is null;', []).then((comments) => {
       let i = 0;
@@ -1058,32 +1040,6 @@ function initializePolisHelpers() {
     emailFeatureRequest(message);
     res.status(200).end();
   }
-  function doGetConversationsRecent(req, res, field) {
-    if (!isPolisDev(req.p.uid)) {
-      fail(res, 403, 'polis_err_no_access_for_this_user');
-      return;
-    }
-    let time = req.p.sinceUnixTimestamp;
-    if (_.isUndefined(time)) {
-      time = Date.now() - 1000 * 60 * 60 * 24 * 7;
-    } else {
-      time *= 1000;
-    }
-    time = Number.parseInt(time);
-    pgQueryP_readOnly(`select * from conversations where ${field} >= ($1);`, [time])
-      .then((rows) => {
-        res.json(rows);
-      })
-      .catch((err) => {
-        fail(res, 403, 'polis_err_conversationsRecent', err);
-      });
-  }
-  function handle_GET_conversationsRecentlyStarted(req, res) {
-    doGetConversationsRecent(req, res, 'created');
-  }
-  function handle_GET_conversationsRecentActivity(req, res) {
-    doGetConversationsRecent(req, res, 'modified');
-  }
   function userHasAnsweredZeQuestions(zid, answers) {
     return new MPromise('userHasAnsweredZeQuestions', (resolve, reject) => {
       getAnswersForConversation(zid, (err, available_answers) => {
@@ -1168,27 +1124,6 @@ function initializePolisHelpers() {
       .catch((err) => {
         fail(res, 500, 'polis_err_post_participants_misc', err);
       });
-  }
-  function subscribeToNotifications(zid, uid, email) {
-    const type = 1;
-    logger.info('subscribeToNotifications', { zid, uid });
-    return pgQueryP('update participants_extended set subscribe_email = ($3) where zid = ($1) and uid = ($2);', [
-      zid,
-      uid,
-      email
-    ]).then(() =>
-      pgQueryP('update participants set subscribed = ($3) where zid = ($1) and uid = ($2);', [zid, uid, type]).then(
-        (_rows) => type
-      )
-    );
-  }
-  function unsubscribeFromNotifications(zid, uid) {
-    const type = 0;
-    return pgQueryP('update participants set subscribed = ($3) where zid = ($1) and uid = ($2);', [
-      zid,
-      uid,
-      type
-    ]).then((_rows) => type);
   }
   function maybeAddNotificationTask(zid, timeInMillis) {
     return pgQueryP('insert into notification_tasks (zid, modified) values ($1, $2) on conflict (zid) do nothing;', [
@@ -1316,35 +1251,8 @@ function initializePolisHelpers() {
       setTimeout(doNotificationLoop, 10000);
     });
   }
-  const shouldSendNotifications = !devMode;
   if (shouldSendNotifications) {
     doNotificationLoop();
-  }
-  function handle_POST_convSubscriptions(req, res) {
-    const zid = req.p.zid;
-    const uid = req.p.uid;
-    const type = req.p.type;
-    const email = req.p.email;
-    function finish(type) {
-      res.status(200).json({
-        subscribed: type
-      });
-    }
-    if (type === 1) {
-      subscribeToNotifications(zid, uid, email)
-        .then(finish)
-        .catch((err) => {
-          fail(res, 500, `polis_err_sub_conv ${zid} ${uid}`, err);
-        });
-    } else if (type === 0) {
-      unsubscribeFromNotifications(zid, uid)
-        .then(finish)
-        .catch((err) => {
-          fail(res, 500, `polis_err_unsub_conv ${zid} ${uid}`, err);
-        });
-    } else {
-      fail(res, 400, 'polis_err_bad_subscription_type', new Error('polis_err_bad_subscription_type'));
-    }
   }
   function handle_POST_auth_login(req, res) {
     const password = req.p.password;
@@ -1541,109 +1449,6 @@ function initializePolisHelpers() {
   function handle_GET_perfStats(_req, res) {
     res.json(METRICS_IN_RAM);
   }
-  function getFirstForPid(votes) {
-    const seen = {};
-    const len = votes.length;
-    const firstVotes = [];
-    for (let i = 0; i < len; i++) {
-      const vote = votes[i];
-      if (!seen[vote.pid]) {
-        firstVotes.push(vote);
-        seen[vote.pid] = true;
-      }
-    }
-    return firstVotes;
-  }
-  function handle_GET_conversationStats(req, res) {
-    const zid = req.p.zid;
-    const uid = req.p.uid;
-    const until = req.p.until;
-    const hasPermission = req.p.rid ? Promise.resolve(!!req.p.rid) : isModerator(zid, uid);
-    hasPermission
-      .then((ok) => {
-        if (!ok) {
-          fail(res, 403, 'polis_err_conversationStats_need_report_id_or_moderation_permission');
-          return;
-        }
-        const args = [zid];
-        const q0 = until
-          ? 'select created, pid, mod from comments where zid = ($1) and created < ($2) order by created;'
-          : 'select created, pid, mod from comments where zid = ($1) order by created;';
-        const q1 = until
-          ? 'select created, pid from votes where zid = ($1) and created < ($2) order by created;'
-          : 'select created, pid from votes where zid = ($1) order by created;';
-        if (until) {
-          args.push(until);
-        }
-        return Promise.all([pgQueryP_readOnly(q0, args), pgQueryP_readOnly(q1, args)]).then((a) => {
-          function castTimestamp(o) {
-            o.created = Number(o.created);
-            return o;
-          }
-          const comments = _.map(a[0], castTimestamp);
-          const votes = _.map(a[1], castTimestamp);
-          const votesGroupedByPid = _.groupBy(votes, 'pid');
-          const votesHistogramObj = {};
-          _.each(votesGroupedByPid, (votesByParticipant, _pid) => {
-            votesHistogramObj[votesByParticipant.length] = votesHistogramObj[votesByParticipant.length] + 1 || 1;
-          });
-          let votesHistogram = [];
-          _.each(votesHistogramObj, (ptptCount, voteCount) => {
-            votesHistogram.push({
-              n_votes: voteCount,
-              n_ptpts: ptptCount
-            });
-          });
-          votesHistogram.sort((a, b) => a.n_ptpts - b.n_ptpts);
-          const burstsForPid = {};
-          const interBurstGap = 10 * 60 * 1000;
-          _.each(votesGroupedByPid, (votesByParticipant, pid) => {
-            burstsForPid[pid] = 1;
-            let prevCreated = votesByParticipant.length ? votesByParticipant[0] : 0;
-            for (let v = 1; v < votesByParticipant.length; v++) {
-              const vote = votesByParticipant[v];
-              if (interBurstGap + prevCreated < vote.created) {
-                burstsForPid[pid] += 1;
-              }
-              prevCreated = vote.created;
-            }
-          });
-          const burstHistogramObj = {};
-          _.each(burstsForPid, (bursts, _pid) => {
-            burstHistogramObj[bursts] = burstHistogramObj[bursts] + 1 || 1;
-          });
-          const burstHistogram = [];
-          _.each(burstHistogramObj, (ptptCount, burstCount) => {
-            burstHistogram.push({
-              n_ptpts: ptptCount,
-              n_bursts: Number(burstCount)
-            });
-          });
-          burstHistogram.sort((a, b) => a.n_bursts - b.n_bursts);
-          let actualParticipants = getFirstForPid(votes);
-          actualParticipants = _.pluck(actualParticipants, 'created');
-          let commenters = getFirstForPid(comments);
-          commenters = _.pluck(commenters, 'created');
-          const totalComments = _.pluck(comments, 'created');
-          const totalVotes = _.pluck(votes, 'created');
-          votesHistogram = _.map(votesHistogram, (x) => ({
-            n_votes: Number(x.n_votes),
-            n_ptpts: Number(x.n_ptpts)
-          }));
-          res.status(200).json({
-            voteTimes: totalVotes,
-            firstVoteTimes: actualParticipants,
-            commentTimes: totalComments,
-            firstCommentTimes: commenters,
-            votesHistogram: votesHistogram,
-            burstHistogram: burstHistogram
-          });
-        });
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_conversationStats_misc', err);
-      });
-  }
   function handle_GET_snapshot(req, _res) {
     const _uid = req.p.uid;
     const _zid = req.p.zid;
@@ -1683,8 +1488,6 @@ function initializePolisHelpers() {
         fail(res, 500, 'polis_err_getting_user_info', err);
       });
   }
-  const getUser = User.getUser;
-  const getNumberOfCommentsRemaining = Comment.getNumberOfCommentsRemaining;
   function handle_GET_participation(req, res) {
     const zid = req.p.zid;
     const uid = req.p.uid;
@@ -1763,11 +1566,6 @@ function initializePolisHelpers() {
       err.sqlState === '23505' ||
       err.messagePrimary?.includes('duplicate key value');
     return isdup;
-  }
-  function failWithRetryRequest(res) {
-    res.setHeader('Retry-After', 0);
-    logger.warn('failWithRetryRequest');
-    res.writeHead(500).send(57493875);
   }
   function handle_GET_votes_me(req, res) {
     getPid(req.p.zid, req.p.uid, (err, pid) => {
@@ -2056,118 +1854,6 @@ function initializePolisHelpers() {
       res.status(200).json({});
     });
   }
-  function verifyMetadataAnswersExistForEachQuestion(zid) {
-    const errorcode = 'polis_err_missing_metadata_answers';
-    return new Promise((resolve, reject) => {
-      pgQuery_readOnly('select pmqid from participant_metadata_questions where zid = ($1);', [zid], (err, results) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        if (!results.rows || !results.rows.length) {
-          resolve();
-          return;
-        }
-        const pmqids = results.rows.map((row) => Number(row.pmqid));
-        pgQuery_readOnly(
-          `select pmaid, pmqid from participant_metadata_answers where pmqid in (${pmqids.join(',')}) and alive = TRUE and zid = ($1);`,
-          [zid],
-          (err, results) => {
-            if (err) {
-              reject(err);
-              return;
-            }
-            if (!results.rows || !results.rows.length) {
-              reject(new Error(errorcode));
-              return;
-            }
-            const questions = _.reduce(
-              pmqids,
-              (o, pmqid) => {
-                o[pmqid] = 1;
-                return o;
-              },
-              {}
-            );
-            results.rows.forEach((row) => {
-              delete questions[row.pmqid];
-            });
-            if (Object.keys(questions).length) {
-              reject(new Error(errorcode));
-            } else {
-              resolve();
-            }
-          }
-        );
-      });
-    });
-  }
-  function generateAndReplaceZinvite(zid, generateShortZinvite) {
-    let len = 12;
-    if (generateShortZinvite) {
-      len = 6;
-    }
-    return new Promise((resolve, reject) => {
-      generateToken(len, false, (err, zinvite) => {
-        if (err) {
-          return reject('polis_err_creating_zinvite');
-        }
-        pgQuery('update zinvites set zinvite = ($1) where zid = ($2);', [zinvite, zid], (err, _results) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(zinvite);
-          }
-        });
-      });
-    });
-  }
-  function handle_POST_conversation_close(req, res) {
-    let q = 'select * from conversations where zid = ($1)';
-    const params = [req.p.zid];
-    if (!isPolisDev(req.p.uid)) {
-      q = `${q} and owner = ($2)`;
-      params.push(req.p.uid);
-    }
-    pgQueryP(q, params)
-      .then((rows) => {
-        if (!rows || !rows.length) {
-          fail(res, 500, 'polis_err_closing_conversation_no_such_conversation');
-          return;
-        }
-        const conv = rows[0];
-        pgQueryP('update conversations set is_active = false where zid = ($1);', [conv.zid]);
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_closing_conversation', err);
-      });
-  }
-  function handle_POST_conversation_reopen(req, res) {
-    let q = 'select * from conversations where zid = ($1)';
-    const params = [req.p.zid];
-    if (!isPolisDev(req.p.uid)) {
-      q = `${q} and owner = ($2)`;
-      params.push(req.p.uid);
-    }
-    pgQueryP(q, params)
-      .then((rows) => {
-        if (!rows || !rows.length) {
-          fail(res, 500, 'polis_err_closing_conversation_no_such_conversation');
-          return;
-        }
-        const conv = rows[0];
-        pgQueryP('update conversations set is_active = true where zid = ($1);', [conv.zid])
-          .then(() => {
-            res.status(200).json({});
-          })
-          .catch((err) => {
-            fail(res, 500, 'polis_err_reopening_conversation2', err);
-          });
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_reopening_conversation', err);
-      });
-  }
   function handle_PUT_users(req, res) {
     let uid = req.p.uid;
     if (isPolisDev(uid) && req.p.uid_of_user) {
@@ -2187,145 +1873,6 @@ function initializePolisHelpers() {
       })
       .catch((err) => {
         fail(res, 500, 'polis_err_put_user', err);
-      });
-  }
-  function handle_PUT_conversations(req, res) {
-    const generateShortUrl = req.p.short_url;
-    isModerator(req.p.zid, req.p.uid)
-      .then((ok) => {
-        if (!ok) {
-          fail(res, 403, 'polis_err_update_conversation_permission');
-          return;
-        }
-        let verifyMetaPromise;
-        if (req.p.verifyMeta) {
-          verifyMetaPromise = verifyMetadataAnswersExistForEachQuestion(req.p.zid);
-        } else {
-          verifyMetaPromise = Promise.resolve();
-        }
-        const fields = {};
-        if (!_.isUndefined(req.p.is_active)) {
-          fields.is_active = req.p.is_active;
-        }
-        if (!_.isUndefined(req.p.is_anon)) {
-          fields.is_anon = req.p.is_anon;
-        }
-        if (!_.isUndefined(req.p.is_draft)) {
-          fields.is_draft = req.p.is_draft;
-        }
-        if (!_.isUndefined(req.p.is_data_open)) {
-          fields.is_data_open = req.p.is_data_open;
-        }
-        if (!_.isUndefined(req.p.profanity_filter)) {
-          fields.profanity_filter = req.p.profanity_filter;
-        }
-        if (!_.isUndefined(req.p.spam_filter)) {
-          fields.spam_filter = req.p.spam_filter;
-        }
-        if (!_.isUndefined(req.p.strict_moderation)) {
-          fields.strict_moderation = req.p.strict_moderation;
-        }
-        if (!_.isUndefined(req.p.topic)) {
-          fields.topic = req.p.topic;
-        }
-        if (!_.isUndefined(req.p.description)) {
-          fields.description = req.p.description;
-        }
-        if (!_.isUndefined(req.p.vis_type)) {
-          fields.vis_type = req.p.vis_type;
-        }
-        if (!_.isUndefined(req.p.help_type)) {
-          fields.help_type = req.p.help_type;
-        }
-        if (!_.isUndefined(req.p.socialbtn_type)) {
-          fields.socialbtn_type = req.p.socialbtn_type;
-        }
-        if (!_.isUndefined(req.p.bgcolor)) {
-          if (req.p.bgcolor === 'default') {
-            fields.bgcolor = null;
-          } else {
-            fields.bgcolor = req.p.bgcolor;
-          }
-        }
-        if (!_.isUndefined(req.p.help_color)) {
-          if (req.p.help_color === 'default') {
-            fields.help_color = null;
-          } else {
-            fields.help_color = req.p.help_color;
-          }
-        }
-        if (!_.isUndefined(req.p.help_bgcolor)) {
-          if (req.p.help_bgcolor === 'default') {
-            fields.help_bgcolor = null;
-          } else {
-            fields.help_bgcolor = req.p.help_bgcolor;
-          }
-        }
-        if (!_.isUndefined(req.p.style_btn)) {
-          fields.style_btn = req.p.style_btn;
-        }
-        if (!_.isUndefined(req.p.write_type)) {
-          fields.write_type = req.p.write_type;
-        }
-        if (!_.isUndefined(req.p.importance_enabled)) {
-          fields.importance_enabled = req.p.importance_enabled;
-        }
-        ifDefinedSet('auth_opt_allow_3rdparty', req.p, fields);
-        if (!_.isUndefined(req.p.owner_sees_participation_stats)) {
-          fields.owner_sees_participation_stats = !!req.p.owner_sees_participation_stats;
-        }
-        if (!_.isUndefined(req.p.link_url)) {
-          fields.link_url = req.p.link_url;
-        }
-        ifDefinedSet('subscribe_type', req.p, fields);
-        const q = sql_conversations.update(fields).where(sql_conversations.zid.equals(req.p.zid)).returning('*');
-        verifyMetaPromise.then(
-          () => {
-            pgQuery(q.toString(), (err, result) => {
-              if (err) {
-                fail(res, 500, 'polis_err_update_conversation', err);
-                return;
-              }
-              const conv = result?.rows?.[0];
-              conv.is_mod = true;
-              const promise = generateShortUrl
-                ? generateAndReplaceZinvite(req.p.zid, generateShortUrl)
-                : Promise.resolve();
-              const successCode = generateShortUrl ? 201 : 200;
-              promise
-                .then(() => {
-                  if (req.p.send_created_email) {
-                    Promise.all([getUserInfoForUid2(req.p.uid), getConversationUrl(req, req.p.zid, true)])
-                      .then((results) => {
-                        const hname = results[0].hname;
-                        const url = results[1];
-                        sendEmailByUid(
-                          req.p.uid,
-                          'Conversation created',
-                          `Hi ${hname},\n\nHere's a link to the conversation you just created. Use it to invite participants to the conversation. Share it by whatever network you prefer - Gmail, Facebook, Twitter, etc., or just post it to your website or blog. Try it now! Click this link to go to your conversation:\n${url}\n\nWith gratitude,\n\nThe team at pol.is\n`
-                        ).catch((err) => {
-                          logger.error('polis_err_sending_conversation_created_email', err);
-                        });
-                      })
-                      .catch((err) => {
-                        logger.error('polis_err_sending_conversation_created_email', err);
-                      });
-                  }
-                  finishOne(res, conv, true, successCode);
-                  updateConversationModifiedTime(req.p.zid);
-                })
-                .catch((err) => {
-                  fail(res, 500, 'polis_err_update_conversation', err);
-                });
-            });
-          },
-          (err) => {
-            fail(res, 500, err.message, err);
-          }
-        );
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_update_conversation', err);
       });
   }
   function handle_DELETE_metadata_questions(req, res) {
@@ -2595,221 +2142,6 @@ function initializePolisHelpers() {
       doneChecking(false);
     }
   }
-  function getConversationHasMetadata(zid) {
-    return new Promise((resolve, reject) => {
-      pgQuery_readOnly(
-        'SELECT * from participant_metadata_questions where zid = ($1)',
-        [zid],
-        (err, metadataResults) => {
-          if (err) {
-            return reject('polis_err_get_conversation_metadata_by_zid');
-          }
-          const hasNoMetadata = !metadataResults || !metadataResults.rows || !metadataResults.rows.length;
-          resolve(!hasNoMetadata);
-        }
-      );
-    });
-  }
-  function getConversationTranslations(zid, lang) {
-    const firstTwoCharsOfLang = lang.substr(0, 2);
-    return pgQueryP('select * from conversation_translations where zid = ($1) and lang = ($2);', [
-      zid,
-      firstTwoCharsOfLang
-    ]);
-  }
-  function getConversationTranslationsMinimal(zid, lang) {
-    if (!lang) {
-      return Promise.resolve([]);
-    }
-    return getConversationTranslations(zid, lang).then((rows) => {
-      for (let i = 0; i < rows.length; i++) {
-        rows[i].zid = undefined;
-        rows[i].created = undefined;
-        rows[i].modified = undefined;
-        rows[i].src = undefined;
-      }
-      return rows;
-    });
-  }
-  function getOneConversation(zid, uid, lang) {
-    return Promise.all([
-      pgQueryP_readOnly(
-        'select * from conversations left join  (select uid, site_id from users) as u on conversations.owner = u.uid where conversations.zid = ($1);',
-        [zid]
-      ),
-      getConversationHasMetadata(zid),
-      _.isUndefined(uid) ? Promise.resolve({}) : getUserInfoForUid2(uid),
-      getConversationTranslationsMinimal(zid, lang)
-    ]).then((results) => {
-      const conv = results[0]?.[0];
-      const convHasMetadata = results[1];
-      const requestingUserInfo = results[2];
-      const translations = results[3];
-      conv.auth_opt_allow_3rdparty = ifDefinedFirstElseSecond(conv.auth_opt_allow_3rdparty, true);
-      conv.translations = translations;
-      return getUserInfoForUid2(conv.owner).then((ownerInfo) => {
-        const ownername = ownerInfo.hname;
-        if (convHasMetadata) {
-          conv.hasMetadata = true;
-        }
-        if (!_.isUndefined(ownername) && conv.context !== 'hongkong2014') {
-          conv.ownername = ownername;
-        }
-        conv.is_mod = conv.site_id === requestingUserInfo.site_id;
-        conv.is_owner = conv.owner === uid;
-        conv.uid = undefined;
-        return conv;
-      });
-    });
-  }
-  function getConversations(req, res) {
-    const uid = req.p.uid;
-    const zid = req.p.zid;
-    const xid = req.p.xid;
-    const include_all_conversations_i_am_in = req.p.include_all_conversations_i_am_in;
-    const want_mod_url = req.p.want_mod_url;
-    const want_upvoted = req.p.want_upvoted;
-    const want_inbox_item_admin_url = req.p.want_inbox_item_admin_url;
-    const want_inbox_item_participant_url = req.p.want_inbox_item_participant_url;
-    const want_inbox_item_admin_html = req.p.want_inbox_item_admin_html;
-    const want_inbox_item_participant_html = req.p.want_inbox_item_participant_html;
-    const _context = req.p.context;
-    let zidListQuery =
-      'select zid, 1 as type from conversations where owner in (select uid from users where site_id = (select site_id from users where uid = ($1)))';
-    if (include_all_conversations_i_am_in) {
-      zidListQuery += ' UNION ALL select zid, 2 as type from participants where uid = ($1)';
-    }
-    zidListQuery += ';';
-    pgQuery_readOnly(zidListQuery, [uid], (err, results) => {
-      if (err) {
-        fail(res, 500, 'polis_err_get_conversations_participated_in', err);
-        return;
-      }
-      const participantInOrSiteAdminOf = (results?.rows && _.pluck(results.rows, 'zid')) || null;
-      const siteAdminOf = _.filter(results.rows, (row) => row.type === 1);
-      const isSiteAdmin = _.indexBy(siteAdminOf, 'zid');
-      let query = sql_conversations.select(sql_conversations.star());
-      let isRootsQuery = false;
-      let orClauses;
-      if (!_.isUndefined(req.p.context)) {
-        if (req.p.context === '/') {
-          orClauses = sql_conversations.is_public.equals(true);
-          isRootsQuery = true;
-        } else {
-          orClauses = sql_conversations.context.equals(req.p.context);
-        }
-      } else {
-        orClauses = sql_conversations.owner.equals(uid);
-        if (participantInOrSiteAdminOf.length) {
-          orClauses = orClauses.or(sql_conversations.zid.in(participantInOrSiteAdminOf));
-        }
-      }
-      query = query.where(orClauses);
-      if (!_.isUndefined(req.p.course_invite)) {
-        query = query.and(sql_conversations.course_id.equals(req.p.course_id));
-      }
-      if (!_.isUndefined(req.p.is_active)) {
-        query = query.and(sql_conversations.is_active.equals(req.p.is_active));
-      }
-      if (!_.isUndefined(req.p.is_draft)) {
-        query = query.and(sql_conversations.is_draft.equals(req.p.is_draft));
-      }
-      if (!_.isUndefined(req.p.zid)) {
-        query = query.and(sql_conversations.zid.equals(zid));
-      }
-      if (isRootsQuery) {
-        query = query.and(sql_conversations.context.isNotNull());
-      }
-      query = query.order(sql_conversations.created.descending);
-      if (!_.isUndefined(req.p.limit)) {
-        query = query.limit(req.p.limit);
-      } else {
-        query = query.limit(999);
-      }
-      pgQuery_readOnly(query.toString(), (err, result) => {
-        if (err) {
-          fail(res, 500, 'polis_err_get_conversations', err);
-          return;
-        }
-        const data = result.rows || [];
-        addConversationIds(data)
-          .then((data) => {
-            let suurlsPromise;
-            if (xid) {
-              suurlsPromise = Promise.all(
-                data.map((conv) => createOneSuzinvite(xid, conv.zid, conv.owner, _.partial(generateSingleUseUrl, req)))
-              );
-            } else {
-              suurlsPromise = Promise.resolve();
-            }
-            const upvotesPromise =
-              uid && want_upvoted
-                ? pgQueryP_readOnly('select zid from upvotes where uid = ($1);', [uid])
-                : Promise.resolve();
-            return Promise.all([suurlsPromise, upvotesPromise]).then(
-              (x) => {
-                let suurlData = x[0];
-                let upvotes = x[1];
-                if (suurlData) {
-                  suurlData = _.indexBy(suurlData, 'zid');
-                }
-                if (upvotes) {
-                  upvotes = _.indexBy(upvotes, 'zid');
-                }
-                data.forEach((conv) => {
-                  conv.is_owner = conv.owner === uid;
-                  if (want_mod_url) {
-                    conv.mod_url = createModerationUrl(conv.conversation_id);
-                  }
-                  if (want_inbox_item_admin_url) {
-                    conv.inbox_item_admin_url = `${serverUrl}/iim/${conv.conversation_id}`;
-                  }
-                  if (want_inbox_item_participant_url) {
-                    conv.inbox_item_participant_url = `${serverUrl}/iip/${conv.conversation_id}`;
-                  }
-                  if (want_inbox_item_admin_html) {
-                    conv.inbox_item_admin_html = `<a href='${serverUrl}/${conv.conversation_id}'>${conv.topic || conv.created}</a> <a href='${serverUrl}/m/${conv.conversation_id}'>moderate</a>`;
-                    conv.inbox_item_admin_html_escaped = conv.inbox_item_admin_html.replace(/'/g, "\\'");
-                  }
-                  if (want_inbox_item_participant_html) {
-                    conv.inbox_item_participant_html = `<a href='${serverUrl}/${conv.conversation_id}'>${conv.topic || conv.created}</a>`;
-                    conv.inbox_item_participant_html_escaped = conv.inbox_item_admin_html.replace(/'/g, "\\'");
-                  }
-                  if (suurlData) {
-                    conv.url = suurlData[conv.zid || ''].suurl;
-                  } else {
-                    conv.url = buildConversationUrl(req, conv.conversation_id);
-                  }
-                  if (upvotes?.[conv.zid || '']) {
-                    conv.upvoted = true;
-                  }
-                  conv.created = Number(conv.created);
-                  conv.modified = Number(conv.modified);
-                  if (_.isUndefined(conv.topic) || conv.topic === '') {
-                    conv.topic = new Date(conv.created).toUTCString();
-                  }
-                  conv.is_mod = conv.is_owner || isSiteAdmin[conv.zid || ''];
-                  conv.zid = undefined;
-                  conv.is_anon = undefined;
-                  conv.is_draft = undefined;
-                  conv.is_public = undefined;
-                  if (conv.context === '') {
-                    conv.context = undefined;
-                  }
-                });
-                res.status(200).json(data);
-              },
-              (err) => {
-                fail(res, 500, 'polis_err_get_conversations_surls', err);
-              }
-            );
-          })
-          .catch((err) => {
-            fail(res, 500, 'polis_err_get_conversations_misc', err);
-          });
-      });
-    });
-  }
   function createReport(zid) {
     return generateTokenP(20, false).then((report_id) => {
       report_id = `r${report_id}`;
@@ -2925,38 +2257,6 @@ function initializePolisHelpers() {
         }
       });
   }
-  function handle_GET_conversations(req, res) {
-    let courseIdPromise = Promise.resolve();
-    if (req.p.course_invite) {
-      courseIdPromise = pgQueryP_readOnly('select course_id from courses where course_invite = ($1);', [
-        req.p.course_invite
-      ]).then((rows) => rows[0].course_id);
-    }
-    courseIdPromise.then((course_id) => {
-      if (course_id) {
-        req.p.course_id = course_id;
-      }
-      const lang = null;
-      if (req.p.zid) {
-        getOneConversation(req.p.zid, req.p.uid, lang)
-          .then(
-            (data) => {
-              finishOne(res, data);
-            },
-            (err) => {
-              fail(res, 500, 'polis_err_get_conversations_2', err);
-            }
-          )
-          .catch((err) => {
-            fail(res, 500, 'polis_err_get_conversations_1', err);
-          });
-      } else if (req.p.uid || req.p.context) {
-        getConversations(req, res);
-      } else {
-        fail(res, 403, 'polis_err_need_auth');
-      }
-    });
-  }
   function handle_GET_contexts(_req, res) {
     pgQueryP_readOnly('select name from contexts where is_public = TRUE order by name;', [])
       .then(
@@ -3004,100 +2304,6 @@ function initializePolisHelpers() {
       )
       .catch((err) => {
         fail(res, 500, 'polis_err_post_contexts_check_misc', err);
-      });
-  }
-  function isUserAllowedToCreateConversations(_uid, callback) {
-    callback?.(null, true);
-  }
-  function handle_POST_reserve_conversation_id(_req, res) {
-    const zid = 0;
-    const shortUrl = false;
-    generateAndRegisterZinvite(zid, shortUrl)
-      .then((conversation_id) => {
-        res.json({
-          conversation_id: conversation_id
-        });
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_reserve_conversation_id', err);
-      });
-  }
-  function handle_POST_conversations(req, res) {
-    const xidStuffReady = Promise.resolve();
-    xidStuffReady
-      .then(() => {
-        const generateShortUrl = req.p.short_url;
-        isUserAllowedToCreateConversations(req.p.uid, (err, isAllowed) => {
-          if (err) {
-            fail(res, 403, 'polis_err_add_conversation_failed_user_check', err);
-            return;
-          }
-          if (!isAllowed) {
-            fail(
-              res,
-              403,
-              'polis_err_add_conversation_not_enabled',
-              new Error('polis_err_add_conversation_not_enabled')
-            );
-            return;
-          }
-          const q = sql_conversations
-            .insert({
-              owner: req.p.uid,
-              org_id: req.p.org_id || req.p.uid,
-              topic: req.p.topic,
-              description: req.p.description,
-              is_active: req.p.is_active,
-              is_data_open: req.p.is_data_open,
-              is_draft: req.p.is_draft,
-              is_public: true,
-              is_anon: req.p.is_anon,
-              profanity_filter: req.p.profanity_filter,
-              spam_filter: req.p.spam_filter,
-              strict_moderation: req.p.strict_moderation,
-              context: req.p.context || null,
-              owner_sees_participation_stats: !!req.p.owner_sees_participation_stats,
-              auth_needed_to_vote: DEFAULTS.auth_needed_to_vote,
-              auth_needed_to_write: DEFAULTS.auth_needed_to_write,
-              auth_opt_allow_3rdparty: req.p.auth_opt_allow_3rdparty || DEFAULTS.auth_opt_allow_3rdparty
-            })
-            .returning('*')
-            .toString();
-          pgQuery(q, [], (err, result) => {
-            if (err) {
-              if (isDuplicateKey(err)) {
-                logger.error('polis_err_add_conversation', err);
-                failWithRetryRequest(res);
-              } else {
-                fail(res, 500, 'polis_err_add_conversation', err);
-              }
-              return;
-            }
-            const zid = result?.rows?.[0]?.zid;
-            const zinvitePromise = req.p.conversation_id
-              ? Conversation.getZidFromConversationId(req.p.conversation_id).then((zid) => {
-                  return zid === 0 ? req.p.conversation_id : null;
-                })
-              : generateAndRegisterZinvite(zid, generateShortUrl);
-            zinvitePromise
-              .then((zinvite) => {
-                if (zinvite === null) {
-                  fail(res, 400, 'polis_err_conversation_id_already_in_use', err);
-                  return;
-                }
-                finishOne(res, {
-                  url: buildConversationUrl(req, zinvite),
-                  zid: zid
-                });
-              })
-              .catch((err) => {
-                fail(res, 500, 'polis_err_zinvite_create', err);
-              });
-          });
-        });
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_conversation_create', err);
       });
   }
   function handle_POST_query_participants_by_metadata(req, res) {
@@ -3541,24 +2747,6 @@ function initializePolisHelpers() {
       }
     );
   }
-  function generateSingleUseUrl(_req, conversation_id, suzinvite) {
-    return `${serverUrl}/ot/${conversation_id}/${suzinvite}`;
-  }
-  function buildConversationUrl(_req, zinvite) {
-    return `${serverUrl}/${zinvite}`;
-  }
-  function buildConversationDemoUrl(_req, zinvite) {
-    return `${serverUrl}/demo/${zinvite}`;
-  }
-  function buildModerationUrl(_req, zinvite) {
-    return `${serverUrl}/m/${zinvite}`;
-  }
-  function buildSeedUrl(req, zinvite) {
-    return `${buildModerationUrl(req, zinvite)}/comments/seed`;
-  }
-  function getConversationUrl(req, zid, dontUseCache) {
-    return getZinvite(zid, dontUseCache).then((zinvite) => buildConversationUrl(req, zinvite));
-  }
   function handle_GET_testConnection(_req, res) {
     res.status(200).json({
       status: 'ok'
@@ -3575,269 +2763,6 @@ function initializePolisHelpers() {
         fail(res, 500, 'polis_err_testDatabase', err);
       }
     );
-  }
-  function initializeImplicitConversation(site_id, page_id, o) {
-    return pgQueryP_readOnly('select uid from users where site_id = ($1) and site_owner = TRUE;', [site_id]).then(
-      (rows) => {
-        if (!rows || !rows.length) {
-          throw new Error('polis_err_bad_site_id');
-        }
-        return new Promise((resolve, reject) => {
-          const uid = rows[0].uid;
-          const generateShortUrl = false;
-          isUserAllowedToCreateConversations(uid, (err, isAllowed) => {
-            if (err) {
-              reject(err);
-              return;
-            }
-            if (!isAllowed) {
-              reject(err);
-              return;
-            }
-            const params = Object.assign(o, {
-              owner: uid,
-              org_id: uid,
-              is_active: true,
-              is_draft: false,
-              is_public: true,
-              is_anon: false,
-              profanity_filter: true,
-              spam_filter: true,
-              strict_moderation: false,
-              owner_sees_participation_stats: false
-            });
-            const q = sql_conversations.insert(params).returning('*').toString();
-            pgQuery(q, [], (err, result) => {
-              if (err) {
-                if (isDuplicateKey(err)) {
-                  logger.error('polis_err_create_implicit_conv_duplicate_key', err);
-                  reject('polis_err_create_implicit_conv_duplicate_key');
-                } else {
-                  reject('polis_err_create_implicit_conv_db');
-                }
-              }
-              const zid = result?.rows?.[0]?.zid;
-              Promise.all([registerPageId(site_id, page_id, zid), generateAndRegisterZinvite(zid, generateShortUrl)])
-                .then((o) => {
-                  const zinvite = o[1];
-                  resolve({
-                    owner: uid,
-                    zid: zid,
-                    zinvite: zinvite
-                  });
-                })
-                .catch((err) => {
-                  reject('polis_err_zinvite_create_implicit', err);
-                });
-            });
-          });
-        });
-      }
-    );
-  }
-  function registerPageId(site_id, page_id, zid) {
-    return pgQueryP('insert into page_ids (site_id, page_id, zid) values ($1, $2, $3);', [site_id, page_id, zid]);
-  }
-  function doGetConversationPreloadInfo(conversation_id) {
-    return Conversation.getZidFromConversationId(conversation_id)
-      .then((zid) => Promise.all([getConversationInfo(zid)]))
-      .then((a) => {
-        let conv = a[0];
-        const auth_opt_allow_3rdparty = ifDefinedFirstElseSecond(
-          conv.auth_opt_allow_3rdparty,
-          DEFAULTS.auth_opt_allow_3rdparty
-        );
-        conv = {
-          topic: conv.topic,
-          description: conv.description,
-          created: conv.created,
-          link_url: conv.link_url,
-          parent_url: conv.parent_url,
-          vis_type: conv.vis_type,
-          write_type: conv.write_type,
-          importance_enabled: conv.importance_enabled,
-          help_type: conv.help_type,
-          socialbtn_type: conv.socialbtn_type,
-          bgcolor: conv.bgcolor,
-          help_color: conv.help_color,
-          help_bgcolor: conv.help_bgcolor,
-          style_btn: conv.style_btn,
-          auth_needed_to_vote: false,
-          auth_needed_to_write: false,
-          auth_opt_allow_3rdparty: auth_opt_allow_3rdparty
-        };
-        conv.conversation_id = conversation_id;
-        return conv;
-      });
-  }
-  function handle_GET_conversationPreloadInfo(req, res) {
-    return doGetConversationPreloadInfo(req.p.conversation_id).then(
-      (conv) => {
-        res.status(200).json(conv);
-      },
-      (err) => {
-        fail(res, 500, 'polis_err_get_conversation_preload_info', err);
-      }
-    );
-  }
-  function handle_GET_implicit_conversation_generation(req, res) {
-    let site_id = /polis_site_id[^/]*/.exec(req.path) || null;
-    let page_id = /\S\/([^/]*)/.exec(req.path) || null;
-    if (!site_id?.length || (page_id && page_id?.length < 2)) {
-      fail(res, 404, 'polis_err_parsing_site_id_or_page_id');
-    }
-    site_id = site_id?.[0];
-    page_id = page_id?.[1];
-    const demo = req.p.demo;
-    const ucv = req.p.ucv;
-    const ucw = req.p.ucw;
-    const ucsh = req.p.ucsh;
-    const ucst = req.p.ucst;
-    const ucsd = req.p.ucsd;
-    const ucsv = req.p.ucsv;
-    const ucsf = req.p.ucsf;
-    const ui_lang = req.p.ui_lang;
-    const subscribe_type = req.p.subscribe_type;
-    const xid = req.p.xid;
-    const x_name = req.p.x_name;
-    const x_profile_image_url = req.p.x_profile_image_url;
-    const x_email = req.p.x_email;
-    const parent_url = req.p.parent_url;
-    const dwok = req.p.dwok;
-    const o = {};
-    ifDefinedSet('parent_url', req.p, o);
-    ifDefinedSet('auth_opt_allow_3rdparty', req.p, o);
-    ifDefinedSet('topic', req.p, o);
-    if (!_.isUndefined(req.p.show_vis)) {
-      o.vis_type = req.p.show_vis ? 1 : 0;
-    }
-    if (!_.isUndefined(req.p.bg_white)) {
-      o.bgcolor = req.p.bg_white ? '#fff' : null;
-    }
-    o.socialbtn_type = req.p.show_share ? 1 : 0;
-    if (req.p.referrer) {
-      setParentReferrerCookie(req, res, req.p.referrer);
-    }
-    if (req.p.parent_url) {
-      setParentUrlCookie(req, res, req.p.parent_url);
-    }
-    function appendParams(url) {
-      url += `?site_id=${site_id}&page_id=${page_id}`;
-      if (!_.isUndefined(ucv)) {
-        url += `&ucv=${ucv}`;
-      }
-      if (!_.isUndefined(ucw)) {
-        url += `&ucw=${ucw}`;
-      }
-      if (!_.isUndefined(ucst)) {
-        url += `&ucst=${ucst}`;
-      }
-      if (!_.isUndefined(ucsd)) {
-        url += `&ucsd=${ucsd}`;
-      }
-      if (!_.isUndefined(ucsv)) {
-        url += `&ucsv=${ucsv}`;
-      }
-      if (!_.isUndefined(ucsf)) {
-        url += `&ucsf=${ucsf}`;
-      }
-      if (!_.isUndefined(ui_lang)) {
-        url += `&ui_lang=${ui_lang}`;
-      }
-      if (!_.isUndefined(ucsh)) {
-        url += `&ucsh=${ucsh}`;
-      }
-      if (!_.isUndefined(subscribe_type)) {
-        url += `&subscribe_type=${subscribe_type}`;
-      }
-      if (!_.isUndefined(xid)) {
-        url += `&xid=${xid}`;
-      }
-      if (!_.isUndefined(x_name)) {
-        url += `&x_name=${encodeURIComponent(x_name)}`;
-      }
-      if (!_.isUndefined(x_profile_image_url)) {
-        url += `&x_profile_image_url=${encodeURIComponent(x_profile_image_url)}`;
-      }
-      if (!_.isUndefined(x_email)) {
-        url += `&x_email=${encodeURIComponent(x_email)}`;
-      }
-      if (!_.isUndefined(parent_url)) {
-        url += `&parent_url=${encodeURIComponent(parent_url)}`;
-      }
-      if (!_.isUndefined(dwok)) {
-        url += `&dwok=${dwok}`;
-      }
-      return url;
-    }
-    pgQueryP_readOnly('select * from page_ids where site_id = ($1) and page_id = ($2);', [site_id, page_id])
-      .then((rows) => {
-        if (!rows || !rows.length) {
-          initializeImplicitConversation(site_id, page_id, o)
-            .then((conv) => {
-              let url = _.isUndefined(demo)
-                ? buildConversationUrl(req, conv.zinvite)
-                : buildConversationDemoUrl(req, conv.zinvite);
-              const modUrl = buildModerationUrl(req, conv.zinvite);
-              const seedUrl = buildSeedUrl(req, conv.zinvite);
-              sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, seedUrl)
-                .then(() => {
-                  logger.info('email sent');
-                })
-                .catch((err) => {
-                  logger.error('email fail', err);
-                });
-              url = appendParams(url);
-              res.redirect(url);
-            })
-            .catch((err) => {
-              fail(res, 500, 'polis_err_creating_conv', err);
-            });
-        } else {
-          getZinvite(rows[0].zid)
-            .then((conversation_id) => {
-              let url = buildConversationUrl(req, conversation_id);
-              url = appendParams(url);
-              res.redirect(url);
-            })
-            .catch((err) => {
-              fail(res, 500, 'polis_err_finding_conversation_id', err);
-            });
-        }
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_redirecting_to_conv', err);
-      });
-  }
-  const routingProxy = new httpProxy.createProxyServer();
-  function addStaticFileHeaders(res) {
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', 0);
-  }
-  function proxy(req, res) {
-    const hostname = Config.staticFilesHost;
-    if (!hostname) {
-      const host = req?.headers?.host || '';
-      const re = new RegExp(`${Config.getServerHostname()}$`);
-      if (host.match(re)) {
-        fail(res, 500, 'polis_err_proxy_serving_to_domain', new Error(host));
-      } else {
-        fail(res, 500, 'polis_err_proxy_serving_to_domain', new Error(host));
-      }
-      return;
-    }
-    if (devMode) {
-      addStaticFileHeaders(res);
-    }
-    const port = Config.staticFilesParticipationPort;
-    if (req?.headers?.host) req.headers.host = hostname;
-    routingProxy.web(req, res, {
-      target: {
-        host: hostname,
-        port: port
-      }
-    });
   }
   function makeRedirectorTo(path) {
     return (req, res) => {
@@ -3881,141 +2806,6 @@ function initializePolisHelpers() {
       )
     );
   }
-  function makeFileFetcher(_hostname, port, path, headers, preloadData) {
-    return (req, res) => {
-      const hostname = Config.staticFilesHost;
-      if (!hostname) {
-        fail(res, 500, 'polis_err_file_fetcher_serving_to_domain');
-        return;
-      }
-      const url = `http://${hostname}:${port}${path}`;
-      logger.info(`fetch file from ${url}`);
-      let x = request(url);
-      req.pipe(x);
-      if (!_.isUndefined(preloadData)) {
-        x = x.pipe(replaceStream('"REPLACE_THIS_WITH_PRELOAD_DATA"', JSON.stringify(preloadData)));
-      }
-      let fbMetaTagsString = '<meta property="og:image" content="https://s3.amazonaws.com/pol.is/polis_logo.png" />\n';
-      if (preloadData?.conversation) {
-        fbMetaTagsString += `    <meta property="og:title" content="${encode(preloadData.conversation.topic)}" />\n`;
-        fbMetaTagsString += `    <meta property="og:description" content="${encode(preloadData.conversation.description)}" />\n`;
-      }
-      x = x.pipe(replaceStream('<!-- REPLACE_THIS_WITH_FB_META_TAGS -->', fbMetaTagsString));
-      res.set(headers);
-      x.pipe(res);
-      x.on('error', (err) => {
-        fail(res, 500, `polis_err_finding_file ${path}`, err);
-      });
-    };
-  }
-  function isUnsupportedBrowser(req) {
-    return /MSIE [234567]/.test(req?.headers?.['user-agent'] || '');
-  }
-  function browserSupportsPushState(req) {
-    return !/MSIE [23456789]/.test(req?.headers?.['user-agent'] || '');
-  }
-  const hostname = Config.staticFilesHost;
-  const staticFilesParticipationPort = Config.staticFilesParticipationPort;
-  const staticFilesAdminPort = Config.staticFilesAdminPort;
-  const fetchUnsupportedBrowserPage = makeFileFetcher(
-    hostname,
-    staticFilesParticipationPort,
-    '/unsupportedBrowser.html',
-    {
-      'Content-Type': 'text/html'
-    }
-  );
-  function fetchIndex(req, res, preloadData, port) {
-    const headers = {
-      'Content-Type': 'text/html'
-    };
-    if (!devMode) {
-      Object.assign(headers, {
-        'Cache-Control': 'no-cache'
-      });
-    }
-    setCookieTestCookie(req, res);
-    const indexPath = '/index.html';
-    const doFetch = makeFileFetcher(hostname, port, indexPath, headers, preloadData);
-    if (isUnsupportedBrowser(req)) {
-      return fetchUnsupportedBrowserPage(req, res);
-    }
-    if (!browserSupportsPushState(req) && req.path.length > 1 && !/^\/api/.exec(req.path)) {
-      res.writeHead(302, {
-        Location: `https://${req?.headers?.host}/#${req.path}`
-      });
-      return res.end();
-    }
-    return doFetch(req, res);
-  }
-  function fetchIndexWithoutPreloadData(req, res, port) {
-    return fetchIndex(req, res, {}, port);
-  }
-  function ifDefinedFirstElseSecond(first, second) {
-    return _.isUndefined(first) ? second : first;
-  }
-  const fetch404Page = makeFileFetcher(hostname, staticFilesAdminPort, '/404.html', {
-    'Content-Type': 'text/html'
-  });
-  function fetchIndexForConversation(req, res) {
-    logger.debug('fetchIndexForConversation', req.path);
-    const match = req.path.match(/[0-9][0-9A-Za-z]+/);
-    let conversation_id;
-    if (match?.length) {
-      conversation_id = match[0];
-    }
-    doGetConversationPreloadInfo(conversation_id)
-      .then((x) => {
-        const preloadData = {
-          conversation: x
-        };
-        fetchIndex(req, res, preloadData, staticFilesParticipationPort);
-      })
-      .catch((err) => {
-        logger.error('polis_err_fetching_conversation_info', err);
-        fetch404Page(req, res);
-      });
-  }
-  const fetchIndexForAdminPage = makeFileFetcher(hostname, staticFilesAdminPort, '/index_admin.html', {
-    'Content-Type': 'text/html'
-  });
-  const fetchIndexForReportPage = makeFileFetcher(hostname, staticFilesAdminPort, '/index_report.html', {
-    'Content-Type': 'text/html'
-  });
-  function handle_GET_iip_conversation(req, res) {
-    const conversation_id = req.params.conversation_id;
-    res.set({
-      'Content-Type': 'text/html'
-    });
-    res.send(`<a href='https://pol.is/${conversation_id}' target='_blank'>${conversation_id}</a>`);
-  }
-  function handle_GET_iim_conversation(req, res) {
-    const zid = req.p.zid;
-    const conversation_id = req.params.conversation_id;
-    getConversationInfo(zid)
-      .then((info) => {
-        res.set({
-          'Content-Type': 'text/html'
-        });
-        const title = info.topic || info.created;
-        res.send(
-          `<a href='https://pol.is/${conversation_id}' target='_blank'>${title}</a><p><a href='https://pol.is/m${conversation_id}' target='_blank'>moderate</a></p>${info.description ? `<p>${info.description}</p>` : ''}`
-        );
-      })
-      .catch((err) => {
-        fail(res, 500, 'polis_err_fetching_conversation_info', err);
-      });
-  }
-  const handle_GET_conditionalIndexFetcher = (() => (req, res) => {
-    if (hasAuthToken(req)) {
-      return fetchIndexForAdminPage(req, res);
-    }
-    if (!browserSupportsPushState(req)) {
-      return fetchIndexForAdminPage(req, res);
-    }
-    const url = `${serverUrl}/home`;
-    res.redirect(url);
-  })();
   function middleware_log_request_body(req, _res, next) {
     if (devMode) {
       let b = '';
@@ -4074,21 +2864,12 @@ function initializePolisHelpers() {
     fail,
     fetchThirdPartyCookieTestPt1,
     fetchThirdPartyCookieTestPt2,
-    fetchIndexForAdminPage,
-    fetchIndexForConversation,
-    fetchIndexForReportPage,
-    fetchIndexWithoutPreloadData,
     finishArray,
     getPidForParticipant,
     haltOnTimeout,
     HMAC_SIGNATURE_PARAM_NAME,
-    hostname,
-    makeFileFetcher,
     makeRedirectorTo,
     pidCache,
-    staticFilesAdminPort,
-    staticFilesParticipationPort,
-    proxy,
     redirectIfHasZidButNoConversationId,
     redirectIfNotHttps,
     sendTextEmail,
@@ -4102,22 +2883,13 @@ function initializePolisHelpers() {
     handle_DELETE_metadata_questions,
     handle_GET_bid,
     handle_GET_bidToPid,
-    handle_GET_conditionalIndexFetcher,
     handle_GET_contexts,
-    handle_GET_conversationPreloadInfo,
-    handle_GET_conversations,
-    handle_GET_conversationsRecentActivity,
-    handle_GET_conversationsRecentlyStarted,
-    handle_GET_conversationStats,
     handle_GET_math_correlationMatrix,
     handle_GET_dataExport,
     handle_GET_dataExport_results,
     handle_GET_reportExport,
     handle_GET_dummyButton,
     handle_GET_einvites,
-    handle_GET_iim_conversation,
-    handle_GET_iip_conversation,
-    handle_GET_implicit_conversation_generation,
     handle_GET_launchPrep,
     handle_GET_locations,
     handle_GET_math_pca,
@@ -4150,10 +2922,6 @@ function initializePolisHelpers() {
     handle_POST_auth_pwresettoken,
     handle_POST_contexts,
     handle_POST_contributors,
-    handle_POST_conversation_close,
-    handle_POST_conversation_reopen,
-    handle_POST_conversations,
-    handle_POST_convSubscriptions,
     handle_POST_einvites,
     handle_POST_joinWithInvite,
     handle_POST_math_update,
@@ -4164,7 +2932,6 @@ function initializePolisHelpers() {
     handle_POST_participants,
     handle_POST_query_participants_by_metadata,
     handle_POST_reports,
-    handle_POST_reserve_conversation_id,
     handle_POST_stars,
     handle_POST_trashes,
     handle_POST_tutorial,
@@ -4172,7 +2939,6 @@ function initializePolisHelpers() {
     handle_POST_votes,
     handle_POST_xidWhitelist,
     handle_POST_zinvites,
-    handle_PUT_conversations,
     handle_PUT_participants_extended,
     handle_PUT_ptptois,
     handle_PUT_reports,

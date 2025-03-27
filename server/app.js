@@ -35,6 +35,32 @@ import {
   handle_PUT_comments
 } from './src/icebergs/comment.js';
 
+import {
+  fetchIndexForConversation,
+  handle_GET_conversationPreloadInfo,
+  handle_GET_conversationStats,
+  handle_GET_conversations,
+  handle_GET_conversationsRecentActivity,
+  handle_GET_conversationsRecentlyStarted,
+  handle_GET_iim_conversation,
+  handle_GET_iip_conversation,
+  handle_GET_implicit_conversation_generation,
+  handle_POST_convSubscriptions,
+  handle_POST_conversation_close,
+  handle_POST_conversation_reopen,
+  handle_POST_conversations,
+  handle_POST_reserve_conversation_id,
+  handle_PUT_conversations
+} from './src/icebergs/conversation.js';
+
+import {
+  fetchIndexForAdminPage,
+  fetchIndexForReportPage,
+  fetchIndexWithoutPreloadData,
+  handle_GET_conditionalIndexFetcher,
+  proxy
+} from './src/icebergs/static.js';
+
 const app = express();
 app.use(
   morgan('dev', {
@@ -54,10 +80,6 @@ helpersInitialized.then(
       devMode,
       fetchThirdPartyCookieTestPt1,
       fetchThirdPartyCookieTestPt2,
-      fetchIndexForAdminPage,
-      fetchIndexForConversation,
-      fetchIndexForReportPage,
-      fetchIndexWithoutPreloadData,
       getPidForParticipant,
       haltOnTimeout,
       HMAC_SIGNATURE_PARAM_NAME,
@@ -67,7 +89,6 @@ helpersInitialized.then(
       pidCache,
       staticFilesAdminPort,
       staticFilesParticipationPort,
-      proxy,
       redirectIfHasZidButNoConversationId,
       redirectIfNotHttps,
       timeout,
@@ -80,13 +101,7 @@ helpersInitialized.then(
       handle_DELETE_metadata_questions,
       handle_GET_bid,
       handle_GET_bidToPid,
-      handle_GET_conditionalIndexFetcher,
       handle_GET_contexts,
-      handle_GET_conversationPreloadInfo,
-      handle_GET_conversations,
-      handle_GET_conversationsRecentActivity,
-      handle_GET_conversationsRecentlyStarted,
-      handle_GET_conversationStats,
       handle_GET_math_correlationMatrix,
       handle_GET_dataExport,
       handle_GET_dataExport_results,
@@ -94,9 +109,6 @@ helpersInitialized.then(
       handle_GET_reportExport,
       handle_GET_dummyButton,
       handle_GET_einvites,
-      handle_GET_iim_conversation,
-      handle_GET_iip_conversation,
-      handle_GET_implicit_conversation_generation,
       handle_GET_launchPrep,
       handle_GET_locations,
       handle_GET_math_pca,
@@ -128,10 +140,6 @@ helpersInitialized.then(
       handle_POST_auth_pwresettoken,
       handle_POST_contexts,
       handle_POST_contributors,
-      handle_POST_conversation_close,
-      handle_POST_conversation_reopen,
-      handle_POST_conversations,
-      handle_POST_convSubscriptions,
       handle_POST_einvites,
       handle_POST_joinWithInvite,
       handle_POST_math_update,
@@ -142,7 +150,6 @@ helpersInitialized.then(
       handle_POST_participants,
       handle_POST_query_participants_by_metadata,
       handle_POST_reports,
-      handle_POST_reserve_conversation_id,
       handle_POST_stars,
       handle_POST_trashes,
       handle_POST_tutorial,
@@ -150,7 +157,6 @@ helpersInitialized.then(
       handle_POST_votes,
       handle_POST_xidWhitelist,
       handle_POST_zinvites,
-      handle_PUT_conversations,
       handle_PUT_participants_extended,
       handle_PUT_ptptois,
       handle_PUT_reports,
