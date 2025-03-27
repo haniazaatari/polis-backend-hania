@@ -5,14 +5,13 @@ import BluebirdPromise from 'bluebird';
 import timeout from 'connect-timeout';
 import express from 'express';
 import morgan from 'morgan';
-import Config from './src/config.js';
 import {
   auth,
   authOptional,
   handle_POST_auth_deregister,
   handle_POST_auth_login,
   handle_POST_auth_new
-} from './src/icebergs/auth.js';
+} from './src/concerns/auth.js';
 import {
   handle_GET_comments,
   handle_GET_comments_translations,
@@ -21,7 +20,7 @@ import {
   handle_POST_ptptCommentMod,
   handle_POST_reportCommentSelections,
   handle_PUT_comments
-} from './src/icebergs/comment.js';
+} from './src/concerns/comment.js';
 import {
   fetchIndexForConversation,
   handle_GET_conversationPreloadInfo,
@@ -38,13 +37,13 @@ import {
   handle_POST_conversations,
   handle_POST_reserve_conversation_id,
   handle_PUT_conversations
-} from './src/icebergs/conversation.js';
+} from './src/concerns/conversation.js';
 import {
   addCorsHeader,
   denyIfNotFromWhitelistedDomain,
   handle_GET_domainWhitelist,
   handle_POST_domainWhitelist
-} from './src/icebergs/domain.js';
+} from './src/concerns/domain.js';
 import {
   HMAC_SIGNATURE_PARAM_NAME,
   handle_GET_notifications_subscribe,
@@ -53,7 +52,7 @@ import {
   handle_POST_sendCreatedLinkToEmail,
   handle_POST_sendEmailExportReady,
   handle_POST_users_invite
-} from './src/icebergs/email.js';
+} from './src/concerns/email.js';
 import {
   handle_DELETE_metadata_questions,
   handle_GET_metadata,
@@ -62,7 +61,7 @@ import {
   handle_GET_metadata_questions,
   handle_POST_metadata_answers,
   handle_POST_metadata_questions
-} from './src/icebergs/metadata.js';
+} from './src/concerns/metadata.js';
 import {
   haltOnTimeout,
   makeRedirectorTo,
@@ -73,8 +72,8 @@ import {
   redirectIfHasZidButNoConversationId,
   redirectIfNotHttps,
   writeDefaultHead
-} from './src/icebergs/middleware.js';
-import { handle_POST_notifyTeam } from './src/icebergs/notification.js';
+} from './src/concerns/middleware.js';
+import { handle_POST_notifyTeam } from './src/concerns/notification.js';
 import {
   handle_GET_contexts,
   handle_GET_dummyButton,
@@ -94,7 +93,7 @@ import {
   handle_POST_tutorial,
   handle_POST_zinvites,
   handle_PUT_users
-} from './src/icebergs/other.js';
+} from './src/concerns/other.js';
 import {
   handle_GET_participants,
   handle_GET_participation,
@@ -103,9 +102,9 @@ import {
   handle_POST_participants,
   handle_POST_query_participants_by_metadata,
   handle_PUT_participants_extended
-} from './src/icebergs/participant.js';
-import { handle_GET_reports, handle_POST_reports, handle_PUT_reports } from './src/icebergs/report.js';
-import { handle_GET_ptptois, handle_GET_votes_famous, handle_PUT_ptptois } from './src/icebergs/social.js';
+} from './src/concerns/participant.js';
+import { handle_GET_reports, handle_POST_reports, handle_PUT_reports } from './src/concerns/report.js';
+import { handle_GET_ptptois, handle_GET_votes_famous, handle_PUT_ptptois } from './src/concerns/social.js';
 import {
   fetchIndexForAdminPage,
   fetchIndexForReportPage,
@@ -113,15 +112,21 @@ import {
   handle_GET_conditionalIndexFetcher,
   makeFileFetcher,
   proxy
-} from './src/icebergs/static.js';
+} from './src/concerns/static.js';
 import {
   handle_GET_votes,
   handle_GET_votes_me,
   handle_POST_stars,
   handle_POST_upvotes,
   handle_POST_votes
-} from './src/icebergs/vote.js';
+} from './src/concerns/vote.js';
+import Config from './src/config.js';
 import { handle_GET_conversationUuid } from './src/routes/conversationUuid.js';
+import {
+  fetchThirdPartyCookieTestPt1,
+  fetchThirdPartyCookieTestPt2,
+  handle_GET_tryCookie
+} from './src/routes/cookie.js';
 import { handle_GET_dataExport, handle_GET_dataExport_results } from './src/routes/dataExport.js';
 import { handle_GET_xidReport } from './src/routes/export.js';
 import { handle_GET_reportExport } from './src/routes/export.js';
@@ -139,11 +144,6 @@ import {
 import { handle_DELETE_metadata_answers } from './src/routes/metadataAnswers.js';
 import { handle_POST_auth_password, handle_POST_auth_pwresettoken } from './src/routes/password.js';
 import { handle_GET_reportNarrative } from './src/routes/reportNarrative.js';
-import {
-  fetchThirdPartyCookieTestPt1,
-  fetchThirdPartyCookieTestPt2,
-  handle_GET_tryCookie
-} from './src/routes/tryCookie.js';
 import server from './src/server.js';
 import { getPidForParticipant, pidCache } from './src/user.js';
 import { COOKIES } from './src/utils/cookies.js';
