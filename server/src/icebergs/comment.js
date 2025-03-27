@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/cognitive-complexity */
 import badwords from 'badwords/object';
 import { google } from 'googleapis';
 import _ from 'underscore';

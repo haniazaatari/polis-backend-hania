@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/cognitive-complexity */
 import responseTime from 'response-time';
 import _ from 'underscore';
 import Config from '../config.js';

@@ -1,5 +1,4 @@
 import Config from '../config.js';
-/* eslint-disable sonarjs/cognitive-complexity */
 import { queryP as pgQueryP, queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query.js';
 import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';

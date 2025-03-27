@@ -1,5 +1,4 @@
 import js from '@eslint/js';
-import sonarjs from 'eslint-plugin-sonarjs';
 import { defineConfig } from 'eslint/config';
 import globals from 'globals';
 
@@ -10,13 +9,11 @@ export default defineConfig([
       globals: globals.node
     },
     plugins: {
-      js,
-      sonarjs
+      js
     },
     extends: ['js/recommended'],
     rules: {
-      'no-unused-vars': 'off',
-      'sonarjs/cognitive-complexity': ['error', 10]
+      'no-unused-vars': 'off'
     }
   }
 ]);

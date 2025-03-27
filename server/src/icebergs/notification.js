@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/cognitive-complexity */
 import BluebirdPromise from 'bluebird';
 import _ from 'underscore';
 import { getNumberOfCommentsRemaining } from '../comment.js';

@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/cognitive-complexity */
 import _ from 'underscore';
 import { generateAndRegisterZinvite } from '../auth/create-user.js';
 import { generateToken } from '../auth/password.js';

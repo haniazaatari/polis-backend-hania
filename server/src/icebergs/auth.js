@@ -1,7 +1,6 @@
 import bcrypt from 'bcryptjs';
 import _ from 'underscore';
 import { createUser } from '../auth/create-user.js';
-/* eslint-disable sonarjs/cognitive-complexity */
 import { getConversationInfoByConversationId } from '../conversation.js';
 import { query as pgQuery, queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty } from '../db/pg-query.js';
 import { getUserInfoForSessionToken, startSession } from '../session.js';

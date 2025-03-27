@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/cognitive-complexity */
 import Anthropic from '@anthropic-ai/sdk';
 import { countTokens } from '@anthropic-ai/tokenizer';
 import { GoogleGenerativeAI } from '@google/generative-ai';

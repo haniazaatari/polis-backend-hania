@@ -1,4 +1,3 @@
-/* eslint-disable sonarjs/cognitive-complexity */
 import async from 'async';
 import request from 'request-promise';
 import _ from 'underscore';
