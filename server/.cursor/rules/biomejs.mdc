@@ -1,0 +1,16 @@
+---
+description: Please use the included biomejs rules for linting and styling of js files.
+globs: 
+alwaysApply: false
+---
+
+# Your rule content
+
+- See [biome.json](mdc:biome.json) for current configuration
+- See [package.json](mdc:package.json) for additional context
+
+## helpful npm commands
+
+- `npm run lint`
+- `npm run format`
+- `npm run check`
