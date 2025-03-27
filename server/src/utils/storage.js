@@ -121,8 +121,6 @@ export default class DynamoStorageService {
         itemsToDelete = scanResponse.Items;
         lastEvaluatedKey = scanResponse.LastEvaluatedKey;
         if (!itemsToDelete || itemsToDelete.length === 0) {
-          if (!lastEvaluatedKey) {
-          }
           break;
         }
       } catch (_scanError) {
@@ -141,7 +139,9 @@ export default class DynamoStorageService {
         const deleteItemCommand = new DeleteItemCommand(deleteParams);
         try {
           await this.client.send(deleteItemCommand);
-        } catch (_deleteError) {}
+        } catch (error) {
+          logger.error('Error deleting dynamo item:', error);
+        }
       });
       await Promise.all(deletePromises);
     } while (lastEvaluatedKey);

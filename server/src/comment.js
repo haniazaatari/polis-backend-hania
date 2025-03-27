@@ -96,11 +96,12 @@ function _getCommentsForModerationList(o) {
         const adp = {};
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
-          const o = (adp[row.tid] = adp[row.tid] || {
+          adp[row.tid] = adp[row.tid] || {
             agree_count: 0,
             disagree_count: 0,
             pass_count: 0
-          });
+          };
+          const o = adp[row.tid];
           if (row.vote === Utils.polisTypes.reactions.pull) {
             o.agree_count = Number(row.count);
           } else if (row.vote === Utils.polisTypes.reactions.push) {

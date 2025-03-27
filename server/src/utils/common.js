@@ -8,6 +8,7 @@ import {
   queryP_readOnly as pgQueryP_readOnly,
   query_readOnly as pgQuery_readOnly
 } from '../db/pg-query.js';
+import MPromise from '../utils/MPromise.js';
 import logger from '../utils/logger.js';
 const serverUrl = Config.getServerUrl();
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];

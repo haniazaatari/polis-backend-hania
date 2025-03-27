@@ -6,6 +6,7 @@ import {
   query_readOnly as pgQuery_readOnly
 } from '../db/pg-query.js';
 import SQL from '../db/sql.js';
+import MPromise from '../utils/MPromise.js';
 import { isDuplicateKey } from '../utils/common.js';
 import logger from '../utils/logger.js';
 const isXidWhitelisted = Conversation.isXidWhitelisted;

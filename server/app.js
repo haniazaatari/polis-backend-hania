@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
-import Promise from 'bluebird';
+import BluebirdPromise from 'bluebird';
 import express from 'express';
 import morgan from 'morgan';
 import Config from './src/config.js';
@@ -15,7 +15,7 @@ app.use(
   })
 );
 app.set('trust proxy', 1);
-const helpersInitialized = new Promise((resolve, _reject) => {
+const helpersInitialized = new BluebirdPromise((resolve, _reject) => {
   resolve(server.initializePolisHelpers());
 });
 helpersInitialized.then(
@@ -1104,13 +1104,13 @@ helpersInitialized.then(
     const missingFilesGet404 = false;
     if (missingFilesGet404) {
       app.get(
-        /^\/[^(api\/)]?.*/,
+        /^\/[^(api/)]?.*/,
         makeFileFetcher(hostname, staticFilesAdminPort, '/404.html', {
           'Content-Type': 'text/html'
         })
       );
     } else {
-      app.get(/^\/[^(api\/)]?.*/, proxy);
+      app.get(/^\/[^(api/)]?.*/, proxy);
     }
     app.listen(Config.serverPort);
     logger.info(`started on port ${Config.serverPort}`);

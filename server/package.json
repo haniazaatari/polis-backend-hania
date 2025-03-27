@@ -22,7 +22,9 @@
     "lint:list": "biome lint 2>&1 | grep 'Users' | sed 's/:.*//' | sed 's|.*/server/||' | sort | uniq",
     "format": "biome format --write",
     "check": "biome check --max-diagnostics=none",
-    "check:fix": "biome check --write --unsafe"
+    "check:fix": "biome check --write --unsafe",
+    "eslint": "eslint .",
+    "eslint:fix": "eslint . --fix"
   },
   "repository": {
     "type": "git",
@@ -76,6 +78,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@eslint/js": "^9.23.0",
+    "eslint": "^9.23.0",
+    "globals": "^16.0.0",
     "nodemon": "^3.1.9",
     "typescript": "^5.8.2"
   }

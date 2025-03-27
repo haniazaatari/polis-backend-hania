@@ -1,7 +1,7 @@
 import Session from '../session.js';
 import Utils from '../utils/common.js';
 import cookies from '../utils/cookies.js';
-const COOKIES = cookies.COOKIES;
+const { COOKIES, setCookie } = cookies;
 const setPermanentCookie = cookies.setPermanentCookie;
 const setCookieTestCookie = cookies.setCookieTestCookie;
 const makeSessionToken = Session.makeSessionToken;

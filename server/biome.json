@@ -20,13 +20,14 @@
     "enabled": true,
     "rules": {
       "complexity": {
-        "noForEach": "off"
+        "noForEach": "off",
+        "noStaticOnlyClass": "off"
       },
       "correctness": {
         "noUndeclaredDependencies": "error",
         "noUndeclaredVariables": "error",
         "noUnusedImports": "error",
-        "noUnusedVariables": "error"
+        "noUnusedVariables": "off"
       },
       "recommended": true,
       "style": {

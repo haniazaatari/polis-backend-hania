@@ -117,7 +117,7 @@ function DA(f) {
   this.f = f;
 }
 DD.prototype.g = DA.prototype.g = function (k) {
-  if (this.m.hasOwnProperty(k)) {
+  if (Object.prototype.hasOwnProperty.call(this.m, k)) {
     return this.m[k];
   }
   const v = this.f(k);
@@ -295,6 +295,7 @@ function initializePolisHelpers() {
     ]).then(
       (rows) => {
         if (rows?.length) {
+          // noop
         } else {
           return doInsert();
         }
@@ -599,7 +600,7 @@ function initializePolisHelpers() {
   }
   function addCorsHeader(req, res, next) {
     const origin = req.get('Origin') || req.get('Referer') || '';
-    const sanitizedOrigin = origin.replace(/#.*$/, '').match(/^[^\/]*\/\/[^\/]*/)?.[0] || '';
+    const sanitizedOrigin = origin.replace(/#.*$/, '').match(/^[^/]*\/\/[^/]*/)?.[0] || '';
     const routeIsWhitelistedForAnyDomain = whitelistedCrossDomainRoutes.some((regex) => regex.test(req.path));
     if (!hasWhitelistMatches(sanitizedOrigin) && !routeIsWhitelistedForAnyDomain) {
       logger.info('not whitelisted', { headers: req.headers, path: req.path });
@@ -2272,9 +2273,8 @@ Email verified! You can close this tab or hit the back button.
   function handle_GET_snapshot(req, _res) {
     const _uid = req.p.uid;
     const _zid = req.p.zid;
-    if (true) {
-      throw new Error('TODO Needs to clone participants_extended and any other new tables as well.');
-    }
+
+    throw new Error('TODO Needs to clone participants_extended and any other new tables as well.');
   }
   function handle_POST_auth_new(req, res) {
     CreateUser.createUser(req, res);
@@ -5071,8 +5071,8 @@ Thanks for using Polis!
     );
   }
   function handle_GET_implicit_conversation_generation(req, res) {
-    let site_id = /polis_site_id[^\/]*/.exec(req.path) || null;
-    let page_id = /\S\/([^\/]*)/.exec(req.path) || null;
+    let site_id = /polis_site_id[^/]*/.exec(req.path) || null;
+    let page_id = /\S\/([^/]*)/.exec(req.path) || null;
     if (!site_id?.length || (page_id && page_id?.length < 2)) {
       fail(res, 404, 'polis_err_parsing_site_id_or_page_id');
     }
@@ -5431,7 +5431,6 @@ Thanks for using Polis!
       if (req.path !== '/api/v3/math/pca2') {
         logger.debug('middleware_log_request_body', { path: req.path, body: b });
       }
-    } else {
     }
     next();
   }
