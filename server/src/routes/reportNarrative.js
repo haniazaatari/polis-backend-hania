@@ -1,77 +1,76 @@
-import fs from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import { countTokens } from '@anthropic-ai/tokenizer';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { parse } from 'csv-parse/sync';
+import fs from 'fs/promises';
 import OpenAI from 'openai';
-import convertXMLpkg from 'simple-xml-to-json';
+import { convertXML } from 'simple-xml-to-json';
 import { create } from 'xmlbuilder2';
 import config from '../config.js';
-import { getTopicsFromRID } from '../report_experimental/topics-example/index.js';
+import { getTopicsFromRID } from '../report_experimental/topics-example.js';
 import fail from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import DynamoStorageService from '../utils/storage.js';
 import { getZidForRid } from '../utils/zinvite.js';
 import { sendCommentGroupsSummary } from './export.js';
-const js2xmlparser = await import('js2xmlparser');
-const { convertXML } = convertXMLpkg;
-export function convertToXml(csvContent) {
-  const records = parse(csvContent, {
-    columns: true,
-    skip_empty_lines: true
-  });
-  if (records.length === 0) return '';
-  const doc = create({ version: '1.0', encoding: 'UTF-8' }).ele('polis-comments');
-  for (const record of records) {
-    const comment = doc.ele('comment', {
-      id: record['comment-id'],
-      votes: record['total-votes'],
-      agrees: record['total-agrees'],
-      disagrees: record['total-disagrees'],
-      passes: record['total-passes']
+const js2xmlparser = require('js2xmlparser');
+export class PolisConverter {
+  static convertToXml(csvContent) {
+    const records = parse(csvContent, {
+      columns: true,
+      skip_empty_lines: true
     });
-    comment.ele('text').txt(record.comment);
-    const groupKeys = Object.keys(record)
-      .filter((key) => key.match(/^group-[a-z]-/))
-      .reduce((groups, key) => {
-        const groupId = key.split('-')[1];
-        if (!groups.includes(groupId)) groups.push(groupId);
-        return groups;
-      }, []);
-    for (const groupId of groupKeys) {
-      comment.ele(`group-${groupId}`, {
-        votes: record[`group-${groupId}-votes`],
-        agrees: record[`group-${groupId}-agrees`],
-        disagrees: record[`group-${groupId}-disagrees`],
-        passes: record[`group-${groupId}-passes`]
+    if (records.length === 0) return '';
+    const doc = create({ version: '1.0', encoding: 'UTF-8' }).ele('polis-comments');
+    records.forEach((record) => {
+      const comment = doc.ele('comment', {
+        id: record['comment-id'],
+        votes: record['total-votes'],
+        agrees: record['total-agrees'],
+        disagrees: record['total-disagrees'],
+        passes: record['total-passes']
       });
-    }
+      comment.ele('text').txt(record.comment);
+      const groupKeys = Object.keys(record)
+        .filter((key) => key.match(/^group-[a-z]-/))
+        .reduce((groups, key) => {
+          const groupId = key.split('-')[1];
+          if (!groups.includes(groupId)) groups.push(groupId);
+          return groups;
+        }, []);
+      groupKeys.forEach((groupId) => {
+        comment.ele(`group-${groupId}`, {
+          votes: record[`group-${groupId}-votes`],
+          agrees: record[`group-${groupId}-agrees`],
+          disagrees: record[`group-${groupId}-disagrees`],
+          passes: record[`group-${groupId}-passes`]
+        });
+      });
+    });
+    return doc.end({ prettyPrint: true });
   }
-  return doc.end({ prettyPrint: true });
+  static async convertFromFile(filePath) {
+    const fs = await import('fs/promises');
+    const csvContent = await fs.readFile(filePath, 'utf-8');
+    return PolisConverter.convertToXml(csvContent);
+  }
+  static validateCsvStructure(headers) {
+    const requiredBaseFields = [
+      'comment-id',
+      'comment',
+      'total-votes',
+      'total-agrees',
+      'total-disagrees',
+      'total-passes'
+    ];
+    const hasRequiredFields = requiredBaseFields.every((field) => headers.includes(field));
+    const groupFields = headers.filter((h) => h.startsWith('group-'));
+    const validGroupPattern = groupFields.every((field) =>
+      field.match(/^group-[a-z]-(?:votes|agrees|disagrees|passes)$/)
+    );
+    return hasRequiredFields && validGroupPattern;
+  }
 }
-
-export async function convertFromFile(filePath) {
-  const csvContent = await fs.readFile(filePath, 'utf-8');
-  return convertToXml(csvContent);
-}
-
-export function validateCsvStructure(headers) {
-  const requiredBaseFields = [
-    'comment-id',
-    'comment',
-    'total-votes',
-    'total-agrees',
-    'total-disagrees',
-    'total-passes'
-  ];
-  const hasRequiredFields = requiredBaseFields.every((field) => headers.includes(field));
-  const groupFields = headers.filter((h) => h.startsWith('group-'));
-  const validGroupPattern = groupFields.every((field) =>
-    field.match(/^group-[a-z]-(?:votes|agrees|disagrees|passes)$/)
-  );
-  return hasRequiredFields && validGroupPattern;
-}
-
 const anthropic = config.anthropicApiKey
   ? new Anthropic({
       apiKey: config.anthropicApiKey
@@ -81,7 +80,7 @@ const genAI = config.geminiApiKey ? new GoogleGenerativeAI(config.geminiApiKey) 
 const getCommentsAsXML = async (id, filter) => {
   try {
     const resp = await sendCommentGroupsSummary(id, undefined, false, filter);
-    const xml = convertToXml(resp);
+    const xml = PolisConverter.convertToXml(resp);
     if (xml.trim().length === 0) logger.error('No data has been returned by sendCommentGroupsSummary');
     return xml;
   } catch (e) {

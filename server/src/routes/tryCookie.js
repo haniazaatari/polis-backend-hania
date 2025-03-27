@@ -2,7 +2,7 @@ import cookies from '../utils/cookies.js';
 const COOKIES = cookies.COOKIES;
 function handle_GET_tryCookie(req, res) {
   if (!req.cookies[COOKIES.TRY_COOKIE]) {
-    cookies.setCookie(req, res, COOKIES.TRY_COOKIE, 'ok', {
+    setCookie(req, res, COOKIES.TRY_COOKIE, 'ok', {
       httpOnly: false
     });
   }

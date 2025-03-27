@@ -98,7 +98,6 @@ function getPermanentCookieAndEnsureItIsSet(req, res) {
     setPermanentCookie(req, res, token);
     return token;
   }
-
   return req.cookies[COOKIES.PERMANENT_COOKIE];
 }
 function clearCookies(req, res) {

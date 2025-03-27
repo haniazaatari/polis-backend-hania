@@ -41,12 +41,9 @@ export async function loadConversationSummary(zid, siteUrl) {
   if (!zinvite || !convoRows || !commentersRow || !pca) {
     throw new Error('polis_error_data_unknown_report');
   }
-
   const convo = convoRows[0];
   const commenters = commentersRow[0].count;
-
   const data = pca.asPOJO;
-
   return [
     ['topic', formatEscapedText(convo.topic)],
     ['url', `${siteUrl}/${zinvite}`],
@@ -66,7 +63,6 @@ export async function sendConversationSummary(zid, siteUrl, res) {
 }
 export async function sendCommentSummary(zid, res) {
   const comments = new Map();
-
   try {
     const commentRows = await pgQueryP_readOnly(
       'SELECT tid, pid, created, txt, mod, velocity, active FROM comments WHERE zid = ($1)',
@@ -84,7 +80,6 @@ export async function sendCommentSummary(zid, res) {
       (row) => {
         const comment = comments.get(row.tid);
         if (comment) {
-          // note that -1 means agree and 1 means disagree
           if (row.vote === -1) comment.agrees += 1;
           else if (row.vote === 1) comment.disagrees += 1;
           else if (row.vote === 0) comment.pass += 1;
@@ -96,7 +91,6 @@ export async function sendCommentSummary(zid, res) {
         commentRows.sort((a, b) => {
           return b.velocity - a.velocity;
         });
-
         res.setHeader('content-type', 'text/csv');
         res.send(
           formatCSV(
@@ -129,7 +123,7 @@ export async function sendVotesSummary(zid, res) {
     datetime: (row) => formatDatetime(row.timestamp),
     'comment-id': (row) => String(row.tid),
     'voter-id': (row) => String(row.pid),
-    vote: (row) => String(-row.vote) // have to flip -1 to 1 and vice versa
+    vote: (row) => String(-row.vote)
   };
   res.setHeader('Content-Type', 'text/csv');
   res.write(formatCSVHeaders(formatters) + sep);
@@ -139,7 +133,6 @@ export async function sendVotesSummary(zid, res) {
     (row) => res.write(formatCSVRow(row, formatters) + sep),
     () => res.end(),
     (error) => {
-      // Handle any errors
       logger.error('polis_err_report_votes_csv', error);
       fail(res, 500, 'polis_err_data_export', error);
     }
@@ -156,7 +149,6 @@ export async function sendParticipantVotesSummary(zid, res) {
     const count = participantCommentCounts.get(row.pid) || 0;
     participantCommentCounts.set(row.pid, count + 1);
   }
-
   const pca = await getPca(zid);
   function getGroupId(pca, pid) {
     if (!pca || !pca.asPOJO) {
@@ -198,16 +190,12 @@ export async function sendParticipantVotesSummary(zid, res) {
     logger.info(`Could not find group cluster for participant ${pid}`);
     return undefined;
   }
-
   res.setHeader('content-type', 'text/csv');
   res.write(
     ['participant', 'group-id', 'n-comments', 'n-votes', 'n-agree', 'n-disagree', ...commentIds].join(',') + sep
   );
-
-  // Query the votes in participant order so that we can summarize them in a streaming pass
   let currentParticipantId = -1;
   const currentParticipantVotes = new Map();
-
   function sendCurrentParticipantRow() {
     let agrees = 0;
     let disagrees = 0;
@@ -238,7 +226,6 @@ export async function sendParticipantVotesSummary(zid, res) {
         currentParticipantId = pid;
         currentParticipantVotes.clear();
       }
-      // have to flip vote from -1 to 1 and vice versa
       currentParticipantVotes.set(row.tid, -row.vote);
     },
     () => {
@@ -374,29 +361,21 @@ export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
     return csvText.join('');
   }
 }
-
 export async function sendParticipantXidsSummary(zid, res) {
   try {
     const pca = await getPca(zid);
     if (!pca?.asPOJO) {
       throw new Error('polis_error_no_pca_data');
     }
-
     const xids = await getXids(zid);
     if (!xids) {
       throw new Error('polis_error_no_xid_response');
     }
-
-    // Sort xids by pid
     xids.sort((a, b) => a.pid - b.pid);
-
-    // Define formatters for the CSV columns
     const formatters = {
       participant: (row) => String(row.pid),
       xid: (row) => formatEscapedText(row.xid)
     };
-
-    // Generate and send the CSV
     res.setHeader('content-type', 'text/csv');
     res.send(formatCSV(formatters, xids));
   } catch (err) {
@@ -404,7 +383,6 @@ export async function sendParticipantXidsSummary(zid, res) {
     fail(res, 500, 'polis_err_data_export', err);
   }
 }
-
 export async function handle_GET_reportExport(req, res) {
   const { rid, report_type } = req.p;
   try {
@@ -413,7 +391,6 @@ export async function handle_GET_reportExport(req, res) {
       fail(res, 404, 'polis_error_data_unknown_report');
       return;
     }
-
     switch (report_type) {
       case 'summary.csv': {
         const siteUrl = `${req.headers['x-forwarded-proto']}://${req.headers.host}`;
@@ -423,11 +400,9 @@ export async function handle_GET_reportExport(req, res) {
       case 'comments.csv':
         await sendCommentSummary(zid, res);
         break;
-
       case 'votes.csv':
         await sendVotesSummary(zid, res);
         break;
-
       case 'participant-votes.csv':
         await sendParticipantVotesSummary(zid, res);
         break;
@@ -444,7 +419,6 @@ export async function handle_GET_reportExport(req, res) {
     fail(res, 500, msg, err);
   }
 }
-
 export async function handle_GET_xidReport(req, res) {
   const { xid_report } = req.p;
   try {

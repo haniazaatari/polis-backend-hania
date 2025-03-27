@@ -1,12 +1,11 @@
-import translatePkg from '@google-cloud/translate';
 import _ from 'underscore';
+const { Translate } = require('@google-cloud/translate').v2;
 import Config from './config.js';
 import Conversation from './conversation.js';
 import pg from './db/pg-query.js';
 import SQL from './db/sql.js';
 import Utils from './utils/common.js';
 import { MPromise } from './utils/metered.js';
-const { v2: Translate } = translatePkg;
 const useTranslateApi = Config.shouldUseTranslationAPI;
 const translateClient = useTranslateApi ? new Translate() : null;
 function getComment(zid, tid) {
@@ -20,19 +19,7 @@ function getComments(o) {
   return Promise.all([convPromise, commentListPromise])
     .then((a) => {
       let rows = a[1];
-      const cols = [
-        'txt',
-        'tid',
-        'created',
-        'uid',
-        'tweet_id',
-        'quote_src_url',
-        'anon',
-        'is_seed',
-        'is_meta',
-        'lang',
-        'pid'
-      ];
+      const cols = ['txt', 'tid', 'created', 'uid', 'quote_src_url', 'anon', 'is_seed', 'is_meta', 'lang', 'pid'];
       if (o.moderation) {
         cols.push('velocity');
         cols.push('zid');
@@ -53,10 +40,10 @@ function getComments(o) {
       return rows;
     })
     .then((comments) => {
-      for (const c of comments) {
+      comments.forEach((c) => {
         c.uid = undefined;
         c.anon = undefined;
-      }
+      });
       return comments;
     });
 }
@@ -109,14 +96,11 @@ function _getCommentsForModerationList(o) {
         const adp = {};
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
-          if (!adp[row.tid]) {
-            adp[row.tid] = {
-              agree_count: 0,
-              disagree_count: 0,
-              pass_count: 0
-            };
-          }
-          const o = adp[row.tid];
+          const o = (adp[row.tid] = adp[row.tid] || {
+            agree_count: 0,
+            disagree_count: 0,
+            pass_count: 0
+          });
           if (row.vote === Utils.polisTypes.reactions.pull) {
             o.agree_count = Number(row.count);
           } else if (row.vote === Utils.polisTypes.reactions.push) {
@@ -125,17 +109,17 @@ function _getCommentsForModerationList(o) {
             o.pass_count = Number(row.count);
           }
         }
-        const uniqueRows = _.uniq(rows, false, (row) => {
+        rows = _.uniq(rows, false, (row) => {
           return row.tid;
         });
-        for (let i = 0; i < uniqueRows.length; i++) {
-          const row = uniqueRows[i];
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
           row.agree_count = adp[row.tid].agree_count;
           row.disagree_count = adp[row.tid].disagree_count;
           row.pass_count = adp[row.tid].pass_count;
           row.count = row.agree_count + row.disagree_count + row.pass_count;
         }
-        return uniqueRows;
+        return rows;
       });
   });
 }

@@ -1,4 +1,4 @@
-import LruCache from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 import _ from 'underscore';
 import { isUri } from 'valid-url';
 import Conversation from '../conversation.js';
@@ -175,27 +175,28 @@ function getOptionalStringLimitLength(limit) {
       if (s.length && s.length > limit) {
         return reject('polis_fail_parse_string_too_long');
       }
-      const trimmedS = s.replace(/^ */, '').replace(/ *$/, '');
-      resolve(trimmedS);
+      s = s.replace(/^ */, '').replace(/ *$/, '');
+      resolve(s);
     });
 }
-function getStringLimitLength(minLength, maxLength) {
-  const effectiveMin = _.isUndefined(maxLength) ? 1 : minLength;
-  const effectiveMax = _.isUndefined(maxLength) ? minLength : maxLength;
-
+function getStringLimitLength(min, max) {
+  if (_.isUndefined(max)) {
+    max = min;
+    min = 1;
+  }
   return (s) =>
     new Promise((resolve, reject) => {
       if (typeof s !== 'string') {
         return reject('polis_fail_parse_string_missing');
       }
-      if (s.length && s.length > effectiveMax) {
+      if (s.length && s.length > max) {
         return reject('polis_fail_parse_string_too_long');
       }
-      if (s.length && s.length < effectiveMin) {
+      if (s.length && s.length < min) {
         return reject('polis_fail_parse_string_too_short');
       }
-      const trimmedS = s.replace(/^ */, '').replace(/ *$/, '');
-      resolve(trimmedS);
+      s = s.replace(/^ */, '').replace(/ *$/, '');
+      resolve(s);
     });
 }
 function getUrlLimitLength(limit) {
@@ -206,7 +207,6 @@ function getUrlLimitLength(limit) {
           if (isUri(s)) {
             return resolve(s);
           }
-
           return reject('polis_fail_parse_url_invalid');
         })
     );
@@ -236,11 +236,11 @@ function getBool(s) {
       }
       return resolve(true);
     }
-    const lowerS = s.toLowerCase();
-    if (lowerS === 't' || lowerS === 'true' || lowerS === 'on' || lowerS === '1') {
+    s = s.toLowerCase();
+    if (s === 't' || s === 'true' || s === 'on' || s === '1') {
       return resolve(true);
     }
-    if (lowerS === 'f' || lowerS === 'false' || lowerS === 'off' || lowerS === '0') {
+    if (s === 'f' || s === 'false' || s === 'off' || s === '0') {
       return resolve(false);
     }
     reject('polis_fail_parse_boolean');
@@ -255,7 +255,7 @@ function getIntInRange(min, max) {
       return x;
     });
 }
-const reportIdToRidCache = new LruCache({
+const reportIdToRidCache = new LRUCache({
   max: 1000
 });
 const getZidFromConversationId = Conversation.getZidFromConversationId;
@@ -274,7 +274,6 @@ function getRidFromReportId(report_id) {
       if (!results || !results.rows || !results.rows.length) {
         return reject('polis_err_fetching_rid_for_report_id');
       }
-
       const rid = results.rows[0].rid;
       reportIdToRidCache.set(report_id, rid);
       return resolve(rid);
@@ -330,22 +329,23 @@ function getArrayOfStringNonEmpty(a, _maxStrings, _maxLength) {
   }
   return getArrayOfString(a);
 }
+function getArrayOfStringLimitLength(maxStrings, maxLength) {
+  return (a) => getArrayOfString(a, maxStrings || 999999999, maxLength);
+}
 function getArrayOfStringNonEmptyLimitLength(maxStrings, maxLength) {
-  const effectiveMaxStrings = maxStrings || 999999999;
-  return (a) => getArrayOfStringNonEmpty(a, effectiveMaxStrings, maxLength);
+  return (a) => getArrayOfStringNonEmpty(a, maxStrings || 999999999, maxLength);
 }
 function getArrayOfInt(a) {
-  const arrayToProcess = _.isString(a) ? a.split(',') : a;
-
-  if (!_.isArray(arrayToProcess)) {
+  if (_.isString(a)) {
+    a = a.split(',');
+  }
+  if (!_.isArray(a)) {
     return Promise.reject('polis_fail_parse_int_array');
   }
-
   function integer(i) {
     return Number(i) >> 0;
   }
-
-  return Promise.resolve(arrayToProcess.map(integer));
+  return Promise.resolve(a.map(integer));
 }
 function assignToP(req, name, x) {
   req.p = req.p || {};
@@ -360,9 +360,10 @@ function assignToPCustom(name) {
   };
 }
 function resolve_pidThing(pidThingStringName, assigner, loggingString) {
-  const effectiveLoggingString = _.isUndefined(loggingString) ? '' : loggingString;
-
-  logger.debug(`resolve_pidThing ${effectiveLoggingString}`);
+  if (_.isUndefined(loggingString)) {
+    loggingString = '';
+  }
+  logger.debug(`resolve_pidThing ${loggingString}`);
   return (req, res, next) => {
     if (!req.p) {
       fail(res, 500, 'polis_err_this_middleware_should_be_after_auth_and_zid');

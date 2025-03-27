@@ -1,17 +1,15 @@
-import zlib from 'node:zlib';
-import LruCache from 'lru-cache';
+import zlib from 'zlib';
+import { LRUCache } from 'lru-cache';
 import _ from 'underscore';
 import Config from '../config.js';
 import { queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query.js';
 import logger from './logger.js';
 import { addInRamMetric } from './metered.js';
 const pcaCacheSize = Config.cacheMathResults ? 300 : 1;
-const pcaCache = new LruCache({
+const pcaCache = new LRUCache({
   max: pcaCacheSize
 });
-
 let lastPrefetchedMathTick = -1;
-
 export function fetchAndCacheLatestPcaData() {
   let lastPrefetchPollStartTime = Date.now();
   function waitTime() {
@@ -24,12 +22,13 @@ export function fetchAndCacheLatestPcaData() {
       lastPrefetchedMathTick
     ])
       .then((rows) => {
-        if (!rows || !rows.length) {
-          logger.info('mathpoll done');
+        const rowsArray = rows;
+        if (!rowsArray || !rowsArray.length) {
+          logger.silly('mathpoll done');
           setTimeout(pollForLatestPcaData, waitTime());
           return;
         }
-        const results = rows.map((row) => {
+        const results = rowsArray.map((row) => {
           const item = row.data;
           if (row.math_tick) {
             item.math_tick = Number(row.math_tick);
@@ -37,7 +36,7 @@ export function fetchAndCacheLatestPcaData() {
           if (row.caching_tick) {
             item.caching_tick = Number(row.caching_tick);
           }
-          logger.info('mathpoll updating', {
+          logger.silly('mathpoll updating', {
             caching_tick: item.caching_tick,
             zid: row.zid
           });
@@ -58,7 +57,6 @@ export function fetchAndCacheLatestPcaData() {
   }
   pollForLatestPcaData();
 }
-
 export function getPca(zid, math_tick) {
   let cached = pcaCache.get(zid);
   if (cached && cached.expiration < Date.now()) {
@@ -67,58 +65,52 @@ export function getPca(zid, math_tick) {
   const cachedPOJO = cached?.asPOJO;
   if (cachedPOJO) {
     if (cachedPOJO.math_tick <= (math_tick || 0)) {
-      logger.info('math was cached but not new', {
+      logger.silly('math was cached but not new', {
         zid,
         cached_math_tick: cachedPOJO.math_tick,
         query_math_tick: math_tick
       });
       return Promise.resolve(undefined);
     }
-
-    logger.info('math from cache', { zid, math_tick });
+    logger.silly('math from cache', { zid, math_tick });
     return Promise.resolve(cached);
   }
-
-  logger.info('mathpoll cache miss', { zid, math_tick });
+  logger.silly('mathpoll cache miss', { zid, math_tick });
   const queryStart = Date.now();
   return pgQueryP_readOnly('select * from math_main where zid = ($1) and math_env = ($2);', [zid, Config.mathEnv]).then(
     (rows) => {
       const queryEnd = Date.now();
       const queryDuration = queryEnd - queryStart;
       addInRamMetric('pcaGetQuery', queryDuration);
-
-      if (!rows || !rows.length) {
-        logger.info('mathpoll related; after cache miss, unable to find data for', {
+      const rowsArray = rows;
+      if (!rowsArray || !rowsArray.length) {
+        logger.silly('mathpoll related; after cache miss, unable to find data for', {
           zid,
           math_tick,
           math_env: Config.mathEnv
         });
         return undefined;
       }
-      const item = rows[0].data;
-      if (rows[0].math_tick) {
-        item.math_tick = Number(rows[0].math_tick);
+      const item = rowsArray[0].data;
+      if (rowsArray[0].math_tick) {
+        item.math_tick = Number(rowsArray[0].math_tick);
       }
-
       if (item.math_tick <= (math_tick || 0)) {
-        logger.info('after cache miss, unable to find newer item', {
+        logger.silly('after cache miss, unable to find newer item', {
           zid,
           math_tick
         });
         return undefined;
       }
-      logger.info('after cache miss, found item, adding to cache', {
+      logger.silly('after cache miss, found item, adding to cache', {
         zid,
         math_tick
       });
-
       processMathObject(item);
-
       return updatePcaCache(zid, item);
     }
   );
 }
-
 function updatePcaCache(zid, item) {
   return new Promise((resolve, reject) => {
     item.zid = undefined;
@@ -141,7 +133,6 @@ function updatePcaCache(zid, item) {
     });
   });
 }
-
 function processMathObject(o) {
   function remapSubgroupStuff(o) {
     if (!o) {
@@ -164,26 +155,23 @@ function processMathObject(o) {
       'subgroup-votes',
       'subgroup-clusters'
     ];
-
-    for (const prop of subgroupProperties) {
+    subgroupProperties.forEach((prop) => {
       if (o[prop]) {
         o[prop] = safeMap(o[prop], (val, i) => ({
           id: Number(i),
           val: val
         }));
       }
-    }
+    });
     return o;
   }
-
   if (_.isArray(o['group-clusters'])) {
     o['group-clusters'] = o['group-clusters'].map((g) => {
       return { id: Number(g.id), val: g };
     });
   }
   const propsToConvert = ['repness', 'group-votes', 'subgroup-repness', 'subgroup-votes', 'subgroup-clusters'];
-
-  for (const prop of propsToConvert) {
+  propsToConvert.forEach((prop) => {
     if (!_.isArray(o[prop])) {
       o[prop] = _.keys(o[prop]).map((gid) => ({
         id: Number(gid),
@@ -193,8 +181,7 @@ function processMathObject(o) {
         o[prop].map(remapSubgroupStuff);
       }
     }
-  }
-
+  });
   function toObj(a) {
     const obj = {};
     if (!a) {
@@ -212,9 +199,9 @@ function processMathObject(o) {
     }
     return a.map((g) => {
       const id = g.id;
-      const gVal = g.val;
-      gVal.id = id;
-      return gVal;
+      g = g.val;
+      g.id = id;
+      return g;
     });
   }
   o.repness = toObj(o.repness);

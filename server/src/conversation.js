@@ -1,4 +1,4 @@
-import LruCache from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 import pg from './db/pg-query.js';
 import logger from './utils/logger.js';
 import { MPromise } from './utils/metered.js';
@@ -61,7 +61,7 @@ function getConversationInfoByConversationId(conversation_id) {
     );
   });
 }
-const conversationIdToZidCache = new LruCache({
+const conversationIdToZidCache = new LRUCache({
   max: 1000
 });
 function getZidFromConversationId(conversation_id) {
@@ -79,7 +79,6 @@ function getZidFromConversationId(conversation_id) {
         logger.error(`polis_err_fetching_zid_for_conversation_id ${conversation_id}`, err);
         return reject('polis_err_fetching_zid_for_conversation_id');
       }
-
       const zid = results.rows[0].zid;
       conversationIdToZidCache.set(conversation_id, zid);
       return resolve(zid);

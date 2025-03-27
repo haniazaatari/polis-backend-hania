@@ -1,6 +1,6 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
-import BluebirdPromise from 'bluebird';
+import Promise from 'bluebird';
 import express from 'express';
 import morgan from 'morgan';
 import Config from './src/config.js';
@@ -8,35 +8,14 @@ import { handle_GET_conversationUuid } from './src/routes/conversationUuid.js';
 import { handle_GET_xidReport } from './src/routes/export.js';
 import server from './src/server.js';
 import logger from './src/utils/logger.js';
-import {
-  assignToP,
-  assignToPCustom,
-  getArrayOfInt,
-  getArrayOfStringNonEmpty,
-  getArrayOfStringNonEmptyLimitLength,
-  getBool,
-  getConversationIdFetchZid,
-  getEmail,
-  getInt,
-  getIntInRange,
-  getNumberInRange,
-  getOptionalStringLimitLength,
-  getPassword,
-  getPasswordWithCreatePasswordRules,
-  getReportIdFetchRid,
-  getStringLimitLength,
-  getUrlLimitLength,
-  moveToBody,
-  need,
-  resolve_pidThing,
-  want,
-  wantCookie,
-  wantHeader
-} from './src/utils/parameter.js';
 const app = express();
-app.use(morgan('dev'));
-app.set('trust proxy', 'uniquelocal');
-const helpersInitialized = new BluebirdPromise((resolve, _reject) => {
+app.use(
+  morgan('dev', {
+    skip: (req) => req.url.startsWith('/api/v3/math')
+  })
+);
+app.set('trust proxy', 1);
+const helpersInitialized = new Promise((resolve, _reject) => {
   resolve(server.initializePolisHelpers());
 });
 helpersInitialized.then(
@@ -48,6 +27,7 @@ helpersInitialized.then(
       COOKIES,
       denyIfNotFromWhitelistedDomain,
       devMode,
+      enableAgid,
       fetchThirdPartyCookieTestPt1,
       fetchThirdPartyCookieTestPt2,
       fetchIndexForAdminPage,
@@ -93,7 +73,6 @@ helpersInitialized.then(
       handle_GET_domainWhitelist,
       handle_GET_dummyButton,
       handle_GET_einvites,
-      handle_GET_groupDemographics,
       handle_GET_iim_conversation,
       handle_GET_iip_conversation,
       handle_GET_implicit_conversation_generation,
@@ -168,6 +147,33 @@ helpersInitialized.then(
       handle_PUT_reports,
       handle_PUT_users
     } = o;
+    const {
+      assignToP,
+      assignToPCustom,
+      getArrayOfInt,
+      getArrayOfStringNonEmpty,
+      getArrayOfStringNonEmptyLimitLength,
+      getBool,
+      getConversationIdFetchZid,
+      getEmail,
+      getInt,
+      getIntInRange,
+      getNumberInRange,
+      getOptionalStringLimitLength,
+      getPassword,
+      getPasswordWithCreatePasswordRules,
+      getReportIdFetchRid,
+      getStringLimitLength,
+      getUrlLimitLength,
+      moveToBody,
+      need,
+      needCookie,
+      needHeader,
+      resolve_pidThing,
+      want,
+      wantCookie,
+      wantHeader
+    } = require('./src/utils/parameter');
     app.disable('x-powered-by');
     app.use(middleware_responseTime_start);
     app.use(redirectIfNotHttps);
@@ -456,14 +462,6 @@ helpersInitialized.then(
       handle_GET_participation
     );
     app.get(
-      '/api/v3/group_demographics',
-      moveToBody,
-      authOptional(assignToP),
-      need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
-      want('report_id', getReportIdFetchRid, assignToPCustom('rid')),
-      handle_GET_groupDemographics
-    );
-    app.get(
       '/api/v3/comments',
       moveToBody,
       authOptional(assignToP),
@@ -475,7 +473,6 @@ helpersInitialized.then(
       want('modIn', getBool, assignToP),
       want('mod_gt', getInt, assignToP),
       want('include_social', getBool, assignToP),
-      want('include_demographics', getBool, assignToP),
       want('include_voting_patterns', getBool, assignToP, false),
       resolve_pidThing('not_voted_by_pid', assignToP, 'get:comments:not_voted_by_pid'),
       resolve_pidThing('pid', assignToP, 'get:comments:pid'),
@@ -676,8 +673,6 @@ helpersInitialized.then(
       want('style_btn', getOptionalStringLimitLength(500), assignToP),
       want('auth_needed_to_vote', getBool, assignToP),
       want('auth_needed_to_write', getBool, assignToP),
-      want('auth_opt_fb', getBool, assignToP),
-      want('auth_opt_tw', getBool, assignToP),
       want('auth_opt_allow_3rdparty', getBool, assignToP),
       want('verifyMeta', getBool, assignToP),
       want('send_created_email', getBool, assignToP),
@@ -929,8 +924,6 @@ helpersInitialized.then(
       want('referrer', getStringLimitLength(1, 10000), assignToP),
       want('auth_needed_to_vote', getBool, assignToP),
       want('auth_needed_to_write', getBool, assignToP),
-      want('auth_opt_fb', getBool, assignToP),
-      want('auth_opt_tw', getBool, assignToP),
       want('auth_opt_allow_3rdparty', getBool, assignToP),
       want('show_vis', getBool, assignToP),
       want('show_share', getBool, assignToP),

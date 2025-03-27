@@ -8,7 +8,6 @@ import {
 import SQL from '../db/sql.js';
 import { isDuplicateKey } from '../utils/common.js';
 import logger from '../utils/logger.js';
-import { MPromise } from '../utils/metered.js';
 const isXidWhitelisted = Conversation.isXidWhitelisted;
 const sql_votes_latest_unique = SQL.sql_votes_latest_unique;
 function doVotesPost(_uid, pid, conv, tid, voteType, weight, high_priority) {
@@ -52,7 +51,6 @@ function votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
           if (is_whitelisted) {
             return conv;
           }
-
           throw 'polis_err_xid_not_whitelisted';
         });
       }

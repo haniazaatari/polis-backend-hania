@@ -1,11 +1,10 @@
-import { GoogleAIModel } from '@tevko/sensemaking-tools/src/models/aiStudio_model.js';
-import { Sensemaker } from '@tevko/sensemaking-tools/src/sensemaker.js';
-import { VoteTally } from '@tevko/sensemaking-tools/src/types.js';
+import { GoogleAIModel } from '@tevko/sensemaking-tools/src/models/aiStudio_model';
+import { Sensemaker } from '@tevko/sensemaking-tools/src/sensemaker';
+import { VoteTally } from '@tevko/sensemaking-tools/src/types';
 import { parse } from 'csv-parse';
 import config from '../../config.js';
 import { sendCommentGroupsSummary } from '../../routes/export.js';
 import logger from '../../utils/logger.js';
-
 async function parseCsvString(csvString) {
   return new Promise((resolve, reject) => {
     const data = [];
@@ -58,20 +57,16 @@ export async function getTopicsFromRID(zId) {
       defaultModel: new GoogleAIModel(config.geminiApiKey, 'gemini-1.5-flash-8b')
     }).categorizeComments(comments, false, topics);
     const topics_master_list = new Map();
-
-    for (const c of categorizedComments) {
-      if (c.topics) {
-        for (const t of c.topics) {
-          const existingTopic = topics_master_list.get(t.name);
-          if (existingTopic) {
-            existingTopic.citations.push(Number(c.id));
-          } else {
-            topics_master_list.set(t.name, { citations: [Number(c.id)] });
-          }
+    categorizedComments.forEach((c) => {
+      c.topics?.forEach((t) => {
+        const existingTopic = topics_master_list.get(t.name);
+        if (existingTopic) {
+          existingTopic.citations.push(Number(c.id));
+        } else {
+          topics_master_list.set(t.name, { citations: [Number(c.id)] });
         }
-      }
-    }
-
+      });
+    });
     return Array.from(topics_master_list, ([name, value]) => ({
       name,
       citations: value.citations

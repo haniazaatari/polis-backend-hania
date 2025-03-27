@@ -1,6 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import logger from '../../utils/logger.js';
-
+import logger from '../../../utils/logger.js';
 const genAI = new GoogleGenerativeAI('my_api_key');
 async function main() {
   const model = genAI.getGenerativeModel({ model: 'gemini-pro' });

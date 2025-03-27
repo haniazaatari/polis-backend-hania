@@ -2,7 +2,6 @@ import { CreateTableCommand, DeleteItemCommand, DescribeTableCommand, DynamoDBCl
 import { DeleteCommand, PutCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import config from '../config.js';
 import logger from './logger.js';
-
 export default class DynamoStorageService {
   client;
   tableName;
@@ -13,11 +12,9 @@ export default class DynamoStorageService {
       secretAccessKey: config.awsSecretAccessKey
     };
     const clientConfig = { region: config.awsRegion, credentials };
-
     if (config.dynamoDbEndpoint) {
       clientConfig.endpoint = config.dynamoDbEndpoint;
     }
-
     this.client = new DynamoDBClient(clientConfig);
     this.tableName = tableName;
     this.cacheDisabled = disableCache || false;
@@ -103,14 +100,11 @@ export default class DynamoStorageService {
       logger.error('Error deleting item:', error);
     }
   }
-
   async deleteAllByReportID(reportIdPrefix) {
     if (!reportIdPrefix) {
       return;
     }
-
     let lastEvaluatedKey = undefined;
-
     do {
       const scanParams = {
         TableName: this.tableName,
@@ -120,15 +114,12 @@ export default class DynamoStorageService {
         },
         ExclusiveStartKey: lastEvaluatedKey
       };
-
       const scanCommand = new ScanCommand(scanParams);
       let itemsToDelete;
-
       try {
         const scanResponse = await this.client.send(scanCommand);
         itemsToDelete = scanResponse.Items;
         lastEvaluatedKey = scanResponse.LastEvaluatedKey;
-
         if (!itemsToDelete || itemsToDelete.length === 0) {
           if (!lastEvaluatedKey) {
           }
@@ -140,7 +131,6 @@ export default class DynamoStorageService {
       const deletePromises = itemsToDelete.map(async (item) => {
         const rid_section_model = item.rid_section_model;
         const timestamp = item.timestamp;
-
         const deleteParams = {
           TableName: this.tableName,
           Key: {
@@ -148,23 +138,18 @@ export default class DynamoStorageService {
             timestamp: { S: timestamp }
           }
         };
-
         const deleteItemCommand = new DeleteItemCommand(deleteParams);
-
         try {
           await this.client.send(deleteItemCommand);
         } catch (_deleteError) {}
       });
-
       await Promise.all(deletePromises);
     } while (lastEvaluatedKey);
   }
-
   async getAllByReportID(reportIdPrefix) {
     if (!reportIdPrefix) {
       return [];
     }
-
     const scanParams = {
       TableName: this.tableName,
       FilterExpression: 'begins_with(rid_section_model, :reportIdPrefix)',
@@ -172,17 +157,13 @@ export default class DynamoStorageService {
         ':reportIdPrefix': String(reportIdPrefix)
       }
     };
-
     const scanCommand = new ScanCommand(scanParams);
-
     try {
       const scanResponse = await this.client.send(scanCommand);
       const items = scanResponse.Items;
-
       if (!items || items.length === 0) {
         return [];
       }
-
       return items;
     } catch (_scanError) {
       return;

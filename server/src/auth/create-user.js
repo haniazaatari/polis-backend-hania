@@ -114,8 +114,8 @@ function doSendVerification(req, email) {
       .then((_rows) => sendVerificationEmail(req, email, einvite))
   );
 }
-function sendVerificationEmail(req, email, einvite) {
-  const serverName = Config.getServerNameWithProtocol(req);
+function sendVerificationEmail(_req, email, einvite) {
+  const serverName = Config.getServerUrl();
   const body = `Welcome to pol.is!
 
 Click this link to verify your email address:

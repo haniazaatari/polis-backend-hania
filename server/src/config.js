@@ -2,7 +2,6 @@ import fs from 'fs';
 import isTrue from 'boolean';
 const devHostname = process.env.API_DEV_HOSTNAME || 'localhost:5000';
 const devMode = isTrue(process.env.DEV_MODE);
-const domainOverride = process.env.DOMAIN_OVERRIDE || null;
 const prodHostname = process.env.API_PROD_HOSTNAME || 'pol.is';
 const serverPort = Number.parseInt(process.env.API_SERVER_PORT || process.env.PORT || '5000', 10);
 const shouldUseTranslationAPI = isTrue(process.env.SHOULD_USE_TRANSLATION_API);
@@ -10,24 +9,11 @@ import('source-map-support').then((sourceMapSupport) => {
   sourceMapSupport.install();
 });
 export default {
-  domainOverride,
   isDevMode: devMode,
   serverPort,
-  getServerNameWithProtocol: (req) => {
+  getServerUrl: () => {
     if (devMode) {
-      return `${req.protocol}://${req.headers.host}`;
-    }
-    if (domainOverride) {
-      return `${req.protocol}://${domainOverride}`;
-    }
-    if (req.headers.host.includes('preprod.pol.is')) {
-      return 'https://preprod.pol.is';
-    }
-    if (req.headers.host.includes('embed.pol.is')) {
-      return 'https://embed.pol.is';
-    }
-    if (req.headers.host.includes('survey.pol.is')) {
-      return 'https://survey.pol.is';
+      return `http://${devHostname}`;
     }
     return `https://${prodHostname}`;
   },
@@ -35,17 +21,7 @@ export default {
     if (devMode) {
       return devHostname;
     }
-    if (domainOverride) {
-      return domainOverride;
-    }
     return prodHostname;
-  },
-  getServerUrl: () => {
-    if (devMode) {
-      return `http://${devHostname}`;
-    }
-
-    return `https://${prodHostname}`;
   },
   adminEmailDataExport: process.env.ADMIN_EMAIL_DATA_EXPORT,
   adminEmailDataExportTest: process.env.ADMIN_EMAIL_DATA_EXPORT_TEST,
@@ -123,9 +99,7 @@ function setGoogleApplicationCredentials() {
     process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsFilePath;
     fs.writeFileSync(credentialsFilePath, creds_string);
     return true;
-  } catch (error) {
-    // biome-ignore lint/suspicious/noConsole: config is processed before logger is ready
-    console.error(error);
+  } catch (_error) {
     return false;
   }
 }

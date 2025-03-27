@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import LruCache from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 import Config from './config.js';
 import pg from './db/pg-query.js';
 import logger from './utils/logger.js';
@@ -19,7 +19,6 @@ function decrypt(text) {
   dec += decipher.final('utf8');
   return dec;
 }
-decrypt;
 function makeSessionToken() {
   return crypto
     .randomBytes(32)
@@ -27,7 +26,7 @@ function makeSessionToken() {
     .replace(/[^A-Za-z0-9]/g, '')
     .substr(0, 20);
 }
-const userTokenCache = new LruCache({
+const userTokenCache = new LRUCache({
   max: 9000
 });
 function getUserInfoForSessionToken(sessionToken, _res, cb) {
@@ -55,17 +54,21 @@ function getUserInfoForSessionToken(sessionToken, _res, cb) {
 function startSession(uid, cb) {
   const token = makeSessionToken();
   logger.info('startSession');
-  pg.query('insert into auth_tokens (uid, token, created) values ($1, $2, default);', [uid, token], (err) => {
-    if (err) {
-      cb(err);
-      return;
+  pg.query(
+    'insert into auth_tokens (uid, token, created) values ($1, $2, default);',
+    [uid, token],
+    (err, _repliesSetToken) => {
+      if (err) {
+        cb(err);
+        return;
+      }
+      logger.info('startSession: token set.');
+      cb(null, token);
     }
-    logger.info('startSession: token set.');
-    cb(null, token);
-  });
+  );
 }
 function endSession(sessionToken, cb) {
-  pg.query('delete from auth_tokens where token = ($1);', [sessionToken], (err) => {
+  pg.query('delete from auth_tokens where token = ($1);', [sessionToken], (err, _results) => {
     if (err) {
       cb(err);
       return;
@@ -85,7 +88,7 @@ function setupPwReset(uid, cb) {
   pg.query(
     'insert into pwreset_tokens (uid, token, created) values ($1, $2, default);',
     [uid, token],
-    (errSetToken) => {
+    (errSetToken, _repliesSetToken) => {
       if (errSetToken) {
         cb(errSetToken);
         return;
@@ -112,7 +115,7 @@ function getUidForPwResetToken(pwresettoken, cb) {
   });
 }
 function clearPwResetToken(pwresettoken, cb) {
-  pg.query('delete from pwreset_tokens where token = ($1);', [pwresettoken], (errDelToken) => {
+  pg.query('delete from pwreset_tokens where token = ($1);', [pwresettoken], (errDelToken, _repliesSetToken) => {
     if (errDelToken) {
       cb(errDelToken);
       return;

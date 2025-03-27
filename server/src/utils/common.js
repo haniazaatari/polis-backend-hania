@@ -9,7 +9,6 @@ import {
   query_readOnly as pgQuery_readOnly
 } from '../db/pg-query.js';
 import logger from '../utils/logger.js';
-import { MPromise } from './metered.js';
 const serverUrl = Config.getServerUrl();
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
 const akismet = akismetLib.client({

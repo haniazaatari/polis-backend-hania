@@ -10,7 +10,7 @@ function handle_GET_launchPrep(req, res) {
     setPermanentCookie(req, res, makeSessionToken());
   }
   setCookieTestCookie(req, res);
-  cookies.setCookie(req, res, 'top', 'ok', {
+  setCookie(req, res, 'top', 'ok', {
     httpOnly: false
   });
   const dest = Utils.hexToStr(req.p.dest);

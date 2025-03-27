@@ -1,18 +1,22 @@
-import LruCache from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 import _ from 'underscore';
-import pg from '../db/pg-query.js';
+import {
+  queryP as pgQueryP,
+  queryP_metered as pgQueryP_metered,
+  queryP_readOnly as pgQueryP_readOnly,
+  query_readOnly as pgQuery_readOnly
+} from '../db/pg-query.js';
 import logger from './logger.js';
 import { MPromise } from './metered.js';
-const zidToConversationIdCache = new LruCache({
+const zidToConversationIdCache = new LRUCache({
   max: 1000
 });
-
 export function getZinvite(zid, dontUseCache) {
   const cachedConversationId = zidToConversationIdCache.get(zid);
   if (!dontUseCache && cachedConversationId) {
     return Promise.resolve(cachedConversationId);
   }
-  return pg.queryP_metered('getZinvite', 'select * from zinvites where zid = ($1);', [zid]).then((rows) => {
+  return pgQueryP_metered('getZinvite', 'select * from zinvites where zid = ($1);', [zid]).then((rows) => {
     const conversation_id = rows?.[0]?.zinvite || void 0;
     if (conversation_id) {
       zidToConversationIdCache.set(zid, conversation_id);
@@ -20,14 +24,14 @@ export function getZinvite(zid, dontUseCache) {
     return conversation_id;
   });
 }
-export function getZinvites(zidsParam) {
-  if (!zidsParam.length) {
-    return Promise.resolve(zidsParam);
+export function getZinvites(zids) {
+  if (!zids.length) {
+    return Promise.resolve(zids);
   }
-  const zidsAsNumbers = _.map(zidsParam, (zid) => Number(zid));
-  const uniqueZids = _.uniq(zidsAsNumbers);
-  const uncachedZids = uniqueZids.filter((zid) => !zidToConversationIdCache.get(zid));
-  const zidsWithCachedConversationIds = uniqueZids
+  zids = _.map(zids, (zid) => Number(zid));
+  zids = _.uniq(zids);
+  const uncachedZids = zids.filter((zid) => !zidToConversationIdCache.get(zid));
+  const zidsWithCachedConversationIds = zids
     .filter((zid) => !!zidToConversationIdCache.get(zid))
     .map((zid) => ({
       zid: zid,
@@ -35,11 +39,11 @@ export function getZinvites(zidsParam) {
     }));
   function makeZidToConversationIdMap(arrays) {
     const zid2conversation_id = {};
-    for (const array of arrays) {
-      for (const item of array) {
-        zid2conversation_id[item.zid] = item.zinvite;
-      }
-    }
+    arrays.forEach((a) => {
+      a.forEach((o) => {
+        zid2conversation_id[o.zid] = o.zinvite;
+      });
+    });
     return zid2conversation_id;
   }
   return new MPromise('getZinvites', (resolve, reject) => {
@@ -47,7 +51,7 @@ export function getZinvites(zidsParam) {
       resolve(makeZidToConversationIdMap([zidsWithCachedConversationIds]));
       return;
     }
-    pg.query_readOnly(`select * from zinvites where zid in (${uncachedZids.join(',')});`, [], (err, result) => {
+    pgQuery_readOnly(`select * from zinvites where zid in (${uncachedZids.join(',')});`, [], (err, result) => {
       if (err) {
         reject(err);
       } else {
@@ -56,27 +60,21 @@ export function getZinvites(zidsParam) {
     });
   });
 }
-
 export function getZidForRid(rid) {
-  return pg.queryP('select zid from reports where rid = ($1);', [rid]).then((row) => {
+  return pgQueryP('select zid from reports where rid = ($1);', [rid]).then((row) => {
     if (!row || !row.length) {
       return null;
     }
     return row[0].zid;
   });
 }
-
 export async function getZidForUuid(uuid) {
   logger.debug(`getZidForUuid: ${uuid}`);
   try {
-    const queryResult = await pg.queryP_readOnly('SELECT zid FROM zinvites WHERE uuid = $1', [uuid]);
-
+    const queryResult = await pgQueryP_readOnly('SELECT zid FROM zinvites WHERE uuid = $1', [uuid]);
     const rows = queryResult;
-
     logger.debug(`queryResult: ${JSON.stringify(queryResult)}`);
     logger.debug(`rows: ${JSON.stringify(rows)}`);
-
-    // Return zid if found, null otherwise
     return rows.length > 0 ? rows[0].zid : null;
   } catch (err) {
     logger.error(`Error finding zid for uuid ${uuid}: ${err}`);

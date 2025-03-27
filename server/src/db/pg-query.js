@@ -1,13 +1,10 @@
-import pg from 'pg';
-import pgConnectionString from 'pg-connection-string';
+import { Pool } from 'pg';
+import { parse as parsePgConnectionString } from 'pg-connection-string';
 import QueryStream from 'pg-query-stream';
 import { isFunction, isString, isUndefined } from 'underscore';
 import Config from '../config.js';
 import logger from '../utils/logger.js';
 import { MPromise } from '../utils/metered.js';
-
-const { Pool } = pg;
-const { parse: parsePgConnectionString } = pgConnectionString;
 const usingReplica = Config.databaseURL !== Config.readOnlyDatabaseURL;
 const poolSize = Config.isDevMode ? 2 : usingReplica ? 3 : 12;
 const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), {
@@ -52,7 +49,6 @@ function queryImpl(pool, queryString, ...args) {
   } else {
     throw 'unexpected db query syntax';
   }
-
   return new Promise((resolve, reject) => {
     pool.connect((err, client, release) => {
       if (err) {
@@ -61,13 +57,17 @@ function queryImpl(pool, queryString, ...args) {
         logger.error('pg_connect_pool_fail', err);
         return reject(err);
       }
+      if (!client) {
+        const error = new Error('Failed to acquire client from pool');
+        logger.error('pg_connect_no_client', error);
+        return reject(error);
+      }
       client.query(queryString, params, (err, results) => {
         if (err) {
           release(err);
           if (callback) callback(err);
           return reject(err);
         }
-
         release();
         if (callback) callback(null, results);
         resolve(results.rows);
@@ -134,6 +134,12 @@ function stream_queryP_readOnly(queryString, params, onRow, onEnd, onError) {
   readPool.connect((err, client, done) => {
     if (err) {
       onError(err);
+      return;
+    }
+    if (!client) {
+      const error = new Error('Failed to acquire client from pool');
+      logger.error('pg_connect_no_client', error);
+      onError(error);
       return;
     }
     const stream = client.query(query);

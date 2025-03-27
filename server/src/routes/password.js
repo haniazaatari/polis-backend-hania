@@ -10,7 +10,7 @@ import logger from '../utils/logger.js';
 const sendTextEmail = emailSenders.sendTextEmail;
 const getUidForPwResetToken = Session.getUidForPwResetToken;
 const clearPwResetToken = Session.clearPwResetToken;
-const getServerNameWithProtocol = Config.getServerNameWithProtocol;
+const getServerUrl = Config.getServerUrl;
 const setupPwReset = Session.setupPwReset;
 const polisFromAddress = Config.polisFromAddress;
 const getUserInfoForUid = User.getUserInfoForUid;
@@ -82,7 +82,7 @@ function handle_POST_auth_password(req, res) {
 }
 function handle_POST_auth_pwresettoken(req, res) {
   const email = req.p.email;
-  const server = getServerNameWithProtocol(req);
+  const server = getServerUrl();
   cookies.clearCookies(req, res);
   function finish() {
     res.status(200).json('Password reset email sent, please check your email.');

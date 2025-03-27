@@ -9,7 +9,6 @@ import { MPromise } from '../utils/metered.js';
 import { getBidIndexToPidMapping } from '../utils/participants.js';
 import { getPca } from '../utils/pca.js';
 import { getZidForRid } from '../utils/zinvite.js';
-
 function handle_GET_math_pca(_req, res) {
   res.status(304).end();
 }
@@ -172,13 +171,13 @@ function handle_GET_bidToPid(req, res) {
         bidToPid: b2p
       });
     },
-    () => {
+    (_err) => {
       res.status(304).end();
     }
   );
 }
 function getXids(zid) {
-  return new MPromise('getXids', (resolve, reject) => {
+  return MPromise('getXids', (resolve, reject) => {
     pgQuery_readOnly(
       'select pid, xid from xids inner join ' +
         '(select * from participants where zid = ($1)) as p on xids.uid = p.uid ' +
@@ -300,7 +299,7 @@ function handle_GET_bid(req, res) {
           bid: yourBid
         });
       },
-      () => {
+      (_err) => {
         res.status(304).end();
       }
     )

@@ -1,4 +1,4 @@
-import LruCache from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 import _ from 'underscore';
 import Conversation from './conversation.js';
 import pg from './db/pg-query.js';
@@ -71,7 +71,7 @@ function createDummyUser() {
     });
   });
 }
-const pidCache = new LruCache({
+const pidCache = new LRUCache({
   max: 9000
 });
 function getPid(zid, uid, callback) {
@@ -113,7 +113,7 @@ function getPidPromise(zid, uid, usePrimary) {
     });
   });
 }
-function getPidForParticipant(assigner) {
+function getPidForParticipant(assigner, _cache) {
   return (req, _res, next) => {
     const zid = req.p.zid;
     const uid = req.p.uid;
