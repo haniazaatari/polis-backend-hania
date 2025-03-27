@@ -4,6 +4,7 @@ import Config from '../config.js';
 import Session from '../session.js';
 import User from '../user.js';
 import logger from '../utils/logger.js';
+
 const COOKIES = {
   COOKIE_TEST: 'ct',
   HAS_EMAIL: 'e',
@@ -16,7 +17,9 @@ const COOKIES = {
   PERMANENT_COOKIE: 'pc',
   TRY_COOKIE: 'tryCookie'
 };
+
 const getUserInfoForSessionToken = Session.getUserInfoForSessionToken;
+
 const COOKIES_TO_CLEAR = {
   e: true,
   token2: true,
@@ -25,7 +28,9 @@ const COOKIES_TO_CLEAR = {
   referrer: true,
   parent_url: true
 };
+
 const oneYear = 1000 * 60 * 60 * 24 * 365;
+
 function cookieDomain(req) {
   const origin = req?.headers?.origin || '';
   const parsedOrigin = url.parse(origin);
@@ -34,6 +39,7 @@ function cookieDomain(req) {
   }
   return `.${Config.getServerHostname()}`;
 }
+
 function setCookie(req, res, name, value, options) {
   const opts = _.clone(options || {});
   opts.path = _.isUndefined(opts.path) ? '/' : opts.path;
@@ -44,40 +50,49 @@ function setCookie(req, res, name, value, options) {
   opts.domain = cookieDomain(req);
   res.cookie(name, value, opts);
 }
+
 function setParentReferrerCookie(req, res, referrer) {
   setCookie(req, res, COOKIES.PARENT_REFERRER, referrer, {
     httpOnly: true
   });
 }
+
 function setParentUrlCookie(req, res, parent_url) {
   setCookie(req, res, COOKIES.PARENT_URL, parent_url, {
     httpOnly: true
   });
 }
+
 function setHasEmailCookie(req, res, email) {
   if (email) {
     setCookie(req, res, COOKIES.HAS_EMAIL, 1, {});
   }
 }
+
 function setUserCreatedTimestampCookie(req, res, timestamp) {
   setCookie(req, res, COOKIES.USER_CREATED_TIMESTAMP, timestamp, {});
 }
+
 function setTokenCookie(req, res, token) {
   setCookie(req, res, COOKIES.TOKEN, token, {
     httpOnly: true
   });
 }
+
 function setUidCookie(req, res, uid) {
   setCookie(req, res, COOKIES.UID, uid, {});
 }
+
 function setPermanentCookie(req, res, token) {
   setCookie(req, res, COOKIES.PERMANENT_COOKIE, token, {
     httpOnly: true
   });
 }
+
 function setCookieTestCookie(req, res) {
   setCookie(req, res, COOKIES.COOKIE_TEST, 1, {});
 }
+
 function addCookies(req, res, token, uid) {
   return User.getUserInfoForUid2(uid).then((opts) => {
     const email = opts.email;
@@ -92,6 +107,7 @@ function addCookies(req, res, token, uid) {
     res.header('x-polis', token);
   });
 }
+
 function getPermanentCookieAndEnsureItIsSet(req, res) {
   if (!req.cookies[COOKIES.PERMANENT_COOKIE]) {
     const token = Session.makeSessionToken();
@@ -100,6 +116,7 @@ function getPermanentCookieAndEnsureItIsSet(req, res) {
   }
   return req.cookies[COOKIES.PERMANENT_COOKIE];
 }
+
 function clearCookies(req, res) {
   let cookieName;
   for (cookieName in req.cookies) {
@@ -112,12 +129,14 @@ function clearCookies(req, res) {
   }
   logger.info(`after clear res set-cookie: ${JSON.stringify(res?._headers?.['set-cookie'])}`);
 }
+
 function clearCookie(req, res, cookieName) {
   res?.clearCookie?.(cookieName, {
     path: '/',
     domain: cookieDomain(req)
   });
 }
+
 function doCookieAuth(assigner, isOptional, req, res, next) {
   const token = req.cookies[COOKIES.TOKEN];
   getUserInfoForSessionToken(token, res, (err, uid) => {
@@ -140,6 +159,7 @@ function doCookieAuth(assigner, isOptional, req, res, next) {
     next();
   });
 }
+
 export default {
   COOKIES,
   COOKIES_TO_CLEAR,

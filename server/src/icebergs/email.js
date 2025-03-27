@@ -5,13 +5,13 @@ import Conversation from '../conversation.js';
 import dbPgQuery, { query as pgQuery, queryP as pgQueryP, query_readOnly as pgQuery_readOnly } from '../db/pg-query.js';
 import emailSenders from '../email/senders.js';
 import Password from '../routes/password.js';
-import { HMAC_SIGNATURE_PARAM_NAME } from '../server.js';
 import User from '../user.js';
 import Utils from '../utils/common.js';
 import fail from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import { getZinvite } from '../utils/zinvite.js';
 
+const HMAC_SIGNATURE_PARAM_NAME = 'signature';
 const polisFromAddress = Config.polisFromAddress;
 const adminEmails = Config.adminEmails ? JSON.parse(Config.adminEmails) : [];
 const devMode = Config.devMode;
@@ -477,6 +477,7 @@ function sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, se
 }
 
 export default {
+  HMAC_SIGNATURE_PARAM_NAME,
   createOneSuzinvite,
   doSendEinvite,
   emailBadProblemTime,

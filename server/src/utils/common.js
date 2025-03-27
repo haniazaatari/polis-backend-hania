@@ -10,12 +10,14 @@ import {
 } from '../db/pg-query.js';
 import MPromise from '../utils/MPromise.js';
 import logger from '../utils/logger.js';
+
 const serverUrl = Config.getServerUrl();
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
 const akismet = akismetLib.client({
   blog: serverUrl,
   apiKey: Config.akismetAntispamApiKey
 });
+
 akismet.verifyKey((_err, verified) => {
   if (verified) {
     logger.debug('Akismet: API key successfully verified.');
@@ -23,39 +25,9 @@ akismet.verifyKey((_err, verified) => {
     logger.debug('Akismet: Unable to verify API key.');
   }
 });
-function isSpam(o) {
-  return new MPromise('isSpam', (resolve, reject) => {
-    akismet.checkSpam(o, (err, spam) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(spam);
-      }
-    });
-  });
-}
-function isPolisDev(uid) {
-  return polisDevs.indexOf(uid) >= 0;
-}
-function strToHex(str) {
-  let hex;
-  let i;
-  let result = '';
-  for (i = 0; i < str.length; i++) {
-    hex = str.charCodeAt(i).toString(16);
-    result += `000${hex}`.slice(-4);
-  }
-  return result;
-}
-function hexToStr(hexString) {
-  let j;
-  const hexes = hexString.match(/.{1,4}/g) || [];
-  let str = '';
-  for (j = 0; j < hexes.length; j++) {
-    str += String.fromCharCode(Number.parseInt(hexes[j], 16));
-  }
-  return str;
-}
+
+const escapeLiteral = pg.Client.prototype.escapeLiteral;
+
 const polisTypes = {
   reactions: {
     push: 1,
@@ -75,6 +47,44 @@ const polisTypes = {
 };
 polisTypes.reactionValues = _.values(polisTypes.reactions);
 polisTypes.starValues = _.values(polisTypes.staractions);
+
+function isSpam(o) {
+  return new MPromise('isSpam', (resolve, reject) => {
+    akismet.checkSpam(o, (err, spam) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(spam);
+      }
+    });
+  });
+}
+
+function isPolisDev(uid) {
+  return polisDevs.indexOf(uid) >= 0;
+}
+
+function strToHex(str) {
+  let hex;
+  let i;
+  let result = '';
+  for (i = 0; i < str.length; i++) {
+    hex = str.charCodeAt(i).toString(16);
+    result += `000${hex}`.slice(-4);
+  }
+  return result;
+}
+
+function hexToStr(hexString) {
+  let j;
+  const hexes = hexString.match(/.{1,4}/g) || [];
+  let str = '';
+  for (j = 0; j < hexes.length; j++) {
+    str += String.fromCharCode(Number.parseInt(hexes[j], 16));
+  }
+  return str;
+}
+
 function isConversationOwner(zid, uid, callback) {
   pgQuery_readOnly('SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);', [zid, uid], (err, docs) => {
     if (!docs || !docs.rows || docs.rows.length === 0) {
@@ -83,6 +93,7 @@ function isConversationOwner(zid, uid, callback) {
     callback?.(err);
   });
 }
+
 function isModerator(zid, uid) {
   if (isPolisDev(uid)) {
     return Promise.resolve(true);
@@ -92,6 +103,7 @@ function isModerator(zid, uid) {
     [zid, uid]
   ).then((rows) => rows[0].count >= 1);
 }
+
 function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) {
   return pgQueryP(
     "insert into worker_tasks (math_env, task_data, task_type, task_bucket) values ($1, $2, 'generate_export_data', $3);",
@@ -107,10 +119,11 @@ function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) 
     ]
   );
 }
+
 function isOwner(zid, uid) {
   return Conversation.getConversationInfo(zid).then((info) => info.owner === uid);
 }
-const escapeLiteral = pg.Client.prototype.escapeLiteral;
+
 function isDuplicateKey(err) {
   const isdup =
     err.code === 23505 ||
@@ -120,14 +133,17 @@ function isDuplicateKey(err) {
     err.messagePrimary?.includes('duplicate key value');
   return isdup;
 }
+
 function ifDefinedFirstElseSecond(first, second) {
   return _.isUndefined(first) ? second : first;
 }
+
 function ifDefinedSet(name, source, dest) {
   if (!_.isUndefined(source[name])) {
     dest[name] = source[name];
   }
 }
+
 export {
   doAddDataExportTask,
   escapeLiteral,
@@ -143,6 +159,7 @@ export {
   polisTypes,
   strToHex
 };
+
 export default {
   doAddDataExportTask,
   escapeLiteral,

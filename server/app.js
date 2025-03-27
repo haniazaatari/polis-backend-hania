@@ -1,30 +1,18 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
+
 import BluebirdPromise from 'bluebird';
+import timeout from 'connect-timeout';
 import express from 'express';
 import morgan from 'morgan';
 import Config from './src/config.js';
-import { handle_GET_conversationUuid } from './src/routes/conversationUuid.js';
-import { handle_GET_xidReport } from './src/routes/export.js';
-import server from './src/server.js';
-import logger from './src/utils/logger.js';
-
 import {
-  addCorsHeader,
-  denyIfNotFromWhitelistedDomain,
-  handle_GET_domainWhitelist,
-  handle_POST_domainWhitelist
-} from './src/icebergs/domain.js';
-
-import {
-  handle_GET_notifications_subscribe,
-  handle_GET_notifications_unsubscribe,
-  handle_GET_verification,
-  handle_POST_sendCreatedLinkToEmail,
-  handle_POST_sendEmailExportReady,
-  handle_POST_users_invite
-} from './src/icebergs/email.js';
-
+  auth,
+  authOptional,
+  handle_POST_auth_deregister,
+  handle_POST_auth_login,
+  handle_POST_auth_new
+} from './src/icebergs/auth.js';
 import {
   handle_GET_comments,
   handle_GET_comments_translations,
@@ -34,7 +22,6 @@ import {
   handle_POST_reportCommentSelections,
   handle_PUT_comments
 } from './src/icebergs/comment.js';
-
 import {
   fetchIndexForConversation,
   handle_GET_conversationPreloadInfo,
@@ -52,40 +39,21 @@ import {
   handle_POST_reserve_conversation_id,
   handle_PUT_conversations
 } from './src/icebergs/conversation.js';
-
 import {
-  fetchIndexForAdminPage,
-  fetchIndexForReportPage,
-  fetchIndexWithoutPreloadData,
-  handle_GET_conditionalIndexFetcher,
-  proxy
-} from './src/icebergs/static.js';
-
+  addCorsHeader,
+  denyIfNotFromWhitelistedDomain,
+  handle_GET_domainWhitelist,
+  handle_POST_domainWhitelist
+} from './src/icebergs/domain.js';
 import {
-  middleware_check_if_options,
-  middleware_log_middleware_errors,
-  middleware_log_request_body,
-  middleware_responseTime_start
-} from './src/icebergs/middleware.js';
-
-import {
-  handle_GET_participants,
-  handle_GET_participation,
-  handle_GET_participationInit,
-  handle_POST_joinWithInvite,
-  handle_POST_participants,
-  handle_POST_query_participants_by_metadata,
-  handle_PUT_participants_extended
-} from './src/icebergs/participant.js';
-
-import {
-  auth,
-  authOptional,
-  handle_POST_auth_deregister,
-  handle_POST_auth_login,
-  handle_POST_auth_new
-} from './src/icebergs/auth.js';
-
+  HMAC_SIGNATURE_PARAM_NAME,
+  handle_GET_notifications_subscribe,
+  handle_GET_notifications_unsubscribe,
+  handle_GET_verification,
+  handle_POST_sendCreatedLinkToEmail,
+  handle_POST_sendEmailExportReady,
+  handle_POST_users_invite
+} from './src/icebergs/email.js';
 import {
   handle_DELETE_metadata_questions,
   handle_GET_metadata,
@@ -95,7 +63,57 @@ import {
   handle_POST_metadata_answers,
   handle_POST_metadata_questions
 } from './src/icebergs/metadata.js';
-
+import {
+  haltOnTimeout,
+  makeRedirectorTo,
+  middleware_check_if_options,
+  middleware_log_middleware_errors,
+  middleware_log_request_body,
+  middleware_responseTime_start,
+  redirectIfHasZidButNoConversationId,
+  redirectIfNotHttps,
+  writeDefaultHead
+} from './src/icebergs/middleware.js';
+import { handle_POST_notifyTeam } from './src/icebergs/notification.js';
+import {
+  handle_GET_contexts,
+  handle_GET_dummyButton,
+  handle_GET_einvites,
+  handle_GET_locations,
+  handle_GET_perfStats,
+  handle_GET_snapshot,
+  handle_GET_testConnection,
+  handle_GET_testDatabase,
+  handle_GET_users,
+  handle_GET_zinvites,
+  handle_POST_contexts,
+  handle_POST_contributors,
+  handle_POST_einvites,
+  handle_POST_metrics,
+  handle_POST_trashes,
+  handle_POST_tutorial,
+  handle_POST_zinvites,
+  handle_PUT_users
+} from './src/icebergs/other.js';
+import {
+  handle_GET_participants,
+  handle_GET_participation,
+  handle_GET_participationInit,
+  handle_POST_joinWithInvite,
+  handle_POST_participants,
+  handle_POST_query_participants_by_metadata,
+  handle_PUT_participants_extended
+} from './src/icebergs/participant.js';
+import { handle_GET_reports, handle_POST_reports, handle_PUT_reports } from './src/icebergs/report.js';
+import { handle_GET_ptptois, handle_GET_votes_famous, handle_PUT_ptptois } from './src/icebergs/social.js';
+import {
+  fetchIndexForAdminPage,
+  fetchIndexForReportPage,
+  fetchIndexWithoutPreloadData,
+  handle_GET_conditionalIndexFetcher,
+  makeFileFetcher,
+  proxy
+} from './src/icebergs/static.js';
 import {
   handle_GET_votes,
   handle_GET_votes_me,
@@ -103,14 +121,9 @@ import {
   handle_POST_upvotes,
   handle_POST_votes
 } from './src/icebergs/vote.js';
-
-import { handle_POST_notifyTeam } from './src/icebergs/notification.js';
-
-import { handle_GET_ptptois, handle_GET_votes_famous, handle_PUT_ptptois } from './src/icebergs/social.js';
-
-import { handle_DELETE_metadata_answers } from './src/routes/metadataAnswers.js';
-
+import { handle_GET_conversationUuid } from './src/routes/conversationUuid.js';
 import { handle_GET_dataExport, handle_GET_dataExport_results } from './src/routes/dataExport.js';
+import { handle_GET_xidReport } from './src/routes/export.js';
 import { handle_GET_reportExport } from './src/routes/export.js';
 import handle_GET_launchPrep from './src/routes/launchPrep.js';
 import {
@@ -123,98 +136,71 @@ import {
   handle_POST_math_update,
   handle_POST_xidWhitelist
 } from './src/routes/math.js';
+import { handle_DELETE_metadata_answers } from './src/routes/metadataAnswers.js';
 import { handle_POST_auth_password, handle_POST_auth_pwresettoken } from './src/routes/password.js';
 import { handle_GET_reportNarrative } from './src/routes/reportNarrative.js';
-import handle_GET_tryCookie from './src/routes/tryCookie.js';
+import {
+  fetchThirdPartyCookieTestPt1,
+  fetchThirdPartyCookieTestPt2,
+  handle_GET_tryCookie
+} from './src/routes/tryCookie.js';
+import server from './src/server.js';
+import { getPidForParticipant, pidCache } from './src/user.js';
+import { COOKIES } from './src/utils/cookies.js';
+import logger from './src/utils/logger.js';
+import {
+  assignToP,
+  assignToPCustom,
+  getArrayOfInt,
+  getArrayOfStringNonEmpty,
+  getArrayOfStringNonEmptyLimitLength,
+  getBool,
+  getConversationIdFetchZid,
+  getEmail,
+  getInt,
+  getIntInRange,
+  getNumberInRange,
+  getOptionalStringLimitLength,
+  getPassword,
+  getPasswordWithCreatePasswordRules,
+  getReportIdFetchRid,
+  getStringLimitLength,
+  getUrlLimitLength,
+  moveToBody,
+  need,
+  resolve_pidThing,
+  want,
+  wantCookie,
+  wantHeader
+} from './src/utils/parameter.js';
 
 const app = express();
+
 app.use(
   morgan('dev', {
     skip: (req) => req.url.startsWith('/api/v3/math')
   })
 );
+
 app.set('trust proxy', 1);
+
 const helpersInitialized = new BluebirdPromise((resolve, _reject) => {
   resolve(server.initializePolisHelpers());
 });
+
+const hostname = Config.staticFilesHost;
+const staticFilesAdminPort = Config.staticFilesAdminPort;
+const staticFilesParticipationPort = Config.staticFilesParticipationPort;
+
 helpersInitialized.then(
-  (o) => {
-    const {
-      COOKIES,
-      devMode,
-      fetchThirdPartyCookieTestPt1,
-      fetchThirdPartyCookieTestPt2,
-      getPidForParticipant,
-      haltOnTimeout,
-      HMAC_SIGNATURE_PARAM_NAME,
-      hostname,
-      makeFileFetcher,
-      makeRedirectorTo,
-      pidCache,
-      staticFilesAdminPort,
-      staticFilesParticipationPort,
-      redirectIfHasZidButNoConversationId,
-      redirectIfNotHttps,
-      timeout,
-      writeDefaultHead,
-      handle_GET_contexts,
-      handle_GET_dummyButton,
-      handle_GET_einvites,
-      handle_GET_locations,
-      handle_GET_perfStats,
-      handle_GET_reports,
-      handle_GET_snapshot,
-      handle_GET_testConnection,
-      handle_GET_testDatabase,
-      handle_GET_users,
-      handle_GET_zinvites,
-      handle_POST_contexts,
-      handle_POST_contributors,
-      handle_POST_einvites,
-      handle_POST_metrics,
-      handle_POST_reports,
-      handle_POST_trashes,
-      handle_POST_tutorial,
-      handle_POST_zinvites,
-      handle_PUT_reports,
-      handle_PUT_users
-    } = o;
-    const {
-      assignToP,
-      assignToPCustom,
-      getArrayOfInt,
-      getArrayOfStringNonEmpty,
-      getArrayOfStringNonEmptyLimitLength,
-      getBool,
-      getConversationIdFetchZid,
-      getEmail,
-      getInt,
-      getIntInRange,
-      getNumberInRange,
-      getOptionalStringLimitLength,
-      getPassword,
-      getPasswordWithCreatePasswordRules,
-      getReportIdFetchRid,
-      getStringLimitLength,
-      getUrlLimitLength,
-      moveToBody,
-      need,
-      resolve_pidThing,
-      want,
-      wantCookie,
-      wantHeader
-    } = require('./src/utils/parameter');
+  () => {
     app.disable('x-powered-by');
     app.use(middleware_responseTime_start);
     app.use(redirectIfNotHttps);
     app.use(express.cookieParser());
     app.use(express.bodyParser());
     app.use(writeDefaultHead);
-    if (devMode) {
-      app.use(express.compress());
-    } else {
-      app.use(express.compress());
-    }
+    app.use(express.compress());
     app.use(middleware_log_request_body);
     app.use(middleware_log_middleware_errors);
     app.all('/api/v3/*', addCorsHeader);
