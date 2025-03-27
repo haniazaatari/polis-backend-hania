@@ -123,6 +123,11 @@ Click this link to verify your email address:
 ${serverName}/api/v3/verify?e=${einvite}`;
   return sendTextEmail(Config.polisFromAddress, email, 'Polis verification', body);
 }
+function _encodeParams(o) {
+  const stringifiedJson = JSON.stringify(o);
+  const encoded = `ep1_${Utils.strToHex(stringifiedJson)}`;
+  return encoded;
+}
 function decodeParams(encodedStringifiedJson) {
   if (typeof encodedStringifiedJson === 'string' && !encodedStringifiedJson.match(/^\/?ep1_/)) {
     throw new Error('wrong encoded params prefix');

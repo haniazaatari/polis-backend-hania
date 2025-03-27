@@ -14,7 +14,7 @@ function getComment(zid, tid) {
   });
 }
 function getComments(o) {
-  const commentListPromise = o.moderation ? _getCommentsForModerationList(o) : _getCommentsList(o);
+  const commentListPromise = o.moderation ? _getCommentsForModerationList(o) : getCommentsList(o);
   const convPromise = Conversation.getConversationInfo(o.zid);
   return Promise.all([convPromise, commentListPromise])
     .then((a) => {
@@ -124,8 +124,8 @@ function _getCommentsForModerationList(o) {
       });
   });
 }
-function _getCommentsList(o) {
-  return new MPromise('_getCommentsList', (resolve, reject) => {
+function getCommentsList(o) {
+  return new MPromise('getCommentsList', (resolve, reject) => {
     Conversation.getConversationInfo(o.zid).then((conv) => {
       let q = SQL.sql_comments.select(SQL.sql_comments.star()).where(SQL.sql_comments.zid.equals(o.zid));
       if (!_.isUndefined(o.pid)) {
@@ -235,7 +235,7 @@ export {
   getComment,
   getComments,
   _getCommentsForModerationList,
-  _getCommentsList,
+  getCommentsList,
   getNumberOfCommentsRemaining,
   translateAndStoreComment,
   detectLanguage
@@ -244,7 +244,7 @@ export default {
   getComment,
   getComments,
   _getCommentsForModerationList,
-  _getCommentsList,
+  getCommentsList,
   getNumberOfCommentsRemaining,
   translateAndStoreComment,
   detectLanguage

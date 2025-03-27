@@ -27,7 +27,7 @@
         "noUndeclaredDependencies": "error",
         "noUndeclaredVariables": "error",
         "noUnusedImports": "error",
-        "noUnusedVariables": "off"
+        "noUnusedVariables": "error"
       },
       "recommended": true,
       "style": {

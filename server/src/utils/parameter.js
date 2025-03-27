@@ -329,9 +329,6 @@ function getArrayOfStringNonEmpty(a, _maxStrings, _maxLength) {
   }
   return getArrayOfString(a);
 }
-function getArrayOfStringLimitLength(maxStrings, maxLength) {
-  return (a) => getArrayOfString(a, maxStrings || 999999999, maxLength);
-}
 function getArrayOfStringNonEmptyLimitLength(maxStrings, maxLength) {
   return (a) => getArrayOfStringNonEmpty(a, maxStrings || 999999999, maxLength);
 }

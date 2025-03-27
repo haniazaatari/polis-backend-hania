@@ -8,6 +8,16 @@ import { handle_GET_conversationUuid } from './src/routes/conversationUuid.js';
 import { handle_GET_xidReport } from './src/routes/export.js';
 import server from './src/server.js';
 import logger from './src/utils/logger.js';
+
+import {
+  handle_GET_notifications_subscribe,
+  handle_GET_notifications_unsubscribe,
+  handle_GET_verification,
+  handle_POST_sendCreatedLinkToEmail,
+  handle_POST_sendEmailExportReady,
+  handle_POST_users_invite
+} from './src/icebergs/email.js';
+
 const app = express();
 app.use(
   morgan('dev', {
@@ -27,7 +37,6 @@ helpersInitialized.then(
       COOKIES,
       denyIfNotFromWhitelistedDomain,
       devMode,
-      enableAgid,
       fetchThirdPartyCookieTestPt1,
       fetchThirdPartyCookieTestPt2,
       fetchIndexForAdminPage,
@@ -85,8 +94,6 @@ helpersInitialized.then(
       handle_GET_metadata_choices,
       handle_GET_metadata_questions,
       handle_GET_nextComment,
-      handle_GET_notifications_subscribe,
-      handle_GET_notifications_unsubscribe,
       handle_GET_participants,
       handle_GET_participation,
       handle_GET_participationInit,
@@ -98,7 +105,6 @@ helpersInitialized.then(
       handle_GET_testDatabase,
       handle_GET_tryCookie,
       handle_GET_users,
-      handle_GET_verification,
       handle_GET_votes,
       handle_GET_votes_famous,
       handle_GET_votes_me,
@@ -130,13 +136,10 @@ helpersInitialized.then(
       handle_POST_reportCommentSelections,
       handle_POST_reports,
       handle_POST_reserve_conversation_id,
-      handle_POST_sendCreatedLinkToEmail,
-      handle_POST_sendEmailExportReady,
       handle_POST_stars,
       handle_POST_trashes,
       handle_POST_tutorial,
       handle_POST_upvotes,
-      handle_POST_users_invite,
       handle_POST_votes,
       handle_POST_xidWhitelist,
       handle_POST_zinvites,
@@ -167,8 +170,6 @@ helpersInitialized.then(
       getUrlLimitLength,
       moveToBody,
       need,
-      needCookie,
-      needHeader,
       resolve_pidThing,
       want,
       wantCookie,
