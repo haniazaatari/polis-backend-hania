@@ -16,6 +16,7 @@
     "fix-imports": "node bin/add-extensions.js",
     "clean": "rm -rf dist",
     "build": "npm run fix-imports && npm run clean && tsc --pretty",
+    "rebuild": "./bin/rebuild-js.sh",
     "lint": "biome lint --write",
     "lint:unsafe": "biome lint --write --unsafe",
     "lint:list": "biome lint 2>&1 | grep 'Users' | sed 's/:.*//' | sed 's|.*/server/||' | sort | uniq",
