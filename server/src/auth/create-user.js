@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 import _ from 'underscore';
 import Config from '../config.js';
 import pg from '../db/pg-query.js';

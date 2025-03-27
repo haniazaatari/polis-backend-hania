@@ -61,6 +61,35 @@ import {
   proxy
 } from './src/icebergs/static.js';
 
+import {
+  middleware_check_if_options,
+  middleware_log_middleware_errors,
+  middleware_log_request_body,
+  middleware_responseTime_start
+} from './src/icebergs/middleware.js';
+
+import {
+  handle_GET_participants,
+  handle_GET_participation,
+  handle_GET_participationInit,
+  handle_POST_joinWithInvite,
+  handle_POST_participants,
+  handle_POST_query_participants_by_metadata,
+  handle_PUT_participants_extended
+} from './src/icebergs/participant.js';
+
+import {
+  auth,
+  authOptional,
+  handle_POST_auth_deregister,
+  handle_POST_auth_login,
+  handle_POST_auth_new
+} from './src/icebergs/auth.js';
+
+import { handle_POST_notifyTeam } from './src/icebergs/notification.js';
+
+import { handle_GET_ptptois, handle_GET_votes_famous, handle_PUT_ptptois } from './src/icebergs/social.js';
+
 const app = express();
 app.use(
   morgan('dev', {
@@ -74,8 +103,6 @@ const helpersInitialized = new BluebirdPromise((resolve, _reject) => {
 helpersInitialized.then(
   (o) => {
     const {
-      auth,
-      authOptional,
       COOKIES,
       devMode,
       fetchThirdPartyCookieTestPt1,
@@ -93,10 +120,6 @@ helpersInitialized.then(
       redirectIfNotHttps,
       timeout,
       writeDefaultHead,
-      middleware_log_request_body,
-      middleware_log_middleware_errors,
-      middleware_check_if_options,
-      middleware_responseTime_start,
       handle_DELETE_metadata_answers,
       handle_DELETE_metadata_questions,
       handle_GET_bid,
@@ -117,11 +140,7 @@ helpersInitialized.then(
       handle_GET_metadata_answers,
       handle_GET_metadata_choices,
       handle_GET_metadata_questions,
-      handle_GET_participants,
-      handle_GET_participation,
-      handle_GET_participationInit,
       handle_GET_perfStats,
-      handle_GET_ptptois,
       handle_GET_reports,
       handle_GET_snapshot,
       handle_GET_testConnection,
@@ -129,26 +148,18 @@ helpersInitialized.then(
       handle_GET_tryCookie,
       handle_GET_users,
       handle_GET_votes,
-      handle_GET_votes_famous,
       handle_GET_votes_me,
       handle_GET_xids,
       handle_GET_zinvites,
-      handle_POST_auth_deregister,
-      handle_POST_auth_login,
-      handle_POST_auth_new,
       handle_POST_auth_password,
       handle_POST_auth_pwresettoken,
       handle_POST_contexts,
       handle_POST_contributors,
       handle_POST_einvites,
-      handle_POST_joinWithInvite,
       handle_POST_math_update,
       handle_POST_metadata_answers,
       handle_POST_metadata_questions,
       handle_POST_metrics,
-      handle_POST_notifyTeam,
-      handle_POST_participants,
-      handle_POST_query_participants_by_metadata,
       handle_POST_reports,
       handle_POST_stars,
       handle_POST_trashes,
@@ -157,8 +168,6 @@ helpersInitialized.then(
       handle_POST_votes,
       handle_POST_xidWhitelist,
       handle_POST_zinvites,
-      handle_PUT_participants_extended,
-      handle_PUT_ptptois,
       handle_PUT_reports,
       handle_PUT_users
     } = o;

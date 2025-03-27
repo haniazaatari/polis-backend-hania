@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 import _ from 'underscore';
 const { Translate } = require('@google-cloud/translate').v2;
 import Config from './config.js';

@@ -2,7 +2,9 @@ import crypto from 'crypto';
 import { LRUCache } from 'lru-cache';
 import Config from './config.js';
 import pg from './db/pg-query.js';
+import { addCookies } from './utils/cookies.js';
 import logger from './utils/logger.js';
+
 function encrypt(text) {
   const algorithm = 'aes-256-ctr';
   const password = Config.encryptionPassword;
@@ -11,6 +13,7 @@ function encrypt(text) {
   crypted += cipher.final('hex');
   return crypted;
 }
+
 function decrypt(text) {
   const algorithm = 'aes-256-ctr';
   const password = Config.encryptionPassword;
@@ -19,6 +22,7 @@ function decrypt(text) {
   dec += decipher.final('utf8');
   return dec;
 }
+
 function makeSessionToken() {
   return crypto
     .randomBytes(32)
@@ -26,9 +30,11 @@ function makeSessionToken() {
     .replace(/[^A-Za-z0-9]/g, '')
     .substr(0, 20);
 }
+
 const userTokenCache = new LRUCache({
   max: 9000
 });
+
 function getUserInfoForSessionToken(sessionToken, _res, cb) {
   const cachedUid = userTokenCache.get(sessionToken);
   if (cachedUid) {
@@ -51,6 +57,7 @@ function getUserInfoForSessionToken(sessionToken, _res, cb) {
     cb(null, uid);
   });
 }
+
 function startSession(uid, cb) {
   const token = makeSessionToken();
   logger.info('startSession');
@@ -67,6 +74,7 @@ function startSession(uid, cb) {
     }
   );
 }
+
 function endSession(sessionToken, cb) {
   pg.query('delete from auth_tokens where token = ($1);', [sessionToken], (err, _results) => {
     if (err) {
@@ -76,6 +84,19 @@ function endSession(sessionToken, cb) {
     cb(null);
   });
 }
+
+function startSessionAndAddCookies(req, res, uid) {
+  return new Promise((resolve, reject) => {
+    startSession(uid, (err, token) => {
+      if (err) {
+        reject(new Error('polis_err_reg_failed_to_start_session'));
+        return;
+      }
+      resolve(addCookies(req, res, token, uid));
+    });
+  });
+}
+
 function setupPwReset(uid, cb) {
   function makePwResetToken() {
     return crypto
@@ -97,6 +118,7 @@ function setupPwReset(uid, cb) {
     }
   );
 }
+
 function getUidForPwResetToken(pwresettoken, cb) {
   pg.query('select uid from pwreset_tokens where token = ($1);', [pwresettoken], (errGetToken, results) => {
     if (errGetToken) {
@@ -114,6 +136,7 @@ function getUidForPwResetToken(pwresettoken, cb) {
     });
   });
 }
+
 function clearPwResetToken(pwresettoken, cb) {
   pg.query('delete from pwreset_tokens where token = ($1);', [pwresettoken], (errDelToken, _repliesSetToken) => {
     if (errDelToken) {
@@ -123,25 +146,29 @@ function clearPwResetToken(pwresettoken, cb) {
     cb(null);
   });
 }
+
 export {
-  encrypt,
+  clearPwResetToken,
   decrypt,
-  makeSessionToken,
-  getUserInfoForSessionToken,
-  startSession,
+  encrypt,
   endSession,
-  setupPwReset,
   getUidForPwResetToken,
-  clearPwResetToken
+  getUserInfoForSessionToken,
+  makeSessionToken,
+  setupPwReset,
+  startSession,
+  startSessionAndAddCookies
 };
+
 export default {
-  encrypt,
+  clearPwResetToken,
   decrypt,
-  makeSessionToken,
-  getUserInfoForSessionToken,
-  startSession,
+  encrypt,
   endSession,
-  setupPwReset,
   getUidForPwResetToken,
-  clearPwResetToken
+  getUserInfoForSessionToken,
+  makeSessionToken,
+  setupPwReset,
+  startSession,
+  startSessionAndAddCookies
 };

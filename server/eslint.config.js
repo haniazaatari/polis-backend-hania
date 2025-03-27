@@ -16,7 +16,7 @@ export default defineConfig([
     extends: ['js/recommended'],
     rules: {
       'no-unused-vars': 'off',
-      'sonarjs/cognitive-complexity': ['error', 15]
+      'sonarjs/cognitive-complexity': ['error', 10]
     }
   }
 ]);
