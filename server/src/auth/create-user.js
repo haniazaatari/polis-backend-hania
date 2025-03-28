@@ -1,6 +1,6 @@
 import _ from 'underscore';
 import Config from '../config.js';
-import { queryP } from '../db/pg-query.js';
+import { query, queryP } from '../db/pg-query.js';
 import { sendTextEmail } from '../email/senders.js';
 import { startSession } from '../session.js';
 import { hexToStr, strToHex } from '../utils/common.js';
@@ -63,12 +63,12 @@ function createUser(req, res) {
           fail(res, 500, 'polis_err_generating_hash', err);
           return;
         }
-        const query = `insert into users (email, hname, zinvite, oinvite, is_owner${site_id ? ', site_id' : ''}) VALUES ($1, $2, $3, $4, $5${site_id ? ', $6' : ''}) returning uid;`;
+        const insertQuery = `insert into users (email, hname, zinvite, oinvite, is_owner${site_id ? ', site_id' : ''}) VALUES ($1, $2, $3, $4, $5${site_id ? ', $6' : ''}) returning uid;`;
         const vals = [email, hname, zinvite || null, oinvite || null, true];
         if (site_id) {
           vals.push(site_id);
         }
-        query(query, vals, (err, result) => {
+        query(insertQuery, vals, (err, result) => {
           if (err) {
             fail(res, 500, 'polis_err_reg_failed_to_add_user_record', err);
             return;

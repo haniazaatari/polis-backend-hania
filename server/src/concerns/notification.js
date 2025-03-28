@@ -87,7 +87,7 @@ function doNotificationsForZid(zid, timeOfLastEvent) {
               shouldTryAgain = true;
               needs = false;
             }
-            if (Config.devMode) {
+            if (Config.isDevMode) {
               needs = needs && isPolisDev(ptpt.uid);
             }
             return needs;

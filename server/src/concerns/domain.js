@@ -3,7 +3,7 @@ import { queryP, queryP_readOnly } from '../db/pg-query.js';
 import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
 
-const devMode = Config.devMode;
+const devMode = Config.isDevMode;
 
 const whitelistedCrossDomainRoutes = [/^\/api\/v[0-9]+\/launchPrep/, /^\/api\/v[0-9]+\/setFirstCookie/];
 const whitelistedDomains = [

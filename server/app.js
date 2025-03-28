@@ -1,9 +1,3 @@
-console.log('app.js');
-
-// import * as dotenv from 'dotenv';
-// console.log('dotenv.config()');
-// dotenv.config();
-
 import bluebird from 'bluebird';
 import timeout from 'connect-timeout';
 import express from 'express';

@@ -14,7 +14,7 @@ import { getZinvite } from '../utils/zinvite.js';
 const HMAC_SIGNATURE_PARAM_NAME = 'signature';
 const polisFromAddress = Config.polisFromAddress;
 const adminEmails = Config.adminEmails ? JSON.parse(Config.adminEmails) : [];
-const devMode = Config.devMode;
+const devMode = Config.isDevMode;
 const serverUrl = Config.getServerUrl();
 
 function _sendPasswordResetEmailFailure(email, server) {

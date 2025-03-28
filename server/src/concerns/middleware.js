@@ -5,7 +5,7 @@ import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import { addInRamMetric } from '../utils/metered.js';
 
-const devMode = Config.devMode;
+const devMode = Config.isDevMode;
 
 function middleware_log_request_body(req, _res, next) {
   if (devMode) {

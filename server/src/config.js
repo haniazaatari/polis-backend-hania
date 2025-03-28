@@ -1,5 +1,4 @@
 import * as dotenv from 'dotenv';
-console.log('Config.js : dotenv.config()');
 dotenv.config();
 
 import fs from 'fs';
@@ -15,7 +14,7 @@ import('source-map-support').then((sourceMapSupport) => {
   sourceMapSupport.install();
 });
 
-export default {
+const Config = {
   isDevMode: devMode,
   serverPort,
   getServerUrl: () => {
@@ -86,9 +85,11 @@ export default {
     process.env.DOMAIN_WHITELIST_ITEM_08 || null
   ].filter((item) => item !== null)
 };
+
 function isTrueOrBlank(val) {
   return val === undefined || val === '' || isTrue(val);
 }
+
 function setGoogleApplicationCredentials() {
   if (!shouldUseTranslationAPI) {
     return false;
@@ -110,3 +111,5 @@ function setGoogleApplicationCredentials() {
     return false;
   }
 }
+
+export default Config;

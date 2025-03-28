@@ -11,7 +11,7 @@ import logger from '../utils/logger.js';
 const hostname = Config.staticFilesHost;
 const staticFilesParticipationPort = Config.staticFilesParticipationPort;
 const staticFilesAdminPort = Config.staticFilesAdminPort;
-const devMode = Config.devMode;
+const devMode = Config.isDevMode;
 const routingProxy = new httpProxy.createProxyServer();
 const serverUrl = Config.getServerUrl();
 
