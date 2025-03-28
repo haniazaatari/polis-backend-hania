@@ -454,20 +454,19 @@ EOF`,
 
     // delphi db
     const partitionKeyAttribute: dynamodb.Attribute = {
-      name: 'pk', // <-- TODO: CHANGE THIS to actual partition key name
-      type: dynamodb.AttributeType.STRING // <-- TODO: CHANGE THIS
+      name: 'pk',
+      type: dynamodb.AttributeType.STRING,
     };
 
-    // Optional: Define a sort key if needed
     const sortKeyAttribute: dynamodb.Attribute = {
-       name: 'sk', // <-- TODO: CHANGE THIS (e.g., 'timestamp', 'itemId') or remove if not needed
-       type: dynamodb.AttributeType.STRING // <-- TODO: CHANGE THIS (STRING, NUMBER, or BINARY)
+       name: 'sk',
+       type: dynamodb.AttributeType.STRING,
     };
 
     const delphiTable = new dynamodb.Table(this, 'DelphiTable', {
       tableName: 'delphi-data',
       partitionKey: partitionKeyAttribute,
-      // sortKey: sortKeyAttribute, // <-- Uncomment this line if define a sortKeyAttribute
+      sortKey: sortKeyAttribute,
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecovery: true,
       deletionProtection: true,
