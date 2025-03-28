@@ -1,6 +1,4 @@
-import cookies from '../utils/cookies.js';
-
-const { COOKIES, setCookie } = cookies;
+import { COOKIES, setCookie } from '../utils/cookies.js';
 
 function handle_GET_tryCookie(req, res) {
   if (!req.cookies[COOKIES.TRY_COOKIE]) {
@@ -45,8 +43,4 @@ function fetchThirdPartyCookieTestPt2(_req, res) {
   );
 }
 
-export default {
-  fetchThirdPartyCookieTestPt1,
-  fetchThirdPartyCookieTestPt2,
-  handle_GET_tryCookie
-};
+export { fetchThirdPartyCookieTestPt1, fetchThirdPartyCookieTestPt2, handle_GET_tryCookie };

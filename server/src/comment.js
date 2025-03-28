@@ -1,21 +1,24 @@
+import Translate from '@google-cloud/translate';
 import _ from 'underscore';
-const { Translate } = require('@google-cloud/translate').v2;
 import Config from './config.js';
-import Conversation from './conversation.js';
-import pg from './db/pg-query.js';
-import SQL from './db/sql.js';
-import Utils from './utils/common.js';
+import { getConversationInfo } from './conversation.js';
+import { query, queryP, queryP_metered_readOnly } from './db/pg-query.js';
+import { sql_comments, sql_votes_latest_unique } from './db/sql.js';
+import { polisTypes } from './utils/common.js';
 import { MPromise } from './utils/metered.js';
+
 const useTranslateApi = Config.shouldUseTranslationAPI;
-const translateClient = useTranslateApi ? new Translate() : null;
+const translateClient = useTranslateApi ? Translate() : null;
+
 function getComment(zid, tid) {
-  return pg.queryP('select * from comments where zid = ($1) and tid = ($2);', [zid, tid]).then((rows) => {
+  return queryP('select * from comments where zid = ($1) and tid = ($2);', [zid, tid]).then((rows) => {
     return rows?.[0] || null;
   });
 }
+
 function getComments(o) {
   const commentListPromise = o.moderation ? _getCommentsForModerationList(o) : getCommentsList(o);
-  const convPromise = Conversation.getConversationInfo(o.zid);
+  const convPromise = getConversationInfo(o.zid);
   return Promise.all([convPromise, commentListPromise])
     .then((a) => {
       let rows = a[1];
@@ -47,11 +50,12 @@ function getComments(o) {
       return comments;
     });
 }
+
 function _getCommentsForModerationList(o) {
   let strictCheck = Promise.resolve(null);
   const include_voting_patterns = o.include_voting_patterns;
   if (o.modIn) {
-    strictCheck = pg.queryP('select strict_moderation from conversations where zid = ($1);', [o.zid]).then(() => {
+    strictCheck = queryP('select strict_moderation from conversations where zid = ($1);', [o.zid]).then(() => {
       return o.strict_moderation;
     });
   }
@@ -80,84 +84,83 @@ function _getCommentsForModerationList(o) {
       }
     }
     if (!include_voting_patterns) {
-      return pg.queryP_metered_readOnly(
+      return queryP_metered_readOnly(
         '_getCommentsForModerationList',
         `select * from comments where comments.zid = ($1)${modClause}`,
         params
       );
     }
-    return pg
-      .queryP_metered_readOnly(
-        '_getCommentsForModerationList',
-        `select * from (select tid, vote, count(*) from votes_latest_unique where zid = ($1) group by tid, vote) as foo full outer join comments on foo.tid = comments.tid where comments.zid = ($1)${modClause}`,
-        params
-      )
-      .then((rows) => {
-        const adp = {};
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          adp[row.tid] = adp[row.tid] || {
-            agree_count: 0,
-            disagree_count: 0,
-            pass_count: 0
-          };
-          const o = adp[row.tid];
-          if (row.vote === Utils.polisTypes.reactions.pull) {
-            o.agree_count = Number(row.count);
-          } else if (row.vote === Utils.polisTypes.reactions.push) {
-            o.disagree_count = Number(row.count);
-          } else if (row.vote === Utils.polisTypes.reactions.pass) {
-            o.pass_count = Number(row.count);
-          }
+    return queryP_metered_readOnly(
+      '_getCommentsForModerationList',
+      `select * from (select tid, vote, count(*) from votes_latest_unique where zid = ($1) group by tid, vote) as foo full outer join comments on foo.tid = comments.tid where comments.zid = ($1)${modClause}`,
+      params
+    ).then((rows) => {
+      const adp = {};
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        adp[row.tid] = adp[row.tid] || {
+          agree_count: 0,
+          disagree_count: 0,
+          pass_count: 0
+        };
+        const o = adp[row.tid];
+        if (row.vote === polisTypes.reactions.pull) {
+          o.agree_count = Number(row.count);
+        } else if (row.vote === polisTypes.reactions.push) {
+          o.disagree_count = Number(row.count);
+        } else if (row.vote === polisTypes.reactions.pass) {
+          o.pass_count = Number(row.count);
         }
-        rows = _.uniq(rows, false, (row) => {
-          return row.tid;
-        });
-        for (let i = 0; i < rows.length; i++) {
-          const row = rows[i];
-          row.agree_count = adp[row.tid].agree_count;
-          row.disagree_count = adp[row.tid].disagree_count;
-          row.pass_count = adp[row.tid].pass_count;
-          row.count = row.agree_count + row.disagree_count + row.pass_count;
-        }
-        return rows;
+      }
+      rows = _.uniq(rows, false, (row) => {
+        return row.tid;
       });
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        row.agree_count = adp[row.tid].agree_count;
+        row.disagree_count = adp[row.tid].disagree_count;
+        row.pass_count = adp[row.tid].pass_count;
+        row.count = row.agree_count + row.disagree_count + row.pass_count;
+      }
+      return rows;
+    });
   });
 }
+
 function getCommentsList(o) {
   return new MPromise('getCommentsList', (resolve, reject) => {
-    Conversation.getConversationInfo(o.zid).then((conv) => {
-      let q = SQL.sql_comments.select(SQL.sql_comments.star()).where(SQL.sql_comments.zid.equals(o.zid));
+    getConversationInfo(o.zid).then((conv) => {
+      let q = sql_comments.select(sql_comments.star()).where(sql_comments.zid.equals(o.zid));
       if (!_.isUndefined(o.pid)) {
-        q = q.and(SQL.sql_comments.pid.equals(o.pid));
+        q = q.and(sql_comments.pid.equals(o.pid));
       }
       if (!_.isUndefined(o.tids)) {
-        q = q.and(SQL.sql_comments.tid.in(o.tids));
+        q = q.and(sql_comments.tid.in(o.tids));
       }
       if (!_.isUndefined(o.mod)) {
-        q = q.and(SQL.sql_comments.mod.equals(o.mod));
+        q = q.and(sql_comments.mod.equals(o.mod));
       }
       if (!_.isUndefined(o.not_voted_by_pid)) {
         q = q.and(
-          SQL.sql_comments.tid.notIn(
-            SQL.sql_votes_latest_unique
+          sql_comments.tid.notIn(
+            sql_votes_latest_unique
               .subQuery()
-              .select(SQL.sql_votes_latest_unique.tid)
-              .where(SQL.sql_votes_latest_unique.zid.equals(o.zid))
-              .and(SQL.sql_votes_latest_unique.pid.equals(o.not_voted_by_pid))
+              .select(sql_votes_latest_unique.tid)
+              .where(sql_votes_latest_unique.zid.equals(o.zid))
+              .and(sql_votes_latest_unique.pid.equals(o.not_voted_by_pid))
           )
         );
       }
       if (!_.isUndefined(o.withoutTids)) {
-        q = q.and(SQL.sql_comments.tid.notIn(o.withoutTids));
+        q = q.and(sql_comments.tid.notIn(o.withoutTids));
       }
-      q = q.and(SQL.sql_comments.active.equals(true));
+      q = q.and(sql_comments.active.equals(true));
       if (conv.strict_moderation) {
-        q = q.and(SQL.sql_comments.mod.equals(Utils.polisTypes.mod.ok));
+        q = q.and(sql_comments.mod.equals(polisTypes.mod.ok));
       } else {
-        q = q.and(SQL.sql_comments.mod.notEquals(Utils.polisTypes.mod.ban));
+        q = q.and(sql_comments.mod.notEquals(polisTypes.mod.ban));
       }
-      q = q.and(SQL.sql_comments.velocity.gt(0));
+      q = q.and(sql_comments.velocity.gt(0));
       if (!_.isUndefined(o.random)) {
         if (conv.prioritize_seed) {
           q = q.order('is_seed desc, random()');
@@ -165,14 +168,14 @@ function getCommentsList(o) {
           q = q.order('random()');
         }
       } else {
-        q = q.order(SQL.sql_comments.created);
+        q = q.order(sql_comments.created);
       }
       if (!_.isUndefined(o.limit)) {
         q = q.limit(o.limit);
       } else {
         q = q.limit(999);
       }
-      return pg.query(q.toString(), [], (err, docs) => {
+      return query(q.toString(), [], (err, docs) => {
         if (err) {
           reject(err);
           return;
@@ -186,8 +189,9 @@ function getCommentsList(o) {
     });
   });
 }
+
 function getNumberOfCommentsRemaining(zid, pid) {
-  return pg.queryP(
+  return queryP(
     'with ' +
       'v as (select * from votes_latest_unique where zid = ($1) and pid = ($2)), ' +
       'c as (select * from get_visible_comments($1)), ' +
@@ -197,29 +201,30 @@ function getNumberOfCommentsRemaining(zid, pid) {
     [zid, pid]
   );
 }
+
 function translateAndStoreComment(zid, tid, txt, lang) {
   if (useTranslateApi) {
     return translateString(txt, lang).then((results) => {
       const translation = results[0];
       const src = -1;
-      return pg
-        .queryP(
-          'insert into comment_translations (zid, tid, txt, lang, src) values ($1, $2, $3, $4, $5) returning *;',
-          [zid, tid, translation, lang, src]
-        )
-        .then((rows) => {
-          return rows[0];
-        });
+      return queryP(
+        'insert into comment_translations (zid, tid, txt, lang, src) values ($1, $2, $3, $4, $5) returning *;',
+        [zid, tid, translation, lang, src]
+      ).then((rows) => {
+        return rows[0];
+      });
     });
   }
   return Promise.resolve(null);
 }
+
 function translateString(txt, target_lang) {
   if (useTranslateApi) {
     return translateClient.translate(txt, target_lang);
   }
   return Promise.resolve(null);
 }
+
 function detectLanguage(txt) {
   if (useTranslateApi) {
     return translateClient.detect(txt);
@@ -231,16 +236,8 @@ function detectLanguage(txt) {
     }
   ]);
 }
+
 export {
-  getComment,
-  getComments,
-  _getCommentsForModerationList,
-  getCommentsList,
-  getNumberOfCommentsRemaining,
-  translateAndStoreComment,
-  detectLanguage
-};
-export default {
   getComment,
   getComments,
   _getCommentsForModerationList,

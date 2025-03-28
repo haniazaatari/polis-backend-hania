@@ -2,27 +2,21 @@ import _ from 'underscore';
 import { generateAndRegisterZinvite } from '../auth/create-user.js';
 import { generateToken } from '../auth/password.js';
 import Config from '../config.js';
-import {
-  query as pgQuery,
-  queryP as pgQueryP,
-  queryP_readOnly as pgQueryP_readOnly,
-  query_readOnly as pgQuery_readOnly
-} from '../db/pg-query.js';
+import { getConversationInfo, getZidFromConversationId } from '../conversation.js';
+import { query as pgQuery, queryP, queryP_readOnly, query_readOnly } from '../db/pg-query.js';
 import { sql_conversations } from '../db/sql.js';
+import { getUserInfoForUid2 } from '../user.js';
 import { ifDefinedFirstElseSecond, ifDefinedSet, isDuplicateKey, isModerator, isPolisDev } from '../utils/common.js';
-import constants from '../utils/constants.js';
+import { DEFAULTS } from '../utils/constants.js';
 import { setParentReferrerCookie, setParentUrlCookie } from '../utils/cookies.js';
-import fail from '../utils/fail.js';
+import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import { getZinvite } from '../utils/zinvite.js';
 import { createModerationUrl } from './comment.js';
-import { getConversationInfo, getZidFromConversationId } from './conversation.js';
 import { createOneSuzinvite, sendEmailByUid, sendImplicitConversationCreatedEmails } from './email.js';
 import { addConversationIds, finishOne } from './response.js';
 import { fetchIndex, makeFileFetcher } from './static.js';
-import { getUserInfoForUid2 } from './user.js';
 
-const DEFAULTS = constants.DEFAULTS;
 const serverUrl = Config.getServerUrl();
 const hostname = Config.staticFilesHost;
 
@@ -34,18 +28,18 @@ function updateConversationModifiedTime(zid, t) {
     query = 'update conversations set modified = now_as_millis() where zid = ($1);';
     params = [zid];
   }
-  return pgQueryP(query, params);
+  return queryP(query, params);
 }
 
 function updateLastInteractionTimeForConversation(zid, uid) {
-  return pgQueryP(
+  return queryP(
     'update participants set last_interaction = now_as_millis(), nsli = 0 where zid = ($1) and uid = ($2);',
     [zid, uid]
   );
 }
 
 function updateVoteCount(zid, pid) {
-  return pgQueryP(
+  return queryP(
     'update participants set vote_count = (select count(*) from votes where zid = ($1) and pid = ($2)) where zid = ($1) and pid = ($2)',
     [zid, pid]
   );
@@ -63,7 +57,7 @@ function doGetConversationsRecent(req, res, field) {
     time *= 1000;
   }
   time = Number.parseInt(time);
-  pgQueryP_readOnly(`select * from conversations where ${field} >= ($1);`, [time])
+  queryP_readOnly(`select * from conversations where ${field} >= ($1);`, [time])
     .then((rows) => {
       res.json(rows);
     })
@@ -89,7 +83,7 @@ function getFirstForPid(votes) {
 function verifyMetadataAnswersExistForEachQuestion(zid) {
   const errorcode = 'polis_err_missing_metadata_answers';
   return new Promise((resolve, reject) => {
-    pgQuery_readOnly('select pmqid from participant_metadata_questions where zid = ($1);', [zid], (err, results) => {
+    query_readOnly('select pmqid from participant_metadata_questions where zid = ($1);', [zid], (err, results) => {
       if (err) {
         reject(err);
         return;
@@ -99,7 +93,7 @@ function verifyMetadataAnswersExistForEachQuestion(zid) {
         return;
       }
       const pmqids = results.rows.map((row) => Number(row.pmqid));
-      pgQuery_readOnly(
+      query_readOnly(
         `select pmaid, pmqid from participant_metadata_answers where pmqid in (${pmqids.join(',')}) and alive = TRUE and zid = ($1);`,
         [zid],
         (err, results) => {
@@ -156,7 +150,7 @@ function generateAndReplaceZinvite(zid, generateShortZinvite) {
 
 function getConversationHasMetadata(zid) {
   return new Promise((resolve, reject) => {
-    pgQuery_readOnly('SELECT * from participant_metadata_questions where zid = ($1)', [zid], (err, metadataResults) => {
+    query_readOnly('SELECT * from participant_metadata_questions where zid = ($1)', [zid], (err, metadataResults) => {
       if (err) {
         return reject('polis_err_get_conversation_metadata_by_zid');
       }
@@ -168,7 +162,7 @@ function getConversationHasMetadata(zid) {
 
 function getConversationTranslations(zid, lang) {
   const firstTwoCharsOfLang = lang.substr(0, 2);
-  return pgQueryP('select * from conversation_translations where zid = ($1) and lang = ($2);', [
+  return queryP('select * from conversation_translations where zid = ($1) and lang = ($2);', [
     zid,
     firstTwoCharsOfLang
   ]);
@@ -191,7 +185,7 @@ function getConversationTranslationsMinimal(zid, lang) {
 
 function getOneConversation(zid, uid, lang) {
   return Promise.all([
-    pgQueryP_readOnly(
+    queryP_readOnly(
       'select * from conversations left join  (select uid, site_id from users) as u on conversations.owner = u.uid where conversations.zid = ($1);',
       [zid]
     ),
@@ -239,7 +233,7 @@ function getConversations(req, res) {
     zidListQuery += ' UNION ALL select zid, 2 as type from participants where uid = ($1)';
   }
   zidListQuery += ';';
-  pgQuery_readOnly(zidListQuery, [uid], (err, results) => {
+  query_readOnly(zidListQuery, [uid], (err, results) => {
     if (err) {
       fail(res, 500, 'polis_err_get_conversations_participated_in', err);
       return;
@@ -285,7 +279,7 @@ function getConversations(req, res) {
     } else {
       query = query.limit(999);
     }
-    pgQuery_readOnly(query.toString(), (err, result) => {
+    query_readOnly(query.toString(), (err, result) => {
       if (err) {
         fail(res, 500, 'polis_err_get_conversations', err);
         return;
@@ -303,7 +297,7 @@ function getConversations(req, res) {
           }
           const upvotesPromise =
             uid && want_upvoted
-              ? pgQueryP_readOnly('select zid from upvotes where uid = ($1);', [uid])
+              ? queryP_readOnly('select zid from upvotes where uid = ($1);', [uid])
               : Promise.resolve();
           return Promise.all([suurlsPromise, upvotesPromise]).then(
             (x) => {
@@ -371,7 +365,7 @@ function getConversations(req, res) {
 }
 
 function registerPageId(site_id, page_id, zid) {
-  return pgQueryP('insert into page_ids (site_id, page_id, zid) values ($1, $2, $3);', [site_id, page_id, zid]);
+  return queryP('insert into page_ids (site_id, page_id, zid) values ($1, $2, $3);', [site_id, page_id, zid]);
 }
 
 function generateSingleUseUrl(_req, conversation_id, suzinvite) {
@@ -399,7 +393,7 @@ function getConversationUrl(req, zid, dontUseCache) {
 }
 
 function initializeImplicitConversation(site_id, page_id, o) {
-  return pgQueryP_readOnly('select uid from users where site_id = ($1) and site_owner = TRUE;', [site_id]).then(
+  return queryP_readOnly('select uid from users where site_id = ($1) and site_owner = TRUE;', [site_id]).then(
     (rows) => {
       if (!rows || !rows.length) {
         throw new Error('polis_err_bad_site_id');
@@ -465,12 +459,12 @@ function isUserAllowedToCreateConversations(_uid, callback) {
 function subscribeToNotifications(zid, uid, email) {
   const type = 1;
   logger.info('subscribeToNotifications', { zid, uid });
-  return pgQueryP('update participants_extended set subscribe_email = ($3) where zid = ($1) and uid = ($2);', [
+  return queryP('update participants_extended set subscribe_email = ($3) where zid = ($1) and uid = ($2);', [
     zid,
     uid,
     email
   ]).then(() =>
-    pgQueryP('update participants set subscribed = ($3) where zid = ($1) and uid = ($2);', [zid, uid, type]).then(
+    queryP('update participants set subscribed = ($3) where zid = ($1) and uid = ($2);', [zid, uid, type]).then(
       (_rows) => type
     )
   );
@@ -478,7 +472,7 @@ function subscribeToNotifications(zid, uid, email) {
 
 function unsubscribeFromNotifications(zid, uid) {
   const type = 0;
-  return pgQueryP('update participants set subscribed = ($3) where zid = ($1) and uid = ($2);', [zid, uid, type]).then(
+  return queryP('update participants set subscribed = ($3) where zid = ($1) and uid = ($2);', [zid, uid, type]).then(
     (_rows) => type
   );
 }
@@ -602,7 +596,7 @@ function handle_GET_conversationStats(req, res) {
       if (until) {
         args.push(until);
       }
-      return Promise.all([pgQueryP_readOnly(q0, args), pgQueryP_readOnly(q1, args)]).then((a) => {
+      return Promise.all([queryP_readOnly(q0, args), queryP_readOnly(q1, args)]).then((a) => {
         function castTimestamp(o) {
           o.created = Number(o.created);
           return o;
@@ -679,14 +673,14 @@ function handle_POST_conversation_close(req, res) {
     q = `${q} and owner = ($2)`;
     params.push(req.p.uid);
   }
-  pgQueryP(q, params)
+  queryP(q, params)
     .then((rows) => {
       if (!rows || !rows.length) {
         fail(res, 500, 'polis_err_closing_conversation_no_such_conversation');
         return;
       }
       const conv = rows[0];
-      pgQueryP('update conversations set is_active = false where zid = ($1);', [conv.zid]);
+      queryP('update conversations set is_active = false where zid = ($1);', [conv.zid]);
     })
     .catch((err) => {
       fail(res, 500, 'polis_err_closing_conversation', err);
@@ -700,14 +694,14 @@ function handle_POST_conversation_reopen(req, res) {
     q = `${q} and owner = ($2)`;
     params.push(req.p.uid);
   }
-  pgQueryP(q, params)
+  queryP(q, params)
     .then((rows) => {
       if (!rows || !rows.length) {
         fail(res, 500, 'polis_err_closing_conversation_no_such_conversation');
         return;
       }
       const conv = rows[0];
-      pgQueryP('update conversations set is_active = true where zid = ($1);', [conv.zid])
+      queryP('update conversations set is_active = true where zid = ($1);', [conv.zid])
         .then(() => {
           res.status(200).json({});
         })
@@ -863,7 +857,7 @@ function handle_PUT_conversations(req, res) {
 function handle_GET_conversations(req, res) {
   let courseIdPromise = Promise.resolve();
   if (req.p.course_invite) {
-    courseIdPromise = pgQueryP_readOnly('select course_id from courses where course_invite = ($1);', [
+    courseIdPromise = queryP_readOnly('select course_id from courses where course_invite = ($1);', [
       req.p.course_invite
     ]).then((rows) => rows[0].course_id);
   }
@@ -1082,7 +1076,7 @@ function handle_GET_implicit_conversation_generation(req, res) {
     }
     return url;
   }
-  pgQueryP_readOnly('select * from page_ids where site_id = ($1) and page_id = ($2);', [site_id, page_id])
+  queryP_readOnly('select * from page_ids where site_id = ($1) and page_id = ($2);', [site_id, page_id])
     .then((rows) => {
       if (!rows || !rows.length) {
         initializeImplicitConversation(site_id, page_id, o)
@@ -1148,8 +1142,9 @@ function handle_GET_iim_conversation(req, res) {
     });
 }
 
-export default {
+export {
   fetchIndexForConversation,
+  getOneConversation,
   handle_GET_conversationPreloadInfo,
   handle_GET_conversations,
   handle_GET_conversationsRecentActivity,

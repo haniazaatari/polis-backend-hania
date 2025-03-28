@@ -1,5 +1,5 @@
 import async from 'async';
-import { query as pgQuery, query_readOnly as pgQuery_readOnly } from '../db/pg-query.js';
+import { query as pgQuery, query_readOnly } from '../db/pg-query.js';
 import { sql_participant_metadata_answers } from '../db/sql.js';
 import { isConversationOwner } from '../utils/common.js';
 import { fail } from '../utils/fail.js';
@@ -7,7 +7,7 @@ import logger from '../utils/logger.js';
 import { finishArray, finishOne } from './response.js';
 
 function checkZinviteCodeValidity(zid, zinvite, callback) {
-  pgQuery_readOnly('SELECT * FROM zinvites WHERE zid = ($1) AND zinvite = ($2);', [zid, zinvite], (err, results) => {
+  query_readOnly('SELECT * FROM zinvites WHERE zid = ($1) AND zinvite = ($2);', [zid, zinvite], (err, results) => {
     if (err || !results || !results.rows || !results.rows.length) {
       callback(1);
     } else {
@@ -28,21 +28,17 @@ function checkSuzinviteCodeValidity(zid, suzinvite, callback) {
 
 function getChoicesForConversation(zid) {
   return new Promise((resolve, reject) => {
-    pgQuery_readOnly(
-      'select * from participant_metadata_choices where zid = ($1) and alive = TRUE;',
-      [zid],
-      (err, x) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        if (!x || !x.rows) {
-          resolve([]);
-          return;
-        }
-        resolve(x.rows);
+    query_readOnly('select * from participant_metadata_choices where zid = ($1) and alive = TRUE;', [zid], (err, x) => {
+      if (err) {
+        reject(err);
+        return;
       }
-    );
+      if (!x || !x.rows) {
+        resolve([]);
+        return;
+      }
+      resolve(x.rows);
+    });
   });
 }
 
@@ -113,7 +109,7 @@ function handle_GET_metadata_questions(req, res) {
     async.parallel(
       [
         (callback) => {
-          pgQuery_readOnly(
+          query_readOnly(
             'SELECT * FROM participant_metadata_questions WHERE alive = true AND zid = ($1);',
             [zid],
             callback
@@ -231,7 +227,7 @@ function handle_GET_metadata_answers(req, res) {
     if (pmqid) {
       query = query.where(sql_participant_metadata_answers.pmqid.equals(pmqid));
     }
-    pgQuery_readOnly(query.toString(), (err, result) => {
+    query_readOnly(query.toString(), (err, result) => {
       if (err) {
         fail(res, 500, 'polis_err_get_participant_metadata_answers', err);
         return;
@@ -264,13 +260,13 @@ function handle_GET_metadata(req, res) {
     async.parallel(
       [
         (callback) => {
-          pgQuery_readOnly('SELECT * FROM participant_metadata_questions WHERE zid = ($1);', [zid], callback);
+          query_readOnly('SELECT * FROM participant_metadata_questions WHERE zid = ($1);', [zid], callback);
         },
         (callback) => {
-          pgQuery_readOnly('SELECT * FROM participant_metadata_answers WHERE zid = ($1);', [zid], callback);
+          query_readOnly('SELECT * FROM participant_metadata_answers WHERE zid = ($1);', [zid], callback);
         },
         (callback) => {
-          pgQuery_readOnly('SELECT * FROM participant_metadata_choices WHERE zid = ($1);', [zid], callback);
+          query_readOnly('SELECT * FROM participant_metadata_choices WHERE zid = ($1);', [zid], callback);
         }
       ],
       (err, result) => {
@@ -322,7 +318,7 @@ function handle_GET_metadata(req, res) {
   }
 }
 
-export default {
+export {
   handle_DELETE_metadata_questions,
   handle_GET_metadata,
   handle_GET_metadata_answers,

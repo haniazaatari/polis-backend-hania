@@ -1,7 +1,10 @@
-import * as dotenv from 'dotenv';
-dotenv.config();
+console.log('app.js');
 
-import BluebirdPromise from 'bluebird';
+// import * as dotenv from 'dotenv';
+// console.log('dotenv.config()');
+// dotenv.config();
+
+import bluebird from 'bluebird';
 import timeout from 'connect-timeout';
 import express from 'express';
 import morgan from 'morgan';
@@ -130,7 +133,7 @@ import {
 import { handle_GET_dataExport, handle_GET_dataExport_results } from './src/routes/dataExport.js';
 import { handle_GET_xidReport } from './src/routes/export.js';
 import { handle_GET_reportExport } from './src/routes/export.js';
-import handle_GET_launchPrep from './src/routes/launchPrep.js';
+import { handle_GET_launchPrep } from './src/routes/launchPrep.js';
 import {
   handle_GET_bid,
   handle_GET_bidToPid,
@@ -144,7 +147,7 @@ import {
 import { handle_DELETE_metadata_answers } from './src/routes/metadataAnswers.js';
 import { handle_POST_auth_password, handle_POST_auth_pwresettoken } from './src/routes/password.js';
 import { handle_GET_reportNarrative } from './src/routes/reportNarrative.js';
-import server from './src/server.js';
+import { initializePolisHelpers } from './src/server.js';
 import { getPidForParticipant, pidCache } from './src/user.js';
 import { COOKIES } from './src/utils/cookies.js';
 import logger from './src/utils/logger.js';
@@ -174,6 +177,8 @@ import {
   wantHeader
 } from './src/utils/parameter.js';
 
+const { Promise: BluebirdPromise } = bluebird;
+
 const app = express();
 
 app.use(
@@ -185,7 +190,7 @@ app.use(
 app.set('trust proxy', 1);
 
 const helpersInitialized = new BluebirdPromise((resolve, _reject) => {
-  resolve(server.initializePolisHelpers());
+  resolve(initializePolisHelpers());
 });
 
 const hostname = Config.staticFilesHost;
@@ -1135,4 +1140,3 @@ helpersInitialized.then(
     logger.error('failed to init server', err);
   }
 );
-export default app;

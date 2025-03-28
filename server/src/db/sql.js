@@ -1,5 +1,6 @@
 import sql from 'sql';
 import Config from '../config.js';
+
 const sql_conversations = sql.define({
   name: 'conversations',
   columns: [
@@ -40,18 +41,22 @@ const sql_conversations = sql.define({
     'auth_opt_allow_3rdparty'
   ]
 });
+
 const sql_comments = sql.define({
   name: 'comments',
   columns: ['tid', 'zid', 'pid', 'uid', 'created', 'txt', 'velocity', 'active', 'mod', 'quote_src_url', 'anon']
 });
+
 const sql_votes_latest_unique = sql.define({
   name: 'votes_latest_unique',
   columns: ['zid', 'tid', 'pid', 'modified', 'vote', 'weight', 'high_priority']
 });
+
 const sql_participant_metadata_answers = sql.define({
   name: 'participant_metadata_answers',
   columns: ['pmaid', 'pmqid', 'zid', 'value', 'alive']
 });
+
 const baseParticipantsExtendedColumns = [
   'uid',
   'zid',
@@ -63,6 +68,7 @@ const baseParticipantsExtendedColumns = [
   'permanent_cookie',
   'origin'
 ];
+
 const sql_participants_extended = sql.define({
   name: 'participants_extended',
   columns:
@@ -70,10 +76,12 @@ const sql_participants_extended = sql.define({
       ? [...baseParticipantsExtendedColumns, 'encrypted_ip_address', 'encrypted_x_forwarded_for']
       : baseParticipantsExtendedColumns
 });
+
 const sql_users = sql.define({
   name: 'users',
   columns: ['uid', 'hname', 'email', 'created']
 });
+
 const sql_reports = sql.define({
   name: 'reports',
   columns: [
@@ -99,16 +107,8 @@ const sql_reports = sql.define({
     'label_group_9'
   ]
 });
+
 export {
-  sql_conversations,
-  sql_comments,
-  sql_votes_latest_unique,
-  sql_participant_metadata_answers,
-  sql_participants_extended,
-  sql_reports,
-  sql_users
-};
-export default {
   sql_conversations,
   sql_comments,
   sql_votes_latest_unique,

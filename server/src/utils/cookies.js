@@ -1,8 +1,8 @@
 import url from 'url';
 import _ from 'underscore';
 import Config from '../config.js';
-import Session from '../session.js';
-import User from '../user.js';
+import { getUserInfoForSessionToken, makeSessionToken } from '../session.js';
+import { getUserInfoForUid2 } from '../user.js';
 import logger from '../utils/logger.js';
 
 const COOKIES = {
@@ -17,8 +17,6 @@ const COOKIES = {
   PERMANENT_COOKIE: 'pc',
   TRY_COOKIE: 'tryCookie'
 };
-
-const getUserInfoForSessionToken = Session.getUserInfoForSessionToken;
 
 const COOKIES_TO_CLEAR = {
   e: true,
@@ -94,7 +92,7 @@ function setCookieTestCookie(req, res) {
 }
 
 function addCookies(req, res, token, uid) {
-  return User.getUserInfoForUid2(uid).then((opts) => {
+  return getUserInfoForUid2(uid).then((opts) => {
     const email = opts.email;
     const created = opts.created;
     setTokenCookie(req, res, token);
@@ -102,7 +100,7 @@ function addCookies(req, res, token, uid) {
     setHasEmailCookie(req, res, email);
     setUserCreatedTimestampCookie(req, res, created);
     if (!req.cookies[COOKIES.PERMANENT_COOKIE]) {
-      setPermanentCookie(req, res, Session.makeSessionToken());
+      setPermanentCookie(req, res, makeSessionToken());
     }
     res.header('x-polis', token);
   });
@@ -110,7 +108,7 @@ function addCookies(req, res, token, uid) {
 
 function getPermanentCookieAndEnsureItIsSet(req, res) {
   if (!req.cookies[COOKIES.PERMANENT_COOKIE]) {
-    const token = Session.makeSessionToken();
+    const token = makeSessionToken();
     setPermanentCookie(req, res, token);
     return token;
   }
@@ -160,18 +158,18 @@ function doCookieAuth(assigner, isOptional, req, res, next) {
   });
 }
 
-export default {
-  COOKIES,
-  COOKIES_TO_CLEAR,
+export {
+  addCookies,
+  clearCookie,
+  clearCookies,
   cookieDomain,
+  COOKIES_TO_CLEAR,
+  COOKIES,
+  doCookieAuth,
+  getPermanentCookieAndEnsureItIsSet,
   setCookie,
+  setCookieTestCookie,
   setParentReferrerCookie,
   setParentUrlCookie,
-  setPermanentCookie,
-  setCookieTestCookie,
-  addCookies,
-  getPermanentCookieAndEnsureItIsSet,
-  clearCookies,
-  clearCookie,
-  doCookieAuth
+  setPermanentCookie
 };

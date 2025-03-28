@@ -4,7 +4,9 @@ import nodemailer from 'nodemailer';
 import mg from 'nodemailer-mailgun-transport';
 import Config from '../config.js';
 import logger from '../utils/logger.js';
+
 AWS.config.update({ region: Config.awsRegion });
+
 function sendTextEmailWithBackup(sender, recipient, subject, text) {
   const transportTypes = Config.emailTransportTypes ? Config.emailTransportTypes.split(',') : ['aws-ses', 'mailgun'];
   if (transportTypes.length < 2) {
@@ -13,9 +15,11 @@ function sendTextEmailWithBackup(sender, recipient, subject, text) {
   const backupTransport = transportTypes[1];
   sendTextEmail(sender, recipient, subject, text, backupTransport);
 }
+
 function isDocker() {
   return fs.existsSync('/.dockerenv');
 }
+
 function getMailOptions(transportType) {
   let mailgunAuth;
   switch (transportType) {
@@ -41,6 +45,7 @@ function getMailOptions(transportType) {
       return {};
   }
 }
+
 function sendTextEmail(sender, recipient, subject, text, transportTypes = Config.emailTransportTypes, priority = 1) {
   if (!transportTypes) {
     return;
@@ -60,8 +65,5 @@ function sendTextEmail(sender, recipient, subject, text, transportTypes = Config
   });
   return promise;
 }
+
 export { sendTextEmail, sendTextEmailWithBackup as sendTextEmailWithBackupOnly };
-export default {
-  sendTextEmail: sendTextEmail,
-  sendTextEmailWithBackupOnly: sendTextEmailWithBackup
-};

@@ -3,28 +3,28 @@ import _ from 'underscore';
 import { getNumberOfCommentsRemaining } from '../comment.js';
 import Config from '../config.js';
 import { getConversationInfo } from '../conversation.js';
-import { queryP as pgQueryP } from '../db/pg-query.js';
-import Utils from '../utils/common.js';
+import { queryP } from '../db/pg-query.js';
+import { isPolisDev } from '../utils/common.js';
 import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import { getZinvite } from '../utils/zinvite.js';
 import { emailTeam, sendNotificationEmail } from './email.js';
 
 function getDbTime() {
-  return pgQueryP('select now_as_millis();', []).then((rows) => {
+  return queryP('select now_as_millis();', []).then((rows) => {
     return rows[0].now_as_millis;
   });
 }
 
 function maybeAddNotificationTask(zid, timeInMillis) {
-  return pgQueryP('insert into notification_tasks (zid, modified) values ($1, $2) on conflict (zid) do nothing;', [
+  return queryP('insert into notification_tasks (zid, modified) values ($1, $2) on conflict (zid) do nothing;', [
     zid,
     timeInMillis
   ]);
 }
 
 function claimNextNotificationTask() {
-  return pgQueryP(
+  return queryP(
     'delete from notification_tasks where zid = (select zid from notification_tasks order by random() for update skip locked limit 1) returning *;'
   ).then((rows) => {
     if (!rows || !rows.length) {
@@ -36,7 +36,7 @@ function claimNextNotificationTask() {
 
 function doNotificationsForZid(zid, timeOfLastEvent) {
   let shouldTryAgain = false;
-  return pgQueryP('select * from participants where zid = ($1) and last_notified < ($2) and subscribed > 0;', [
+  return queryP('select * from participants where zid = ($1) and last_notified < ($2) and subscribed > 0;', [
     zid,
     timeOfLastEvent
   ])
@@ -88,7 +88,7 @@ function doNotificationsForZid(zid, timeOfLastEvent) {
               needs = false;
             }
             if (Config.devMode) {
-              needs = needs && Utils.isPolisDev(ptpt.uid);
+              needs = needs && isPolisDev(ptpt.uid);
             }
             return needs;
           });
@@ -96,7 +96,7 @@ function doNotificationsForZid(zid, timeOfLastEvent) {
             return null;
           }
           const pids = _.pluck(needNotification, 'pid');
-          return pgQueryP(
+          return queryP(
             `select uid, subscribe_email from participants_extended where uid in (select uid from participants where pid in (${pids.join(',')}));`,
             []
           ).then((rows) => {
@@ -107,7 +107,7 @@ function doNotificationsForZid(zid, timeOfLastEvent) {
             return BluebirdPromise.each(needNotification, (item, _index, _length) => {
               const uid = pid_to_ptpt[item.pid].uid;
               return sendNotificationEmail(uid, url, conversation_id, uidToEmail[uid], item.remaining).then(() => {
-                return pgQueryP(
+                return queryP(
                   'update participants set last_notified = now_as_millis(), nsli = nsli + 1 where uid = ($1) and zid = ($2);',
                   [uid, zid]
                 );
@@ -157,7 +157,4 @@ function handle_POST_notifyTeam(req, res) {
     });
 }
 
-export default {
-  doNotificationLoop,
-  handle_POST_notifyTeam
-};
+export { doNotificationLoop, handle_POST_notifyTeam };

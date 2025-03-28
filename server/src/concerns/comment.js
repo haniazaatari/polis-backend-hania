@@ -1,20 +1,24 @@
-import badwords from 'badwords/object';
+import badwords from 'badwords';
 import { google } from 'googleapis';
 import _ from 'underscore';
-import Comment from '../comment.js';
-import { getComments, getNumberOfCommentsRemaining } from '../comment.js';
+import {
+  detectLanguage,
+  getComment,
+  getComments,
+  getNumberOfCommentsRemaining,
+  translateAndStoreComment
+} from '../comment.js';
 import Config from '../config.js';
-import Conversation from '../conversation.js';
-import dbPgQuery, {
-  query as pgQuery,
-  queryP as pgQueryP,
-  query_readOnly as pgQuery_readOnly,
-  queryP_readOnly as pgQueryP_readOnly
-} from '../db/pg-query.js';
+import { createXidRecordByZid, getConversationInfo } from '../conversation.js';
+import { query, queryP, queryP_readOnly, query_readOnly } from '../db/pg-query.js';
 import { votesPost } from '../routes/votes.js';
-import User from '../user.js';
-import { MPromise } from '../utils/MPromise.js';
+import { getPidPromise, getXidStuff } from '../user.js';
+import { isModerator, isSpam, polisTypes } from '../utils/common.js';
+import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
+import { MPromise } from '../utils/metered.js';
+import { getPca } from '../utils/pca.js';
+import { getZinvite } from '../utils/zinvite.js';
 import {
   updateConversationModifiedTime,
   updateLastInteractionTimeForConversation,
@@ -22,26 +26,14 @@ import {
 } from './conversation.js';
 import { sendEmailByUid } from './email.js';
 import { addParticipant } from './participant.js';
-import { isModerator, isSpam, polisTypes } from './utils/common.js';
-import { fail } from './utils/fail.js';
-import { getPca } from './utils/pca.js';
-import { finishArray, finishOne } from './utils/response.js';
-import { getZinvite } from './utils/zinvite.js';
+import { finishArray, finishOne } from './response.js';
 
 const serverUrl = Config.getServerUrl();
-const getComment = Comment.getComment;
-const translateAndStoreComment = Comment.translateAndStoreComment;
-const detectLanguage = Comment.detectLanguage;
-const createXidRecordByZid = Conversation.createXidRecordByZid;
-const getConversationInfo = Conversation.getConversationInfo;
-const getXidStuff = User.getXidStuff;
-const getPidPromise = User.getPidPromise;
-
 const GOOGLE_DISCOVERY_URL = 'https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1';
 
 function getNumberOfCommentsWithModerationStatus(zid, mod) {
   return new MPromise('getNumberOfCommentsWithModerationStatus', (resolve, reject) => {
-    pgQuery_readOnly('select count(*) from comments where zid = ($1) and mod = ($2);', [zid, mod], (err, result) => {
+    query_readOnly('select count(*) from comments where zid = ($1) and mod = ($2);', [zid, mod], (err, result) => {
       if (err) {
         reject(err);
       } else {
@@ -87,16 +79,16 @@ function createModerationUrl(zinvite) {
 
 function moderateComment(zid, tid, active, mod, is_meta) {
   return new Promise((resolve, reject) => {
-    const query = 'UPDATE comments SET active = $1, mod = $2, is_meta = $3 WHERE zid = $4 AND tid = $5';
+    const updateQuery = 'UPDATE comments SET active = $1, mod = $2, is_meta = $3 WHERE zid = $4 AND tid = $5';
     const params = [active, mod, is_meta, zid, tid];
-    logger.debug('Executing query:', { query });
+    logger.debug('Executing query:', { query: updateQuery });
     logger.debug('With parameters:', { params });
-    pgQuery(query, params, (err, result) => {
+    query(updateQuery, params, (err, result) => {
       if (err) {
-        logger.error('moderateComment pgQuery error:', err);
+        logger.error('moderateComment query error:', err);
         reject(err);
       } else {
-        logger.debug('moderateComment pgQuery executed successfully');
+        logger.debug('moderateComment query executed successfully');
         resolve(result);
       }
     });
@@ -115,7 +107,7 @@ function hasBadWords(txt) {
 }
 
 function commentExists(zid, txt) {
-  return pgQueryP('select zid from comments where zid = ($1) and txt = ($2);', [zid, txt]).then((rows) => rows?.length);
+  return queryP('select zid from comments where zid = ($1) and txt = ($2);', [zid, txt]).then((rows) => rows?.length);
 }
 
 async function analyzeComment(txt) {
@@ -140,7 +132,7 @@ async function analyzeComment(txt) {
 }
 
 function addNotificationTask(zid) {
-  return pgQueryP(
+  return queryP(
     'insert into notification_tasks (zid) values ($1) on conflict (zid) do update set modified = now_as_millis();',
     [zid]
   );
@@ -199,7 +191,7 @@ function getNextPrioritizedComment(zid, pid, withoutTids, include_social) {
 }
 
 function getCommentTranslations(zid, tid) {
-  return dbPgQuery.queryP('select * from comment_translations where zid = ($1) and tid = ($2);', [zid, tid]);
+  return queryP('select * from comment_translations where zid = ($1) and tid = ($2);', [zid, tid]);
 }
 
 function getNextComment(zid, pid, withoutTids, include_social, lang) {
@@ -230,7 +222,7 @@ function getNextComment(zid, pid, withoutTids, include_social, lang) {
 }
 
 function addNoMoreCommentsRecord(zid, pid) {
-  return pgQueryP(
+  return queryP(
     'insert into event_ptpt_no_more_comments (zid, pid, votes_placed) values ($1, $2, ' +
       '(select count(*) from votes where zid = ($1) and pid = ($2)))',
     [zid, pid]
@@ -355,7 +347,7 @@ async function handle_POST_comments(req, res) {
     const detection = Array.isArray(detections) ? detections[0] : detections;
     const lang = detection.language;
     const lang_confidence = detection.confidence;
-    const insertedComment = await pgQueryP(
+    const insertedComment = await queryP(
       `INSERT INTO COMMENTS
       (pid, zid, txt, velocity, active, mod, uid, anon, is_seed, created, tid, lang, lang_confidence)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, default, null, $10, $11)
@@ -368,7 +360,7 @@ async function handle_POST_comments(req, res) {
       try {
         const n = await getNumberOfCommentsWithModerationStatus(zid, polisTypes.mod.unmoderated);
         if (n !== 0) {
-          const users = await pgQueryP_readOnly(
+          const users = await queryP_readOnly(
             'SELECT * FROM users WHERE site_id = (SELECT site_id FROM page_ids WHERE zid = $1) UNION SELECT * FROM users WHERE uid = $2;',
             [zid, conv.owner]
           );
@@ -422,12 +414,11 @@ function handle_GET_comments_translations(req, res) {
   const firstTwoCharsOfLang = req.p.lang.substr(0, 2);
   getComment(zid, tid)
     .then((comment) => {
-      return dbPgQuery
-        .queryP("select * from comment_translations where zid = ($1) and tid = ($2) and lang LIKE '$3%';", [
-          zid,
-          tid,
-          firstTwoCharsOfLang
-        ])
+      return queryP("select * from comment_translations where zid = ($1) and tid = ($2) and lang LIKE '$3%';", [
+        zid,
+        tid,
+        firstTwoCharsOfLang
+      ])
         .then((existingTranslations) => {
           if (existingTranslations) {
             return existingTranslations;
@@ -449,7 +440,7 @@ function handle_GET_comments(req, res) {
   getComments(req.p)
     .then((comments) => {
       if (req.p.rid) {
-        return pgQueryP('select tid, selection from report_comment_selections where rid = ($1);', [req.p.rid]).then(
+        return queryP('select tid, selection from report_comment_selections where rid = ($1);', [req.p.rid]).then(
           (selections) => {
             const tidToSelection = _.indexBy(selections, 'tid');
             comments = comments.map((c) => {
@@ -512,7 +503,7 @@ function handle_POST_ptptCommentMod(req, res) {
   const zid = req.p.zid;
   const pid = req.p.pid;
   const uid = req.p.uid;
-  return pgQueryP(
+  return queryP(
     'insert into crowd_mod (' +
       'zid, ' +
       'pid, ' +
@@ -628,13 +619,13 @@ function handle_POST_reportCommentSelections(req, res) {
       if (!isMod) {
         return fail(res, 403, 'polis_err_POST_reportCommentSelections_auth');
       }
-      return pgQueryP(
+      return queryP(
         'insert into report_comment_selections (rid, tid, selection, zid, modified) values ($1, $2, $3, $4, now_as_millis()) ' +
           'on conflict (rid, tid) do update set selection = ($3), zid  = ($4), modified = now_as_millis();',
         [rid, tid, selection, zid]
       )
         .then(() => {
-          return pgQueryP('delete from math_report_correlationmatrix where rid = ($1);', [rid]);
+          return queryP('delete from math_report_correlationmatrix where rid = ($1);', [rid]);
         })
         .then(() => {
           res.json({});
@@ -645,7 +636,10 @@ function handle_POST_reportCommentSelections(req, res) {
     });
 }
 
-export default {
+export {
+  addNoMoreCommentsRecord,
+  createModerationUrl,
+  getNextComment,
   handle_GET_comments_translations,
   handle_GET_comments,
   handle_GET_nextComment,

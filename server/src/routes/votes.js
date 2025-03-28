@@ -1,16 +1,11 @@
 import _ from 'underscore';
-import Conversation from '../conversation.js';
-import {
-  query as pgQuery,
-  queryP_readOnly as pgQueryP_readOnly,
-  query_readOnly as pgQuery_readOnly
-} from '../db/pg-query.js';
-import SQL from '../db/sql.js';
-import MPromise from '../utils/MPromise.js';
+import { isXidWhitelisted } from '../conversation.js';
+import { query as pgQuery, queryP_readOnly, query_readOnly } from '../db/pg-query.js';
+import { sql_votes_latest_unique } from '../db/sql.js';
 import { isDuplicateKey } from '../utils/common.js';
 import logger from '../utils/logger.js';
-const isXidWhitelisted = Conversation.isXidWhitelisted;
-const sql_votes_latest_unique = SQL.sql_votes_latest_unique;
+import { MPromise } from '../utils/metered.js';
+
 function doVotesPost(_uid, pid, conv, tid, voteType, weight, high_priority) {
   const zid = conv?.zid;
   weight = weight || 0;
@@ -37,8 +32,9 @@ function doVotesPost(_uid, pid, conv, tid, voteType, weight, high_priority) {
     });
   });
 }
+
 function votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
-  return pgQueryP_readOnly('select * from conversations where zid = ($1);', [zid])
+  return queryP_readOnly('select * from conversations where zid = ($1);', [zid])
     .then((rows) => {
       if (!rows || !rows.length) {
         throw 'polis_err_unknown_conversation';
@@ -59,12 +55,14 @@ function votesPost(uid, pid, zid, tid, xid, voteType, weight, high_priority) {
     })
     .then((conv) => doVotesPost(uid, pid, conv, tid, voteType, weight, high_priority));
 }
+
 function getVotesForSingleParticipant(p) {
   if (_.isUndefined(p.pid)) {
     return Promise.resolve([]);
   }
   return votesGet(p);
 }
+
 function votesGet(p) {
   return new MPromise('votesGet', (resolve, reject) => {
     let q = sql_votes_latest_unique
@@ -76,7 +74,7 @@ function votesGet(p) {
     if (!_.isUndefined(p.tid)) {
       q = q.where(sql_votes_latest_unique.tid.equals(p.tid));
     }
-    pgQuery_readOnly(q.toString(), (err, results) => {
+    query_readOnly(q.toString(), (err, results) => {
       if (err) {
         reject(err);
       } else {
@@ -85,4 +83,5 @@ function votesGet(p) {
     });
   });
 }
+
 export { votesGet, getVotesForSingleParticipant, votesPost, doVotesPost };

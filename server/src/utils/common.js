@@ -2,14 +2,10 @@ import akismetLib from 'akismet';
 import pg from 'pg';
 import _ from 'underscore';
 import Config from '../config.js';
-import Conversation from '../conversation.js';
-import {
-  queryP as pgQueryP,
-  queryP_readOnly as pgQueryP_readOnly,
-  query_readOnly as pgQuery_readOnly
-} from '../db/pg-query.js';
-import MPromise from '../utils/MPromise.js';
+import { getConversationInfo } from '../conversation.js';
+import { queryP, queryP_readOnly, query_readOnly } from '../db/pg-query.js';
 import logger from '../utils/logger.js';
+import { MPromise } from '../utils/metered.js';
 
 const serverUrl = Config.getServerUrl();
 const polisDevs = Config.adminUIDs ? JSON.parse(Config.adminUIDs) : [];
@@ -86,7 +82,7 @@ function hexToStr(hexString) {
 }
 
 function isConversationOwner(zid, uid, callback) {
-  pgQuery_readOnly('SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);', [zid, uid], (err, docs) => {
+  query_readOnly('SELECT * FROM conversations WHERE zid = ($1) AND owner = ($2);', [zid, uid], (err, docs) => {
     if (!docs || !docs.rows || docs.rows.length === 0) {
       err = err || 1;
     }
@@ -98,14 +94,14 @@ function isModerator(zid, uid) {
   if (isPolisDev(uid)) {
     return Promise.resolve(true);
   }
-  return pgQueryP_readOnly(
+  return queryP_readOnly(
     'select count(*) from conversations where owner in (select uid from users where site_id = (select site_id from users where uid = ($2))) and zid = ($1);',
     [zid, uid]
   ).then((rows) => rows[0].count >= 1);
 }
 
 function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) {
-  return pgQueryP(
+  return queryP(
     "insert into worker_tasks (math_env, task_data, task_type, task_bucket) values ($1, $2, 'generate_export_data', $3);",
     [
       math_env,
@@ -121,7 +117,7 @@ function doAddDataExportTask(math_env, email, zid, atDate, format, task_bucket) 
 }
 
 function isOwner(zid, uid) {
-  return Conversation.getConversationInfo(zid).then((info) => info.owner === uid);
+  return getConversationInfo(zid).then((info) => info.owner === uid);
 }
 
 function isDuplicateKey(err) {
@@ -145,22 +141,6 @@ function ifDefinedSet(name, source, dest) {
 }
 
 export {
-  doAddDataExportTask,
-  escapeLiteral,
-  hexToStr,
-  ifDefinedFirstElseSecond,
-  ifDefinedSet,
-  isConversationOwner,
-  isDuplicateKey,
-  isModerator,
-  isOwner,
-  isPolisDev,
-  isSpam,
-  polisTypes,
-  strToHex
-};
-
-export default {
   doAddDataExportTask,
   escapeLiteral,
   hexToStr,

@@ -2,10 +2,12 @@ import { CreateTableCommand, DeleteItemCommand, DescribeTableCommand, DynamoDBCl
 import { DeleteCommand, PutCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import config from '../config.js';
 import logger from './logger.js';
+
 export default class DynamoStorageService {
   client;
   tableName;
   cacheDisabled;
+
   constructor(tableName, disableCache) {
     const credentials = {
       accessKeyId: config.awsAccessKeyId,
@@ -19,6 +21,7 @@ export default class DynamoStorageService {
     this.tableName = tableName;
     this.cacheDisabled = disableCache || false;
   }
+
   async initTable() {
     try {
       const describeCmd = new DescribeTableCommand({
@@ -51,6 +54,7 @@ export default class DynamoStorageService {
       }
     }
   }
+
   async putItem(item) {
     const params = {
       TableName: this.tableName,
@@ -64,6 +68,7 @@ export default class DynamoStorageService {
       logger.error(error);
     }
   }
+
   async queryItemsByRidSectionModel(rid_section_model) {
     const params = {
       TableName: this.tableName,
@@ -83,6 +88,7 @@ export default class DynamoStorageService {
       logger.error('Error querying items:', error);
     }
   }
+
   async deleteReportItem(rid_section_model, timestamp) {
     const params = {
       TableName: this.tableName,
@@ -100,6 +106,7 @@ export default class DynamoStorageService {
       logger.error('Error deleting item:', error);
     }
   }
+
   async deleteAllByReportID(reportIdPrefix) {
     if (!reportIdPrefix) {
       return;
@@ -146,6 +153,7 @@ export default class DynamoStorageService {
       await Promise.all(deletePromises);
     } while (lastEvaluatedKey);
   }
+
   async getAllByReportID(reportIdPrefix) {
     if (!reportIdPrefix) {
       return [];

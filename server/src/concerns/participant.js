@@ -2,13 +2,8 @@ import async from 'async';
 import request from 'request-promise';
 import _ from 'underscore';
 import Config from '../config.js';
-import { isXidWhitelisted } from '../conversation.js';
-import {
-  query as pgQuery,
-  queryP as pgQueryP,
-  queryP_readOnly as pgQueryP_readOnly,
-  query_readOnly as pgQuery_readOnly
-} from '../db/pg-query.js';
+import { getConversationInfo, isXidWhitelisted } from '../conversation.js';
+import { query, queryP, queryP_readOnly, query_readOnly } from '../db/pg-query.js';
 import { sql_participants_extended } from '../db/sql.js';
 import { getXids } from '../routes/math.js';
 import { getVotesForSingleParticipant } from '../routes/votes.js';
@@ -22,7 +17,7 @@ import logger from '../utils/logger.js';
 import { MPromise } from '../utils/metered.js';
 import { getPca } from '../utils/pca.js';
 import { getNextComment } from './comment.js';
-import { getConversationInfo, getOneConversation, updateLastInteractionTimeForConversation } from './conversation.js';
+import { getOneConversation, updateLastInteractionTimeForConversation } from './conversation.js';
 import { doFamousQuery } from './social.js';
 
 function DD(f) {
@@ -49,7 +44,7 @@ DD.prototype.s = DA.prototype.s = function (k, v) {
 
 function getSUZinviteInfo(suzinvite) {
   return new Promise((resolve, reject) => {
-    pgQuery('SELECT * FROM suzinvites WHERE suzinvite = ($1);', [suzinvite], (err, results) => {
+    query('SELECT * FROM suzinvites WHERE suzinvite = ($1);', [suzinvite], (err, results) => {
       if (err) {
         return reject(err);
       }
@@ -62,19 +57,19 @@ function getSUZinviteInfo(suzinvite) {
 }
 const deleteSuzinvite = async (suzinvite) => {
   try {
-    await pgQuery('DELETE FROM suzinvites WHERE suzinvite = ($1);', [suzinvite]);
+    await query('DELETE FROM suzinvites WHERE suzinvite = ($1);', [suzinvite]);
   } catch (err) {
     logger.error('polis_err_removing_suzinvite', err);
   }
 };
 function xidExists(xid, owner, uid) {
-  return pgQueryP('select * from xids where xid = ($1) and owner = ($2) and uid = ($3);', [xid, owner, uid]).then(
+  return queryP('select * from xids where xid = ($1) and owner = ($2) and uid = ($3);', [xid, owner, uid]).then(
     (rows) => rows?.length
   );
 }
 const createXidEntry = async (xid, owner, uid) => {
   try {
-    await pgQueryP('INSERT INTO xids (uid, owner, xid) VALUES ($1, $2, $3);', [uid, owner, xid]);
+    await queryP('INSERT INTO xids (uid, owner, xid) VALUES ($1, $2, $3);', [uid, owner, xid]);
   } catch (err) {
     logger.error('polis_err_adding_xid_entry', err);
     throw new Error('polis_err_adding_xid_entry');
@@ -87,7 +82,7 @@ function isOwner(zid, uid) {
 
 function getParticipant(zid, uid) {
   return new MPromise('getParticipant', (resolve, reject) => {
-    pgQuery_readOnly('SELECT * FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid], (err, results) => {
+    query_readOnly('SELECT * FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid], (err, results) => {
       if (err) {
         return reject(err);
       }
@@ -189,7 +184,7 @@ function saveParticipantMetadataChoices(zid, pid, answers, callback) {
     return callback(0);
   }
   const q = `select * from participant_metadata_answers where zid = ($1) and pmaid in (${answers.join(',')});`;
-  pgQuery(q, [zid], (err, qa_results) => {
+  query(q, [zid], (err, qa_results) => {
     if (err) {
       logger.error('polis_err_getting_participant_metadata_answers', err);
       return callback(err);
@@ -203,7 +198,7 @@ function saveParticipantMetadataChoices(zid, pid, answers, callback) {
     async.map(
       answers,
       (x, cb) => {
-        pgQuery(
+        query(
           'INSERT INTO participant_metadata_choices (zid, pid, pmaid, pmqid) VALUES ($1,$2,$3,$4);',
           x,
           (err, _results) => {
@@ -227,7 +222,7 @@ function saveParticipantMetadataChoices(zid, pid, answers, callback) {
 }
 
 function createParticpantLocationRecord(zid, uid, pid, lat, lng, source) {
-  return pgQueryP('insert into participant_locations (zid, uid, pid, lat, lng, source) values ($1,$2,$3,$4,$5,$6);', [
+  return queryP('insert into participant_locations (zid, uid, pid, lat, lng, source) values ($1,$2,$3,$4,$5,$6);', [
     zid,
     uid,
     pid,
@@ -252,7 +247,7 @@ function addExtendedParticipantInfo(zid, uid, data) {
     .and(sql_participants_extended.uid.equals(uid));
   let qString = qUpdate.toString();
   qString = qString.replace('9876543212345', 'now_as_millis()');
-  return pgQueryP(qString, []);
+  return queryP(qString, []);
 }
 
 function tryToJoinConversation(zid, uid, info, pmaid_answers) {
@@ -340,15 +335,15 @@ function joinConversation(zid, uid, info, pmaid_answers) {
 }
 
 const addParticipant = async (zid, uid) => {
-  await pgQueryP('INSERT INTO participants_extended (zid, uid) VALUES ($1, $2);', [zid, uid]);
-  return pgQueryP('INSERT INTO participants (pid, zid, uid, created) VALUES (NULL, $1, $2, default) RETURNING *;', [
+  await queryP('INSERT INTO participants_extended (zid, uid) VALUES ($1, $2);', [zid, uid]);
+  return queryP('INSERT INTO participants (pid, zid, uid, created) VALUES (NULL, $1, $2, default) RETURNING *;', [
     zid,
     uid
   ]);
 };
 
 function getAnswersForConversation(zid, callback) {
-  pgQuery_readOnly('SELECT * from participant_metadata_answers WHERE zid = ($1) AND alive=TRUE;', [zid], (err, x) => {
+  query_readOnly('SELECT * from participant_metadata_answers WHERE zid = ($1) AND alive=TRUE;', [zid], (err, x) => {
     if (err) {
       callback(err);
       return;
@@ -382,9 +377,9 @@ function userHasAnsweredZeQuestions(zid, answers) {
 
 function recordPermanentCookieZidJoin(permanentCookieToken, zid) {
   function doInsert() {
-    return pgQueryP('insert into permanentCookieZidJoins (cookie, zid) values ($1, $2);', [permanentCookieToken, zid]);
+    return queryP('insert into permanentCookieZidJoins (cookie, zid) values ($1, $2);', [permanentCookieToken, zid]);
   }
-  return pgQueryP('select zid from permanentCookieZidJoins where cookie = ($1) and zid = ($2);', [
+  return queryP('select zid from permanentCookieZidJoins where cookie = ($1) and zid = ($2);', [
     permanentCookieToken,
     zid
   ]).then(
@@ -405,7 +400,7 @@ function recordPermanentCookieZidJoin(permanentCookieToken, zid) {
 function handle_GET_participants(req, res) {
   const uid = req.p.uid;
   const zid = req.p.zid;
-  pgQueryP_readOnly('select * from participants where uid = ($1) and zid = ($2)', [uid, zid])
+  queryP_readOnly('select * from participants where uid = ($1) and zid = ($2)', [uid, zid])
     .then((rows) => {
       const ptpt = (rows?.length && rows[0]) || null;
       res.status(200).json(ptpt);
@@ -491,8 +486,8 @@ function handle_GET_participation(req, res) {
         return;
       }
       return Promise.all([
-        pgQueryP_readOnly('select pid, count(*) from votes where zid = ($1) group by pid;', [zid]),
-        pgQueryP_readOnly('select pid, count(*) from comments where zid = ($1) group by pid;', [zid]),
+        queryP_readOnly('select pid, count(*) from votes where zid = ($1) group by pid;', [zid]),
+        queryP_readOnly('select pid, count(*) from comments where zid = ($1) group by pid;', [zid]),
         getXids(zid)
       ]).then((o) => {
         const voteCountRows = o[0];
@@ -630,7 +625,7 @@ function handle_PUT_participants_extended(req, res) {
     .update(fields)
     .where(sql_participants_extended.zid.equals(zid))
     .and(sql_participants_extended.uid.equals(uid));
-  pgQueryP(q.toString(), [])
+  queryP(q.toString(), [])
     .then((result) => {
       res.json(result);
     })
@@ -647,7 +642,7 @@ function handle_POST_query_participants_by_metadata(req, res) {
     return res.status(200).json([]);
   }
   function doneChecking() {
-    pgQuery_readOnly(
+    query_readOnly(
       `select pid from participants where zid = ($1) and pid not in (select pid from participant_metadata_choices where alive = TRUE and pmaid in (select pmaid from participant_metadata_answers where alive = TRUE and zid = ($2) and pmaid not in (${pmaids.join(',')})));`,
       [zid, zid],
       (err, results) => {
@@ -791,7 +786,7 @@ function joinWithZidOrSuzinvite(o) {
     });
 }
 
-export default {
+export {
   addParticipant,
   addParticipantAndMetadata,
   handle_GET_participants,

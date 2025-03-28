@@ -1,11 +1,7 @@
 import { LRUCache } from 'lru-cache';
 import _ from 'underscore';
 import { getConversationInfo } from '../conversation.js';
-import {
-  queryP as pgQueryP,
-  queryP_metered_readOnly as pgQueryP_metered_readOnly,
-  queryP_readOnly as pgQueryP_readOnly
-} from '../db/pg-query.js';
+import { queryP, queryP_metered_readOnly, queryP_readOnly } from '../db/pg-query.js';
 import { getBidsForPids } from '../routes/math.js';
 import { isModerator, isPolisDev, polisTypes } from '../utils/common.js';
 import { fail } from '../utils/fail.js';
@@ -58,7 +54,7 @@ function getVotesForPids(zid, pids) {
   if (pids.length === 0) {
     return Promise.resolve([]);
   }
-  return pgQueryP_readOnly(
+  return queryP_readOnly(
     `select * from votes where zid = ($1) and pid in (${pids.join(',')}) order by pid, tid, created;`,
     [zid]
   ).then((votesRows) => {
@@ -187,7 +183,7 @@ function doFamousQuery(o, _req) {
         return [];
       }
       const q = `with authors as (select distinct(uid) from comments where zid = ($1) and tid in (${featuredTids.join(',')}) order by uid) select authors.uid from authors inner join xids on xids.uid = authors.uid order by uid;`;
-      return pgQueryP_readOnly(q, [zid]).then((comments) => {
+      return queryP_readOnly(q, [zid]).then((comments) => {
         let uids = _.pluck(comments, 'uid');
         uids = _.uniq(uids);
         return uids;
@@ -250,7 +246,7 @@ function getSocialParticipantsForMod(zid, limit, mod, owner) {
     params.push(mod);
   }
   const q = `with p as (select uid, pid, mod from participants where zid = ($1) ${modClause}), final_set as (select * from p limit ($2)), xids_subset as (select * from xids where owner = ($3) and x_profile_image_url is not null), all_rows as (select final_set.mod, xids_subset.x_profile_image_url as x_profile_image_url, xids_subset.xid as xid, xids_subset.x_name as x_name, final_set.pid from final_set left join xids_subset on final_set.uid = xids_subset.uid ) select * from all_rows where (xid is not null) ;`;
-  return pgQueryP(q, params);
+  return queryP(q, params);
 }
 
 const socialParticipantsCache = new LRUCache({
@@ -270,7 +266,7 @@ function getSocialParticipants(zid, uid, limit, mod, math_tick, authorUids) {
     authorsQuery = null;
   }
   const q = `with p as (select uid, pid, mod from participants where zid = ($1) and vote_count >= 1), xids_subset as (select * from xids where owner in (select org_id from conversations where zid = ($1)) and x_profile_image_url is not null), xid_ptpts as (select p.uid, 100 as priority from p inner join xids_subset on xids_subset.uid = p.uid where p.mod >= ($4)), self as (select CAST($2 as INTEGER) as uid, 1000 as priority), ${authorsQuery ? `authors as ${authorsQuery}, ` : ''}pptpts as (select prioritized_ptpts.uid, max(prioritized_ptpts.priority) as priority from ( select * from self ${authorsQuery ? 'union ' + 'select * from authors ' : ''}union select * from xid_ptpts ) as prioritized_ptpts inner join p on prioritized_ptpts.uid = p.uid group by prioritized_ptpts.uid order by priority desc, prioritized_ptpts.uid asc), mod_pptpts as (select asdfasdjfioasjdfoi.uid, max(asdfasdjfioasjdfoi.priority) as priority from ( select * from pptpts union all select uid, 999 as priority from p where mod >= 2) as asdfasdjfioasjdfoi group by asdfasdjfioasjdfoi.uid order by priority desc, asdfasdjfioasjdfoi.uid asc), final_set as (select * from mod_pptpts limit ($3) ) select final_set.priority, xids_subset.x_profile_image_url as x_profile_image_url, xids_subset.xid as xid, xids_subset.x_name as x_name, xids_subset.x_email as x_email, p.pid from final_set left join xids_subset on final_set.uid = xids_subset.uid left join p on final_set.uid = p.uid ;`;
-  return pgQueryP_metered_readOnly('getSocialParticipants', q, [zid, uid, limit, mod]).then((response) => {
+  return queryP_metered_readOnly('getSocialParticipants', q, [zid, uid, limit, mod]).then((response) => {
     socialParticipantsCache.set(cacheKey, response);
     return response;
   });
@@ -287,11 +283,9 @@ function handle_PUT_ptptois(req, res) {
         fail(res, 403, 'polis_err_ptptoi_permissions_123');
         return;
       }
-      return pgQueryP('update participants set mod = ($3) where zid = ($1) and pid = ($2);', [zid, pid, mod]).then(
-        () => {
-          res.status(200).json({});
-        }
-      );
+      return queryP('update participants set mod = ($3) where zid = ($1) and pid = ($2);', [zid, pid, mod]).then(() => {
+        res.status(200).json({});
+      });
     })
     .catch((err) => {
       fail(res, 500, 'polis_err_ptptoi_misc_234', err);
@@ -330,9 +324,4 @@ function handle_GET_ptptois(req, res) {
     });
 }
 
-export default {
-  doFamousQuery,
-  handle_GET_ptptois,
-  handle_GET_votes_famous,
-  handle_PUT_ptptois
-};
+export { doFamousQuery, handle_GET_ptptois, handle_GET_votes_famous, handle_PUT_ptptois };

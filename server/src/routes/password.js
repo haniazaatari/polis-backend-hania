@@ -1,19 +1,16 @@
 import { generateHashedPassword } from '../auth/password.js';
 import Config from '../config.js';
-import { queryP as pgQueryP, queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query.js';
-import emailSenders from '../email/senders.js';
-import Session from '../session.js';
-import User from '../user.js';
-import cookies from '../utils/cookies.js';
-import fail from '../utils/fail.js';
+import { queryP, queryP_readOnly } from '../db/pg-query.js';
+import { sendTextEmail } from '../email/senders.js';
+import { clearPwResetToken, getUidForPwResetToken, setupPwReset } from '../session.js';
+import { getUserInfoForUid } from '../user.js';
+import { clearCookies } from '../utils/cookies.js';
+import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
-const sendTextEmail = emailSenders.sendTextEmail;
-const getUidForPwResetToken = Session.getUidForPwResetToken;
-const clearPwResetToken = Session.clearPwResetToken;
+
 const getServerUrl = Config.getServerUrl;
-const setupPwReset = Session.setupPwReset;
 const polisFromAddress = Config.polisFromAddress;
-const getUserInfoForUid = User.getUserInfoForUid;
+
 function sendPasswordResetEmail(uid, pwresettoken, serverName, callback) {
   getUserInfoForUid(uid, (err, userInfo) => {
     if (err) {
@@ -40,15 +37,17 @@ ${serverName}/pwreset/${pwresettoken}
       });
   });
 }
+
 function getUidByEmail(email) {
   email = email.toLowerCase();
-  return pgQueryP_readOnly('SELECT uid FROM users where LOWER(email) = ($1);', [email]).then((rows) => {
+  return queryP_readOnly('SELECT uid FROM users where LOWER(email) = ($1);', [email]).then((rows) => {
     if (!rows || !rows.length) {
       throw new Error('polis_err_no_user_matching_email');
     }
     return rows[0].uid;
   });
 }
+
 function handle_POST_auth_password(req, res) {
   const pwresettoken = req.p.pwresettoken;
   const newPassword = req.p.newPassword;
@@ -59,7 +58,7 @@ function handle_POST_auth_password(req, res) {
     }
     const uid = Number(userParams.uid);
     generateHashedPassword(newPassword, (_err, hashedPassword) =>
-      pgQueryP(
+      queryP(
         'insert into jianiuevyew (uid, pwhash) values ' +
           '($1, $2) on conflict (uid) ' +
           'do update set pwhash = excluded.pwhash;',
@@ -80,10 +79,11 @@ function handle_POST_auth_password(req, res) {
     );
   });
 }
+
 function handle_POST_auth_pwresettoken(req, res) {
   const email = req.p.email;
   const server = getServerUrl();
-  cookies.clearCookies(req, res);
+  clearCookies(req, res);
   function finish() {
     res.status(200).json('Password reset email sent, please check your email.');
   }
@@ -105,6 +105,7 @@ function handle_POST_auth_pwresettoken(req, res) {
     }
   );
 }
+
 function sendPasswordResetEmailFailure(email, server) {
   const body = `We were unable to find a pol.is account registered with the email address: ${email}
 
@@ -115,4 +116,5 @@ If you need to create a new account, you can do that here ${server}/home
 Feel free to reply to this email if you need help.`;
   return sendTextEmail(polisFromAddress, email, 'Password Reset Failed', body);
 }
+
 export { handle_POST_auth_password, handle_POST_auth_pwresettoken };

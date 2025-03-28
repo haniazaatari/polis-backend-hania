@@ -3,17 +3,20 @@ import { countTokens } from '@anthropic-ai/tokenizer';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { parse } from 'csv-parse/sync';
 import fs from 'fs/promises';
+import js2xmlparser from 'js2xmlparser';
 import OpenAI from 'openai';
-import { convertXML } from 'simple-xml-to-json';
+import simpleXmlToJson from 'simple-xml-to-json';
 import { create } from 'xmlbuilder2';
 import config from '../config.js';
-import { getTopicsFromRID } from '../report_experimental/topics-example.js';
-import fail from '../utils/fail.js';
+import { getTopicsFromRID } from '../report_experimental/topics-example/index.js';
+import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import DynamoStorageService from '../utils/storage.js';
 import { getZidForRid } from '../utils/zinvite.js';
 import { sendCommentGroupsSummary } from './export.js';
-const js2xmlparser = require('js2xmlparser');
+
+const { convertXML } = simpleXmlToJson;
+
 export class PolisConverter {
   static convertToXml(csvContent) {
     const records = parse(csvContent, {

@@ -1,14 +1,13 @@
 import _ from 'underscore';
 import Config from '../config.js';
-import pg from '../db/pg-query.js';
-import emailSenders from '../email/senders.js';
-import Session from '../session.js';
-import Utils from '../utils/common.js';
-import cookies from '../utils/cookies.js';
-import fail from '../utils/fail.js';
-import Password from './password.js';
-const _COOKIES = cookies.COOKIES;
-const sendTextEmail = emailSenders.sendTextEmail;
+import { queryP } from '../db/pg-query.js';
+import { sendTextEmail } from '../email/senders.js';
+import { startSession } from '../session.js';
+import { hexToStr, strToHex } from '../utils/common.js';
+import { addCookies } from '../utils/cookies.js';
+import { fail } from '../utils/fail.js';
+import { generateHashedPassword, generateTokenP } from './password.js';
+
 function createUser(req, res) {
   const hname = req.p.hname;
   const password = req.p.password;
@@ -53,13 +52,13 @@ function createUser(req, res) {
     fail(res, 400, 'polis_err_reg_bad_email');
     return;
   }
-  pg.queryP('SELECT * FROM users WHERE email = ($1)', [email]).then(
+  queryP('SELECT * FROM users WHERE email = ($1)', [email]).then(
     (rows) => {
       if (rows.length > 0) {
         fail(res, 403, 'polis_err_reg_user_with_that_email_exists');
         return;
       }
-      Password.generateHashedPassword(password, (err, hashedPassword) => {
+      generateHashedPassword(password, (err, hashedPassword) => {
         if (err) {
           fail(res, 500, 'polis_err_generating_hash', err);
           return;
@@ -69,24 +68,23 @@ function createUser(req, res) {
         if (site_id) {
           vals.push(site_id);
         }
-        pg.query(query, vals, (err, result) => {
+        query(query, vals, (err, result) => {
           if (err) {
             fail(res, 500, 'polis_err_reg_failed_to_add_user_record', err);
             return;
           }
           const uid = result?.rows?.[0]?.uid;
-          pg.query('insert into jianiuevyew (uid, pwhash) values ($1, $2);', [uid, hashedPassword], (err, _results) => {
+          query('insert into jianiuevyew (uid, pwhash) values ($1, $2);', [uid, hashedPassword], (err, _results) => {
             if (err) {
               fail(res, 500, 'polis_err_reg_failed_to_add_user_record', err);
               return;
             }
-            Session.startSession(uid, (err, token) => {
+            startSession(uid, (err, token) => {
               if (err) {
                 fail(res, 500, 'polis_err_reg_failed_to_start_session', err);
                 return;
               }
-              cookies
-                .addCookies(req, res, token, uid)
+              addCookies(req, res, token, uid)
                 .then(() => {
                   res.json({
                     uid: uid,
@@ -107,13 +105,15 @@ function createUser(req, res) {
     }
   );
 }
+
 function doSendVerification(req, email) {
-  return Password.generateTokenP(30, false).then((einvite) =>
-    pg
-      .queryP('insert into einvites (email, einvite) values ($1, $2);', [email, einvite])
-      .then((_rows) => sendVerificationEmail(req, email, einvite))
+  return generateTokenP(30, false).then((einvite) =>
+    queryP('insert into einvites (email, einvite) values ($1, $2);', [email, einvite]).then((_rows) =>
+      sendVerificationEmail(req, email, einvite)
+    )
   );
 }
+
 function sendVerificationEmail(_req, email, einvite) {
   const serverName = Config.getServerUrl();
   const body = `Welcome to pol.is!
@@ -123,11 +123,13 @@ Click this link to verify your email address:
 ${serverName}/api/v3/verify?e=${einvite}`;
   return sendTextEmail(Config.polisFromAddress, email, 'Polis verification', body);
 }
+
 function _encodeParams(o) {
   const stringifiedJson = JSON.stringify(o);
-  const encoded = `ep1_${Utils.strToHex(stringifiedJson)}`;
+  const encoded = `ep1_${strToHex(stringifiedJson)}`;
   return encoded;
 }
+
 function decodeParams(encodedStringifiedJson) {
   if (typeof encodedStringifiedJson === 'string' && !encodedStringifiedJson.match(/^\/?ep1_/)) {
     throw new Error('wrong encoded params prefix');
@@ -137,20 +139,21 @@ function decodeParams(encodedStringifiedJson) {
   } else {
     encodedStringifiedJson = encodedStringifiedJson.slice(4);
   }
-  const stringifiedJson = Utils.hexToStr(encodedStringifiedJson);
+  const stringifiedJson = hexToStr(encodedStringifiedJson);
   const o = JSON.parse(stringifiedJson);
   return o;
 }
+
 function generateAndRegisterZinvite(zid, generateShort) {
   let len = 10;
   if (generateShort) {
     len = 6;
   }
-  return Password.generateTokenP(len, false).then((zinvite) =>
-    pg
-      .queryP('INSERT INTO zinvites (zid, zinvite, created) VALUES ($1, $2, default);', [zid, zinvite])
-      .then((_rows) => zinvite)
+  return generateTokenP(len, false).then((zinvite) =>
+    queryP('INSERT INTO zinvites (zid, zinvite, created) VALUES ($1, $2, default);', [zid, zinvite]).then(
+      (_rows) => zinvite
+    )
   );
 }
+
 export { createUser, doSendVerification, generateAndRegisterZinvite };
-export default { createUser, doSendVerification, generateAndRegisterZinvite };

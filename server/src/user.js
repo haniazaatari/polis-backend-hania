@@ -1,11 +1,16 @@
 import { LRUCache } from 'lru-cache';
 import _ from 'underscore';
-import Conversation from './conversation.js';
-import pg from './db/pg-query.js';
+import { createXidRecord, getConversationInfo, getXidRecord, isXidWhitelisted } from './conversation.js';
+import { query, queryP, query_readOnly } from './db/pg-query.js';
 import logger from './utils/logger.js';
 import { MPromise } from './utils/metered.js';
+
+const pidCache = new LRUCache({
+  max: 9000
+});
+
 function getUserInfoForUid(uid, callback) {
-  pg.query_readOnly('SELECT email, hname from users where uid = $1', [uid], (err, results) => {
+  query_readOnly('SELECT email, hname from users where uid = $1', [uid], (err, results) => {
     if (err) {
       return callback(err);
     }
@@ -15,9 +20,10 @@ function getUserInfoForUid(uid, callback) {
     callback(null, results.rows[0]);
   });
 }
+
 function getUserInfoForUid2(uid) {
   return new MPromise('getUserInfoForUid2', (resolve, reject) => {
-    pg.query_readOnly('SELECT * from users where uid = $1', [uid], (err, results) => {
+    query_readOnly('SELECT * from users where uid = $1', [uid], (err, results) => {
       if (err) {
         return reject(err);
       }
@@ -29,15 +35,16 @@ function getUserInfoForUid2(uid) {
     });
   });
 }
+
 async function getUser(uid, zid_optional, xid_optional, owner_uid_optional) {
   if (!uid) {
     return Promise.resolve({});
   }
   let xidInfoPromise = Promise.resolve(null);
   if (zid_optional && xid_optional) {
-    xidInfoPromise = Conversation.getXidRecord(xid_optional, zid_optional);
+    xidInfoPromise = getXidRecord(xid_optional, zid_optional);
   } else if (xid_optional && owner_uid_optional) {
-    xidInfoPromise = Conversation.getXidRecordByXidOwnerId(xid_optional, owner_uid_optional, zid_optional);
+    xidInfoPromise = getXidRecordByXidOwnerId(xid_optional, owner_uid_optional, zid_optional);
   }
   const o = await Promise.all([getUserInfoForUid2(uid), xidInfoPromise]);
   const info = o[0];
@@ -59,9 +66,10 @@ async function getUser(uid, zid_optional, xid_optional, owner_uid_optional) {
     created: Number(info.created)
   };
 }
+
 function createDummyUser() {
   return new MPromise('createDummyUser', (resolve, reject) => {
-    pg.query('INSERT INTO users (created) VALUES (default) RETURNING uid;', [], (err, results) => {
+    query('INSERT INTO users (created) VALUES (default) RETURNING uid;', [], (err, results) => {
       if (err || !results || !results.rows || !results.rows.length) {
         logger.error('polis_err_create_empty_user', err);
         reject(new Error('polis_err_create_empty_user'));
@@ -71,9 +79,7 @@ function createDummyUser() {
     });
   });
 }
-const pidCache = new LRUCache({
-  max: 9000
-});
+
 function getPid(zid, uid, callback) {
   const cacheKey = `${zid}_${uid}`;
   const cachedPid = pidCache.get(cacheKey);
@@ -81,7 +87,7 @@ function getPid(zid, uid, callback) {
     callback(null, cachedPid);
     return;
   }
-  pg.query_readOnly('SELECT pid FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid], (err, docs) => {
+  query_readOnly('SELECT pid FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid], (err, docs) => {
     let pid = -1;
     if (docs?.rows?.[0]) {
       pid = docs.rows[0].pid;
@@ -90,6 +96,7 @@ function getPid(zid, uid, callback) {
     callback(err, pid);
   });
 }
+
 function getPidPromise(zid, uid, usePrimary) {
   const cacheKey = `${zid}_${uid}`;
   const cachedPid = pidCache.get(cacheKey);
@@ -98,7 +105,7 @@ function getPidPromise(zid, uid, usePrimary) {
       resolve(cachedPid);
       return;
     }
-    const f = usePrimary ? pg.query : pg.query_readOnly;
+    const f = usePrimary ? query : query_readOnly;
     f('SELECT pid FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid], (err, results) => {
       if (err) {
         return reject(err);
@@ -113,6 +120,7 @@ function getPidPromise(zid, uid, usePrimary) {
     });
   });
 }
+
 function getPidForParticipant(assigner, _cache) {
   return (req, _res, next) => {
     const zid = req.p.zid;
@@ -141,8 +149,9 @@ function getPidForParticipant(assigner, _cache) {
     );
   };
 }
+
 function getXidRecordByXidOwnerId(xid, owner, zid_optional, x_profile_image_url, x_name, x_email, createIfMissing) {
-  return pg.queryP('select * from xids where xid = ($1) and owner = ($2);', [xid, owner]).then((rows) => {
+  return queryP('select * from xids where xid = ($1) and owner = ($2);', [xid, owner]).then((rows) => {
     if (!rows || !rows.length) {
       logger.warn('getXidRecordByXidOwnerId: no xInfo yet');
       if (!createIfMissing) {
@@ -150,41 +159,37 @@ function getXidRecordByXidOwnerId(xid, owner, zid_optional, x_profile_image_url,
       }
       const shouldCreateXidEntryPromise = !zid_optional
         ? Promise.resolve(true)
-        : Conversation.getConversationInfo(zid_optional).then((conv) => {
-            return conv.use_xid_whitelist ? Conversation.isXidWhitelisted(owner, xid) : Promise.resolve(true);
+        : getConversationInfo(zid_optional).then((conv) => {
+            return conv.use_xid_whitelist ? isXidWhitelisted(owner, xid) : Promise.resolve(true);
           });
       return shouldCreateXidEntryPromise.then((should) => {
         if (!should) {
           return null;
         }
         return createDummyUser().then((newUid) => {
-          return Conversation.createXidRecord(
-            owner,
-            newUid,
-            xid,
-            x_profile_image_url || null,
-            x_name || null,
-            x_email || null
-          ).then(() => {
-            return [
-              {
-                uid: newUid,
-                owner: owner,
-                xid: xid,
-                x_profile_image_url: x_profile_image_url,
-                x_name: x_name,
-                x_email: x_email
-              }
-            ];
-          });
+          return createXidRecord(owner, newUid, xid, x_profile_image_url || null, x_name || null, x_email || null).then(
+            () => {
+              return [
+                {
+                  uid: newUid,
+                  owner: owner,
+                  xid: xid,
+                  x_profile_image_url: x_profile_image_url,
+                  x_name: x_name,
+                  x_email: x_email
+                }
+              ];
+            }
+          );
         });
       });
     }
     return rows;
   });
 }
+
 function getXidStuff(xid, zid) {
-  return Conversation.getXidRecord(xid, zid).then((rows) => {
+  return getXidRecord(xid, zid).then((rows) => {
     if (!rows || !rows.length) {
       return 'noXidRecord';
     }
@@ -198,25 +203,16 @@ function getXidStuff(xid, zid) {
     return xidRecordForPtpt;
   });
 }
+
 export {
-  pidCache,
-  getUserInfoForUid,
-  getUserInfoForUid2,
-  getUser,
   createDummyUser,
   getPid,
+  getPidForParticipant,
   getPidPromise,
-  getPidForParticipant
-};
-export default {
-  pidCache,
+  getUser,
+  getUserInfoForUid,
+  getUserInfoForUid2,
   getXidRecordByXidOwnerId,
   getXidStuff,
-  getUserInfoForUid,
-  getUserInfoForUid2,
-  getUser,
-  createDummyUser,
-  getPid,
-  getPidPromise,
-  getPidForParticipant
+  pidCache
 };

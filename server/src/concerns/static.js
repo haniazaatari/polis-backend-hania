@@ -14,6 +14,7 @@ const staticFilesAdminPort = Config.staticFilesAdminPort;
 const devMode = Config.devMode;
 const routingProxy = new httpProxy.createProxyServer();
 const serverUrl = Config.getServerUrl();
+
 function makeFileFetcher(_hostname, port, path, headers, preloadData) {
   return (req, res) => {
     const hostname = Config.staticFilesHost;
@@ -141,11 +142,12 @@ function proxy(req, res) {
   });
 }
 
-export default {
+export {
   fetchIndex,
   fetchIndexForAdminPage,
   fetchIndexForReportPage,
   fetchIndexWithoutPreloadData,
   handle_GET_conditionalIndexFetcher,
+  makeFileFetcher,
   proxy
 };

@@ -1,11 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { parse } from 'csv-parse/sync';
 import fs from 'fs/promises';
-import { convertXML } from 'simple-xml-to-json';
+import js2xmlparser from 'js2xmlparser';
+import simpleXmlToJson from 'simple-xml-to-json';
 import { create } from 'xmlbuilder2';
 import logger from '../../../utils/logger.js';
-const js2xmlparser = require('js2xmlparser');
+
 const report_id = process.argv[2];
+const { convertXML } = simpleXmlToJson;
+
 export class PolisConverter {
   static convertToXml(csvContent) {
     const records = parse(csvContent, {
@@ -63,18 +66,22 @@ export class PolisConverter {
     return hasRequiredFields && validGroupPattern;
   }
 }
+
 const anthropic = new Anthropic({});
+
 const getJSONuserMsg = async () => {
   const report_xml_template = await fs.readFile('src/prompts/report_experimental/subtasks/uncertainty.xml', 'utf8');
   const asJSON = await convertXML(report_xml_template);
   return asJSON;
 };
+
 const getCommentsAsJson = async (id) => {
   const resp = await fetch(`http://localhost/api/v3/reportExport/${id}/comment-groups.csv`);
   const data = await resp.text();
   const xml = PolisConverter.convertToXml(data);
   return xml;
 };
+
 async function main() {
   const system_lore = await fs.readFile('src/prompts/report_experimental/system.xml', 'utf8');
   const json = await getJSONuserMsg();
@@ -112,4 +119,5 @@ async function main() {
   });
   logger.debug(msg);
 }
+
 main().catch(logger.error);

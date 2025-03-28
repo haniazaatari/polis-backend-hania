@@ -1,13 +1,13 @@
 import { encode } from 'html-entities';
 import _ from 'underscore';
+import { generateToken, generateTokenP } from '../auth/password.js';
 import Config from '../config.js';
-import Conversation from '../conversation.js';
-import dbPgQuery, { query as pgQuery, queryP as pgQueryP, query_readOnly as pgQuery_readOnly } from '../db/pg-query.js';
-import emailSenders from '../email/senders.js';
-import Password from '../routes/password.js';
-import User from '../user.js';
-import Utils from '../utils/common.js';
-import fail from '../utils/fail.js';
+import { getConversationInfo } from '../conversation.js';
+import { query, queryP, query_readOnly } from '../db/pg-query.js';
+import { sendTextEmail, sendTextEmailWithBackupOnly } from '../email/senders.js';
+import { getUserInfoForUid, getUserInfoForUid2 } from '../user.js';
+import { escapeLiteral } from '../utils/common.js';
+import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import { getZinvite } from '../utils/zinvite.js';
 
@@ -16,14 +16,6 @@ const polisFromAddress = Config.polisFromAddress;
 const adminEmails = Config.adminEmails ? JSON.parse(Config.adminEmails) : [];
 const devMode = Config.devMode;
 const serverUrl = Config.getServerUrl();
-const sendTextEmail = emailSenders.sendTextEmail;
-const sendTextEmailWithBackupOnly = emailSenders.sendTextEmailWithBackupOnly;
-const getUserInfoForUid = User.getUserInfoForUid;
-const getUserInfoForUid2 = User.getUserInfoForUid2;
-const generateTokenP = Password.generateTokenP;
-const getConversationInfo = Conversation.getConversationInfo;
-const escapeLiteral = Utils.escapeLiteral;
-const generateToken = Password.generateToken;
 
 function _sendPasswordResetEmailFailure(email, server) {
   const body = `We were unable to find a pol.is account registered with the email address: ${email}
@@ -132,24 +124,22 @@ Thank you for using Polis`;
 }
 
 function _isEmailVerified(email) {
-  return dbPgQuery
-    .queryP('select * from email_validations where email = ($1);', [email])
-    .then((rows) => rows.length > 0);
+  return queryP('select * from email_validations where email = ($1);', [email]).then((rows) => rows.length > 0);
 }
 
 function handle_GET_verification(req, res) {
   const einvite = req.p.e;
-  pgQueryP('select * from einvites where einvite = ($1);', [einvite])
+  queryP('select * from einvites where einvite = ($1);', [einvite])
     .then((rows) => {
       if (!rows.length) {
         fail(res, 500, 'polis_err_verification_missing');
       }
       const email = rows[0].email;
-      return pgQueryP('select email from email_validations where email = ($1);', [email]).then((rows) => {
+      return queryP('select email from email_validations where email = ($1);', [email]).then((rows) => {
         if (rows && rows.length > 0) {
           return true;
         }
-        return pgQueryP('insert into email_validations (email) values ($1);', [email]);
+        return queryP('insert into email_validations (email) values ($1);', [email]);
       });
     })
     .then(() => {
@@ -176,7 +166,7 @@ function handle_GET_notifications_subscribe(req, res) {
   verifyHmacForQueryParams('api/v3/notifications/subscribe', params)
     .then(
       () =>
-        pgQueryP(
+        queryP(
           'update participants set subscribed = 1 where uid = (select uid from users where email = ($2)) and zid = ($1);',
           [zid, email]
         ).then(() => {
@@ -206,7 +196,7 @@ function handle_GET_notifications_unsubscribe(req, res) {
   verifyHmacForQueryParams('api/v3/notifications/unsubscribe', params)
     .then(
       () =>
-        pgQueryP(
+        queryP(
           'update participants set subscribed = 0 where uid = (select uid from users where email = ($2)) and zid = ($1);',
           [zid, email]
         ).then(() => {
@@ -334,14 +324,14 @@ function paramsToStringSortedByName(params) {
 }
 
 function handle_POST_sendCreatedLinkToEmail(req, res) {
-  pgQuery_readOnly('SELECT * FROM users WHERE uid = $1', [req.p.uid], (err, results) => {
+  query_readOnly('SELECT * FROM users WHERE uid = $1', [req.p.uid], (err, results) => {
     if (err) {
       fail(res, 500, 'polis_err_get_email_db', err);
       return;
     }
     const email = results.rows[0].email;
     const fullname = results.rows[0].hname;
-    pgQuery_readOnly('select * from zinvites where zid = $1', [req.p.zid], (_err, results) => {
+    query_readOnly('select * from zinvites where zid = $1', [req.p.zid], (_err, results) => {
       const zinvite = results.rows[0].zinvite;
       const createdLink = `${serverUrl}/#${req.p.zid}/${zinvite}`;
       const body = `Hi ${fullname},\n\nHere's a link to the conversation you just created. Use it to invite participants to the conversation. Share it by whatever network you prefer - Gmail, Facebook, Twitter, etc., or just post it to your website or blog. Try it now! Click this link to go to your conversation: \n\n${createdLink}\n\nWith gratitude,\n\nThe team at pol.is`;
@@ -358,7 +348,7 @@ function handle_POST_sendCreatedLinkToEmail(req, res) {
 
 function doSendEinvite(req, email) {
   return generateTokenP(30, false).then((einvite) =>
-    pgQueryP('insert into einvites (email, einvite) values ($1, $2);', [email, einvite]).then((_rows) =>
+    queryP('insert into einvites (email, einvite) values ($1, $2);', [email, einvite]).then((_rows) =>
       sendEinviteEmail(req, email, einvite)
     )
   );
@@ -386,8 +376,8 @@ function handle_POST_users_invite(req, res) {
             const statement = `(${suzinvite}, ${xid},${zid},${owner})`;
             return statement;
           });
-          const query = `INSERT INTO suzinvites (suzinvite, xid, zid, owner) VALUES ${valuesStatements.join(',')};`;
-          pgQuery(query, [], (err, _results) => {
+          const insertQuery = `INSERT INTO suzinvites (suzinvite, xid, zid, owner) VALUES ${valuesStatements.join(',')};`;
+          query(insertQuery, [], (err, _results) => {
             if (err) {
               fail(res, 500, 'polis_err_saving_invites', err);
               return;
@@ -439,7 +429,7 @@ function generateSUZinvites(numTokens) {
 }
 
 function addInviter(inviter_uid, invited_email) {
-  return pgQueryP('insert into inviters (inviter_uid, invited_email) VALUES ($1, $2);', [inviter_uid, invited_email]);
+  return queryP('insert into inviters (inviter_uid, invited_email) VALUES ($1, $2);', [inviter_uid, invited_email]);
 }
 
 function generateConversationURLPrefix() {
@@ -449,7 +439,7 @@ function generateConversationURLPrefix() {
 function createOneSuzinvite(xid, zid, owner, generateSingleUseUrl) {
   return generateSUZinvites(1).then((suzinviteArray) => {
     const suzinvite = suzinviteArray[0];
-    return pgQueryP('INSERT INTO suzinvites (suzinvite, xid, zid, owner) VALUES ($1, $2, $3, $4);', [
+    return queryP('INSERT INTO suzinvites (suzinvite, xid, zid, owner) VALUES ($1, $2, $3, $4);', [
       suzinvite,
       xid,
       zid,
@@ -470,13 +460,13 @@ function createOneSuzinvite(xid, zid, owner, generateSingleUseUrl) {
 
 function sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, seedUrl) {
   const body = `Conversation created!\n\nYou can find the conversation here:\n${url}\nYou can moderate the conversation here:\n${modUrl}\n\nWe recommend you add 2-3 short statements to start things off. These statements should be easy to agree or disagree with. Here are some examples:\n "I think the proposal is good"\n "This topic matters a lot"\n or "The bike shed should have a metal roof"\n\nYou can add statements here:\n${seedUrl}\n\nFeel free to reply to this email if you have questions.\n\nAdditional info: \nsite_id: "${site_id}"\npage_id: "${page_id}"\n\n`;
-  return pgQueryP('select email from users where site_id = ($1)', [site_id]).then((rows) => {
+  return queryP('select email from users where site_id = ($1)', [site_id]).then((rows) => {
     const emails = _.pluck(rows, 'email');
     return sendMultipleTextEmails(polisFromAddress, emails, 'Polis conversation created', body);
   });
 }
 
-export default {
+export {
   HMAC_SIGNATURE_PARAM_NAME,
   createOneSuzinvite,
   doSendEinvite,

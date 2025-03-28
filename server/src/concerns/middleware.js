@@ -3,7 +3,7 @@ import _ from 'underscore';
 import Config from '../config.js';
 import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
-import { addInRamMetric } from '../utils/metrics.js';
+import { addInRamMetric } from '../utils/metered.js';
 
 const devMode = Config.devMode;
 
@@ -118,7 +118,7 @@ function redirectIfHasZidButNoConversationId(req, res, next) {
   return next();
 }
 
-export default {
+export {
   haltOnTimeout,
   makeRedirectorTo,
   middleware_check_if_options,

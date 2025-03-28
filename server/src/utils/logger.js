@@ -1,11 +1,14 @@
 import { createLogger, format, transports } from 'winston';
 import Config from '../config.js';
+
 const logLevel = Config.logLevel || 'warn';
 const logToFile = Config.logToFile;
+
 const consoleTransport = new transports.Console({
   format: format.combine(format.colorize(), format.simple()),
   level: logLevel
 });
+
 const logger = createLogger({
   level: logLevel,
   exitOnError: false,
@@ -19,6 +22,7 @@ const logger = createLogger({
   defaultMeta: { service: 'polis-api-server' },
   transports: [consoleTransport]
 });
+
 if (logToFile) {
   logger.configure({
     transports: [
@@ -35,4 +39,5 @@ if (logToFile) {
     rejectionHandlers: [new transports.File({ filename: './logs/rejections.log' })]
   });
 }
+
 export default logger;

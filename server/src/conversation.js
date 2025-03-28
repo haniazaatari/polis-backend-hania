@@ -1,14 +1,20 @@
 import { LRUCache } from 'lru-cache';
-import pg from './db/pg-query.js';
+import { query, queryP, query_readOnly } from './db/pg-query.js';
 import logger from './utils/logger.js';
 import { MPromise } from './utils/metered.js';
+
+const conversationIdToZidCache = new LRUCache({
+  max: 1000
+});
+
 function createXidRecord(ownerUid, uid, xid, x_profile_image_url, x_name, x_email) {
-  return pg.queryP(
+  return queryP(
     'insert into xids (owner, uid, xid, x_profile_image_url, x_name, x_email) values ($1, $2, $3, $4, $5, $6) ' +
       'on conflict (owner, xid) do nothing;',
     [ownerUid, uid, xid, x_profile_image_url || null, x_name || null, x_email || null]
   );
 }
+
 function createXidRecordByZid(zid, uid, xid, x_profile_image_url, x_name, x_email) {
   return getConversationInfo(zid).then((conv) => {
     const shouldCreateXidRecord = conv.use_xid_whitelist ? isXidWhitelisted(conv.owner, xid) : Promise.resolve(true);
@@ -16,7 +22,7 @@ function createXidRecordByZid(zid, uid, xid, x_profile_image_url, x_name, x_emai
       if (!should) {
         throw new Error('polis_err_xid_not_whitelisted_2');
       }
-      return pg.queryP(
+      return queryP(
         'insert into xids (owner, uid, xid, x_profile_image_url, x_name, x_email) values ((select org_id from conversations where zid = ($1)), $2, $3, $4, $5, $6) ' +
           'on conflict (owner, xid) do nothing;',
         [zid, uid, xid, x_profile_image_url || null, x_name || null, x_email || null]
@@ -24,20 +30,23 @@ function createXidRecordByZid(zid, uid, xid, x_profile_image_url, x_name, x_emai
     });
   });
 }
+
 function getXidRecord(xid, zid) {
-  return pg.queryP(
+  return queryP(
     'select * from xids where xid = ($1) and owner = (select org_id from conversations where zid = ($2));',
     [xid, zid]
   );
 }
+
 function isXidWhitelisted(owner, xid) {
-  return pg.queryP('select * from xid_whitelist where owner = ($1) and xid = ($2);', [owner, xid]).then((rows) => {
+  return queryP('select * from xid_whitelist where owner = ($1) and xid = ($2);', [owner, xid]).then((rows) => {
     return !!rows && rows.length > 0;
   });
 }
+
 function getConversationInfo(zid) {
   return new MPromise('getConversationInfo', (resolve, reject) => {
-    pg.query('SELECT * FROM conversations WHERE zid = ($1);', [zid], (err, result) => {
+    query('SELECT * FROM conversations WHERE zid = ($1);', [zid], (err, result) => {
       if (err) {
         reject(err);
       } else {
@@ -46,9 +55,10 @@ function getConversationInfo(zid) {
     });
   });
 }
+
 function getConversationInfoByConversationId(conversation_id) {
   return new MPromise('getConversationInfoByConversationId', (resolve, reject) => {
-    pg.query(
+    query(
       'SELECT * FROM conversations WHERE zid = (select zid from zinvites where zinvite = ($1));',
       [conversation_id],
       (err, result) => {
@@ -61,9 +71,7 @@ function getConversationInfoByConversationId(conversation_id) {
     );
   });
 }
-const conversationIdToZidCache = new LRUCache({
-  max: 1000
-});
+
 function getZidFromConversationId(conversation_id) {
   return new MPromise('getZidFromConversationId', (resolve, reject) => {
     const cachedZid = conversationIdToZidCache.get(conversation_id);
@@ -71,7 +79,7 @@ function getZidFromConversationId(conversation_id) {
       resolve(cachedZid);
       return;
     }
-    pg.query_readOnly('select zid from zinvites where zinvite = ($1);', [conversation_id], (err, results) => {
+    query_readOnly('select zid from zinvites where zinvite = ($1);', [conversation_id], (err, results) => {
       if (err) {
         return reject(err);
       }
@@ -85,17 +93,10 @@ function getZidFromConversationId(conversation_id) {
     });
   });
 }
+
 export {
-  createXidRecordByZid,
-  getXidRecord,
-  isXidWhitelisted,
-  getConversationInfo,
-  getConversationInfoByConversationId,
-  getZidFromConversationId
-};
-export default {
-  createXidRecordByZid,
   createXidRecord,
+  createXidRecordByZid,
   getXidRecord,
   isXidWhitelisted,
   getConversationInfo,

@@ -1,7 +1,8 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import _ from 'underscore';
-import pg from '../db/pg-query.js';
+import { queryP_readOnly_wRetryIfEmpty } from '../db/pg-query.js';
+
 function generateHashedPassword(password, callback) {
   bcrypt.genSalt(12, (errSalt, salt) => {
     if (errSalt) {
@@ -15,8 +16,9 @@ function generateHashedPassword(password, callback) {
     });
   });
 }
+
 function checkPassword(uid, password) {
-  return pg.queryP_readOnly_wRetryIfEmpty('select pwhash from jianiuevyew where uid = ($1);', [uid]).then((rows) => {
+  return queryP_readOnly_wRetryIfEmpty('select pwhash from jianiuevyew where uid = ($1);', [uid]).then((rows) => {
     if (!rows || !rows.length) {
       return null;
     }
@@ -35,6 +37,7 @@ function checkPassword(uid, password) {
     });
   });
 }
+
 function generateToken(len, pseudoRandomOk, callback) {
   let gen;
   if (pseudoRandomOk) {
@@ -67,6 +70,7 @@ function generateToken(len, pseudoRandomOk, callback) {
     callback(0, prettyToken);
   });
 }
+
 function generateTokenP(len, pseudoRandomOk) {
   return new Promise((resolve, reject) => {
     generateToken(len, pseudoRandomOk, (err, token) => {
@@ -78,10 +82,5 @@ function generateTokenP(len, pseudoRandomOk) {
     });
   });
 }
+
 export { generateHashedPassword, checkPassword, generateToken, generateTokenP };
-export default {
-  generateHashedPassword,
-  checkPassword,
-  generateToken,
-  generateTokenP
-};

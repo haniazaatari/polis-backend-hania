@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import _ from 'underscore';
 import { createUser } from '../auth/create-user.js';
 import { getConversationInfoByConversationId } from '../conversation.js';
-import { query as pgQuery, queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty } from '../db/pg-query.js';
+import { query, queryP_readOnly_wRetryIfEmpty } from '../db/pg-query.js';
 import { getUserInfoForSessionToken, startSession } from '../session.js';
 import { endSession, startSessionAndAddCookies } from '../session.js';
 import { getXidRecordByXidOwnerId } from '../user.js';
@@ -106,7 +106,7 @@ function doHeaderAuth(assigner, _isOptional, req, res, next) {
 }
 
 function getUidForApiKey(apikey) {
-  return pgQueryP_readOnly_wRetryIfEmpty('select uid from apikeysndvweifu WHERE apikey = ($1);', [apikey]);
+  return queryP_readOnly_wRetryIfEmpty('select uid from apikeysndvweifu WHERE apikey = ($1);', [apikey]);
 }
 
 function doXidConversationIdAuth(assigner, xid, conversation_id, isOptional, req, res, onDone) {
@@ -302,7 +302,7 @@ function handle_POST_auth_login(req, res) {
     fail(res, 403, 'polis_err_login_need_password');
     return;
   }
-  pgQuery('SELECT * FROM users WHERE LOWER(email) = ($1);', [email], (err, docs) => {
+  query('SELECT * FROM users WHERE LOWER(email) = ($1);', [email], (err, docs) => {
     const { rows } = docs;
     if (err) {
       fail(res, 403, 'polis_err_login_unknown_user_or_password', err);
@@ -313,7 +313,7 @@ function handle_POST_auth_login(req, res) {
       return;
     }
     const uid = rows[0].uid;
-    pgQuery('select pwhash from jianiuevyew where uid = ($1);', [uid], (err, results) => {
+    query('select pwhash from jianiuevyew where uid = ($1);', [uid], (err, results) => {
       const { rows } = results;
       if (err) {
         fail(res, 403, 'polis_err_login_unknown_user_or_password', err);
@@ -353,10 +353,4 @@ function handle_POST_auth_new(req, res) {
   createUser(req, res);
 }
 
-export default {
-  auth,
-  authOptional,
-  handle_POST_auth_deregister,
-  handle_POST_auth_login,
-  handle_POST_auth_new
-};
+export { auth, authOptional, handle_POST_auth_deregister, handle_POST_auth_login, handle_POST_auth_new };

@@ -1,8 +1,5 @@
-import {
-  queryP_readOnly as pgQueryP_readOnly,
-  stream_queryP_readOnly as stream_pgQueryP_readOnly
-} from '../db/pg-query.js';
-import fail from '../utils/fail.js';
+import { queryP_readOnly, stream_queryP_readOnly as stream_pgQueryP_readOnly } from '../db/pg-query.js';
+import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import { getPca } from '../utils/pca.js';
 import { getZidForRid, getZidForUuid, getZinvite } from '../utils/zinvite.js';
@@ -34,8 +31,8 @@ export function formatCSV(colFns, rows) {
 export async function loadConversationSummary(zid, siteUrl) {
   const [zinvite, convoRows, commentersRow, pca] = await Promise.all([
     getZinvite(zid),
-    pgQueryP_readOnly('SELECT topic, description FROM conversations WHERE zid = $1', [zid]),
-    pgQueryP_readOnly('SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1', [zid]),
+    queryP_readOnly('SELECT topic, description FROM conversations WHERE zid = $1', [zid]),
+    queryP_readOnly('SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1', [zid]),
     getPca(zid)
   ]);
   if (!zinvite || !convoRows || !commentersRow || !pca) {
@@ -64,7 +61,7 @@ export async function sendConversationSummary(zid, siteUrl, res) {
 export async function sendCommentSummary(zid, res) {
   const comments = new Map();
   try {
-    const commentRows = await pgQueryP_readOnly(
+    const commentRows = await queryP_readOnly(
       'SELECT tid, pid, created, txt, mod, velocity, active FROM comments WHERE zid = ($1)',
       [zid]
     );
@@ -139,7 +136,7 @@ export async function sendVotesSummary(zid, res) {
   );
 }
 export async function sendParticipantVotesSummary(zid, res) {
-  const commentRows = await pgQueryP_readOnly(
+  const commentRows = await queryP_readOnly(
     'SELECT tid, pid FROM comments WHERE zid = ($1) ORDER BY tid ASC, created ASC',
     [zid]
   );
@@ -254,7 +251,7 @@ export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
   const groupVotes = pca.asPOJO['group-votes'];
   const groupAwareConsensus = pca.asPOJO['group-aware-consensus'];
   const commentExtremity = pca.asPOJO.pca?.['comment-extremity'] || [];
-  const commentRows = await pgQueryP_readOnly('SELECT tid, txt FROM comments WHERE zid = ($1)', [zid]);
+  const commentRows = await queryP_readOnly('SELECT tid, txt FROM comments WHERE zid = ($1)', [zid]);
   const commentTexts = new Map(commentRows.map((row) => [row.tid, row.txt]));
   const commentStats = new Map();
   const tidToExtremityIndex = new Map();

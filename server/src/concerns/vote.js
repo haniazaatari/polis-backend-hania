@@ -1,5 +1,5 @@
 import _ from 'underscore';
-import { queryP as pgQueryP, query_readOnly as pgQuery_readOnly } from '../db/pg-query.js';
+import { queryP, query_readOnly } from '../db/pg-query.js';
 import { getVotesForSingleParticipant, votesPost } from '../routes/votes.js';
 import { getPid } from '../user.js';
 import { isDuplicateKey, polisTypes } from '../utils/common.js';
@@ -23,7 +23,7 @@ function addStar(zid, tid, pid, starred, created) {
     query = 'INSERT INTO stars (pid, zid, tid, starred, created) VALUES ($1, $2, $3, $4, $5) RETURNING created;';
     params.push(created);
   }
-  return pgQueryP(query, params);
+  return queryP(query, params);
 }
 
 function handle_POST_stars(req, res) {
@@ -52,7 +52,7 @@ function handle_GET_votes_me(req, res) {
       fail(res, 500, 'polis_err_getting_pid', err);
       return;
     }
-    pgQuery_readOnly('SELECT * FROM votes WHERE zid = ($1) AND pid = ($2);', [req.p.zid, req.p.pid], (err, docs) => {
+    query_readOnly('SELECT * FROM votes WHERE zid = ($1) AND pid = ($2);', [req.p.zid, req.p.pid], (err, docs) => {
       if (err) {
         fail(res, 500, 'polis_err_get_votes_by_me', err);
         return;
@@ -171,14 +171,14 @@ function handle_POST_votes(req, res) {
 function handle_POST_upvotes(req, res) {
   const uid = req.p.uid;
   const zid = req.p.zid;
-  pgQueryP('select * from upvotes where uid = ($1) and zid = ($2);', [uid, zid]).then(
+  queryP('select * from upvotes where uid = ($1) and zid = ($2);', [uid, zid]).then(
     (rows) => {
       if (rows?.length) {
         fail(res, 403, 'polis_err_upvote_already_upvoted');
       } else {
-        pgQueryP('insert into upvotes (uid, zid) VALUES ($1, $2);', [uid, zid]).then(
+        queryP('insert into upvotes (uid, zid) VALUES ($1, $2);', [uid, zid]).then(
           () => {
-            pgQueryP(
+            queryP(
               'update conversations set upvotes = (select count(*) from upvotes where zid = ($1)) where zid = ($1);',
               [zid]
             ).then(
@@ -202,10 +202,4 @@ function handle_POST_upvotes(req, res) {
   );
 }
 
-export default {
-  handle_GET_votes_me,
-  handle_GET_votes,
-  handle_POST_stars,
-  handle_POST_votes,
-  handle_POST_upvotes
-};
+export { handle_GET_votes_me, handle_GET_votes, handle_POST_stars, handle_POST_votes, handle_POST_upvotes };

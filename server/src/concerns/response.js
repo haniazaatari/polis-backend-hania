@@ -1,5 +1,5 @@
-import { fail } from './utils/fail.js';
-import { getZinvite, getZinvites } from './utils/zinvite.js';
+import { fail } from '../utils/fail.js';
+import { getZinvite, getZinvites } from '../utils/zinvite.js';
 
 function addConversationId(o, dontUseCache) {
   if (!o.zid) {
@@ -10,6 +10,7 @@ function addConversationId(o, dontUseCache) {
     return o;
   });
 }
+
 function addConversationIds(a) {
   const zids = [];
   for (let i = 0; i < a.length; i++) {
@@ -27,6 +28,7 @@ function addConversationIds(a) {
     })
   );
 }
+
 function finishOne(res, o, dontUseCache, altStatusCode) {
   addConversationId(o, dontUseCache)
     .then(
@@ -45,6 +47,7 @@ function finishOne(res, o, dontUseCache, altStatusCode) {
       fail(res, 500, 'polis_err_finishing_response', err);
     });
 }
+
 function finishArray(res, a) {
   addConversationIds(a)
     .then(
@@ -67,7 +70,4 @@ function finishArray(res, a) {
     });
 }
 
-export default {
-  finishOne,
-  finishArray
-};
+export { addConversationIds, finishOne, finishArray };

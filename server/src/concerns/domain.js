@@ -1,5 +1,5 @@
 import Config from '../config.js';
-import { queryP as pgQueryP, queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query.js';
+import { queryP, queryP_readOnly } from '../db/pg-query.js';
 import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
 
@@ -60,7 +60,7 @@ function addCorsHeader(req, res, next) {
 }
 
 function isParentDomainWhitelisted(domain, zid, isWithinIframe, domain_whitelist_override_key) {
-  return pgQueryP_readOnly(
+  return queryP_readOnly(
     'select * from site_domain_whitelist where site_id = ' +
       '(select site_id from users where uid = ' +
       '(select owner from conversations where zid = ($1)));',
@@ -153,23 +153,23 @@ function denyIfNotFromWhitelistedDomain(req, res, next) {
     });
 }
 function setDomainWhitelist(uid, newWhitelist) {
-  return pgQueryP('select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));', [
+  return queryP('select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));', [
     uid
   ]).then((rows) => {
     if (!rows || !rows.length) {
-      return pgQueryP(
+      return queryP(
         'insert into site_domain_whitelist (site_id, domain_whitelist) values ((select site_id from users where uid = ($1)), $2);',
         [uid, newWhitelist]
       );
     }
-    return pgQueryP(
+    return queryP(
       'update site_domain_whitelist set domain_whitelist = ($2) where site_id = (select site_id from users where uid = ($1));',
       [uid, newWhitelist]
     );
   });
 }
 function getDomainWhitelist(uid) {
-  return pgQueryP('select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));', [
+  return queryP('select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));', [
     uid
   ]).then((rows) => {
     if (!rows || !rows.length) {
@@ -201,9 +201,4 @@ function handle_POST_domainWhitelist(req, res) {
     });
 }
 
-export default {
-  addCorsHeader,
-  denyIfNotFromWhitelistedDomain,
-  handle_GET_domainWhitelist,
-  handle_POST_domainWhitelist
-};
+export { addCorsHeader, denyIfNotFromWhitelistedDomain, handle_GET_domainWhitelist, handle_POST_domainWhitelist };

@@ -1,12 +1,21 @@
-import { Pool } from 'pg';
-import { parse as parsePgConnectionString } from 'pg-connection-string';
+import pg from 'pg';
+import pgConnectionString from 'pg-connection-string';
 import QueryStream from 'pg-query-stream';
 import { isFunction, isString, isUndefined } from 'underscore';
 import Config from '../config.js';
 import logger from '../utils/logger.js';
 import { MPromise } from '../utils/metered.js';
+
+if (!Config.databaseURL || Config.databaseURL.trim() === '') {
+  logger.error('Config.databaseURL is empty. Please set the DATABASE_URL environment variable.');
+  throw new Error('Config.databaseURL is not configured.');
+}
+
+const { Pool } = pg;
+const { parse: parsePgConnectionString } = pgConnectionString;
 const usingReplica = Config.databaseURL !== Config.readOnlyDatabaseURL;
 const poolSize = Config.isDevMode ? 2 : usingReplica ? 3 : 12;
+
 const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), {
   max: poolSize,
   isReadOnly: false,
@@ -21,6 +30,7 @@ const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), 
     }
   }
 });
+
 const readsPgConnection = Object.assign(parsePgConnectionString(Config.readOnlyDatabaseURL), {
   max: poolSize,
   isReadOnly: true,
@@ -35,8 +45,10 @@ const readsPgConnection = Object.assign(parsePgConnectionString(Config.readOnlyD
     }
   }
 });
+
 const readWritePool = new Pool(pgConnection);
 const readPool = new Pool(readsPgConnection);
+
 function queryImpl(pool, queryString, ...args) {
   let params;
   let callback;
@@ -75,14 +87,18 @@ function queryImpl(pool, queryString, ...args) {
     });
   });
 }
+
 const pgPoolLevelRanks = ['info', 'verbose'];
 const pgPoolLoggingLevel = -1;
+
 function query(queryString, ...args) {
   return queryImpl(readWritePool, queryString, ...args);
 }
+
 function query_readOnly(queryString, ...args) {
   return queryImpl(readPool, queryString, ...args);
 }
+
 function queryP_impl(pool, queryString, params) {
   if (!isString(queryString)) {
     return Promise.reject('query_was_not_string');
@@ -99,12 +115,15 @@ function queryP_impl(pool, queryString, params) {
     });
   });
 }
+
 function queryP(queryString, ...args) {
   return queryP_impl(readWritePool, queryString, ...args);
 }
+
 function queryP_readOnly(queryString, ...args) {
   return queryP_impl(readPool, queryString, ...args);
 }
+
 function queryP_readOnly_wRetryIfEmpty(queryString, ...args) {
   function retryIfEmpty(rows) {
     if (!rows.length) {
@@ -114,6 +133,7 @@ function queryP_readOnly_wRetryIfEmpty(queryString, ...args) {
   }
   return queryP_impl(readPool, queryString, ...args).then(retryIfEmpty);
 }
+
 function queryP_metered_impl(isReadOnly, name, queryString, params) {
   const f = isReadOnly ? queryP_readOnly : queryP;
   if (isUndefined(name) || isUndefined(queryString) || isUndefined(params)) {
@@ -123,12 +143,15 @@ function queryP_metered_impl(isReadOnly, name, queryString, params) {
     f(queryString, params).then(resolve, reject);
   });
 }
+
 function queryP_metered(name, queryString, params) {
   return queryP_metered_impl(false, name, queryString, params);
 }
+
 function queryP_metered_readOnly(name, queryString, params) {
   return queryP_metered_impl(true, name, queryString, params);
 }
+
 function stream_queryP_readOnly(queryString, params, onRow, onEnd, onError) {
   const query = new QueryStream(queryString, params);
   readPool.connect((err, client, done) => {
@@ -156,17 +179,8 @@ function stream_queryP_readOnly(queryString, params, onRow, onEnd, onError) {
     });
   });
 }
+
 export {
-  query,
-  query_readOnly,
-  queryP,
-  queryP_metered,
-  queryP_metered_readOnly,
-  queryP_readOnly,
-  queryP_readOnly_wRetryIfEmpty,
-  stream_queryP_readOnly
-};
-export default {
   query,
   query_readOnly,
   queryP,

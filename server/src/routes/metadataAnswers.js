@@ -1,8 +1,9 @@
-import { query as pgQuery } from '../db/pg-query.js';
-import Utils from '../utils/common.js';
-import fail from '../utils/fail.js';
+import { query } from '../db/pg-query.js';
+import { isConversationOwner } from '../utils/common.js';
+import { fail } from '../utils/fail.js';
+
 function getZidForAnswer(pmaid, callback) {
-  pgQuery('SELECT zid FROM participant_metadata_answers WHERE pmaid = ($1);', [pmaid], (err, result) => {
+  query('SELECT zid FROM participant_metadata_answers WHERE pmaid = ($1);', [pmaid], (err, result) => {
     if (err) {
       callback(err);
       return;
@@ -14,8 +15,9 @@ function getZidForAnswer(pmaid, callback) {
     callback(null, result.rows[0].zid);
   });
 }
+
 function deleteMetadataAnswer(pmaid, callback) {
-  pgQuery('update participant_metadata_answers set alive = FALSE where pmaid = ($1);', [pmaid], (err) => {
+  query('update participant_metadata_answers set alive = FALSE where pmaid = ($1);', [pmaid], (err) => {
     if (err) {
       callback(err);
       return;
@@ -23,6 +25,7 @@ function deleteMetadataAnswer(pmaid, callback) {
     callback(null);
   });
 }
+
 function handle_DELETE_metadata_answers(req, res) {
   const uid = req.p.uid;
   const pmaid = req.p.pmaid;
@@ -31,7 +34,7 @@ function handle_DELETE_metadata_answers(req, res) {
       fail(res, 500, 'polis_err_delete_participant_metadata_answers_zid', err);
       return;
     }
-    Utils.isConversationOwner(zid, uid, (err) => {
+    isConversationOwner(zid, uid, (err) => {
       if (err) {
         fail(res, 403, 'polis_err_delete_participant_metadata_answers_auth', err);
         return;
@@ -46,4 +49,5 @@ function handle_DELETE_metadata_answers(req, res) {
     });
   });
 }
-export default handle_DELETE_metadata_answers;
+
+export { handle_DELETE_metadata_answers };

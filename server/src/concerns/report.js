@@ -1,13 +1,13 @@
 import _ from 'underscore';
 import { generateTokenP } from '../auth/password.js';
-import { queryP as pgQueryP } from '../db/pg-query.js';
+import { queryP } from '../db/pg-query.js';
 import { sql_reports } from '../db/sql.js';
 import { isModerator } from '../utils/common.js';
 import { fail } from '../utils/fail.js';
 function createReport(zid) {
   return generateTokenP(20, false).then((report_id) => {
     report_id = `r${report_id}`;
-    return pgQueryP('insert into reports (zid, report_id) values ($1, $2);', [zid, report_id]);
+    return queryP('insert into reports (zid, report_id) values ($1, $2);', [zid, report_id]);
   });
 }
 
@@ -58,7 +58,7 @@ function handle_PUT_reports(req, res) {
       const q = sql_reports.update(fields).where(sql_reports.rid.equals(rid));
       let query = q.toString();
       query = query.replace("'now_as_millis()'", 'now_as_millis()');
-      return pgQueryP(query, []).then((_result) => {
+      return queryP(query, []).then((_result) => {
         res.json({});
       });
     })
@@ -76,20 +76,19 @@ function handle_GET_reports(req, res) {
     if (zid) {
       reportsPromise = Promise.reject('polis_err_get_reports_should_not_specify_both_report_id_and_conversation_id');
     } else {
-      reportsPromise = pgQueryP('select * from reports where rid = ($1);', [rid]);
+      reportsPromise = queryP('select * from reports where rid = ($1);', [rid]);
     }
   } else if (zid) {
     reportsPromise = isModerator(zid, uid).then((doesOwnConversation) => {
       if (!doesOwnConversation) {
         throw 'polis_err_permissions';
       }
-      return pgQueryP('select * from reports where zid = ($1);', [zid]);
+      return queryP('select * from reports where zid = ($1);', [zid]);
     });
   } else {
-    reportsPromise = pgQueryP(
-      'select * from reports where zid in (select zid from conversations where owner = ($1));',
-      [uid]
-    );
+    reportsPromise = queryP('select * from reports where zid in (select zid from conversations where owner = ($1));', [
+      uid
+    ]);
   }
   reportsPromise
     .then((reports) => {
@@ -102,7 +101,7 @@ function handle_GET_reports(req, res) {
       if (zids.length === 0) {
         return res.json(reports);
       }
-      return pgQueryP(`select * from zinvites where zid in (${zids.join(',')});`, []).then((zinvite_entries) => {
+      return queryP(`select * from zinvites where zid in (${zids.join(',')});`, []).then((zinvite_entries) => {
         const zidToZinvite = _.indexBy(zinvite_entries, 'zid');
         reports = reports.map((report) => {
           report.conversation_id = zidToZinvite[report.zid || '']?.zinvite;
@@ -123,8 +122,4 @@ function handle_GET_reports(req, res) {
     });
 }
 
-export default {
-  handle_POST_reports,
-  handle_PUT_reports,
-  handle_GET_reports
-};
+export { handle_POST_reports, handle_PUT_reports, handle_GET_reports };

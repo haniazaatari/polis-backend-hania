@@ -1,19 +1,21 @@
 import _ from 'underscore';
 import Config from '../config.js';
-import { queryP as pgQueryP, query_readOnly as pgQuery_readOnly } from '../db/pg-query.js';
-import User from '../user.js';
-import Utils from '../utils/common.js';
-import fail from '../utils/fail.js';
+import { queryP, query_readOnly } from '../db/pg-query.js';
+import { getPidPromise } from '../user.js';
+import { escapeLiteral, isModerator, isOwner } from '../utils/common.js';
+import { fail } from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import { MPromise } from '../utils/metered.js';
 import { getBidIndexToPidMapping } from '../utils/participants.js';
 import { getPca } from '../utils/pca.js';
 import { getZidForRid } from '../utils/zinvite.js';
+
+const pcaResultsExistForZid = {};
+
 function handle_GET_math_pca(_req, res) {
   res.status(304).end();
 }
-const pcaResultsExistForZid = {};
-const getPidPromise = User.getPidPromise;
+
 function handle_GET_math_pca2(req, res) {
   const zid = req.p.zid;
   let math_tick = req.p.math_tick;
@@ -69,16 +71,17 @@ function handle_GET_math_pca2(req, res) {
       fail(res, 500, err);
     });
 }
+
 function handle_POST_math_update(req, res) {
   const zid = req.p.zid;
   const uid = req.p.uid;
   const math_env = Config.mathEnv;
   const math_update_type = req.p.math_update_type;
-  Utils.isModerator(zid, uid).then((hasPermission) => {
+  isModerator(zid, uid).then((hasPermission) => {
     if (!hasPermission) {
       return fail(res, 500, 'handle_POST_math_update_permission');
     }
-    return pgQueryP(
+    return queryP(
       "insert into worker_tasks (task_type, task_data, task_bucket, math_env) values ('update_math', $1, $2, $3);",
       [
         JSON.stringify({
@@ -97,6 +100,7 @@ function handle_POST_math_update(req, res) {
       });
   });
 }
+
 function handle_GET_math_correlationMatrix(req, res) {
   const rid = req.p.rid;
   const math_env = Config.mathEnv;
@@ -107,20 +111,18 @@ function handle_GET_math_correlationMatrix(req, res) {
     });
   }
   function hasCommentSelections() {
-    return pgQueryP('select * from report_comment_selections where rid = ($1) and selection = 1;', [rid]).then(
-      (rows) => {
-        return rows.length > 0;
-      }
-    );
+    return queryP('select * from report_comment_selections where rid = ($1) and selection = 1;', [rid]).then((rows) => {
+      return rows.length > 0;
+    });
   }
-  const requestExistsPromise = pgQueryP(
+  const requestExistsPromise = queryP(
     "select * from worker_tasks where task_type = 'generate_report_data' and math_env=($2) " +
       'and task_bucket = ($1) ' +
       "and (task_data->>'math_tick')::int >= ($3) " +
       'and finished_time is NULL;',
     [rid, math_env, math_tick]
   );
-  const resultExistsPromise = pgQueryP(
+  const resultExistsPromise = queryP(
     'select * from math_report_correlationmatrix where rid = ($1) and math_env = ($2) and math_tick >= ($3);',
     [rid, math_env, math_tick]
   );
@@ -138,7 +140,7 @@ function handle_GET_math_correlationMatrix(req, res) {
                   status: 'polis_report_needs_comment_selection'
                 });
               }
-              return pgQueryP(
+              return queryP(
                 "insert into worker_tasks (task_type, task_data, task_bucket, math_env) values ('generate_report_data', $1, $2, $3);",
                 [
                   JSON.stringify({
@@ -161,6 +163,7 @@ function handle_GET_math_correlationMatrix(req, res) {
       return fail(res, 500, 'polis_err_GET_math_correlationMatrix', err);
     });
 }
+
 function handle_GET_bidToPid(req, res) {
   const zid = req.p.zid;
   const math_tick = req.p.math_tick;
@@ -176,9 +179,10 @@ function handle_GET_bidToPid(req, res) {
     }
   );
 }
+
 function getXids(zid) {
-  return MPromise('getXids', (resolve, reject) => {
-    pgQuery_readOnly(
+  return new MPromise('getXids', (resolve, reject) => {
+    query_readOnly(
       'select pid, xid from xids inner join ' +
         '(select * from participants where zid = ($1)) as p on xids.uid = p.uid ' +
         ' where owner in (select org_id from conversations where zid = ($1));',
@@ -193,10 +197,11 @@ function getXids(zid) {
     );
   });
 }
+
 function handle_GET_xids(req, res) {
   const uid = req.p.uid;
   const zid = req.p.zid;
-  Utils.isOwner(zid, uid).then(
+  isOwner(zid, uid).then(
     (owner) => {
       if (owner) {
         getXids(zid).then(
@@ -216,6 +221,7 @@ function handle_GET_xids(req, res) {
     }
   );
 }
+
 function handle_POST_xidWhitelist(req, res) {
   const xid_whitelist = req.p.xid_whitelist;
   const len = xid_whitelist.length;
@@ -223,12 +229,12 @@ function handle_POST_xidWhitelist(req, res) {
   const entries = [];
   try {
     for (let i = 0; i < len; i++) {
-      entries.push(`(${Utils.escapeLiteral(xid_whitelist[i])},${owner})`);
+      entries.push(`(${escapeLiteral(xid_whitelist[i])},${owner})`);
     }
   } catch (err) {
     return fail(res, 400, 'polis_err_bad_xid', err);
   }
-  pgQueryP(`insert into xid_whitelist (xid, owner) values ${entries.join(',')} on conflict do nothing;`, [])
+  queryP(`insert into xid_whitelist (xid, owner) values ${entries.join(',')} on conflict do nothing;`, [])
     .then((_result) => {
       res.status(200).json({});
     })
@@ -236,6 +242,7 @@ function handle_POST_xidWhitelist(req, res) {
       return fail(res, 500, 'polis_err_POST_xidWhitelist', err);
     });
 }
+
 function getBidsForPids(zid, math_tick, pids) {
   const dataPromise = getBidIndexToPidMapping(zid, math_tick);
   const mathResultsPromise = getPca(zid, math_tick);
@@ -264,6 +271,7 @@ function getBidsForPids(zid, math_tick, pids) {
     return pidToBid;
   });
 }
+
 function handle_GET_bid(req, res) {
   const uid = req.p.uid;
   const zid = req.p.zid;
@@ -307,6 +315,7 @@ function handle_GET_bid(req, res) {
       fail(res, 500, 'polis_err_get_bid_misc', err);
     });
 }
+
 export {
   handle_GET_math_pca,
   handle_GET_math_pca2,
