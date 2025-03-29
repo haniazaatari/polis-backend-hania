@@ -92,8 +92,6 @@ The test suite includes robust handling for the various response formats from th
 - **Gzipped Content**: Automatically detected and decompressed, even when incorrectly marked
 - **Mixed Content-Types**: Handles cases where JSON content is served with non-JSON content types
 
-The `makeRequest()` helper function handles these cases transparently, so tests can focus on validating business logic rather than response format quirks.
-
 ## Test Safety Features
 
 The test environment includes this safety feature:

@@ -1,7 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "files": {
-    "ignore": ["dist/", "app.ts"],
+    "ignore": ["app.ts", "coverage/", "dist/"],
     "ignoreUnknown": false
   },
   "formatter": {
@@ -41,7 +41,8 @@
   },
   "overrides": [
     {
-      "include": ["src/**"],
+      "include": ["app.js", "src/**"],
+      "ignore": ["bin/**", "__tests__/**"],
       "linter": {
         "rules": {
           "suspicious": {
@@ -51,6 +52,16 @@
                 "allow": []
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "include": ["__tests__/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUndeclaredDependencies": "off"
           }
         }
       }

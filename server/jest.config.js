@@ -6,13 +6,16 @@ export default {
   testEnvironment: 'node',
   testMatch: ['**/__tests__/**/*.js', '!**/__tests__/(setup)/**/*'],
   testPathIgnorePatterns: ['/__tests__/feature/'],
-  collectCoverage: false,
+  collectCoverage: true,
   coverageDirectory: 'coverage',
   collectCoverageFrom: ['app.js', 'src/**/*.js', '!src/**/*.test.js', '!**/node_modules/**'],
-  coverageReporters: ['lcov', 'clover'],
+  coverageReporters: ['lcov', 'clover', 'html'],
   // detectOpenHandles: true,
   forceExit: true,
   verbose: true,
   setupFilesAfterEnv: ['./__tests__/setup/jest.setup.js'],
-  reporters: ['default', './__tests__/setup/custom-jest-reporter.js']
+  reporters: ['default', './__tests__/setup/custom-jest-reporter.js'],
+  // Add global setup and teardown files
+  globalSetup: './__tests__/setup/globalSetup.js',
+  globalTeardown: './__tests__/setup/globalTeardown.js'
 };
