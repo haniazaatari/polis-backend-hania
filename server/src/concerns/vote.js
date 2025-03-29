@@ -46,6 +46,9 @@ function handle_POST_stars(req, res) {
     });
 }
 
+// Note: This function currently does not work as expected.
+// It fails to attach the pid to req.p before running the query.
+// So it returns an empty array.
 function handle_GET_votes_me(req, res) {
   getPid(req.p.zid, req.p.uid, (err, pid) => {
     if (err || pid < 0) {

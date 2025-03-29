@@ -140,6 +140,45 @@ function doXidConversationIdAuth(assigner, xid, conversation_id, isOptional, req
     });
 }
 
+/**
+ * Main authentication middleware factory that handles multiple authentication methods.
+ * Authentication flow checks the following methods in order:
+ *
+ * 1. X-Polis Header Token:
+ *    - Checks for x-polis header token for API authentication
+ *
+ * 2. API Key + XID Authentication:
+ *    - Checks for polisApiKey + ownerXid combination
+ *    - Checks for polisApiKey + xid combination
+ *    - Both validate API key and associate with external user ID
+ *
+ * 3. XID + Conversation Authentication:
+ *    - Allows authentication via xid + conversation_id pair
+ *    - Validates against conversation ownership
+ *
+ * 4. Sandstorm Authentication:
+ *    - Checks for x-sandstorm-app-polis-apikey header
+ *
+ * 5. Direct API Key:
+ *    - Validates standalone polisApiKey
+ *
+ * 6. Cookie Authentication:
+ *    - Checks for valid session cookie token
+ *
+ * 7. Basic Auth:
+ *    - Supports API key via basic auth header
+ *
+ * 8. Anonymous Guest:
+ *    - Creates temporary user if agid present
+ *    - Optionally starts session with cookies
+ *
+ * If isOptional is true, authentication failure will not block the request.
+ * If isOptional is false, authentication failure will return 401/403 errors.
+ *
+ * @param {Function} assigner - Function to assign authenticated properties to request
+ * @param {boolean} isOptional - Whether authentication is optional
+ * @returns {Function} Express middleware function
+ */
 function _auth(assigner, isOptional) {
   function getKey(req, key) {
     return req.body[key] || req?.headers?.[key] || req?.query?.[key];
@@ -325,7 +364,6 @@ function handle_POST_auth_login(req, res) {
       }
       const hashedPassword = rows[0].pwhash;
       bcrypt.compare(password, hashedPassword, (errCompare, result) => {
-        logger.debug('errCompare, result', { errCompare, result });
         if (errCompare || !result) {
           fail(res, 403, 'polis_err_login_unknown_user_or_password');
           return;

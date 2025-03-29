@@ -408,6 +408,11 @@ async function handle_POST_comments(req, res) {
   }
 }
 
+/**
+ * WARNING: This endpoint is non-functional as written.
+ * It's a GET endpoint but requires conversation_id in req.body.
+ * Without moveToBody middleware, the parameter won't be found even if provided in query string.
+ */
 function handle_GET_comments_translations(req, res) {
   const zid = req.p.zid;
   const tid = req.p.tid;

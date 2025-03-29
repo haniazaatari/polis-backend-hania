@@ -36,6 +36,8 @@ function getUserInfoForUid2(uid) {
   });
 }
 
+// Note: The router does not pass in xid_optional, or owner_uid_optional.
+// So those branches are non-functional at this time.
 async function getUser(uid, zid_optional, xid_optional, owner_uid_optional) {
   if (!uid) {
     return Promise.resolve({});

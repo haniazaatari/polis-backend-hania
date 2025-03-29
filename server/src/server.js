@@ -1,4 +1,3 @@
-import akismetLib from 'akismet';
 import AWS from 'aws-sdk';
 import bluebird from 'bluebird';
 import { detectLanguage } from './comment.js';
@@ -13,13 +12,7 @@ import { fetchAndCacheLatestPcaData } from './utils/pca.js';
 const { Promise: BluebirdPromise } = bluebird;
 
 const devMode = Config.isDevMode;
-const serverUrl = Config.getServerUrl();
 const shouldSendNotifications = !devMode;
-
-const akismet = akismetLib.client({
-  blog: serverUrl,
-  apiKey: Config.akismetAntispamApiKey
-});
 
 AWS.config.update({ region: Config.awsRegion });
 
@@ -29,14 +22,6 @@ if (devMode) {
 
 BluebirdPromise.onPossiblyUnhandledRejection((err) => {
   logger.error('onPossiblyUnhandledRejection', err);
-});
-
-akismet.verifyKey((_err, verified) => {
-  if (verified) {
-    logger.debug('Akismet: API key successfully verified.');
-  } else {
-    logger.debug('Akismet: Unable to verify API key.');
-  }
 });
 
 function initializePolisHelpers() {

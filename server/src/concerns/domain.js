@@ -66,19 +66,19 @@ function isParentDomainWhitelisted(domain, zid, isWithinIframe, domain_whitelist
       '(select owner from conversations where zid = ($1)));',
     [zid]
   ).then((rows) => {
-    logger.debug('isParentDomainWhitelisted', {
+    logger.silly('isParentDomainWhitelisted', {
       domain,
       zid,
       isWithinIframe
     });
     if (!rows || !rows.length || !rows[0].domain_whitelist.length) {
-      logger.debug('isParentDomainWhitelisted : no whitelist');
+      logger.silly('isParentDomainWhitelisted : no whitelist');
       return true;
     }
     const whitelist = rows[0].domain_whitelist;
     const wdomains = whitelist.split(',');
     if (!isWithinIframe && wdomains.indexOf('*.pol.is') >= 0) {
-      logger.debug('isParentDomainWhitelisted : *.pol.is');
+      logger.silly('isParentDomainWhitelisted : *.pol.is');
       return true;
     }
     if (domain_whitelist_override_key && rows[0].domain_whitelist_override_key === domain_whitelist_override_key) {
