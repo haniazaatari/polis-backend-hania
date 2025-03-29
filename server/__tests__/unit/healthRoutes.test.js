@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from '@jest/globals';
+import { beforeEach, describe, expect, test } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 
@@ -24,7 +24,7 @@ describe('Health Routes', () => {
   });
 
   describe('GET /testConnection', () => {
-    it('should return a 200 status and confirm API is running', async () => {
+    test('should return a 200 status and confirm API is running', async () => {
       const response = await request(app).get('/testConnection');
 
       expect(response.status).toBe(200);
@@ -36,7 +36,7 @@ describe('Health Routes', () => {
   });
 
   describe('GET /testDatabase', () => {
-    it('should return a 200 status and confirm database connection', async () => {
+    test('should return a 200 status and confirm database connection', async () => {
       const response = await request(app).get('/testDatabase');
 
       expect(response.status).toBe(200);

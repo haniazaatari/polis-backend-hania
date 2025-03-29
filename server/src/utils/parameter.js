@@ -394,7 +394,7 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
   if (_.isUndefined(loggingString)) {
     loggingString = '';
   }
-  logger.debug(`resolve_pidThing ${loggingString}`);
+  logger.silly(`resolve_pidThing ${loggingString}`);
   return (req, res, next) => {
     if (!req.p) {
       fail(res, 500, 'polis_err_this_middleware_should_be_after_auth_and_zid');

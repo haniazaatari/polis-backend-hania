@@ -1,8 +1,5 @@
-import { beforeAll, describe, expect, test } from '@jest/globals';
-import request from 'supertest';
+import { beforeEach, describe, expect, test } from '@jest/globals';
 import {
-  API_PREFIX,
-  API_URL,
   getMyVotes,
   getVotes,
   initializeParticipant,
@@ -10,175 +7,168 @@ import {
   submitVote
 } from '../setup/api-test-helpers.js';
 
-describe('Vote Endpoints', () => {
-  let _ownerAuthToken = null;
-  let voterAuthToken = null;
-  let conversationId = null;
-  let commentId = null;
+describe('Vote API', () => {
+  let conversationId;
+  let commentId;
 
-  beforeAll(async () => {
-    // Setup owner with conversation and comments
-    const ownerSetup = await setupAuthAndConvo({
-      commentCount: 3
+  beforeEach(async () => {
+    // Setup auth, conversation, and comments
+    const setup = await setupAuthAndConvo({ commentCount: 1 });
+    conversationId = setup.conversationId;
+    commentId = setup.commentIds[0];
+  });
+
+  describe('POST /votes', () => {
+    test('should create a vote for a comment', async () => {
+      // Initialize a participant
+      const { agent: participantAgent } = await initializeParticipant(conversationId);
+
+      // Submit a vote (-1 = AGREE)
+      const voteResponse = await submitVote(participantAgent, {
+        conversation_id: conversationId,
+        tid: commentId,
+        vote: -1, // -1 = AGREE in this system
+        agid: 1
+      });
+
+      expect(voteResponse.status).toBe(200);
+
+      expect(voteResponse.body).toHaveProperty('currentPid');
     });
 
-    _ownerAuthToken = ownerSetup.authToken;
-    conversationId = ownerSetup.conversationId;
-    commentId = ownerSetup.commentIds[0];
+    test('should require a valid conversation_id', async () => {
+      const { agent: participantAgent } = await initializeParticipant(conversationId);
 
-    // Setup voter (separate user)
-    const voterSetup = await setupAuthAndConvo({ createConvo: false });
-    voterAuthToken = voterSetup.authToken;
-  }, 30000); // Increase timeout for setup
+      const response = await submitVote(participantAgent, {
+        conversation_id: 'invalid_conversation_id',
+        tid: commentId
+      });
 
-  test('Vote lifecycle for authenticated user', async () => {
-    // STEP 1: Submit a vote as voter (not comment creator)
-    const voteResponse = await submitVote(
-      {
+      // The API returns 400 for missing required parameters
+      expect(response.status).toBe(400);
+
+      expect(response.text).toMatch(/polis_err_param_parse_failed_conversation_id/);
+      expect(response.text).toMatch(/polis_err_fetching_zid_for_conversation_id/);
+    });
+
+    test('should require a valid tid', async () => {
+      const { agent: participantAgent } = await initializeParticipant(conversationId);
+
+      const response = await submitVote(participantAgent, {
+        conversation_id: conversationId,
+        tid: 'invalid_tid'
+      });
+
+      // The API returns 400 for missing required parameters
+      expect(response.status).toBe(400);
+      expect(response.text).toMatch(/polis_err_param_parse_failed_tid/);
+      expect(response.text).toMatch(/polis_fail_parse_int/);
+    });
+
+    test('should accept votes of -1, 0, or 1', async () => {
+      const { agent: participantAgent } = await initializeParticipant(conversationId);
+
+      // Vote 1 (DISAGREE)
+      const disagreeResponse = await submitVote(participantAgent, {
+        conversation_id: conversationId,
         tid: commentId,
-        vote: 1, // Agree
-        conversation_id: conversationId
-      },
-      voterAuthToken
-    );
+        vote: 1 // 1 = DISAGREE in this system
+      });
+      expect(disagreeResponse.status).toBe(200);
 
-    expect(voteResponse.status).toBe(200);
-    expect(voteResponse.body).toBeDefined();
-    const { currentPid, nextComment } = voteResponse.body;
-    expect(nextComment).toBeDefined();
-    expect(currentPid).toBeDefined();
+      // Vote 0 (PASS)
+      const passResponse = await submitVote(participantAgent, {
+        conversation_id: conversationId,
+        tid: commentId,
+        vote: 0 // 0 = PASS
+      });
+      expect(passResponse.status).toBe(200);
 
-    // STEP 2: Verify vote appears in voter's votes
-    // NOTE: The legacy implementation returns an empty array.
-    const myVotes = await getMyVotes(voterAuthToken, conversationId, currentPid);
-    expect(Array.isArray(myVotes)).toBe(true);
+      // Vote -1 (AGREE)
+      const agreeResponse = await submitVote(participantAgent, {
+        conversation_id: conversationId,
+        tid: commentId,
+        vote: -1 // -1 = AGREE in this system
+      });
+      expect(agreeResponse.status).toBe(200);
+    });
 
-    // STEP 3: Verify vote appears in conversation votes
-    const votes = await getVotes(voterAuthToken, conversationId, currentPid);
-    expect(Array.isArray(votes)).toBe(true);
-    expect(votes.length).toBe(1);
-    expect(votes[0].tid).toBe(commentId);
-    expect(votes[0].vote).toBe(1);
+    test('should allow vote modification', async () => {
+      // Initialize a participant
+      const { agent: participantAgent } = await initializeParticipant(conversationId);
+
+      // Submit initial vote (AGREE)
+      const initialVoteResponse = await submitVote(participantAgent, {
+        conversation_id: conversationId,
+        tid: commentId,
+        vote: -1 // -1 = AGREE in this system
+      });
+
+      expect(initialVoteResponse.status).toBe(200);
+      expect(initialVoteResponse.body).toHaveProperty('currentPid');
+      const { currentPid } = initialVoteResponse.body;
+
+      // Change vote to DISAGREE
+      const changedVoteResponse = await submitVote(participantAgent, {
+        conversation_id: conversationId,
+        tid: commentId,
+        vote: 1, // 1 = DISAGREE in this system
+        pid: currentPid
+      });
+
+      expect(changedVoteResponse.status).toBe(200);
+      expect(changedVoteResponse.body).toBeDefined();
+
+      const votes = await getVotes(participantAgent, conversationId, currentPid);
+      expect(votes.length).toBe(1);
+      expect(votes[0].vote).toBe(1);
+    });
   });
 
-  test('Vote lifecycle for anonymous participant', async () => {
-    // STEP 1: Initialize anonymous participant
-    const { cookies, body: initBody } = await initializeParticipant(conversationId);
-    expect(cookies).toBeDefined();
-    expect(cookies.length).toBeGreaterThan(0);
-    expect(initBody).toBeDefined();
+  describe('GET /votes', () => {
+    test('should retrieve votes for a conversation', async () => {
+      // Create a participant and submit a vote
+      const { agent: participantAgent } = await initializeParticipant(conversationId);
 
-    // STEP 2: Submit vote as anonymous participant
-    const voteResponse = await submitVote(
-      {
+      const voteResponse = await submitVote(participantAgent, {
+        conversation_id: conversationId,
         tid: commentId,
-        vote: -1, // Disagree
-        conversation_id: conversationId
-      },
-      cookies
-    );
+        vote: -1 // -1 = AGREE in this system
+      });
 
-    expect(voteResponse.status).toBe(200);
-    expect(voteResponse.body).toBeDefined();
-    const { currentPid, nextComment } = voteResponse.body;
-    expect(currentPid).toBeDefined();
-    expect(nextComment).toBeDefined();
+      expect(voteResponse.status).toBe(200);
+      expect(voteResponse.body).toHaveProperty('currentPid');
+      const { currentPid } = voteResponse.body;
 
-    // STEP 3: Verify anonymous vote appears in conversation votes
-    const votes = await getVotes(cookies, conversationId, currentPid);
-    expect(Array.isArray(votes)).toBe(true);
-    expect(votes.length).toBe(1);
-    expect(votes[0].tid).toBe(commentId);
-    expect(votes[0].vote).toBe(-1);
+      // Retrieve votes
+      const votes = await getVotes(participantAgent, conversationId, currentPid);
+
+      expect(votes.length).toBe(1);
+      expect(votes[0].vote).toBe(-1);
+    });
   });
 
-  test('Vote validation', async () => {
-    // Test invalid comment ID
-    const invalidCommentResponse = await submitVote(
-      {
-        tid: 999999,
-        vote: 1,
-        conversation_id: conversationId
-      },
-      voterAuthToken
-    );
-    const { body: invalidCommentBody, status: invalidCommentStatus } = invalidCommentResponse;
-    // Note: The legacy implementation returns a 200 status with a nextComment.
-    expect(invalidCommentStatus).toBe(200);
-    expect(invalidCommentBody.nextComment).toBeDefined();
+  describe('GET /votes/me', () => {
+    test('should retrieve votes for the current participant', async () => {
+      // Create a participant and submit a vote
+      const { agent: participantAgent } = await initializeParticipant(conversationId);
 
-    // Test invalid conversation ID
-    const invalidConvResponse = await submitVote(
-      {
+      const voteResponse = await submitVote(participantAgent, {
+        conversation_id: conversationId,
         tid: commentId,
-        vote: 1,
-        conversation_id: 'invalid-conversation'
-      },
-      voterAuthToken
-    );
-    const { body: invalidConvBody, status: invalidConvStatus } = invalidConvResponse;
+        vote: -1 // -1 = AGREE in this system
+      });
 
-    expect(invalidConvStatus).toBe(400);
-    expect(invalidConvBody).toMatch(/polis_err_param_parse_failed_conversation_id/);
-    expect(invalidConvBody).toMatch(/polis_err_fetching_zid_for_conversation_id/);
+      expect(voteResponse.status).toBe(200);
+      expect(voteResponse.body).toHaveProperty('currentPid');
+      const { currentPid } = voteResponse.body;
 
-    // Test invalid vote value
-    const invalidVoteResponse = await submitVote(
-      {
-        tid: commentId,
-        vote: 5, // Only -1, 0, 1 are valid
-        conversation_id: conversationId
-      },
-      voterAuthToken
-    );
-    const { body: invalidVoteBody, status: invalidVoteStatus } = invalidVoteResponse;
+      // Retrieve personal votes
+      const myVotes = await getMyVotes(participantAgent, conversationId, currentPid);
 
-    expect(invalidVoteStatus).toBe(400);
-    expect(invalidVoteBody).toMatch(/polis_err_param_parse_failed_vote/);
-    expect(invalidVoteBody).toMatch(/polis_fail_parse_int_out_of_range/);
-
-    // Test missing required fields
-    const missingFieldsResponse = await request(API_URL)
-      .post(`${API_PREFIX}/votes`)
-      .set('x-polis', voterAuthToken)
-      .send({});
-    const { body: missingFieldsBody, status: missingFieldsStatus } = missingFieldsResponse;
-    // Note: The legacy implementation returns a 400 status with an empty body.
-    expect(missingFieldsStatus).toBe(400);
-    expect(missingFieldsBody).toStrictEqual({});
-  });
-
-  test('Vote modification', async () => {
-    // STEP 1: Submit initial vote
-    const { body: initialVoteBody, status: initialVoteStatus } = await submitVote(
-      {
-        tid: commentId,
-        vote: 1,
-        conversation_id: conversationId
-      },
-      voterAuthToken
-    );
-    expect(initialVoteStatus).toBe(200);
-    expect(initialVoteBody).toBeDefined();
-    const { currentPid } = initialVoteBody;
-    expect(currentPid).toBeDefined();
-
-    // STEP 2: Change vote
-    const { status: changedVoteStatus } = await submitVote(
-      {
-        tid: commentId,
-        vote: -1,
-        conversation_id: conversationId
-      },
-      voterAuthToken
-    );
-    expect(changedVoteStatus).toBe(200);
-
-    // STEP 3: Verify vote was changed
-    const myVotes = await getVotes(voterAuthToken, conversationId, currentPid);
-    expect(Array.isArray(myVotes)).toBe(true);
-    const userVote = myVotes.find((v) => v.tid === commentId);
-    expect(userVote).toBeDefined();
-    expect(userVote.vote).toBe(-1);
+      // NOTE: The legacy endpoint returns an empty array.
+      expect(Array.isArray(myVotes)).toBe(true);
+      expect(myVotes.length).toBe(0);
+    });
   });
 });

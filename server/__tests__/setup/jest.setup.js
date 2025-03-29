@@ -22,6 +22,9 @@ function preventProductionDatabaseTesting() {
   const dbUrl = process.env.DATABASE_URL || '';
 
   if (dbUrl.toLowerCase().includes('amazonaws') || dbUrl.toLowerCase().includes('prod')) {
+    console.error('\x1b[31m%s\x1b[0m', '❌ CRITICAL SECURITY WARNING ❌');
+    console.error('\x1b[31m%s\x1b[0m', 'Tests appear to be targeting a PRODUCTION database!');
+    console.error('\x1b[31m%s\x1b[0m', 'Tests are being aborted to prevent data loss or corruption.');
     process.exit(1);
   }
 }
@@ -31,12 +34,22 @@ function preventProductionDatabaseTesting() {
  * This will be used when the RESET_DB_BEFORE_TESTS environment variable is set
  */
 async function resetDatabase() {
-  const resetScript = path.join(__dirname, '..', '..', 'bin', 'db-reset.js');
-  const { stdout, stderr } = await execAsync(`node ${resetScript}`, {
-    env: { ...process.env, SKIP_CONFIRM: 'true' }
-  });
+  console.log('\n🔄 Resetting database before tests...');
 
-  if (stderr) {
+  try {
+    const resetScript = path.join(__dirname, '..', '..', 'bin', 'db-reset.js');
+    const { _stdout, stderr } = await execAsync(`node ${resetScript}`, {
+      env: { ...process.env, SKIP_CONFIRM: 'true' }
+    });
+
+    console.log('\n✅ Database reset complete!');
+
+    if (stderr) {
+      console.error('stderr:', stderr);
+    }
+  } catch (error) {
+    console.error('\n❌ Failed to reset database:', error);
+    throw error;
   }
 }
 
@@ -52,8 +65,15 @@ beforeAll(async () => {
   if (process.env.RESET_DB_BEFORE_TESTS === 'true') {
     await resetDatabase();
   }
-  const client = await dbHelpers.pool.connect();
-  client.release();
+
+  // Make sure database is available
+  try {
+    const client = await dbHelpers.pool.connect();
+    client.release();
+  } catch (error) {
+    console.error('Failed to connect to database:', error);
+    throw error; // Fail fast if we can't connect to the database
+  }
 });
 
 afterAll(async () => {

@@ -1,23 +1,37 @@
 import { afterAll, beforeAll, describe, expect, test } from '@jest/globals';
-import { initializeParticipantWithXid, makeRequest, setupAuthAndConvo, submitVote } from '../setup/api-test-helpers.js';
+import {
+  getTestAgent,
+  getTextAgent,
+  initializeParticipantWithXid,
+  newAgent,
+  newTextAgent,
+  setupAuthAndConvo,
+  submitVote,
+  wait
+} from '../setup/api-test-helpers.js';
 import { deleteAllEmails, findEmailByRecipient } from '../setup/email-helpers.js';
 
 describe('User Management Endpoints', () => {
-  let ownerAuthToken;
+  // Access the global agents
+  const agent = getTestAgent();
+  const textAgent = getTextAgent();
+
   let ownerUserId;
   let testUser;
   let conversationId;
 
   // Setup - Create a test user with admin privileges and a conversation
   beforeAll(async () => {
-    // Clear any existing emails
+    // Clear any existing emails - ignore errors if MailDev is not running
     try {
       await deleteAllEmails();
-    } catch (_error) {}
+    } catch (error) {
+      // Ignore MailDev errors - tests can proceed without email cleanup
+      console.warn('MailDev may not be running - email cleanup skipped:', error.message);
+    }
 
     // Setup auth and create test conversation
     const setup = await setupAuthAndConvo({ commentCount: 3 });
-    ownerAuthToken = setup.authToken;
     ownerUserId = setup.userId;
     testUser = setup.testUser;
     conversationId = setup.conversationId;
@@ -27,12 +41,15 @@ describe('User Management Endpoints', () => {
   afterAll(async () => {
     try {
       await deleteAllEmails();
-    } catch (_error) {}
+    } catch (error) {
+      // Ignore MailDev errors during cleanup
+      console.warn('MailDev may not be running - email cleanup skipped:', error.message);
+    }
   });
 
   describe('GET /users', () => {
     test('should get the current user info when authenticated', async () => {
-      const response = await makeRequest('GET', '/users', null, ownerAuthToken);
+      const response = await agent.get('/api/v3/users');
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('uid', ownerUserId);
@@ -41,7 +58,9 @@ describe('User Management Endpoints', () => {
     });
 
     test('should require authentication when errIfNoAuth is true', async () => {
-      const response = await makeRequest('GET', '/users?errIfNoAuth=true');
+      // Create a new agent without auth
+      const unauthAgent = newTextAgent();
+      const response = await unauthAgent.get('/api/v3/users?errIfNoAuth=true');
 
       // The server responds with 401 (authorization required)
       expect(response.status).toBe(401);
@@ -51,7 +70,9 @@ describe('User Management Endpoints', () => {
     });
 
     test('should return empty response for anonymous users when errIfNoAuth is false', async () => {
-      const response = await makeRequest('GET', '/users?errIfNoAuth=false');
+      // Create a new agent without auth
+      const unauthAgent = newAgent();
+      const response = await unauthAgent.get('/api/v3/users?errIfNoAuth=false');
 
       expect(response.status).toBe(200);
 
@@ -59,33 +80,39 @@ describe('User Management Endpoints', () => {
       expect(response.body).toEqual({});
     });
 
-    // Note: This functionality is not working on the legacy server. There are multiple issues.
-    // For now we can expect a 200 response, but the body will be empty.
     test('should handle user lookup by XID', async () => {
       // Create a random XID for testing
       const testXid = `test-xid-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
       // Initialize an XID-based participant in the conversation
-      const {
-        cookies: initCookies,
-        body: { nextComment }
-      } = await initializeParticipantWithXid(conversationId, testXid);
+      const { agent: xidAgent, body, status } = await initializeParticipantWithXid(conversationId, testXid);
+
+      expect(status).toBe(200);
+      expect(body).toHaveProperty('nextComment');
+      const nextComment = body.nextComment;
+      expect(nextComment).toBeDefined();
+      expect(nextComment.tid).toBeDefined();
 
       // Vote to establish the xid user in the conversation
-      await submitVote(
-        {
-          conversation_id: conversationId,
-          vote: -1, // upvote
-          tid: nextComment.tid,
-          xid: testXid
-        },
-        initCookies
-      );
+      await submitVote(xidAgent, {
+        conversation_id: conversationId,
+        vote: -1, // upvote
+        tid: nextComment.tid,
+        xid: testXid
+      });
 
-      const response = await makeRequest('GET', `/users?owner_uid=${ownerUserId}&xid=${testXid}`);
+      await wait(500); // Wait for vote to be processed
 
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual({});
+      const lookupResponse = await agent.get(`/api/v3/users?owner_uid=${ownerUserId}&xid=${testXid}`);
+
+      expect(lookupResponse.status).toBe(200);
+
+      // Returns the caller's user info, not the xid user info
+      // This is a legacy behavior, and is not what we want.
+      expect(lookupResponse.body).toHaveProperty('email', testUser.email);
+      expect(lookupResponse.body).toHaveProperty('hasXid', false);
+      expect(lookupResponse.body).toHaveProperty('hname', testUser.hname);
+      expect(lookupResponse.body).toHaveProperty('uid', ownerUserId);
     });
   });
 
@@ -93,26 +120,22 @@ describe('User Management Endpoints', () => {
     test('should update user information', async () => {
       const newName = `Updated Test User ${Date.now()}`;
 
-      const response = await makeRequest(
-        'PUT',
-        '/users',
-        {
-          hname: newName
-        },
-        ownerAuthToken
-      );
+      const response = await agent.put('/api/v3/users').send({
+        hname: newName
+      });
 
       expect(response.status).toBe(200);
 
       // Verify the update by getting user info
-      const userInfo = await makeRequest('GET', '/users', null, ownerAuthToken);
+      const userInfo = await agent.get('/api/v3/users');
       expect(userInfo.status).toBe(200);
       expect(userInfo.body).toHaveProperty('hname', newName);
     });
 
     test('should require authentication', async () => {
-      // Now use the standard makeRequest helper
-      const response = await makeRequest('PUT', '/users', {
+      // Use an unauthenticated agent
+      const unauthAgent = newAgent();
+      const response = await unauthAgent.put('/api/v3/users').send({
         hname: 'Unauthenticated Update'
       });
 
@@ -121,14 +144,9 @@ describe('User Management Endpoints', () => {
     });
 
     test('should validate email format', async () => {
-      const response = await makeRequest(
-        'PUT',
-        '/users',
-        {
-          email: 'invalid-email'
-        },
-        ownerAuthToken
-      );
+      const response = await textAgent.put('/api/v3/users').send({
+        email: 'invalid-email'
+      });
 
       // The server should reject invalid email formats
       expect(response.status).toBe(400);
@@ -143,16 +161,10 @@ describe('User Management Endpoints', () => {
       // NOTE: The DB restricts emails to 32 characters!
       const testEmails = [`invite.${timestamp}.1@test.com`, `invite.${timestamp}.2@test.com`];
 
-      // Use standard makeRequest helper
-      const response = await makeRequest(
-        'POST',
-        '/users/invite',
-        {
-          conversation_id: conversationId,
-          emails: testEmails.join(',')
-        },
-        ownerAuthToken
-      );
+      const response = await agent.post('/api/v3/users/invite').send({
+        conversation_id: conversationId,
+        emails: testEmails.join(',')
+      });
 
       expect(response.status).toBe(200);
       // The legacy server returns a 200 with a status property of ':-)'. Yep.
@@ -160,7 +172,7 @@ describe('User Management Endpoints', () => {
 
       // Verify that emails were sent
       // Allow a small delay for emails to be processed
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await wait(2000);
 
       // Find the emails in MailDev
       const email1 = await findEmailByRecipient(testEmails[0]);
@@ -187,28 +199,22 @@ describe('User Management Endpoints', () => {
     });
 
     test('should require authentication', async () => {
-      // Use standard makeRequest helper
-      const response = await makeRequest('POST', '/users/invite', {
+      // Use an unauthenticated agent
+      const unauthAgent = newAgent();
+      const response = await unauthAgent.post('/api/v3/users/invite').send({
         conversation_id: conversationId,
         emails: `unauthenticated.${Date.now()}@example.com`
       });
 
       expect(response.status).toBe(500);
-
-      // Check for error text
       expect(response.text).toMatch(/polis_err_auth_token_not_supplied/);
     });
 
     test('should require valid conversation ID', async () => {
-      const response = await makeRequest(
-        'POST',
-        '/users/invite',
-        {
-          conversation_id: 'invalid-conversation-id',
-          emails: `invalid-convo.${Date.now()}@example.com`
-        },
-        ownerAuthToken
-      );
+      const response = await textAgent.post('/api/v3/users/invite').send({
+        conversation_id: 'invalid-conversation-id',
+        emails: `invalid-convo.${Date.now()}@example.com`
+      });
 
       expect(response.status).toBe(400);
       expect(response.text).toMatch(/polis_err_param_parse_failed_conversation_id/);
@@ -216,29 +222,19 @@ describe('User Management Endpoints', () => {
     });
 
     test('should require email addresses', async () => {
-      const response = await makeRequest(
-        'POST',
-        '/users/invite',
-        {
-          conversation_id: conversationId
-        },
-        ownerAuthToken
-      );
+      const response = await textAgent.post('/api/v3/users/invite').send({
+        conversation_id: conversationId
+      });
 
       expect(response.status).toBe(400);
       expect(response.text).toMatch(/polis_err_param_missing_emails/);
     });
 
     test('should validate email format', async () => {
-      const response = await makeRequest(
-        'POST',
-        '/users/invite',
-        {
-          conversation_id: conversationId,
-          emails: 'invalid-email'
-        },
-        ownerAuthToken
-      );
+      const response = await agent.post('/api/v3/users/invite').send({
+        conversation_id: conversationId,
+        emails: 'invalid-email'
+      });
 
       // The server should reject invalid email formats
       // However, the legacy server just returns a 200

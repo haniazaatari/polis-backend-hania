@@ -1,20 +1,24 @@
-import { describe, expect, test } from '@jest/globals';
+import { beforeEach, describe, expect, test } from '@jest/globals';
 import {
   createComment,
   createConversation,
   generateTestUser,
-  makeRequest,
+  getTestAgent,
+  newAgent,
   registerAndLoginUser
 } from '../setup/api-test-helpers.js';
 
 describe('Conversation Details API', () => {
-  test('should retrieve conversation details using conversation_id', async () => {
-    // Create a test user and conversation
-    const testUser = generateTestUser();
-    const { authToken } = await registerAndLoginUser(testUser);
+  const agent = getTestAgent();
 
+  beforeEach(async () => {
+    const testUser = generateTestUser();
+    await registerAndLoginUser(testUser);
+  });
+
+  test('should retrieve conversation details using conversation_id', async () => {
     // Create a public conversation
-    const conversationId = await createConversation(authToken, {
+    const conversationId = await createConversation(agent, {
       is_active: true,
       is_anon: true,
       topic: 'Test Public Conversation',
@@ -22,12 +26,11 @@ describe('Conversation Details API', () => {
     });
 
     // Add a comment to the conversation
-    await createComment(authToken, conversationId, {
+    await createComment(agent, conversationId, {
       txt: 'This is a test comment for the conversation'
     });
 
-    // Fetch conversation details - notice we're not prepending API_PREFIX since makeRequest adds it
-    const response = await makeRequest('GET', `/conversations?conversation_id=${conversationId}`, null, authToken);
+    const response = await agent.get(`/api/v3/conversations?conversation_id=${conversationId}`);
 
     // Check that the response is successful
     expect(response.status).toBe(200);
@@ -38,49 +41,46 @@ describe('Conversation Details API', () => {
   });
 
   test('should retrieve conversation list for an authenticated user', async () => {
-    // Create a test user and conversation
-    const testUser = generateTestUser();
-    const { authToken } = await registerAndLoginUser(testUser);
-
     // Create a public conversation
-    const conversationId = await createConversation(authToken, {
-      is_active: true,
-      is_anon: true,
-      topic: 'My Test Conversation',
-      description: 'This is a test conversation for the list endpoint'
+    const conversation1Id = await createConversation(agent, {
+      topic: 'My Test Conversation 1'
+    });
+
+    const conversation2Id = await createConversation(agent, {
+      topic: 'My Test Conversation 2'
     });
 
     // Fetch conversation list for the user - use the correct path without API_PREFIX
-    const response = await makeRequest('GET', '/conversations', null, authToken);
+    const response = await agent.get('/api/v3/conversations');
 
     // Check that the response is successful
     expect(response.status).toBe(200);
     expect(Array.isArray(response.body)).toBe(true);
+    expect(response.body.length).toBe(2);
 
     // Find our created conversation in the list
-    const foundConversation = response.body.find((conv) => conv.conversation_id === conversationId);
+    const foundConversation1 = response.body.find((conv) => conv.conversation_id === conversation1Id);
+    const foundConversation2 = response.body.find((conv) => conv.conversation_id === conversation2Id);
 
-    expect(foundConversation).toBeDefined();
-    expect(foundConversation.topic).toBe('My Test Conversation');
+    expect(foundConversation1).toBeDefined();
+    expect(foundConversation1.topic).toBe('My Test Conversation 1');
+    expect(foundConversation2).toBeDefined();
+    expect(foundConversation2.topic).toBe('My Test Conversation 2');
   });
 
   test('should retrieve public conversation by conversation_id', async () => {
-    // Create a test user and conversation
-    const testUser = generateTestUser();
-    const { authToken } = await registerAndLoginUser(testUser);
-
     // Create a public conversation
-    const conversationId = await createConversation(authToken, {
+    const conversationId = await createConversation(agent, {
       is_active: true,
       is_anon: true,
       topic: 'Public Test Conversation',
       description: 'This is a public test conversation'
     });
 
-    expect(conversationId).toBeDefined();
+    const publicAgent = newAgent();
 
     // Fetch conversation details without auth token
-    const response = await makeRequest('GET', `/conversations?conversation_id=${conversationId}`);
+    const response = await publicAgent.get(`/api/v3/conversations?conversation_id=${conversationId}`);
 
     // Check that the response is successful
     expect(response.status).toBe(200);
@@ -88,40 +88,35 @@ describe('Conversation Details API', () => {
     expect(response.body.topic).toBe('Public Test Conversation');
   });
 
-  test('should return 404 for non-existent conversation', async () => {
-    // Create a test user
-    const testUser = generateTestUser();
-    const { authToken } = await registerAndLoginUser(testUser);
-
+  test('should return 400 for non-existent conversation', async () => {
     // Try to fetch a conversation with an invalid ID
-    const response = await makeRequest(
-      'GET',
-      '/conversations?conversation_id=nonexistent-conversation-id',
-      null,
-      authToken
-    );
+    const response = await agent.get('/api/v3/conversations?conversation_id=nonexistent-conversation-id');
 
-    // For a non-existent conversation, we expect an error
-    expect(response.status).not.toBe(200);
+    // The endpoint returns a 400 error for a non-existent conversation
+    expect(response.status).toBe(400);
+    expect(response.text).toContain('polis_err_param_parse_failed_conversation_id');
+    expect(response.text).toContain('polis_err_fetching_zid_for_conversation_id');
   });
 
   test('should retrieve conversation stats', async () => {
-    // Create a test user and conversation
-    const testUser = generateTestUser();
-    const { authToken } = await registerAndLoginUser(testUser);
-
     // Create a public conversation
-    const conversationId = await createConversation(authToken, {
+    const conversationId = await createConversation(agent, {
       is_active: true,
       is_anon: true,
       topic: 'Test Stats Conversation'
     });
 
     // Get conversation stats
-    const response = await makeRequest('GET', `/conversationStats?conversation_id=${conversationId}`, null, authToken);
+    const response = await agent.get(`/api/v3/conversationStats?conversation_id=${conversationId}`);
 
     // Check that the response is successful
     expect(response.status).toBe(200);
     expect(response.body).toBeDefined();
+    expect(response.body.voteTimes).toBeDefined();
+    expect(response.body.firstVoteTimes).toBeDefined();
+    expect(response.body.commentTimes).toBeDefined();
+    expect(response.body.firstCommentTimes).toBeDefined();
+    expect(response.body.votesHistogram).toBeDefined();
+    expect(response.body.burstHistogram).toBeDefined();
   });
 });

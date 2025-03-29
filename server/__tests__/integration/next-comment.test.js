@@ -1,19 +1,26 @@
 import { beforeAll, describe, expect, test } from '@jest/globals';
-import { initializeParticipant, makeRequest, setupAuthAndConvo, submitVote } from '../setup/api-test-helpers.js';
+import {
+  getTestAgent,
+  getTextAgent,
+  initializeParticipant,
+  setupAuthAndConvo,
+  submitVote
+} from '../setup/api-test-helpers.js';
 
 describe('Next Comment Endpoint', () => {
-  let authToken = null;
+  // Access the global agents
+  const agent = getTestAgent();
+  const textAgent = getTextAgent();
+
   let conversationId = null;
   let commentIds = [];
 
   beforeAll(async () => {
     // Setup auth and create test conversation with multiple comments
     const setup = await setupAuthAndConvo({
-      createConvo: true,
       commentCount: 5
     });
 
-    authToken = setup.authToken;
     conversationId = setup.conversationId;
     commentIds = setup.commentIds;
 
@@ -23,7 +30,7 @@ describe('Next Comment Endpoint', () => {
 
   test('GET /nextComment - Get next comment for voting', async () => {
     // Request the next comment for voting
-    const response = await makeRequest('GET', `/nextComment?conversation_id=${conversationId}`, null, authToken);
+    const response = await agent.get(`/api/v3/nextComment?conversation_id=${conversationId}`);
 
     // Validate response
     expect(response.status).toBe(200);
@@ -39,79 +46,63 @@ describe('Next Comment Endpoint', () => {
 
   test('GET /nextComment - Anonymous users can get next comment', async () => {
     // Initialize anonymous participant
-    const { cookies } = await initializeParticipant(conversationId);
+    const { agent: anonAgent } = await initializeParticipant(conversationId);
 
     // Request next comment as anonymous user
-    const { body, status } = await makeRequest('GET', `/nextComment?conversation_id=${conversationId}`, null, cookies);
+    const response = await anonAgent.get(`/api/v3/nextComment?conversation_id=${conversationId}`);
 
     // Validate response
-    expect(status).toBe(200);
-    expect(body).toBeDefined();
-    expect(body.tid).toBeDefined();
-    expect(body.txt).toBeDefined();
+    expect(response.status).toBe(200);
+    expect(response.body).toBeDefined();
+    expect(response.body.tid).toBeDefined();
+    expect(response.body.txt).toBeDefined();
   });
 
   test('GET /nextComment - Respect not_voted_by_pid parameter', async () => {
-    const [_commentId] = commentIds;
     // Initialize a new participant
-    const { cookies: initCookies, body: initBody } = await initializeParticipant(conversationId);
+    const { agent: firstAgent, body: initBody } = await initializeParticipant(conversationId);
     expect(initBody.nextComment).toBeDefined();
     const { nextComment: firstComment } = initBody;
 
     // Submit vote to get auth token
-    const firstVoteResponse = await submitVote(
-      {
-        tid: firstComment.tid,
-        conversation_id: conversationId
-      },
-      initCookies
-    );
+    const firstVoteResponse = await submitVote(firstAgent, {
+      tid: firstComment.tid,
+      conversation_id: conversationId
+    });
+
     expect(firstVoteResponse.status).toBe(200);
     expect(firstVoteResponse.body).toHaveProperty('currentPid');
+    expect(firstVoteResponse.body).toHaveProperty('nextComment');
 
-    const { cookies } = firstVoteResponse;
     const { currentPid: firstVoterPid, nextComment: secondComment } = firstVoteResponse.body;
 
     // Vote on 3 more comments
-    const {
-      body: { nextComment: thirdComment }
-    } = await submitVote(
-      {
-        tid: secondComment.tid,
-        conversation_id: conversationId
-      },
-      cookies
-    );
+    const secondVoteResponse = await submitVote(firstAgent, {
+      pid: firstVoterPid,
+      tid: secondComment.tid,
+      conversation_id: conversationId
+    });
 
-    const {
-      body: { nextComment: fourthComment }
-    } = await submitVote(
-      {
-        tid: thirdComment.tid,
-        conversation_id: conversationId
-      },
-      cookies
-    );
+    const thirdVoteResponse = await submitVote(firstAgent, {
+      pid: firstVoterPid,
+      tid: secondVoteResponse.body.nextComment.tid,
+      conversation_id: conversationId
+    });
 
-    const {
-      body: { nextComment: lastComment }
-    } = await submitVote(
-      {
-        tid: fourthComment.tid,
-        conversation_id: conversationId
-      },
-      cookies
-    );
+    const fourthVoteResponse = await submitVote(firstAgent, {
+      pid: firstVoterPid,
+      tid: thirdVoteResponse.body.nextComment.tid,
+      conversation_id: conversationId
+    });
+
+    const lastComment = fourthVoteResponse.body.nextComment;
 
     // Initialize a new participant
-    const { cookies: newInitCookies } = await initializeParticipant(conversationId);
+    const { agent: secondAgent } = await initializeParticipant(conversationId);
 
     // Get next comment
-    const nextResponse = await makeRequest(
-      'GET',
-      `/nextComment?conversation_id=${conversationId}&not_voted_by_pid=${firstVoterPid}`,
-      null,
-      newInitCookies
+    const nextResponse = await secondAgent.get(
+      `/api/v3/nextComment?conversation_id=${conversationId}&not_voted_by_pid=${firstVoterPid}`
     );
 
     // Validate response - should return the comment not voted on by the first participant
@@ -122,7 +113,7 @@ describe('Next Comment Endpoint', () => {
 
   test('GET /nextComment - 400 for missing conversation_id', async () => {
     // Request without required conversation_id
-    const response = await makeRequest('GET', '/nextComment', null, authToken);
+    const response = await textAgent.get('/api/v3/nextComment');
 
     // Validate response
     expect(response.status).toBe(400);
@@ -133,11 +124,8 @@ describe('Next Comment Endpoint', () => {
     const withoutCommentIds = commentIds.slice(0, 4);
 
     // Request next comment without comments 0-3
-    const response = await makeRequest(
-      'GET',
-      `/nextComment?conversation_id=${conversationId}&without=${withoutCommentIds}`,
-      null,
-      authToken
+    const response = await agent.get(
+      `/api/v3/nextComment?conversation_id=${conversationId}&without=${withoutCommentIds}`
     );
 
     // Validate response is the last comment

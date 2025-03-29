@@ -133,7 +133,9 @@ async function findEmailByRecipient(recipient, options = {}) {
       if (targetEmail) {
         return await getEmail(targetEmail.id);
       }
-    } catch (_error) {}
+    } catch (error) {
+      console.warn(`Error fetching emails (attempt ${attempts}): ${error.message}`);
+    }
 
     await new Promise((resolve) => setTimeout(resolve, interval));
   }

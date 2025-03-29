@@ -1,47 +1,49 @@
 import { describe, expect, test } from '@jest/globals';
-import { generateTestUser, makeRequest, registerAndLoginUser } from '../setup/api-test-helpers.js';
+import {
+  generateTestUser,
+  getTestAgent,
+  getTextAgent,
+  newAgent,
+  registerAndLoginUser
+} from '../setup/api-test-helpers.js';
 
 describe('POST /tutorial', () => {
+  const agent = getTestAgent();
+  const textAgent = getTextAgent();
+
   test('should update tutorial step for authenticated user', async () => {
-    // Register and login a test user
+    // Register and login a user
     const testUser = generateTestUser();
-    const { authToken } = await registerAndLoginUser(testUser);
+    await registerAndLoginUser(testUser);
 
-    // Test updating the tutorial step
-    const response = await makeRequest('POST', '/tutorial', { step: 1 }, authToken);
+    // Update tutorial step
+    const response = await agent.post('/api/v3/tutorial').send({ step: 1 });
 
-    // Expect success response
+    // Check response
     expect(response.status).toBe(200);
   });
 
   test('should require authentication', async () => {
+    const testAgent = newAgent();
     // Try to update tutorial step without authentication
-    const response = await makeRequest('POST', '/tutorial', { step: 1 });
+    const response = await testAgent.post('/api/v3/tutorial').send({ step: 1 });
 
     // Expect authentication error
     expect(response.status).toBe(500);
-
-    // The error might be in body as string, text field, or JSON
-    const errorText =
-      typeof response.body === 'string' ? response.body : response.text || JSON.stringify(response.body);
-
-    expect(errorText).toMatch(/polis_err_auth_token_not_supplied/);
+    expect(response.text).toContain('polis_err_auth_token_not_supplied');
   });
 
   test('should require valid step parameter', async () => {
-    // Register and login a test user
+    // Register and login a user
     const testUser = generateTestUser();
-    const { authToken } = await registerAndLoginUser(testUser);
+    await registerAndLoginUser(testUser);
 
-    // Test missing step parameter
-    const missingStepResponse = await makeRequest('POST', '/tutorial', {}, authToken);
-    expect(missingStepResponse.status).toBe(400);
+    // Try to update with invalid step
+    const response = await textAgent.post('/api/v3/tutorial').send({ step: 'invalid' });
 
-    const errorText =
-      typeof missingStepResponse.body === 'string'
-        ? missingStepResponse.body
-        : missingStepResponse.text || JSON.stringify(missingStepResponse.body);
-
-    expect(errorText).toMatch(/polis_err_param_missing_step/);
+    // Expect validation error
+    expect(response.status).toBe(400);
+    expect(response.text).toContain('polis_err_param_parse_failed_step');
+    expect(response.text).toContain('polis_fail_parse_int invalid');
   });
 });

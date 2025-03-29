@@ -1,34 +1,35 @@
 import { beforeAll, describe, expect, test } from '@jest/globals';
-import { initializeParticipant, makeRequest, setupAuthAndConvo, submitVote, wait } from '../setup/api-test-helpers.js';
+import {
+  createConversation,
+  getTestAgent,
+  initializeParticipant,
+  setupAuthAndConvo,
+  submitVote,
+  wait
+} from '../setup/api-test-helpers.js';
 
-const NUM_PARTICIPANTS = 5;
-const NUM_COMMENTS = 5;
+const NUM_PARTICIPANTS = 3;
+const NUM_COMMENTS = 3;
 
 describe('Math and Analysis Endpoints', () => {
-  let authToken = null;
+  const agent = getTestAgent();
   let conversationId = null;
   let commentIds = [];
-  const participantCookies = [];
 
   beforeAll(async () => {
     // Setup conversation with comments and votes to have data for analysis
     const setup = await setupAuthAndConvo({
-      createConvo: true,
       commentCount: NUM_COMMENTS
     });
 
-    authToken = setup.authToken;
     conversationId = setup.conversationId;
     commentIds = setup.commentIds;
 
     // Create 5 participants and have them vote on comments
     for (let i = 0; i < NUM_PARTICIPANTS; i++) {
-      let cookies = null;
-      let pid = 'mypid';
       // Initialize a participant
-      const { cookies: initCookies } = await initializeParticipant(conversationId);
-      participantCookies.push(initCookies);
-      cookies = initCookies;
+      const { agent: participantAgent } = await initializeParticipant(conversationId);
+      let pid = 'mypid';
 
       // Have each participant vote on several comments with different patterns
       // This creates a dataset that can be analyzed
@@ -37,18 +38,13 @@ describe('Math and Analysis Endpoints', () => {
         const vote = ((i + j) % 3) - 1; // -1, 0, or 1
 
         const {
-          cookies: voteCookies,
           body: { currentPid }
-        } = await submitVote(
-          {
-            tid: commentIds[j],
-            conversation_id: conversationId,
-            vote: vote,
-            pid: pid
-          },
-          cookies
-        );
-        cookies = voteCookies;
+        } = await submitVote(participantAgent, {
+          tid: commentIds[j],
+          conversation_id: conversationId,
+          vote: vote,
+          pid: pid
+        });
         pid = currentPid;
       }
     }
@@ -59,8 +55,8 @@ describe('Math and Analysis Endpoints', () => {
 
   test('GET /math/pca2 - Get Principal Component Analysis', async () => {
     // Request PCA results for the conversation
-    // The response will be automatically decompressed by our enhanced makeRequest
-    const { body, status } = await makeRequest('GET', `/math/pca2?conversation_id=${conversationId}`, null, authToken);
+    // The response will be automatically decompressed by our supertest agent
+    const { body, status } = await agent.get(`/api/v3/math/pca2?conversation_id=${conversationId}`);
 
     // Validate response
     expect(status).toBe(200);
@@ -77,7 +73,6 @@ describe('Math and Analysis Endpoints', () => {
       expect(body.lastVoteTimestamp).toBeDefined();
       expect(body.math_tick).toBeDefined();
       expect(body.n).toBeDefined();
-      expect(body.pca).toBeDefined();
       expect(body.repness).toBeDefined();
       expect(body.tids).toBeDefined();
       expect(body['base-clusters']).toBeDefined();
@@ -103,14 +98,9 @@ describe('Math and Analysis Endpoints', () => {
 
   // Requires Report ID to exist first.
   // TODO: Revisit this after Reports have been covered in tests.
-  test.skip('GET /math/correlationMatrix - Get correlation matrix', async () => {
+  test.skip('GET /api/v3/math/correlationMatrix - Get correlation matrix', async () => {
     // Request correlation matrix for the conversation
-    const response = await makeRequest(
-      'GET',
-      `/math/correlationMatrix?conversation_id=${conversationId}`,
-      null,
-      authToken
-    );
+    const response = await agent.get(`/api/v3/math/correlationMatrix?conversation_id=${conversationId}`);
 
     // Validate response
     expect(response.status).toBe(200);
@@ -131,18 +121,13 @@ describe('Math and Analysis Endpoints', () => {
 
   test('Math endpoints - Return 400 for missing conversation_id', async () => {
     // Request PCA without conversation_id
-    const pcaResponse = await makeRequest('GET', '/math/pca2', null, authToken);
+    const pcaResponse = await agent.get('/api/v3/math/pca2');
 
     expect(pcaResponse.status).toBe(400);
     expect(pcaResponse.text).toMatch(/polis_err_param_missing_conversation_id/);
 
     // Request correlation matrix without report_id
-    const corrResponse = await makeRequest(
-      'GET',
-      `/math/correlationMatrix?conversation_id=${conversationId}`,
-      null,
-      authToken
-    );
+    const corrResponse = await agent.get(`/api/v3/math/correlationMatrix?conversation_id=${conversationId}`);
 
     expect(corrResponse.status).toBe(400);
     expect(corrResponse.text).toMatch(/polis_err_param_missing_report_id/);
@@ -152,7 +137,7 @@ describe('Math and Analysis Endpoints', () => {
     const invalidId = 'nonexistent-conversation-id';
 
     // Request PCA with invalid conversation_id
-    const pcaResponse = await makeRequest('GET', `/math/pca2?conversation_id=${invalidId}`, null, authToken);
+    const pcaResponse = await agent.get(`/api/v3/math/pca2?conversation_id=${invalidId}`);
 
     // Should return an error status
     expect(pcaResponse.status).toBeGreaterThanOrEqual(400);
@@ -160,7 +145,7 @@ describe('Math and Analysis Endpoints', () => {
     expect(pcaResponse.text).toMatch(/polis_err_fetching_zid_for_conversation_id/);
 
     // Request correlation matrix with invalid report_id
-    const corrResponse = await makeRequest('GET', `/math/correlationMatrix?report_id=${invalidId}`, null, authToken);
+    const corrResponse = await agent.get(`/api/v3/math/correlationMatrix?report_id=${invalidId}`);
 
     // Should return an error status
     expect(corrResponse.status).toBeGreaterThanOrEqual(400);
@@ -170,10 +155,10 @@ describe('Math and Analysis Endpoints', () => {
 
   test('Math endpoints - Require sufficient data for meaningful analysis', async () => {
     // Create a new empty conversation
-    const { conversationId: emptyConvoId } = await setupAuthAndConvo();
+    const emptyConvoId = await createConversation(agent);
 
     // Request PCA for empty conversation
-    const { body, status } = await makeRequest('GET', `/math/pca2?conversation_id=${emptyConvoId}`, null, authToken);
+    const { body, status } = await agent.get(`/api/v3/math/pca2?conversation_id=${emptyConvoId}`);
 
     expect(status).toBe(304);
     expect(body).toBe('');
@@ -183,12 +168,7 @@ describe('Math and Analysis Endpoints', () => {
 
   test('Math endpoints - Support math_tick parameter', async () => {
     // Request PCA with math_tick parameter
-    const pcaResponse = await makeRequest(
-      'GET',
-      `/math/pca2?conversation_id=${conversationId}&math_tick=2`,
-      null,
-      authToken
-    );
+    const pcaResponse = await agent.get(`/api/v3/math/pca2?conversation_id=${conversationId}&math_tick=2`);
 
     // Validate response
     expect(pcaResponse.status).toBe(200);

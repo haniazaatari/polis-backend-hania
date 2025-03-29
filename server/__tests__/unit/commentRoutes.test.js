@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { beforeEach, describe, expect, jest, test } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 
@@ -69,7 +69,7 @@ describe('Comment Routes', () => {
   });
 
   describe('POST /comments', () => {
-    it('should create a comment when valid data is provided', async () => {
+    test('should create a comment when valid data is provided', async () => {
       const commentData = {
         conversation_id: 456,
         txt: 'This is a test comment'
@@ -84,7 +84,7 @@ describe('Comment Routes', () => {
       expect(mockHandleCreateComment).toHaveBeenCalled();
     });
 
-    it('should return 400 when required fields are missing', async () => {
+    test('should return 400 when required fields are missing', async () => {
       const response = await request(app).post('/comments').send({});
 
       expect(response.status).toBe(400);
@@ -94,7 +94,7 @@ describe('Comment Routes', () => {
   });
 
   describe('GET /comments', () => {
-    it('should return comments for a conversation', async () => {
+    test('should return comments for a conversation', async () => {
       const response = await request(app).get('/comments?conversation_id=456');
 
       expect(response.status).toBe(200);
@@ -105,7 +105,7 @@ describe('Comment Routes', () => {
       expect(mockHandleGetComments).toHaveBeenCalled();
     });
 
-    it('should return 400 when conversation_id is missing', async () => {
+    test('should return 400 when conversation_id is missing', async () => {
       const response = await request(app).get('/comments');
 
       expect(response.status).toBe(400);
@@ -115,7 +115,7 @@ describe('Comment Routes', () => {
   });
 
   describe('GET /comments/translations', () => {
-    it('should return translations for a comment', async () => {
+    test('should return translations for a comment', async () => {
       const response = await request(app).get('/comments/translations?conversation_id=456&tid=123');
 
       expect(response.status).toBe(200);
@@ -125,7 +125,7 @@ describe('Comment Routes', () => {
       expect(mockHandleGetCommentTranslations).toHaveBeenCalled();
     });
 
-    it('should return 400 when required fields are missing', async () => {
+    test('should return 400 when required fields are missing', async () => {
       const response = await request(app).get('/comments/translations');
 
       expect(response.status).toBe(400);
