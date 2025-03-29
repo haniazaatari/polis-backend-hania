@@ -507,6 +507,11 @@ helpersInitialized.then(
       resolve_pidThing('pid', assignToP, 'post:comments'),
       handle_POST_comments
     );
+    /**
+     * WARNING: This endpoint is non-functional as written.
+     * It's a GET endpoint but requires conversation_id in req.body.
+     * Without moveToBody middleware, the parameter won't be found even if provided in query string.
+     */
     app.get(
       '/api/v3/comments/translations',
       auth(assignToP),
@@ -1127,10 +1132,10 @@ helpersInitialized.then(
     } else {
       app.get(/^\/[^(api/)]?.*/, proxy);
     }
-    app.listen(Config.serverPort);
-    logger.info(`started on port ${Config.serverPort}`);
   },
   (err) => {
     logger.error('failed to init server', err);
   }
 );
+
+export default app;
