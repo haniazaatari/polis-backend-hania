@@ -14,7 +14,7 @@ def load_votes(dataset_name):
         f"real_data/{dataset_name}",                 # Direct from notebook dir
         f"../real_data/{dataset_name}",              # One level up
         f"../../real_data/{dataset_name}",           # Two levels up
-        f"/Users/colinmegill/polis/math/python_conversion/real_data/{dataset_name}"  # Absolute path
+        f"/Users/colinmegill/polis/delphi/real_data/{dataset_name}",  # Absolute path
     ]
     
     # Find first working path

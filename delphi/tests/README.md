@@ -27,7 +27,7 @@ python run_tests.py --demo
 To run all tests using pytest:
 
 ```bash
-cd python_conversion
+cd delphi
 python -m pytest tests/
 ```
 

@@ -23,8 +23,8 @@ This document provides a comprehensive guide on how to set up, run, and test the
 ### Creating a Virtual Environment
 
 ```bash
-# Navigate to the python_conversion directory
-cd math/python_conversion
+# Navigate to the delphi directory
+cd delphi
 
 # Create a virtual environment
 python -m venv polis_env
@@ -41,7 +41,7 @@ polis_env\Scripts\activate
 Once your environment is set up, install the package in development mode:
 
 ```bash
-# Make sure you're in the python_conversion directory
+# Make sure you're in the delphi directory
 pip install -e .
 ```
 
@@ -171,7 +171,7 @@ The `eda_notebooks` directory contains Jupyter notebooks for exploratory data an
 3. Start Jupyter Notebook or Jupyter Lab:
 
 ```bash
-cd math/python_conversion/eda_notebooks
+cd delphi/eda_notebooks
 jupyter notebook
 # or
 jupyter lab
@@ -193,7 +193,7 @@ To create your own analysis:
 You can use the included helper script to launch a notebook server:
 
 ```bash
-cd math/python_conversion/eda_notebooks
+cd delphi/eda_notebooks
 ./launch_notebook.sh
 ```
 

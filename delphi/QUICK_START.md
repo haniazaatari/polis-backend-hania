@@ -11,8 +11,8 @@ The Python implementation requires Python 3.8+ (ideally Python 3.12) and several
 It's recommended to create a fresh virtual environment:
 
 ```bash
-# Navigate to the python_conversion directory
-cd math/python_conversion
+# Navigate to the delphi directory
+cd delphi
 
 # Create a new virtual environment
 python3 -m venv new_polis_env

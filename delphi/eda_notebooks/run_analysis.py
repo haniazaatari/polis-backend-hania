@@ -41,7 +41,7 @@ def check_environment():
         return True
     except ImportError as e:
         print(f"Error importing polismath modules: {e}")
-        print("Make sure you've installed the package using 'pip install -e .' from the python_conversion directory")
+        print("Make sure you've installed the package using 'pip install -e .' from the delphi directory")
         return False
 
 # Import polismath modules
