@@ -27,8 +27,7 @@ describe('Vote API', () => {
       const voteResponse = await submitVote(participantAgent, {
         conversation_id: conversationId,
         tid: commentId,
-        vote: -1, // -1 = AGREE in this system
-        agid: 1
+        vote: -1 // -1 = AGREE in this system
       });
 
       expect(voteResponse.status).toBe(200);

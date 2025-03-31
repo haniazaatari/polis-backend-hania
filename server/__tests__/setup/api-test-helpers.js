@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import request from 'supertest';
 
@@ -7,7 +8,7 @@ import app from '../../app.js';
 // Use { override: false } to prevent dotenv from overriding command-line env vars
 dotenv.config({ override: false });
 
-// Set environment variable to indicate we're running in test mode
+// Set environment variables for testing
 process.env.NODE_ENV = 'test';
 process.env.TESTING = 'true';
 
@@ -611,20 +612,133 @@ function parseResponseJSON(response) {
   }
 }
 
+// Utility function to create HMAC signature for email verification
+function createHmacSignature(email, conversationId, path = 'api/v3/notifications/subscribe') {
+  // This should match the server's HMAC generation logic
+  const serverKey = 'G7f387ylIll8yuskuf2373rNBmcxqWYFfHhdsd78f3uekfs77EOLR8wofw';
+  const hmac = crypto.createHmac('sha1', serverKey);
+  hmac.setEncoding('hex');
+
+  // Create params object
+  const params = {
+    conversation_id: conversationId,
+    email: email
+  };
+
+  // Create the full string exactly as the server does
+  path = path.replace(/\/$/, ''); // Remove trailing slash if present
+  const paramString = Object.entries(params)
+    .sort(([a], [b]) => a > b)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&');
+
+  const fullString = `${path}?${paramString}`;
+
+  // Write the full string and get the hash exactly as the server does
+  hmac.write(fullString);
+  hmac.end();
+  const hash = hmac.read();
+
+  return hash;
+}
+
+/**
+ * Populates a conversation with participants, comments, and votes
+ * Creates a rich dataset suitable for testing math/analysis features
+ *
+ * @param {Object} options - Configuration options
+ * @param {string} options.conversationId - ID of the conversation to populate
+ * @param {number} options.numParticipants - Number of participants to create (default: 3)
+ * @param {number} options.numComments - Number of comments to create (default: 3)
+ * @returns {Promise<Object>} Object containing arrays of created participants, comments, and votes
+ */
+async function populateConversationWithVotes(options = {}) {
+  const { conversationId, numParticipants = 3, numComments = 3 } = options;
+
+  if (!conversationId) {
+    throw new Error('conversationId is required');
+  }
+
+  const participants = [];
+  const comments = [];
+  const votes = [];
+
+  const voteGenerator = () => [-1, 1, 0][Math.floor(Math.random() * 3)];
+
+  // Create comments first
+  for (let i = 0; i < numComments; i++) {
+    const commentId = await createComment(getTestAgent(), conversationId, {
+      txt: `Test comment ${i + 1} created for data analysis`
+    });
+    comments.push(commentId);
+    await wait(300); // Small delay between comments
+  }
+
+  // Create participants and their votes
+  for (let i = 0; i < numParticipants; i++) {
+    // Initialize participant
+    const { agent: participantAgent } = await initializeParticipant(conversationId);
+    participants.push(participantAgent);
+
+    let pid = 'mypid';
+
+    // Have each participant vote on all comments
+    for (let j = 0; j < comments.length; j++) {
+      const vote = voteGenerator();
+
+      const response = await submitVote(participantAgent, {
+        tid: comments[j],
+        conversation_id: conversationId,
+        vote: vote,
+        pid: pid
+      });
+
+      // Update pid for next vote
+      pid = response.body.currentPid;
+
+      votes.push({
+        participantIndex: i,
+        commentId: comments[j],
+        vote: vote,
+        pid: pid
+      });
+
+      await wait(100); // Small delay between votes
+    }
+  }
+
+  // Final wait to ensure all data is processed
+  await wait(1000);
+
+  return {
+    participants,
+    comments,
+    votes,
+    stats: {
+      numParticipants,
+      numComments,
+      totalVotes: votes.length
+    }
+  };
+}
+
 // Export API constants along with helper functions
 export {
   authenticateAgent,
   authenticateGlobalAgents,
   createComment,
   createConversation,
+  createHmacSignature,
   createTextAgent,
   extractCookieValue,
+  formatErrorMessage,
   generateRandomXid,
   generateTestUser,
   getMyVotes,
   getTestAgent,
   getTextAgent,
   getVotes,
+  hasResponseProperty,
   initializeParticipant,
   initializeParticipantWithXid,
   newAgent,
@@ -634,5 +748,7 @@ export {
   setupAuthAndConvo,
   submitVote,
   updateConversation,
-  wait
+  validateResponse,
+  wait,
+  populateConversationWithVotes
 };

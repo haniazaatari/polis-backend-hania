@@ -1,6 +1,7 @@
 import Config from '../config.js';
 import { queryP_readOnly } from '../db/pg-query.js';
 import { getPca } from './pca.js';
+
 export function getBidIndexToPidMapping(zid, math_tick) {
   math_tick = math_tick || -1;
   return queryP_readOnly('select * from math_bidtopid where zid = ($1) and math_env = ($2);', [
@@ -16,6 +17,7 @@ export function getBidIndexToPidMapping(zid, math_tick) {
     return rows[0].data;
   });
 }
+
 export function getPidsForGid(zid, gid, math_tick) {
   return Promise.all([getPca(zid, math_tick), getBidIndexToPidMapping(zid, math_tick)]).then((o) => {
     if (!o[0] || !o[0].asPOJO) {

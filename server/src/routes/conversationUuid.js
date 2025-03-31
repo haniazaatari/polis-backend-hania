@@ -1,9 +1,11 @@
 import crypto from 'crypto';
 import { queryP, queryP_readOnly } from '../db/pg-query.js';
 import logger from '../utils/logger.js';
+
 function generateUuid() {
   return crypto.randomUUID();
 }
+
 export async function handle_GET_conversationUuid(req, res) {
   const { zid } = req.p;
   try {

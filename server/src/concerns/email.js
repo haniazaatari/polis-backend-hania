@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { encode } from 'html-entities';
 import _ from 'underscore';
 import { generateToken, generateTokenP } from '../auth/password.js';

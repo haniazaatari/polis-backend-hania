@@ -9,7 +9,7 @@ export default {
   collectCoverage: true,
   coverageDirectory: 'coverage',
   collectCoverageFrom: ['app.js', 'src/**/*.js', '!src/**/*.test.js', '!**/node_modules/**'],
-  coverageReporters: ['lcov', 'clover', 'html'],
+  coverageReporters: ['lcov', 'clover', 'html', 'text'],
   // detectOpenHandles: true,
   forceExit: true,
   verbose: true,

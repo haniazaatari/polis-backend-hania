@@ -5,10 +5,13 @@ import { getPca } from '../utils/pca.js';
 import { getZidForRid, getZidForUuid, getZinvite } from '../utils/zinvite.js';
 import { getXids } from './math.js';
 const sep = '\n';
+
 export const formatEscapedText = (s) => `"${s.replace(/"/g, '""')}"`;
+
 export function formatCSVHeaders(colFns) {
   return Object.keys(colFns).join(',');
 }
+
 export function formatCSVRow(row, colFns) {
   const fns = Object.values(colFns);
   let csv = '';
@@ -18,6 +21,7 @@ export function formatCSVRow(row, colFns) {
   }
   return csv;
 }
+
 export function formatCSV(colFns, rows) {
   let csv = formatCSVHeaders(colFns) + sep;
   if (rows.length > 0) {
@@ -28,6 +32,7 @@ export function formatCSV(colFns, rows) {
   }
   return csv;
 }
+
 export async function loadConversationSummary(zid, siteUrl) {
   const [zinvite, convoRows, commentersRow, pca] = await Promise.all([
     getZinvite(zid),
@@ -38,9 +43,11 @@ export async function loadConversationSummary(zid, siteUrl) {
   if (!zinvite || !convoRows || !commentersRow || !pca) {
     throw new Error('polis_error_data_unknown_report');
   }
+
   const convo = convoRows[0];
   const commenters = commentersRow[0].count;
   const data = pca.asPOJO;
+
   return [
     ['topic', formatEscapedText(convo.topic)],
     ['url', `${siteUrl}/${zinvite}`],
@@ -52,12 +59,15 @@ export async function loadConversationSummary(zid, siteUrl) {
     ['conversation-description', formatEscapedText(convo.description)]
   ].map((row) => row.join(','));
 }
+
 export const formatDatetime = (timestamp) => new Date(Number.parseInt(timestamp)).toString();
+
 export async function sendConversationSummary(zid, siteUrl, res) {
   const rows = await loadConversationSummary(zid, siteUrl);
   res.setHeader('content-type', 'text/csv');
   res.send(rows.join(sep));
 }
+
 export async function sendCommentSummary(zid, res) {
   const comments = new Map();
   try {
@@ -114,6 +124,7 @@ export async function sendCommentSummary(zid, res) {
     fail(res, 500, 'polis_err_data_export', err);
   }
 }
+
 export async function sendVotesSummary(zid, res) {
   const formatters = {
     timestamp: (row) => String(Math.floor(row.timestamp / 1000)),
@@ -135,6 +146,7 @@ export async function sendVotesSummary(zid, res) {
     }
   );
 }
+
 export async function sendParticipantVotesSummary(zid, res) {
   const commentRows = await queryP_readOnly(
     'SELECT tid, pid FROM comments WHERE zid = ($1) ORDER BY tid ASC, created ASC',
@@ -237,6 +249,7 @@ export async function sendParticipantVotesSummary(zid, res) {
     }
   );
 }
+
 export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
   const csvText = [];
   const pca = await getPca(zid);
@@ -358,6 +371,7 @@ export async function sendCommentGroupsSummary(zid, res, http, filterFN) {
     return csvText.join('');
   }
 }
+
 export async function sendParticipantXidsSummary(zid, res) {
   try {
     const pca = await getPca(zid);
@@ -380,6 +394,7 @@ export async function sendParticipantXidsSummary(zid, res) {
     fail(res, 500, 'polis_err_data_export', err);
   }
 }
+
 export async function handle_GET_reportExport(req, res) {
   const { rid, report_type } = req.p;
   try {
@@ -416,6 +431,7 @@ export async function handle_GET_reportExport(req, res) {
     fail(res, 500, msg, err);
   }
 }
+
 export async function handle_GET_xidReport(req, res) {
   const { xid_report } = req.p;
   try {

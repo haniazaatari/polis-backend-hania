@@ -6,6 +6,7 @@ import logger from '../utils/logger.js';
 const devMode = Config.isDevMode;
 
 const whitelistedCrossDomainRoutes = [/^\/api\/v[0-9]+\/launchPrep/, /^\/api\/v[0-9]+\/setFirstCookie/];
+
 const whitelistedDomains = [
   Config.getServerHostname(),
   ...Config.whitelistItems,
@@ -121,6 +122,7 @@ function isParentDomainWhitelisted(domain, zid, isWithinIframe, domain_whitelist
     return ok;
   });
 }
+
 function denyIfNotFromWhitelistedDomain(req, res, next) {
   const isWithinIframe = req.headers?.referrer?.includes('parent_url');
   const ref = req?.headers?.referrer;
@@ -152,6 +154,7 @@ function denyIfNotFromWhitelistedDomain(req, res, next) {
       next('polis_err_domain_misc');
     });
 }
+
 function setDomainWhitelist(uid, newWhitelist) {
   return queryP('select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));', [
     uid
@@ -168,6 +171,7 @@ function setDomainWhitelist(uid, newWhitelist) {
     );
   });
 }
+
 function getDomainWhitelist(uid) {
   return queryP('select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));', [
     uid
@@ -178,6 +182,7 @@ function getDomainWhitelist(uid) {
     return rows[0].domain_whitelist;
   });
 }
+
 function handle_GET_domainWhitelist(req, res) {
   getDomainWhitelist(req.p.uid)
     .then((whitelist) => {
@@ -189,6 +194,7 @@ function handle_GET_domainWhitelist(req, res) {
       fail(res, 500, 'polis_err_get_domainWhitelist_misc', err);
     });
 }
+
 function handle_POST_domainWhitelist(req, res) {
   setDomainWhitelist(req.p.uid, req.p.domain_whitelist)
     .then(() => {

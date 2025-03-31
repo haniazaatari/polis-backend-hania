@@ -5,11 +5,15 @@ import Config from '../config.js';
 import { queryP_readOnly } from '../db/pg-query.js';
 import logger from './logger.js';
 import { addInRamMetric } from './metered.js';
+
 const pcaCacheSize = Config.cacheMathResults ? 300 : 1;
+
 const pcaCache = new LRUCache({
   max: pcaCacheSize
 });
+
 let lastPrefetchedMathTick = -1;
+
 export function fetchAndCacheLatestPcaData() {
   let lastPrefetchPollStartTime = Date.now();
   function waitTime() {
@@ -57,12 +61,15 @@ export function fetchAndCacheLatestPcaData() {
   }
   pollForLatestPcaData();
 }
+
 export function getPca(zid, math_tick) {
   let cached = pcaCache.get(zid);
   if (cached && cached.expiration < Date.now()) {
     cached = undefined;
   }
+
   const cachedPOJO = cached?.asPOJO;
+
   if (cachedPOJO) {
     if (cachedPOJO.math_tick <= (math_tick || 0)) {
       logger.silly('math was cached but not new', {
@@ -75,8 +82,10 @@ export function getPca(zid, math_tick) {
     logger.silly('math from cache', { zid, math_tick });
     return Promise.resolve(cached);
   }
+
   logger.silly('mathpoll cache miss', { zid, math_tick });
   const queryStart = Date.now();
+
   return queryP_readOnly('select * from math_main where zid = ($1) and math_env = ($2);', [zid, Config.mathEnv]).then(
     (rows) => {
       const queryEnd = Date.now();
@@ -111,6 +120,7 @@ export function getPca(zid, math_tick) {
     }
   );
 }
+
 function updatePcaCache(zid, item) {
   return new Promise((resolve, reject) => {
     item.zid = undefined;
@@ -133,6 +143,7 @@ function updatePcaCache(zid, item) {
     });
   });
 }
+
 function processMathObject(o) {
   function remapSubgroupStuff(o) {
     if (!o) {

@@ -2,10 +2,8 @@ import { beforeAll, describe, expect, test } from '@jest/globals';
 import {
   createConversation,
   getTestAgent,
-  initializeParticipant,
-  setupAuthAndConvo,
-  submitVote,
-  wait
+  populateConversationWithVotes,
+  setupAuthAndConvo
 } from '../setup/api-test-helpers.js';
 
 const NUM_PARTICIPANTS = 3;
@@ -14,43 +12,17 @@ const NUM_COMMENTS = 3;
 describe('Math and Analysis Endpoints', () => {
   const agent = getTestAgent();
   let conversationId = null;
-  let commentIds = [];
 
   beforeAll(async () => {
     // Setup conversation with comments and votes to have data for analysis
-    const setup = await setupAuthAndConvo({
-      commentCount: NUM_COMMENTS
-    });
-
+    const setup = await setupAuthAndConvo();
     conversationId = setup.conversationId;
-    commentIds = setup.commentIds;
 
-    // Create 5 participants and have them vote on comments
-    for (let i = 0; i < NUM_PARTICIPANTS; i++) {
-      // Initialize a participant
-      const { agent: participantAgent } = await initializeParticipant(conversationId);
-      let pid = 'mypid';
-
-      // Have each participant vote on several comments with different patterns
-      // This creates a dataset that can be analyzed
-      for (let j = 0; j < NUM_COMMENTS; j++) {
-        // Different voting patterns for different participants
-        const vote = ((i + j) % 3) - 1; // -1, 0, or 1
-
-        const {
-          body: { currentPid }
-        } = await submitVote(participantAgent, {
-          tid: commentIds[j],
-          conversation_id: conversationId,
-          vote: vote,
-          pid: pid
-        });
-        pid = currentPid;
-      }
-    }
-
-    // Wait for all votes to be processed
-    await wait(1000);
+    await populateConversationWithVotes({
+      conversationId,
+      numParticipants: NUM_PARTICIPANTS,
+      numComments: NUM_COMMENTS
+    });
   }, 60000);
 
   test('GET /math/pca2 - Get Principal Component Analysis', async () => {

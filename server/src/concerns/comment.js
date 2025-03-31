@@ -169,11 +169,6 @@ function getNextPrioritizedComment(zid, pid, withoutTids, include_social) {
     const comments = results[0];
     const math = results[1];
     const numberOfCommentsRemainingRows = results[2];
-    logger.debug('getNextPrioritizedComment intermediate results:', {
-      zid,
-      pid,
-      numberOfCommentsRemainingRows
-    });
     if (!comments || !comments.length) {
       return null;
     }
