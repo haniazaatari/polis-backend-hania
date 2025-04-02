@@ -107,6 +107,11 @@ export class CdkStack extends cdk.Stack {
       ],
     });
 
+    instanceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['s3:PutObject', 's3:PutObjectAcl', 's3:AbortMultipartUpload'],
+      resources: ['arn:aws:s3:::*', 'arn:aws:s3:::*/*'],
+    }));
+
     // IAM Role for CodeDeploy
     const codeDeployRole = new iam.Role(this, 'CodeDeployRole', {
       assumedBy: new iam.ServicePrincipal('codedeploy.amazonaws.com'),
