@@ -117,6 +117,9 @@ services:
       context: ./
       dockerfile: file-server/Dockerfile
       args:
+        EMBED_SERVICE_HOSTNAME: ${EMBED_SERVICE_HOSTNAME}
+        ENABLE_TWITTER_WIDGETS: ${ENABLE_TWITTER_WIDGETS:-false}
+        FB_APP_ID: ${FB_APP_ID}
         GA_TRACKING_ID: ${GA_TRACKING_ID}
         GIT_HASH: "${GIT_HASH:-placeholder}"
         NODE_ENV: production
