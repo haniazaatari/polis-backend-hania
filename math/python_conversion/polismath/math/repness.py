@@ -503,8 +503,8 @@ def conv_repness(vote_matrix: NamedMatrix, group_clusters: List[Dict[str, Any]])
         group_members = []
         for m in group['members']:
             try:
-                if m in vote_matrix.get_row_index():
-                    idx = vote_matrix.get_row_index().index(m)
+                if m in vote_matrix.rownames():
+                    idx = vote_matrix.rownames().index(m)
                     if 0 <= idx < matrix_values.shape[0]:
                         group_members.append(idx)
             except (ValueError, TypeError) as e:
@@ -663,8 +663,8 @@ def participant_stats(vote_matrix: NamedMatrix, group_clusters: List[Dict[str, A
                 # Get group member indices
                 group_members = []
                 for m in group['members']:
-                    if m in vote_matrix.get_row_index():
-                        idx = vote_matrix.get_row_index().index(m)
+                    if m in vote_matrix.rownames():
+                        idx = vote_matrix.rownames().index(m)
                         if 0 <= idx < matrix_values.shape[0]:
                             group_members.append(idx)
                 

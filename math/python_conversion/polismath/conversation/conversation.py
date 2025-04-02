@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple, Union, Any, Set, Callable
 from copy import deepcopy
 import time
 import logging
+import sys
 from datetime import datetime
 
 from polismath.math.named_matrix import NamedMatrix
@@ -27,8 +28,21 @@ MAX_CMTS = 400    # Maximum number of comments per conversation
 SMALL_CONV_THRESHOLD = 1000  # Threshold for small vs large conversation
 
 
-# Logging configuration
+# Configure logging
 logger = logging.getLogger(__name__)
+
+# Set up better logging if not already configured
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+
+    # Also set up the NamedMatrix logger
+    matrix_logger = logging.getLogger('polismath.math.named_matrix')
+    matrix_logger.addHandler(handler)
+    matrix_logger.setLevel(logging.INFO)
 
 
 class Conversation:
@@ -103,8 +117,26 @@ class Conversation:
         if not vote_data:
             return result
         
-        # Process votes
-        for vote in vote_data:
+        start_time = time.time()
+        total_votes = len(vote_data)
+        logger.info(f"Processing {total_votes} votes for conversation {self.conversation_id}")
+        
+        # Collect all valid votes for batch processing
+        vote_updates = []
+        invalid_count = 0
+        null_count = 0
+        
+        # Progress tracking
+        progress_interval = 10000  # Report every N votes
+        
+        for i, vote in enumerate(vote_data):
+            # Report progress for large datasets
+            if i > 0 and i % progress_interval == 0:
+                progress_pct = (i / total_votes) * 100
+                elapsed = time.time() - start_time
+                remaining = (elapsed / i) * (total_votes - i) if i > 0 else 0
+                logger.info(f"[{elapsed:.2f}s] Processed {i}/{total_votes} votes ({progress_pct:.1f}%) - Est. remaining: {remaining:.2f}s")
+            
             try:
                 ptpt_id = str(vote.get('pid'))  # Ensure string
                 comment_id = str(vote.get('tid'))  # Ensure string
@@ -113,6 +145,7 @@ class Conversation:
                 
                 # Skip invalid votes
                 if ptpt_id is None or comment_id is None or vote_value is None:
+                    invalid_count += 1
                     continue
                     
                 # Convert vote value to standard format
@@ -138,6 +171,7 @@ class Conversation:
                                 else:
                                     vote_value = 0.0
                             except (ValueError, TypeError):
+                                logger.warning(f"Unknown vote value format: {vote_value}")
                                 vote_value = None
                     # Handle numeric values
                     elif isinstance(vote_value, (int, float)):
@@ -152,20 +186,31 @@ class Conversation:
                     else:
                         vote_value = None
                 except Exception as e:
-                    print(f"Error converting vote value: {e}")
+                    logger.error(f"Error converting vote value: {e}")
                     vote_value = None
                 
                 # Skip null votes or unknown format
                 if vote_value is None:
+                    null_count += 1
                     continue
                 
-                # Update the raw rating matrix
-                result.raw_rating_mat = result.raw_rating_mat.update(
-                    ptpt_id, comment_id, vote_value
-                )
+                # Add to batch updates list
+                vote_updates.append((ptpt_id, comment_id, vote_value))
+                
             except Exception as e:
-                print(f"Error processing vote: {e}")
+                logger.error(f"Error processing vote: {e}")
+                invalid_count += 1
                 continue
+        
+        # Log validation results
+        logger.info(f"[{time.time() - start_time:.2f}s] Vote processing summary: {len(vote_updates)} valid, {invalid_count} invalid, {null_count} null")
+        
+        # Apply all updates in a single batch operation for better performance
+        if vote_updates:
+            logger.info(f"[{time.time() - start_time:.2f}s] Applying {len(vote_updates)} votes as batch update...")
+            batch_start = time.time()
+            result.raw_rating_mat = result.raw_rating_mat.batch_update(vote_updates)
+            logger.info(f"[{time.time() - start_time:.2f}s] Batch update completed in {time.time() - batch_start:.2f}s")
         
         # Update last updated timestamp
         result.last_updated = max(
@@ -213,6 +258,10 @@ class Conversation:
         """
         Compute statistics on votes.
         """
+        # Make sure pandas is imported
+        import numpy as np
+        import pandas as pd
+        
         # Initialize stats
         self.vote_stats = {
             'n_votes': 0,
@@ -365,6 +414,10 @@ class Conversation:
         Args:
             n_components: Number of principal components
         """
+        # Make sure pandas and numpy are imported
+        import numpy as np
+        import pandas as pd
+        
         # Check if we have enough data
         if self.rating_mat.values.shape[0] < 2 or self.rating_mat.values.shape[1] < 2:
             # Not enough data for PCA, create minimal results
@@ -421,6 +474,10 @@ class Conversation:
         except Exception as e:
             # If PCA fails, create minimal results
             print(f"Error in PCA computation: {e}")
+            # Make sure we have numpy and pandas
+            import numpy as np
+            import pandas as pd
+            
             cols = self.rating_mat.values.shape[1]
             self.pca = {
                 'center': np.zeros(cols),
@@ -470,6 +527,10 @@ class Conversation:
         """
         Compute participant clusters using auto-determination of optimal k.
         """
+        # Make sure numpy and pandas are imported
+        import numpy as np
+        import pandas as pd
+        
         # Check if we have projections
         if not self.proj:
             self.base_clusters = []
@@ -513,6 +574,10 @@ class Conversation:
         """
         Compute comment representativeness.
         """
+        # Make sure numpy and pandas are imported
+        import numpy as np
+        import pandas as pd
+        
         # Check if we have groups
         if not self.group_clusters:
             self.repness = {
@@ -529,16 +594,38 @@ class Conversation:
         """
         Compute information about participants.
         """
+        # Make sure numpy and pandas are imported
+        import numpy as np
+        import pandas as pd
+        import time
+        
+        start_time = time.time()
+        logger.info("Starting participant info computation...")
+        
         # Check if we have groups
         if not self.group_clusters:
             self.participant_info = {}
             return
         
-        # Compute participant stats
-        ptpt_stats = participant_stats(self.rating_mat, self.group_clusters)
+        # Use optimized participant stats calculation for better performance
+        try:
+            # Import the optimized version
+            from polismath.conversation.participant_info_optimization import compute_participant_info_optimized
+            logger.info("Using optimized participant info computation")
+            
+            # Use the optimized version which has better performance for large datasets
+            ptpt_stats = compute_participant_info_optimized(self.rating_mat, self.group_clusters)
+            
+        except ImportError:
+            # Fall back to original version if optimized one is not available
+            logger.info("Falling back to standard participant info computation")
+            from polismath.math.repness import participant_stats
+            ptpt_stats = participant_stats(self.rating_mat, self.group_clusters)
         
         # Store results
         self.participant_info = ptpt_stats.get('stats', {})
+        
+        logger.info(f"Participant info computation completed in {time.time() - start_time:.2f}s")
     
     def recompute(self) -> 'Conversation':
         """
@@ -547,6 +634,10 @@ class Conversation:
         Returns:
             Updated conversation
         """
+        # Make sure numpy and pandas are imported
+        import numpy as np
+        import pandas as pd
+        
         # Create a copy to avoid modifying the original
         result = deepcopy(self)
         

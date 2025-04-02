@@ -7,7 +7,16 @@ specifically optimized for the Pol.is voting data representation.
 
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Union, Optional, Tuple, Any, Set
+import time
+import logging
+from typing import List, Dict, Union, Optional, Tuple, Any, Set, Callable
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
+# Progress reporting constants
+PROGRESS_INTERVAL = 5000   # Report progress every N items
+REPORT_THRESHOLD = 8000    # Only report detailed progress for operations larger than this
 
 
 class IndexHash:
@@ -318,6 +327,181 @@ class NamedMatrix:
         result._col_index = new_col_index
         return result
     
+    def batch_update(self, 
+                    updates: List[Tuple[Any, Any, Any]]) -> 'NamedMatrix':
+        """
+        Apply multiple updates to the matrix in a single efficient operation.
+        
+        Args:
+            updates: List of (row, col, val) tuples
+            
+        Returns:
+            Updated NamedMatrix with all changes applied at once
+        """
+        if not updates:
+            return self.copy()
+        
+        start_time = time.time()
+        total_updates = len(updates)
+        should_report = total_updates > REPORT_THRESHOLD
+        
+        if should_report:
+            logger.info(f"Starting batch update of {total_updates} items")
+            logger.info(f"[{time.time() - start_time:.2f}s] Matrix current size: {self._matrix.shape}")
+        
+        # Get existing row and column indices
+        existing_rows = set(self._matrix.index)
+        existing_cols = set(self._matrix.columns)
+        
+        if should_report:
+            logger.info(f"[{time.time() - start_time:.2f}s] Found {len(existing_rows)} existing rows and {len(existing_cols)} existing columns")
+            logger.info(f"[{time.time() - start_time:.2f}s] First pass: identifying new rows/columns and processing values")
+        
+        # First pass: identify new rows/columns and process values
+        new_rows = set()
+        new_cols = set()
+        processed_updates = {}  # (row, col) -> processed_value
+        
+        for i, (row, col, value) in enumerate(updates):
+            # Progress reporting
+            if should_report and i > 0 and i % PROGRESS_INTERVAL == 0:
+                progress_pct = (i / total_updates) * 100
+                elapsed = time.time() - start_time
+                remaining = (elapsed / i) * (total_updates - i) if i > 0 else 0
+                logger.info(f"[{elapsed:.2f}s] Processed {i}/{total_updates} updates ({progress_pct:.1f}%) - Est. remaining: {remaining:.2f}s")
+            
+            # Track new rows and columns
+            if row not in existing_rows and row not in new_rows:
+                new_rows.add(row)
+            if col not in existing_cols and col not in new_cols:
+                new_cols.add(col)
+            
+            # Process value into normalized form
+            if value is not None:
+                try:
+                    numeric_value = float(value)
+                    # For vote values, normalize to -1.0, 0.0, or 1.0
+                    if numeric_value > 0:
+                        processed_value = 1.0
+                    elif numeric_value < 0:
+                        processed_value = -1.0
+                    else:
+                        processed_value = 0.0
+                except (ValueError, TypeError):
+                    processed_value = np.nan
+            else:
+                processed_value = np.nan
+                
+            # Store processed value
+            processed_updates[(row, col)] = processed_value
+        
+        if should_report:
+            logger.info(f"[{time.time() - start_time:.2f}s] Found {len(new_rows)} new rows and {len(new_cols)} new columns")
+            logger.info(f"[{time.time() - start_time:.2f}s] Creating new matrix with {len(existing_rows) + len(new_rows)} rows and {len(existing_cols) + len(new_cols)} columns")
+        
+        # Create complete row and column lists (existing + new)
+        all_rows = sorted(list(existing_rows) + list(new_rows))
+        all_cols = sorted(list(existing_cols) + list(new_cols))
+        
+        # Create a new DataFrame with all rows and columns at once
+        # This creates a clean DataFrame without fragmentation
+        matrix_creation_start = time.time()
+        if new_rows or new_cols or self._matrix.empty:
+            # Create new DataFrame with all rows and columns
+            matrix_copy = pd.DataFrame(
+                index=all_rows,
+                columns=all_cols,
+                dtype=float
+            )
+            
+            # Fill with NaN
+            matrix_copy.values[:] = np.nan
+            
+            if should_report:
+                logger.info(f"[{time.time() - start_time:.2f}s] New DataFrame created in {time.time() - matrix_creation_start:.2f}s")
+                logger.info(f"[{time.time() - start_time:.2f}s] Copying existing values...")
+            
+            # Copy existing values from original matrix
+            if not self._matrix.empty:
+                copy_start = time.time()
+                total_values = len(self._matrix.index) * len(self._matrix.columns)
+                
+                # Use vectorized operations if possible to copy faster
+                try:
+                    # Extract existing data as a numpy array
+                    existing_data = self._matrix.values
+                    
+                    # Convert to row/column indices in the new matrix
+                    row_indices = [all_rows.index(row) for row in self._matrix.index]
+                    col_indices = [all_cols.index(col) for col in self._matrix.columns]
+                    
+                    # Use advanced indexing to copy values
+                    for i, row_idx in enumerate(row_indices):
+                        for j, col_idx in enumerate(col_indices):
+                            matrix_copy.values[row_idx, col_idx] = existing_data[i, j]
+                    
+                    if should_report:
+                        logger.info(f"[{time.time() - start_time:.2f}s] Copied {total_values} values in {time.time() - copy_start:.2f}s")
+                
+                except Exception as e:
+                    # Fallback to slower method if vectorized approach fails
+                    if should_report:
+                        logger.warning(f"[{time.time() - start_time:.2f}s] Vectorized copy failed: {e}, falling back to element-wise copy")
+                    
+                    # Element-wise copy
+                    for i, row in enumerate(self._matrix.index):
+                        for j, col in enumerate(self._matrix.columns):
+                            matrix_copy.at[row, col] = self._matrix.iloc[i, j]
+                            
+                            # Report progress for large matrices
+                            if should_report and total_values > REPORT_THRESHOLD and (i * len(self._matrix.columns) + j + 1) % PROGRESS_INTERVAL == 0:
+                                copied = i * len(self._matrix.columns) + j + 1
+                                pct = (copied / total_values) * 100
+                                logger.info(f"[{time.time() - start_time:.2f}s] Copied {copied}/{total_values} values ({pct:.1f}%)")
+                    
+                    if should_report:
+                        logger.info(f"[{time.time() - start_time:.2f}s] Completed element-wise copy in {time.time() - copy_start:.2f}s")
+        else:
+            # No new rows or columns needed, just make a copy
+            matrix_copy = self._matrix.copy()
+            if should_report:
+                logger.info(f"[{time.time() - start_time:.2f}s] No resizing needed, created copy in {time.time() - matrix_creation_start:.2f}s")
+        
+        # Apply all updates at once
+        if should_report:
+            logger.info(f"[{time.time() - start_time:.2f}s] Applying {len(processed_updates)} updates...")
+        
+        update_start = time.time()
+        update_count = 0
+        
+        for (row, col), value in processed_updates.items():
+            matrix_copy.at[row, col] = value
+            update_count += 1
+            
+            # Report progress for large update sets
+            if should_report and update_count % PROGRESS_INTERVAL == 0:
+                progress_pct = (update_count / len(processed_updates)) * 100
+                elapsed = time.time() - update_start
+                estimated_total = (elapsed / update_count) * len(processed_updates)
+                remaining = estimated_total - elapsed
+                logger.info(f"[{time.time() - start_time:.2f}s] Applied {update_count}/{len(processed_updates)} updates ({progress_pct:.1f}%) - Est. remaining: {remaining:.2f}s")
+        
+        if should_report:
+            logger.info(f"[{time.time() - start_time:.2f}s] Updates applied in {time.time() - update_start:.2f}s")
+            logger.info(f"[{time.time() - start_time:.2f}s] Creating result NamedMatrix...")
+        
+        # Create a new NamedMatrix with the updated data
+        result = NamedMatrix.__new__(NamedMatrix)
+        result._matrix = matrix_copy
+        result._row_index = IndexHash(all_rows)
+        result._col_index = IndexHash(all_cols)
+        
+        if should_report:
+            total_time = time.time() - start_time
+            logger.info(f"[{total_time:.2f}s] Batch update completed in {total_time:.2f}s - Final matrix size: {result._matrix.shape}")
+        
+        return result
+        
     def update_many(self, 
                    updates: List[Tuple[Any, Any, Any]]) -> 'NamedMatrix':
         """
@@ -329,10 +513,8 @@ class NamedMatrix:
         Returns:
             A new NamedMatrix with the updated values
         """
-        result = self
-        for row, col, value in updates:
-            result = result.update(row, col, value)
-        return result
+        # Use the more efficient batch_update method
+        return self.batch_update(updates)
     
     def rowname_subset(self, rownames: List[Any]) -> 'NamedMatrix':
         """

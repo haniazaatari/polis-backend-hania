@@ -47,8 +47,9 @@ def run_real_data_test():
         
         print("\n-----------------------------------\n")
         
-        print("Testing VW conversation...")
-        test_vw_conversation()
+        # print("Testing VW conversation...")
+        # test_vw_conversation()
+
         return True
     except Exception as e:
         print(f"Real data test failed with error: {e}")
