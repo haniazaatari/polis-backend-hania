@@ -1032,7 +1032,15 @@ class Conversation:
         result['lastModTimestamp'] = self.last_updated  # Use same value if no specific mod timestamp
         
         # Add tids (list of comment IDs)
-        result['tids'] = self.rating_mat.colnames()
+        # Convert comment IDs to integers when possible for Clojure compatibility
+        tid_integers = []
+        for tid in self.rating_mat.colnames():
+            try:
+                tid_integers.append(int(tid))
+            except (ValueError, TypeError):
+                tid_integers.append(tid)
+                
+        result['tids'] = tid_integers
         
         # Add count values
         result['n'] = self.participant_count
@@ -1056,17 +1064,45 @@ class Conversation:
         
         # Add in-conv (set of participants included in clustering)
         # In Clojure, this is a set of participant IDs that meet certain vote count criteria
+        # Note: In Clojure, the IDs are integers, so we need to convert strings to ints when possible
         ptpt_ids_in_conv = []
         for pid, count in self._compute_user_vote_counts().items():
             # Include participants who have voted on at least min(7, total_comments) comments
             min_votes = min(7, self.comment_count)
             if count >= min_votes:
-                ptpt_ids_in_conv.append(pid)
+                try:
+                    # Try to convert to integer to match Clojure format
+                    ptpt_ids_in_conv.append(int(pid))
+                except (ValueError, TypeError):
+                    # If conversion fails, keep as string
+                    ptpt_ids_in_conv.append(pid)
                 
         result['in-conv'] = ptpt_ids_in_conv
-        result['mod-out'] = list(self.mod_out_tids)
-        result['mod-in'] = list(self.mod_in_tids)
-        result['meta-tids'] = list(self.meta_tids)
+        # Convert mod IDs to integers when possible for Clojure compatibility
+        mod_out_integers = []
+        for tid in self.mod_out_tids:
+            try:
+                mod_out_integers.append(int(tid))
+            except (ValueError, TypeError):
+                mod_out_integers.append(tid)
+        
+        mod_in_integers = []
+        for tid in self.mod_in_tids:
+            try:
+                mod_in_integers.append(int(tid))
+            except (ValueError, TypeError):
+                mod_in_integers.append(tid)
+                
+        meta_integers = []
+        for tid in self.meta_tids:
+            try:
+                meta_integers.append(int(tid))
+            except (ValueError, TypeError):
+                meta_integers.append(tid)
+        
+        result['mod-out'] = mod_out_integers
+        result['mod-in'] = mod_in_integers
+        result['meta-tids'] = meta_integers
         
         # Calculate a math_tick value (used in Clojure version to track updates)
         # Will be added to the result after conversion
@@ -1118,6 +1154,23 @@ class Conversation:
         if isinstance(data, dict):
             converted_dict = {}
             for key, value in data.items():
+                # Try to convert string keys to integers for specific fields
+                if key in ('proj', 'comment-priorities'):
+                    # For these special fields, try to convert string keys to integers
+                    # This makes the Python output match Clojure's integer IDs
+                    if isinstance(value, dict):
+                        int_keyed_dict = {}
+                        for k, v in value.items():
+                            try:
+                                # Try to convert key to integer
+                                int_k = int(k)
+                                int_keyed_dict[int_k] = Conversation._convert_to_clojure_format(v)
+                            except (ValueError, TypeError):
+                                # Keep as is if conversion fails
+                                int_keyed_dict[k] = Conversation._convert_to_clojure_format(v)
+                        converted_dict[key.replace('_', '-') if isinstance(key, str) else key] = int_keyed_dict
+                        continue
+                
                 # Convert the key from underscore to hyphen format
                 hyphenated_key = key.replace('_', '-') if isinstance(key, str) else key
                 # Recursively convert the value
