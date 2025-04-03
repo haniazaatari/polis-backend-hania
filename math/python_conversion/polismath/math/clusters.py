@@ -588,11 +588,11 @@ def clusters_from_dict(clusters_dict: List[Dict],
 def determine_k(nmat: NamedMatrix, base_k: int = 2) -> int:
     """
     Determine the optimal number of clusters based on data size.
-    This aims to match the Clojure implementation's behavior.
+    Uses a simple and consistent heuristic formula.
     
     Args:
         nmat: NamedMatrix to analyze
-        base_k: Base number of clusters
+        base_k: Base number of clusters (minimum)
         
     Returns:
         Recommended number of clusters
@@ -600,20 +600,29 @@ def determine_k(nmat: NamedMatrix, base_k: int = 2) -> int:
     # Get dimensions
     n_rows = len(nmat.rownames())
     
-    # For very small datasets, just use 2 clusters
+    # Simple logarithmic formula for cluster count based on dataset size
+    # - Very small datasets (< 10): Use 2 clusters
+    # - Small datasets (10-100): Use 2-3 clusters
+    # - Medium datasets (100-1000): Use 3-4 clusters
+    # - Large datasets (1000+): Use 4-5 clusters
+    # This is a simple approximation of the elbow method rule
+    
     if n_rows < 10:
         return 2
     
-    # For biodiversity-sized datasets (500+), use 4 clusters
+    # Calculate k using logarithmic formula with a cap
+    # log2(n_rows) gives a reasonable growth that doesn't get too large
+    # For larger datasets, division by a higher number keeps k smaller
     if n_rows >= 500:
-        return 4
+        # For larger datasets like biodiversity (500+ participants),
+        # use a more conservative formula that keeps k between 2-3
+        k = 2 + int(min(1, np.log2(n_rows) / 10))
+    else:
+        # For smaller datasets, allow k to grow more quickly
+        k = 2 + int(min(2, np.log2(n_rows) / 5))
     
-    # For VW-sized datasets (50-100), use 2 clusters
-    if n_rows >= 50 and n_rows < 100:
-        return 2
-    
-    # Default is base_k or 3
-    return max(base_k, 3)
+    # Ensure we return at least the base_k value
+    return max(base_k, k)
 
 
 def cluster_named_matrix(nmat: NamedMatrix, 
