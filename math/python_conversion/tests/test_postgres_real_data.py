@@ -13,6 +13,9 @@ import json
 from datetime import datetime
 import psycopg2
 from psycopg2 import extras
+import boto3
+import time
+import decimal
 
 # Add the parent directory to the path to import the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -20,6 +23,126 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from polismath.conversation.conversation import Conversation
 from polismath.database.postgres import PostgresClient, PostgresConfig
 from polismath.math.named_matrix import NamedMatrix
+
+
+def init_dynamodb():
+    """
+    Initialize a connection to DynamoDB on localhost:8000.
+    
+    Returns:
+        DynamoDB resource and metadata about created tables
+    """
+    # Connect to local DynamoDB
+    print("Connecting to local DynamoDB at localhost:8000")
+    dynamodb = boto3.resource(
+        'dynamodb',
+        endpoint_url='http://localhost:8000',
+        region_name='us-west-2',
+        aws_access_key_id='dummy',
+        aws_secret_access_key='dummy'
+    )
+    
+    # Create tables if they don't exist
+    tables = list(dynamodb.tables.all())
+    table_names = [table.name for table in tables]
+    
+    # Create conversations table if it doesn't exist
+    if 'polis_conversations' not in table_names:
+        print("Creating polis_conversations table")
+        conversations_table = dynamodb.create_table(
+            TableName='polis_conversations',
+            KeySchema=[
+                {'AttributeName': 'zid', 'KeyType': 'HASH'}  # Partition key
+            ],
+            AttributeDefinitions=[
+                {'AttributeName': 'zid', 'AttributeType': 'S'}
+            ],
+            ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+        )
+        # Wait for table creation
+        conversations_table.meta.client.get_waiter('table_exists').wait(TableName='polis_conversations')
+        print("polis_conversations table created")
+    else:
+        conversations_table = dynamodb.Table('polis_conversations')
+        print("Using existing polis_conversations table")
+    
+    # Create math table if it doesn't exist
+    if 'polis_math' not in table_names:
+        print("Creating polis_math table")
+        math_table = dynamodb.create_table(
+            TableName='polis_math',
+            KeySchema=[
+                {'AttributeName': 'zid', 'KeyType': 'HASH'}  # Partition key
+            ],
+            AttributeDefinitions=[
+                {'AttributeName': 'zid', 'AttributeType': 'S'}
+            ],
+            ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+        )
+        # Wait for table creation
+        math_table.meta.client.get_waiter('table_exists').wait(TableName='polis_math')
+        print("polis_math table created")
+    else:
+        math_table = dynamodb.Table('polis_math')
+        print("Using existing polis_math table")
+    
+    return {
+        'dynamodb': dynamodb,
+        'conversations_table': conversations_table,
+        'math_table': math_table
+    }
+
+
+def write_to_dynamodb(dynamodb_resources, conversation_id, conv_data):
+    """
+    Write conversation data to DynamoDB.
+    
+    Args:
+        dynamodb_resources: Dictionary with DynamoDB resources
+        conversation_id: Conversation ID (zid)
+        conv_data: Conversation data from conv.to_dict()
+        
+    Returns:
+        Success status
+    """
+    math_table = dynamodb_resources['math_table']
+    conversations_table = dynamodb_resources['conversations_table']
+    
+    try:
+        print(f"Writing conversation {conversation_id} to DynamoDB")
+        
+        # Prepare math data record
+        # Need to convert all data to DynamoDB compatible format
+        # We'll store a serialized version in the DynamoDB table
+        math_json = json.dumps(conv_data)
+        
+        # Put math data
+        math_table.put_item(
+            Item={
+                'zid': str(conversation_id),
+                'math_data': math_json,
+                'last_updated': int(time.time())
+            }
+        )
+        print(f"Math data written to DynamoDB for conversation {conversation_id}")
+        
+        # Create a summary record for the conversations table
+        summary = {
+            'zid': str(conversation_id),
+            'participant_count': conv_data.get('n', 0),
+            'comment_count': conv_data.get('n-cmts', 0),
+            'group_count': len(conv_data.get('group-clusters', [])),
+            'last_updated': int(time.time())
+        }
+        
+        # Put conversation summary
+        conversations_table.put_item(Item=summary)
+        print(f"Conversation summary written to DynamoDB for conversation {conversation_id}")
+        
+        return True
+    except Exception as e:
+        print(f"Error writing to DynamoDB: {e}")
+        return False
 
 
 def connect_to_db():
@@ -582,12 +705,27 @@ def test_conversation_from_postgres():
             output_dir = os.path.join(os.path.dirname(__file__), '..', 'real_data', 'postgres_output')
             os.makedirs(output_dir, exist_ok=True)
             
-            # Save the conversation data
+            # Save the conversation data to file
             output_file = os.path.join(output_dir, f'conversation_{zinvite}_result.json')
+            conv_data = conv.to_dict()
             with open(output_file, 'w') as f:
-                json.dump(conv.to_dict(), f, indent=2)
+                json.dump(conv_data, f, indent=2)
             
             print(f"[{time.time() - start_time:.2f}s] Saved results to {output_file} in {time.time() - save_start:.2f}s")
+            
+            # Save to DynamoDB
+            try:
+                print(f"[{time.time() - start_time:.2f}s] Initializing DynamoDB connection...")
+                dynamo_start = time.time()
+                dynamodb_resources = init_dynamodb()
+                print(f"[{time.time() - start_time:.2f}s] DynamoDB initialized in {time.time() - dynamo_start:.2f}s")
+                
+                print(f"[{time.time() - start_time:.2f}s] Writing to DynamoDB...")
+                write_start = time.time()
+                success = write_to_dynamodb(dynamodb_resources, conv_id, conv_data)
+                print(f"[{time.time() - start_time:.2f}s] DynamoDB write {'succeeded' if success else 'failed'} in {time.time() - write_start:.2f}s")
+            except Exception as e:
+                print(f"[{time.time() - start_time:.2f}s] Error with DynamoDB: {e}")
             
             # Perform basic assertions
             print(f"[{time.time() - start_time:.2f}s] Running tests...")
@@ -699,6 +837,150 @@ def patched_poll_moderation(client, zid, since=None):
     }
 
 
+def test_dynamodb_direct():
+    """
+    Test writing directly to DynamoDB without PostgreSQL.
+    This is useful for directly testing the DynamoDB functionality.
+    """
+    print("\nTesting direct DynamoDB write functionality")
+    
+    try:
+        # Create a dummy conversation
+        conv_id = "test_conversation_" + str(int(time.time()))
+        print(f"Creating dummy conversation {conv_id}")
+        
+        # Create a basic conversation
+        conv = Conversation(conv_id)
+        
+        # Add some dummy votes
+        dummy_votes = {
+            'votes': [
+                {'pid': '1', 'tid': '101', 'vote': 1.0},
+                {'pid': '1', 'tid': '102', 'vote': -1.0},
+                {'pid': '2', 'tid': '101', 'vote': -1.0},
+                {'pid': '2', 'tid': '102', 'vote': 1.0},
+                {'pid': '3', 'tid': '101', 'vote': 1.0}
+            ]
+        }
+        
+        # Update conversation with votes
+        print("Adding votes to conversation")
+        conv = conv.update_votes(dummy_votes)
+        
+        # Recompute to generate data
+        print("Recomputing conversation")
+        conv = conv.recompute()
+        
+        # Get conversation data
+        conv_data = conv.to_dict()
+        
+        # Initialize DynamoDB
+        print("Initializing DynamoDB connection")
+        dynamodb_resources = init_dynamodb()
+        
+        # Write to DynamoDB
+        print(f"Writing conversation {conv_id} to DynamoDB")
+        success = write_to_dynamodb(dynamodb_resources, conv_id, conv_data)
+        
+        if success:
+            print("Successfully wrote test data to DynamoDB")
+            
+            # Verify the data was written
+            math_table = dynamodb_resources['math_table']
+            
+            # Get the item from DynamoDB
+            response = math_table.get_item(Key={'zid': conv_id})
+            
+            # Check if item exists
+            if 'Item' in response:
+                print("Successfully retrieved data from DynamoDB")
+                
+                # Load and validate a portion of the data
+                stored_data = json.loads(response['Item']['math_data'])
+                
+                # Perform some basic validation
+                assert stored_data.get('zid') == conv_id, "Conversation ID mismatch"
+                assert 'n' in stored_data, "Missing 'n' in stored data"
+                assert 'n-cmts' in stored_data, "Missing 'n-cmts' in stored data"
+                
+                print("Data validation successful")
+                return True
+            else:
+                print("Failed to retrieve data from DynamoDB")
+                return False
+        else:
+            print("Failed to write test data to DynamoDB")
+            return False
+            
+    except Exception as e:
+        print(f"Error in direct DynamoDB test: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def inspect_dynamodb_data():
+    """Inspect data in DynamoDB tables"""
+    print("\nInspecting DynamoDB data")
+    
+    # Initialize DynamoDB
+    dynamodb_resources = init_dynamodb()
+    math_table = dynamodb_resources['math_table']
+    conversations_table = dynamodb_resources['conversations_table']
+    
+    # Scan the conversations table
+    response = conversations_table.scan()
+    items = response.get('Items', [])
+    print(f"\nFound {len(items)} conversations:")
+    for item in items:
+        print(f"  - {item['zid']}: {item.get('participant_count', 0)} participants, {item.get('comment_count', 0)} comments")
+    
+    # If only one conversation, show it automatically
+    if len(items) == 1:
+        zid = items[0]['zid']
+        print(f"\nAutomatically showing conversation {zid} (only one available)")
+        response = math_table.get_item(Key={'zid': zid})
+        item = response.get('Item')
+        if item:
+            math_data = json.loads(item['math_data'])
+            print(f"\nConversation {zid} summary:")
+            print(f"  - Participants: {math_data.get('n', 0)}")
+            print(f"  - Comments: {math_data.get('n-cmts', 0)}")
+            print(f"  - Groups: {len(math_data.get('group-clusters', []))}")
+            
+            # Show group details
+            for i, group in enumerate(math_data.get('group-clusters', [])):
+                print(f"\nGroup {i+1} (ID: {group.get('id')})")
+                print(f"  - Members: {len(group.get('members', []))}")
+                print(f"  - Center: {group.get('center', [])}")
+    else:
+        # If multiple conversations, try to get input but handle EOFError
+        try:
+            zid = input("\nEnter a conversation ID to inspect (or press Enter to skip): ")
+            if zid:
+                response = math_table.get_item(Key={'zid': zid})
+                item = response.get('Item')
+                if item:
+                    math_data = json.loads(item['math_data'])
+                    print(f"\nConversation {zid} summary:")
+                    print(f"  - Participants: {math_data.get('n', 0)}")
+                    print(f"  - Comments: {math_data.get('n-cmts', 0)}")
+                    print(f"  - Groups: {len(math_data.get('group-clusters', []))}")
+                    
+                    # Show group details by default
+                    for i, group in enumerate(math_data.get('group-clusters', [])):
+                        print(f"\nGroup {i+1} (ID: {group.get('id')})")
+                        print(f"  - Members: {len(group.get('members', []))}")
+                        print(f"  - Center: {group.get('center', [])}")
+                else:
+                    print(f"Conversation {zid} not found")
+        except EOFError:
+            print("\nNon-interactive environment detected.")
+            # Just show the list of conversations already displayed
+    
+    return True
+
+
 def test_conversation_client_api():
     """
     Test processing a conversation using the PostgresClient API.
@@ -797,6 +1079,21 @@ def test_conversation_client_api():
         # Save results directly to math_main table (optional, uncomment to enable)
         # client.write_math_main(zid, math_data)
         
+        # Save to DynamoDB
+        try:
+            print("\nInitializing DynamoDB connection...")
+            dynamodb_resources = init_dynamodb()
+            print("DynamoDB initialized")
+            
+            print(f"Writing conversation {zid} to DynamoDB...")
+            success = write_to_dynamodb(dynamodb_resources, zid, math_data)
+            if success:
+                print("Successfully wrote conversation data to DynamoDB")
+            else:
+                print("Failed to write conversation data to DynamoDB")
+        except Exception as e:
+            print(f"Error with DynamoDB: {e}")
+        
         # Basic assertions
         assert group_count >= 0, "Group count should be non-negative"
         assert participant_count > 0, "Participant count should be positive"
@@ -815,6 +1112,12 @@ if __name__ == "__main__":
         if sys.argv[1] == 'client':
             print("Testing PostgresClient API:")
             test_conversation_client_api()
+        elif sys.argv[1] == 'dynamodb':
+            print("Testing DynamoDB directly:")
+            test_dynamodb_direct()
+        elif sys.argv[1] == 'inspect':
+            print("Inspecting DynamoDB data:")
+            inspect_dynamodb_data()
         elif sys.argv[1] == 'limit' and len(sys.argv) > 2:
             # Run with a specific vote limit
             import time
@@ -890,10 +1193,14 @@ if __name__ == "__main__":
             print("Testing conversations with PostgreSQL data:")
             test_conversation_from_postgres()
     else:
-        print("Testing conversations with PostgreSQL data:")
-        test_conversation_from_postgres()
+        # Print usage
+        print("Usage:")
+        print("  python test_postgres_real_data.py             # Test with PostgreSQL data")
+        print("  python test_postgres_real_data.py client      # Test PostgresClient API")
+        print("  python test_postgres_real_data.py dynamodb    # Test DynamoDB directly")
+        print("  python test_postgres_real_data.py inspect     # Inspect DynamoDB data")
+        print("  python test_postgres_real_data.py limit <n>   # Test with limited votes")
         
-        # Uncomment if you want to run both tests
-        # print("\n-----------------------------------\n")
-        # print("Testing PostgresClient API:")
-        # test_conversation_client_api()
+        # By default, run the direct DynamoDB test
+        print("\nRunning DynamoDB test by default:")
+        test_dynamodb_direct()
