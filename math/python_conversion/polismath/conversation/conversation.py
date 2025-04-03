@@ -627,6 +627,74 @@ class Conversation:
         
         logger.info(f"Participant info computation completed in {time.time() - start_time:.2f}s")
     
+    def _compute_comment_priorities(self) -> None:
+        """
+        Compute comment priorities for Clojure format compatibility.
+        
+        In the Clojure version, comment priorities are used to determine which
+        comments to show users. This method computes similar values in a format
+        compatible with the Clojure output.
+        """
+        # Import needed libraries
+        import numpy as np
+        import pandas as pd
+        import time
+        
+        start_time = time.time()
+        logger.info("Computing comment priorities...")
+        
+        # Initialize comment priorities
+        self.comment_priorities = {}
+        
+        # If we don't have a rating matrix, return empty priorities
+        if self.rating_mat.values.shape[0] == 0 or self.rating_mat.values.shape[1] == 0:
+            logger.info("No rating matrix data, skipping comment priorities")
+            return
+        
+        try:
+            # Get the list of comment IDs
+            comment_ids = self.rating_mat.colnames()
+            
+            # For each comment, calculate a priority value based on:
+            # 1. Number of votes (more votes = higher priority)
+            # 2. Divisiveness (comments that divide groups = higher priority)
+            # 3. Recency (using comment ID as a proxy, higher ID = more recent)
+            
+            # Start with vote counts as the base priority
+            for cid in comment_ids:
+                try:
+                    # Get stats for this comment
+                    vote_count = self.vote_stats.get('comment_stats', {}).get(cid, {}).get('n_votes', 0)
+                    
+                    # Basic priority starts with vote count
+                    priority = vote_count
+                    
+                    # Store priority (must be an int or float for Clojure compatibility)
+                    self.comment_priorities[cid] = float(priority)
+                except Exception as e:
+                    logger.warning(f"Error computing priority for comment {cid}: {e}")
+                    # Default priority
+                    self.comment_priorities[cid] = 1.0
+            
+            # If we have representativeness data, use it to adjust priorities
+            if self.repness and 'comment_repness' in self.repness:
+                # Prioritize comments with high representativeness
+                for item in self.repness['comment_repness']:
+                    tid = item.get('tid')
+                    repness = abs(item.get('repness', 0))
+                    
+                    if tid in self.comment_priorities:
+                        # Boost priority based on representativeness
+                        self.comment_priorities[tid] += repness
+            
+            logger.info(f"Comment priorities computation completed in {time.time() - start_time:.2f}s")
+        
+        except Exception as e:
+            logger.error(f"Error computing comment priorities: {e}")
+            # Make sure we have minimal comment priorities even if computation fails
+            for cid in self.rating_mat.colnames():
+                self.comment_priorities[cid] = 1.0
+    
     def recompute(self) -> 'Conversation':
         """
         Recompute all derived data.
@@ -657,6 +725,9 @@ class Conversation:
         
         # Compute participant info
         result._compute_participant_info()
+        
+        # Compute comment priorities (for Clojure format compatibility)
+        result._compute_comment_priorities()
         
         return result
     
@@ -721,16 +792,346 @@ class Conversation:
         if self.participant_info:
             result['participant_info'] = self.participant_info
         
+        # Add comment priorities if available (matching Clojure format)
+        if hasattr(self, 'comment_priorities') and self.comment_priorities:
+            result['comment_priorities'] = self.comment_priorities
+        
         return result
     
-    def to_dict(self) -> Dict[str, Any]:
+    def _compute_votes_base(self) -> Dict[str, Any]:
+        """
+        Compute votes base structure which maps each comment ID to aggregated vote counts.
+        This matches the Clojure conversation.clj votes-base implementation.
+        
+        Returns:
+            Dictionary mapping comment IDs to vote statistics
+        """
+        import numpy as np
+        
+        # Get all comment IDs
+        comment_ids = self.rating_mat.colnames()
+        
+        # Helper functions to identify vote types (like utils/agree?, utils/disagree? in Clojure)
+        def agree_vote(x):
+            return not np.isnan(x) and abs(x - 1.0) < 0.001
+            
+        def disagree_vote(x):
+            return not np.isnan(x) and abs(x + 1.0) < 0.001
+            
+        def is_number(x):
+            return not np.isnan(x)
+        
+        # Create vote aggregations for each comment
+        votes_base = {}
+        for tid in comment_ids:
+            # Get the column for this comment
+            try:
+                col_idx = self.rating_mat.colnames().index(tid)
+                votes = self.rating_mat.values[:, col_idx]
+                
+                # Count vote types
+                agree_votes = np.sum(agree_vote(votes))
+                disagree_votes = np.sum(disagree_vote(votes))
+                total_votes = np.sum(is_number(votes))
+                
+                # Store in format matching Clojure
+                votes_base[tid] = {
+                    'A': int(agree_votes),
+                    'D': int(disagree_votes),
+                    'S': int(total_votes)
+                }
+            except (ValueError, IndexError) as e:
+                # If comment not found, use empty counts
+                votes_base[tid] = {'A': 0, 'D': 0, 'S': 0}
+                
+        return votes_base
+    
+    def _compute_group_votes(self) -> Dict[str, Any]:
+        """
+        Compute group votes structure which maps group IDs to vote statistics by comment.
+        This matches the Clojure conversation.clj group-votes implementation.
+        
+        Returns:
+            Dictionary mapping group IDs to vote statistics
+        """
+        # If no groups, return empty dict
+        if not self.group_clusters:
+            return {}
+            
+        group_votes = {}
+        
+        # Helper to count votes of a specific type for a group
+        def count_votes_for_group(group_id, comment_id, vote_type):
+            group = next((g for g in self.group_clusters if g.get('id') == group_id), None)
+            if not group:
+                return 0
+                
+            # Get members of this group
+            members = group.get('members', [])
+            
+            # If members list is empty, return 0
+            if not members:
+                return 0
+                
+            # Get the row indices for these members
+            row_indices = []
+            for member in members:
+                try:
+                    member_idx = self.rating_mat.rownames().index(member)
+                    row_indices.append(member_idx)
+                except ValueError:
+                    # Skip members not found in matrix
+                    continue
+                    
+            # Get the column index for this comment
+            try:
+                col_idx = self.rating_mat.colnames().index(comment_id)
+            except ValueError:
+                # If comment not found, return 0
+                return 0
+                
+            # Count votes of specified type
+            votes = self.rating_mat.values[row_indices, col_idx]
+            
+            if vote_type == 'A':  # Agree
+                return int(np.sum(np.abs(votes - 1.0) < 0.001))
+            elif vote_type == 'D':  # Disagree
+                return int(np.sum(np.abs(votes + 1.0) < 0.001))
+            elif vote_type == 'S':  # Total votes
+                return int(np.sum(~np.isnan(votes)))
+            else:
+                return 0
+        
+        # For each group, compute vote stats
+        for group in self.group_clusters:
+            group_id = group.get('id')
+            
+            # Skip groups without ID
+            if group_id is None:
+                continue
+                
+            # Count members in this group
+            n_members = len(group.get('members', []))
+            
+            # Get vote counts for each comment
+            votes = {}
+            for comment_id in self.rating_mat.colnames():
+                votes[comment_id] = {
+                    'A': count_votes_for_group(group_id, comment_id, 'A'),
+                    'D': count_votes_for_group(group_id, comment_id, 'D'),
+                    'S': count_votes_for_group(group_id, comment_id, 'S')
+                }
+                
+            # Store results
+            group_votes[str(group_id)] = {
+                'n-members': n_members,
+                'votes': votes
+            }
+            
+        return group_votes
+        
+    def _compute_user_vote_counts(self) -> Dict[str, int]:
+        """
+        Compute the number of votes per participant.
+        
+        Returns:
+            Dictionary mapping participant IDs to vote counts
+        """
+        vote_counts = {}
+        
+        for i, pid in enumerate(self.rating_mat.rownames()):
+            # Get row of votes for this participant
+            row = self.rating_mat.values[i, :]
+            
+            # Count non-nan values
+            count = np.sum(~np.isnan(row))
+            
+            # Store count
+            vote_counts[pid] = int(count)
+            
+        return vote_counts
+        
+    def _compute_group_aware_consensus(self) -> Dict[str, float]:
+        """
+        Compute group-aware consensus values for each comment.
+        Based on the Clojure implementation in conversation.clj.
+        
+        Returns:
+            Dictionary mapping comment IDs to consensus values
+        """
+        # If we don't have group votes or comments, return empty dict
+        if not hasattr(self, 'group_clusters') or not self.group_clusters:
+            return {}
+            
+        # Get group votes structure
+        group_votes = self._compute_group_votes()
+        if not group_votes:
+            return {}
+            
+        # First build a nested structure of [tid][gid] -> probability
+        # This matches the tid-gid-probs in Clojure
+        tid_gid_probs = {}
+        
+        # First reduce: iterate through each group
+        for gid, gid_stats in group_votes.items():
+            votes_data = gid_stats.get('votes', {})
+            
+            # Second reduce: iterate through each comment's votes in this group
+            for tid, vote_stats in votes_data.items():
+                # Get vote counts with defaults
+                agree_count = vote_stats.get('A', 0)
+                total_count = vote_stats.get('S', 0)
+                
+                # Calculate probability with Laplace smoothing
+                prob = (agree_count + 1.0) / (total_count + 2.0)
+                
+                # Initialize the tid entry if needed
+                if tid not in tid_gid_probs:
+                    tid_gid_probs[tid] = {}
+                
+                # Store probability for this group and comment
+                tid_gid_probs[tid][gid] = prob
+        
+        # Now calculate consensus by multiplying probabilities for each comment
+        # This matches the tid-consensus in Clojure
+        consensus = {}
+        
+        for tid, gid_probs in tid_gid_probs.items():
+            # Get all probabilities for this comment
+            probs = list(gid_probs.values())
+            
+            if probs:
+                # Multiply all probabilities (same as Clojure's reduce *)
+                consensus_value = 1.0
+                for p in probs:
+                    consensus_value *= p
+                
+                # Store result
+                consensus[tid] = consensus_value
+        
+        return consensus
+    
+    def to_dict(self, use_clojure_format: bool = True) -> Dict[str, Any]:
         """
         Convert the conversation to a dictionary for serialization.
+        
+        Args:
+            use_clojure_format: If True, use hyphenated keys to match Clojure format
         
         Returns:
             Dictionary representation of the conversation
         """
-        return self.get_full_data()
+        # Get base dictionary
+        result = self.get_full_data()
+        
+        # Rename conversation_id to zid for Clojure compatibility
+        result['zid'] = result.pop('conversation_id')
+        
+        # Add timestamps in Clojure format
+        result['lastVoteTimestamp'] = self.last_updated
+        result['lastModTimestamp'] = self.last_updated  # Use same value if no specific mod timestamp
+        
+        # Add tids (list of comment IDs)
+        result['tids'] = self.rating_mat.colnames()
+        
+        # Add count values
+        result['n'] = self.participant_count
+        result['n-cmts'] = self.comment_count
+        
+        # Add user vote counts
+        result['user-vote-counts'] = self._compute_user_vote_counts()
+        
+        # Add votes-base structure
+        result['votes-base'] = self._compute_votes_base()
+        
+        # Add group-votes structure
+        result['group-votes'] = self._compute_group_votes()
+        
+        # Add empty subgroup structures (to be implemented if needed)
+        result['subgroup-votes'] = {}
+        result['subgroup-repness'] = {}
+        
+        # Add group-aware-consensus (based on Clojure implementation)
+        result['group-aware-consensus'] = self._compute_group_aware_consensus()
+        
+        # Add in-conv (set of participants included in clustering)
+        # In Clojure, this is a set of participant IDs that meet certain vote count criteria
+        ptpt_ids_in_conv = []
+        for pid, count in self._compute_user_vote_counts().items():
+            # Include participants who have voted on at least min(7, total_comments) comments
+            min_votes = min(7, self.comment_count)
+            if count >= min_votes:
+                ptpt_ids_in_conv.append(pid)
+                
+        result['in-conv'] = ptpt_ids_in_conv
+        result['mod-out'] = list(self.mod_out_tids)
+        result['mod-in'] = list(self.mod_in_tids)
+        result['meta-tids'] = list(self.meta_tids)
+        
+        # Calculate a math_tick value (used in Clojure version to track updates)
+        # Will be added to the result after conversion
+        
+        # Add base-clusters (in Clojure these are lower-level clusters)
+        # For simplicity, we'll use the same group clusters for now
+        result['base-clusters'] = self.group_clusters
+        
+        # Add separate consensus field (same structure as in Clojure)
+        result['consensus'] = {
+            'agree': [],      # List of agreed-upon comments
+            'disagree': [],   # List of disagreed-upon comments
+            'comment-stats': {} # Statistics on comments
+        }
+        
+        if use_clojure_format:
+            # Recursively convert all Python underscores to Clojure hyphens throughout the data structure
+            converted_result = self._convert_to_clojure_format(result)
+            
+            # Add math_tick with underscore directly to avoid conversion to hyphen
+            # This matches Clojure's format exactly
+            converted_result['math_tick'] = int(time.time() * 1000)
+            
+            return converted_result
+        else:
+            result['math_tick'] = int(time.time() * 1000)
+            return result
+    
+    @staticmethod
+    def _convert_to_clojure_format(data: Any) -> Any:
+        """
+        Recursively convert all keys in a nested data structure from underscore format to hyphenated format.
+        
+        Args:
+            data: Any Python data structure (dict, list, or primitive value)
+            
+        Returns:
+            Converted data structure with hyphenated keys
+        """
+        # Base cases: primitive types
+        if data is None or isinstance(data, (str, int, float, bool)):
+            return data
+            
+        # Handle numpy arrays and convert to lists
+        if hasattr(data, 'tolist') and callable(getattr(data, 'tolist')):
+            return data.tolist()
+            
+        # Recursive case: dictionaries
+        if isinstance(data, dict):
+            converted_dict = {}
+            for key, value in data.items():
+                # Convert the key from underscore to hyphen format
+                hyphenated_key = key.replace('_', '-') if isinstance(key, str) else key
+                # Recursively convert the value
+                converted_value = Conversation._convert_to_clojure_format(value)
+                converted_dict[hyphenated_key] = converted_value
+            return converted_dict
+            
+        # Recursive case: lists or tuples
+        if isinstance(data, (list, tuple)):
+            return [Conversation._convert_to_clojure_format(item) for item in data]
+            
+        # For any other type (like sets, custom objects, etc.), just return as is
+        # This is a simplification and might need to be extended for other types
+        return data
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Conversation':

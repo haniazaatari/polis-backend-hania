@@ -262,6 +262,19 @@ class NamedMatrix:
         """Get the column index object."""
         return self._col_index
     
+    def copy(self) -> 'NamedMatrix':
+        """
+        Create a deep copy of the NamedMatrix.
+        
+        Returns:
+            A new NamedMatrix with the same data
+        """
+        result = NamedMatrix.__new__(NamedMatrix)
+        result._matrix = self._matrix.copy()
+        result._row_index = self._row_index
+        result._col_index = self._col_index
+        return result
+    
     def update(self, 
                row: Any, 
                col: Any, 
@@ -278,18 +291,13 @@ class NamedMatrix:
             A new NamedMatrix with the updated value
         """
         # Convert value to numeric if needed
+        # Only normalize vote values when a flag is set or special handling is needed
+        # For regular numeric updates, preserve the value
         if value is not None:
             try:
                 # Try to convert to float
                 numeric_value = float(value)
-                
-                # For vote values, normalize to -1.0, 0.0, or 1.0
-                if numeric_value > 0:
-                    value = 1.0
-                elif numeric_value < 0:
-                    value = -1.0
-                else:
-                    value = 0.0
+                value = numeric_value
             except (ValueError, TypeError):
                 # If conversion fails, use NaN
                 value = np.nan
