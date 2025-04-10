@@ -1,0 +1,64 @@
+services:
+  # DynamoDB Local for development
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: delphi-dynamodb-local
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data"
+    volumes:
+      - dynamodb-data:/home/dynamodblocal/data
+    environment:
+      - JAVA_OPTS=-Xmx1G
+    networks:
+      - delphi-network
+
+  # Delphi Application
+  delphi-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delphi-app
+    depends_on:
+      - dynamodb-local
+    environment:
+      - AWS_ACCESS_KEY_ID=fakeMyKeyId
+      - AWS_SECRET_ACCESS_KEY=fakeSecretAccessKey
+      - AWS_REGION=us-west-2
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      # PostgreSQL connection settings
+      - DATABASE_URL=postgresql://colinmegill@host.docker.internal:5432/polisDB_prod_local_mar14
+      # Set Python path explicitly
+      - PYTHONPATH=/app
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - delphi-network
+    volumes:
+      - ./delphi_orchestrator.py:/app/delphi_orchestrator.py
+      - ./create_dynamodb_tables.py:/app/create_dynamodb_tables.py
+      - ./requirements.txt:/app/requirements.txt
+      # Mount polismath and other Python modules directory
+      - ./polismath:/app/polismath
+      # Mount umap_narrative directory
+      - ./umap_narrative:/app/umap_narrative
+    # Keep container running but install dependencies first
+    command: >
+      bash -c "
+      echo 'Ensuring dependencies are installed...' &&
+      pip install --no-cache-dir fastapi==0.115.0 pydantic colorlog &&
+      echo 'PYTHONPATH=$PYTHONPATH' &&
+      echo 'Installed packages:' &&
+      pip list | grep fastapi &&
+      echo 'Keeping container alive...' &&
+      tail -f /dev/null
+      "
+
+volumes:
+  dynamodb-data:
+
+networks:
+  delphi-network:
+    driver: bridge
