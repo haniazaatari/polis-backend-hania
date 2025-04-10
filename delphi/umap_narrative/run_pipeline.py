@@ -1,0 +1,1087 @@
+#!/usr/bin/env python3
+"""
+Process Polis conversation from PostgreSQL and generate visualizations.
+
+This script fetches conversation data from PostgreSQL, processes it using
+EVōC for clustering, and generates interactive visualizations with topic labeling.
+"""
+
+import os
+import sys
+import json
+import time
+import logging
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from datetime import datetime
+from pathlib import Path
+from tqdm.auto import tqdm
+
+# Import from installed packages
+import evoc
+import datamapplot
+from sentence_transformers import SentenceTransformer
+from umap import UMAP
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+
+# Import from local modules
+from polismath_commentgraph.utils.storage import PostgresClient, DynamoDBStorage
+from polismath_commentgraph.utils.converter import DataConverter
+from polismath_commentgraph.core.embedding import EmbeddingEngine
+from polismath_commentgraph.core.clustering import ClusteringEngine
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db_password=None):
+    """Set up environment variables for database connections."""
+    # PostgreSQL settings
+    if db_host:
+        os.environ['DATABASE_HOST'] = db_host
+    elif not os.environ.get('DATABASE_HOST'):
+        os.environ['DATABASE_HOST'] = 'localhost'
+    
+    if db_port:
+        os.environ['DATABASE_PORT'] = str(db_port)
+    elif not os.environ.get('DATABASE_PORT'):
+        os.environ['DATABASE_PORT'] = '5432'
+    
+    if db_name:
+        os.environ['DATABASE_NAME'] = db_name
+    elif not os.environ.get('DATABASE_NAME'):
+        os.environ['DATABASE_NAME'] = 'polisDB_prod_local_mar14'
+    
+    if db_user:
+        os.environ['DATABASE_USER'] = db_user
+    elif not os.environ.get('DATABASE_USER'):
+        os.environ['DATABASE_USER'] = 'postgres'
+    
+    if db_password:
+        os.environ['DATABASE_PASSWORD'] = db_password
+    elif not os.environ.get('DATABASE_PASSWORD'):
+        os.environ['DATABASE_PASSWORD'] = ''
+    
+    # Print database connection info
+    logger.info(f"Database connection info:")
+    logger.info(f"- HOST: {os.environ.get('DATABASE_HOST')}")
+    logger.info(f"- PORT: {os.environ.get('DATABASE_PORT')}")
+    logger.info(f"- DATABASE: {os.environ.get('DATABASE_NAME')}")
+    logger.info(f"- USER: {os.environ.get('DATABASE_USER')}")
+    
+    # DynamoDB settings (for local DynamoDB)
+    os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
+    os.environ['AWS_ACCESS_KEY_ID'] = 'fakeMyKeyId'
+    os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
+    os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
+
+def fetch_conversation_data(zid):
+    """
+    Fetch conversation data from PostgreSQL.
+    
+    Args:
+        zid: Conversation ID
+        
+    Returns:
+        comments: List of comment dictionaries
+        metadata: Dictionary with conversation metadata
+    """
+    logger.info(f"Fetching conversation {zid} from PostgreSQL...")
+    postgres_client = PostgresClient()
+    
+    try:
+        # Initialize connection
+        postgres_client.initialize()
+        
+        # Get conversation metadata
+        conversation = postgres_client.get_conversation_by_id(zid)
+        if not conversation:
+            logger.error(f"Conversation {zid} not found in database.")
+            return None, None
+        
+        # Get comments - include all comments, regardless of active status
+        comments = postgres_client.get_comments_by_conversation(zid)
+        logger.info(f"Retrieved {len(comments)} comments from conversation {zid}")
+        
+        # Count active and inactive for logging purposes only
+        active_count = sum(1 for c in comments if c.get('active', True))
+        inactive_count = sum(1 for c in comments if not c.get('active', True))
+        logger.info(f"Comment counts - Active: {active_count}, Inactive: {inactive_count}, Total: {len(comments)}")
+        
+        # Create metadata
+        metadata = {
+            'conversation_id': str(zid),
+            'zid': zid,
+            'conversation_name': conversation.get('topic', f"Conversation {zid}"),
+            'description': conversation.get('description', ''),
+            'created': str(conversation.get('created', '')),
+            'modified': str(conversation.get('modified', '')),
+            'owner': conversation.get('owner', ''),
+            'num_comments': len(comments),
+            'active_count': active_count,
+            'inactive_count': inactive_count
+        }
+        
+        return comments, metadata
+    
+    except Exception as e:
+        logger.error(f"Error fetching conversation: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None, None
+    
+    finally:
+        # Clean up connection
+        postgres_client.shutdown()
+
+def process_comments(comments, conversation_id):
+    """
+    Process comments with embedding and clustering.
+    
+    Args:
+        comments: List of comment dictionaries
+        conversation_id: Conversation ID string
+        
+    Returns:
+        document_map: 2D projection of comment embeddings
+        document_vectors: Comment embeddings
+        cluster_layers: Hierarchy of cluster assignments
+        comment_texts: List of comment text strings
+        comment_ids: List of comment IDs
+    """
+    logger.info(f"Processing {len(comments)} comments for conversation {conversation_id}...")
+    
+    # Extract comment texts and IDs
+    comment_texts = [c['txt'] for c in comments if c['txt'] and c['txt'].strip()]
+    comment_ids = [c['tid'] for c in comments if c['txt'] and c['txt'].strip()]
+    
+    # Generate embeddings with SentenceTransformer
+    logger.info("Generating embeddings with SentenceTransformer...")
+    embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+    document_vectors = embedding_model.encode(comment_texts, show_progress_bar=True)
+    
+    # Generate 2D projection with UMAP
+    logger.info("Generating 2D projection with UMAP...")
+    document_map = UMAP(n_components=2, metric='cosine', random_state=42).fit_transform(document_vectors)
+    
+    # Cluster with EVōC
+    logger.info("Clustering with EVōC...")
+    try:
+        clusterer = evoc.EVoC(min_samples=5)  # Set min_samples to avoid empty clusters
+        cluster_labels = clusterer.fit_predict(document_vectors)
+        cluster_layers = clusterer.cluster_layers_
+        
+        logger.info(f"Found {len(np.unique(cluster_labels))} clusters at the finest level")
+        for i, layer in enumerate(cluster_layers):
+            unique_clusters = np.unique(layer[layer >= 0])
+            logger.info(f"Layer {i}: {len(unique_clusters)} clusters")
+            
+    except Exception as e:
+        logger.error(f"Error during EVōC clustering: {e}")
+        # Fallback to simple clustering
+        from sklearn.cluster import KMeans
+        
+        logger.info("Falling back to KMeans clustering...")
+        kmeans = KMeans(n_clusters=5, random_state=42)
+        cluster_labels = kmeans.fit_predict(document_vectors)
+        
+        # Create a simple layered clustering for demonstration
+        from sklearn.cluster import AgglomerativeClustering
+        layer1 = AgglomerativeClustering(n_clusters=3).fit_predict(document_vectors)
+        layer2 = AgglomerativeClustering(n_clusters=2).fit_predict(document_vectors)
+        
+        cluster_layers = [cluster_labels, layer1, layer2]
+        logger.info(f"Created {len(cluster_layers)} cluster layers with fallback clustering")
+    
+    return document_map, document_vectors, cluster_layers, comment_texts, comment_ids
+
+def characterize_comment_clusters(cluster_layer, comment_texts):
+    """
+    Characterize comment clusters by common themes and keywords.
+    
+    Args:
+        cluster_layer: Cluster assignments for a specific layer
+        comment_texts: List of comment text strings
+        
+    Returns:
+        cluster_characteristics: Dictionary with cluster characterizations
+    """
+    # Create a dictionary to store cluster characteristics
+    cluster_characteristics = {}
+    
+    # Get unique clusters
+    unique_clusters = np.unique(cluster_layer)
+    unique_clusters = unique_clusters[unique_clusters >= 0]  # Remove noise points (-1)
+    
+    # Create TF-IDF vectorizer
+    vectorizer = CountVectorizer(max_features=1000, stop_words='english')
+    transformer = TfidfTransformer()
+    
+    # Fit and transform the entire corpus
+    X = vectorizer.fit_transform(comment_texts)
+    X_tfidf = transformer.fit_transform(X)
+    
+    # Get feature names
+    feature_names = vectorizer.get_feature_names_out()
+    
+    for cluster_id in unique_clusters:
+        # Get cluster members
+        cluster_members = np.where(cluster_layer == cluster_id)[0]
+        
+        if len(cluster_members) == 0:
+            continue
+            
+        # Get comment texts for this cluster
+        cluster_comments = [comment_texts[i] for i in cluster_members]
+        
+        # Find top words for this cluster by TF-IDF
+        cluster_tfidf = X_tfidf[cluster_members].toarray().mean(axis=0)
+        top_indices = np.argsort(cluster_tfidf)[-10:][::-1]  # Top 10 words
+        top_words = [feature_names[i] for i in top_indices]
+        
+        # Get sample comments (shortest 3 for readability)
+        comment_lengths = [len(comment) for comment in cluster_comments]
+        shortest_indices = np.argsort(comment_lengths)[:3]  # 3 shortest comments
+        sample_comments = [cluster_comments[i] for i in shortest_indices]
+        
+        # Add to cluster characteristics
+        cluster_characteristics[int(cluster_id)] = {
+            'size': len(cluster_members),
+            'top_words': top_words,
+            'top_tfidf_scores': [float(cluster_tfidf[i]) for i in top_indices],
+            'sample_comments': sample_comments
+        }
+    
+    return cluster_characteristics
+
+def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, layer=None, conversation_name=None, use_ollama=False):
+    """
+    Generate topic labels for clusters based on their characteristics.
+    
+    Args:
+        cluster_characteristics: Dictionary with cluster characterizations
+        comment_texts: List of comment text strings (used for Ollama naming)
+        layer: Cluster assignments for the current layer (used for Ollama naming)
+        conversation_name: Name of the conversation (used for Ollama naming) 
+        use_ollama: Whether to use Ollama for topic naming
+        
+    Returns:
+        cluster_labels: Dictionary mapping cluster IDs to topic labels
+    """
+    cluster_labels = {}
+    
+    # Check if we should use Ollama
+    if use_ollama and comment_texts is not None and layer is not None:
+        try:
+            import ollama
+            logger.info("Using Ollama for cluster naming")
+            
+            # Function to get topic labels via Ollama
+            def get_topic_name(comments, prompt_prefix=""):
+                prompt = f"{prompt_prefix}Please provide a concise topic label (3-5 words max) for the following group of comments:\n\n"
+                for j, comment in enumerate(comments[:5]):  # Use first 5 comments as examples
+                    prompt += f"{j+1}. {comment}\n"
+                prompt += "\nTopic label:"
+                
+                try:
+                    response = ollama.chat(
+                        model="gemma3:12b",
+                        messages=[{"role": "user", "content": prompt}]
+                    )
+                    # Extract just the topic name, not the explanation
+                    topic = response['message']['content'].strip().split('\n')[0]
+                    # Further clean up to ensure it's just a label
+                    topic = topic.replace("Topic label:", "").strip()
+                    # Remove asterisks from topic names (e.g., "**Topic Name**" becomes "Topic Name")
+                    topic = topic.replace('*', '')
+                    if len(topic) > 50:  # If it's too long, truncate
+                        topic = topic[:50] + "..."
+                    return topic
+                except Exception as e:
+                    logger.error(f"Error generating topic with Ollama: {e}")
+                    return f"Topic {cluster_id}"
+            
+            # Generate labels using Ollama
+            for cluster_id in cluster_characteristics.keys():
+                if cluster_id < 0:  # Skip noise points
+                    continue
+                    
+                # Get comments for this cluster
+                cluster_indices = np.where(layer == cluster_id)[0]
+                cluster_comments = [comment_texts[i] for i in cluster_indices]
+                
+                # Get topic name
+                topic_name = get_topic_name(
+                    cluster_comments, 
+                    prompt_prefix=f"For conversation {conversation_name}: "
+                )
+                cluster_labels[cluster_id] = topic_name
+                
+                # Sleep briefly to avoid rate limiting
+                time.sleep(0.5)
+                
+            logger.info(f"Generated {len(cluster_labels)} topic names using Ollama")
+            return cluster_labels
+            
+        except ImportError:
+            logger.error("Ollama not installed. Using conventional topic naming.")
+            # Fall back to conventional naming
+        except Exception as e:
+            logger.error(f"Error using Ollama: {e}")
+            # Fall back to conventional naming
+    
+    # Conventional topic naming (fallback or when Ollama is not requested)
+    for cluster_id, characteristics in cluster_characteristics.items():
+        top_words = characteristics.get('top_words', [])
+        sample_comments = characteristics.get('sample_comments', [])
+        
+        label_parts = []
+        
+        # Add top words
+        if len(top_words) > 0:
+            label_parts.append("Keywords: " + ", ".join(top_words[:5]))
+        
+        # Add first sample comment (shortened)
+        if len(sample_comments) > 0:
+            first_comment = sample_comments[0]
+            if len(first_comment) > 50:
+                first_comment = first_comment[:47] + "..."
+            label_parts.append("Example: " + first_comment)
+        
+        # Create the final label
+        if label_parts:
+            label = " | ".join(label_parts)
+            # Truncate if too long
+            if len(label) > 50:
+                label = label[:47] + "..."
+        else:
+            label = f"Topic {cluster_id}"
+        
+        cluster_labels[cluster_id] = label
+    
+    return cluster_labels
+
+def create_comment_hover_info(cluster_layer, cluster_characteristics, comment_texts):
+    """
+    Create hover text information for comments based on cluster characteristics.
+    
+    Args:
+        cluster_layer: Cluster assignments for a specific layer
+        cluster_characteristics: Dictionary with cluster characterizations
+        comment_texts: List of comment text strings
+        
+    Returns:
+        hover_info: List of hover text strings for each comment
+    """
+    hover_info = []
+    for i, (text, cluster_id) in enumerate(zip(comment_texts, cluster_layer)):
+        if cluster_id >= 0 and cluster_id in cluster_characteristics:
+            characteristics = cluster_characteristics[cluster_id]
+            
+            # Create hover text with the comment and cluster info
+            hover_text = f"{text}\n\n"
+            hover_text += f"Cluster {cluster_id} - Size: {characteristics['size']}\n"
+            
+            # Add top keywords
+            if 'top_words' in characteristics:
+                hover_text += "Keywords: " + ", ".join(characteristics['top_words'][:5])
+        else:
+            hover_text = f"{text}\n\nUnclustered"
+            
+        hover_info.append(hover_text)
+    
+    return hover_info
+
+def create_basic_layer_visualization(
+    output_path,
+    file_prefix, 
+    data_map, 
+    cluster_layer, 
+    cluster_characteristics,
+    cluster_labels,
+    hover_info,
+    title,
+    sub_title
+):
+    """
+    Create a basic visualization with numeric topic labels for a specific layer.
+    
+    Args:
+        output_path: Path to save the visualization
+        file_prefix: Prefix for the output file
+        data_map: 2D coordinates of data points
+        cluster_layer: Cluster assignments for a specific layer
+        cluster_characteristics: Dictionary with cluster characterizations
+        cluster_labels: Dictionary mapping cluster IDs to topic labels
+        hover_info: Hover text for each data point
+        title: Title for the visualization
+        sub_title: Subtitle for the visualization
+    
+    Returns:
+        file_path: Path to the saved visualization
+    """
+    # Create labels vector
+    labels_for_viz = np.array([
+        cluster_labels.get(label, "Unlabelled") if label >= 0 else "Unlabelled"
+        for label in cluster_layer
+    ])
+    
+    # Create interactive visualization
+    logger.info(f"Creating basic visualization for {file_prefix}...")
+    viz_file = os.path.join(output_path, f"{file_prefix}.html")
+    
+    try:
+        interactive_figure = datamapplot.create_interactive_plot(
+            data_map,
+            labels_for_viz,
+            hover_text=hover_info,
+            title=title,
+            sub_title=sub_title,
+            point_radius_min_pixels=2,
+            point_radius_max_pixels=10,
+            width="100%",
+            height=800
+        )
+        
+        # Save the visualization
+        interactive_figure.save(viz_file)
+        logger.info(f"Saved basic visualization to {viz_file}")
+        return viz_file
+    except Exception as e:
+        logger.error(f"Error creating basic visualization: {e}")
+        return None
+
+def create_named_layer_visualization(
+    output_path,
+    file_prefix, 
+    data_map, 
+    cluster_layer, 
+    cluster_labels,
+    hover_info,
+    title,
+    sub_title
+):
+    """
+    Create a named visualization with explicit topic labels for a specific layer.
+    
+    Args:
+        output_path: Path to save the visualization
+        file_prefix: Prefix for the output file
+        data_map: 2D coordinates of data points
+        cluster_layer: Cluster assignments for a specific layer
+        cluster_labels: Dictionary mapping cluster IDs to topic labels
+        hover_info: Hover text for each data point
+        title: Title for the visualization
+        sub_title: Subtitle for the visualization
+    
+    Returns:
+        file_path: Path to the saved visualization
+    """
+    # Create labels vector
+    labels_for_viz = np.array([
+        cluster_labels.get(label, "Unlabelled") if label >= 0 else "Unlabelled"
+        for label in cluster_layer
+    ])
+    
+    # Create interactive visualization
+    logger.info(f"Creating named visualization for {file_prefix}...")
+    viz_file = os.path.join(output_path, f"{file_prefix}.html")
+    
+    try:
+        interactive_figure = datamapplot.create_interactive_plot(
+            data_map,
+            labels_for_viz,
+            hover_text=hover_info,
+            title=title,
+            sub_title=sub_title,
+            point_radius_min_pixels=2,
+            point_radius_max_pixels=10,
+            width="100%",
+            height=800
+        )
+        
+        # Save the visualization
+        interactive_figure.save(viz_file)
+        logger.info(f"Saved named visualization to {viz_file}")
+        return viz_file
+    except Exception as e:
+        logger.error(f"Error creating named visualization: {e}")
+        return None
+
+def process_layers_and_store_characteristics(
+    conversation_id,
+    cluster_layers,
+    comment_texts,
+    output_dir=None,
+    dynamo_storage=None
+):
+    """
+    Process layers and store cluster characteristics and enhanced topic names in DynamoDB.
+    
+    Args:
+        conversation_id: Conversation ID string
+        cluster_layers: Cluster assignments for each layer
+        comment_texts: List of comment text strings
+        output_dir: Optional directory to save visualization data as JSON
+        dynamo_storage: Optional DynamoDBStorage object for storing in DynamoDB
+        
+    Returns:
+        Dictionary with layer data including characteristics and enhanced topic names
+    """
+    layer_data = {}
+    
+    for layer_idx, cluster_layer in enumerate(cluster_layers):
+        logger.info(f"Processing layer {layer_idx} with {len(np.unique(cluster_layer[cluster_layer >= 0]))} clusters...")
+        
+        # Generate cluster characteristics
+        cluster_characteristics = characterize_comment_clusters(
+            cluster_layer, comment_texts
+        )
+        
+        # Create basic numeric topic names
+        numeric_labels = {str(i): f"Topic {i}" for i in np.unique(cluster_layer[cluster_layer >= 0])}
+        
+        # Store layer data
+        layer_data[layer_idx] = {
+            'characteristics': cluster_characteristics,
+            'numeric_topic_names': numeric_labels
+        }
+        
+        # Save data to files if output directory provided
+        if output_dir:
+            # Save cluster characteristics
+            with open(os.path.join(output_dir, f"{conversation_id}_comment_layer_{layer_idx}_characteristics.json"), 'w') as f:
+                json_compatible = json.dumps(cluster_characteristics, default=lambda x: float(x) if isinstance(x, np.float32) else x)
+                f.write(json_compatible)
+            
+            # Save numeric topic names
+            with open(os.path.join(output_dir, f"{conversation_id}_layer_{layer_idx}_topic_names.json"), 'w') as f:
+                json.dump(numeric_labels, f, indent=2)
+        
+        # Store in DynamoDB if provided
+        if dynamo_storage:
+            # Convert and store cluster characteristics
+            logger.info(f"Storing cluster characteristics for layer {layer_idx} in DynamoDB...")
+            characteristic_models = DataConverter.batch_convert_cluster_characteristics(
+                conversation_id,
+                cluster_characteristics,
+                layer_idx
+            )
+            result = dynamo_storage.batch_create_cluster_characteristics(characteristic_models)
+            logger.info(f"Stored {result['success']} cluster characteristics with {result['failure']} failures")
+    
+    logger.info(f"Processing of layers and storing characteristics complete!")
+    return layer_data
+
+
+def create_visualizations(
+    conversation_id,
+    conversation_name,
+    document_map,
+    cluster_layers,
+    comment_texts,
+    output_dir,
+    layer_data=None
+):
+    """
+    Create visualizations based on processed layer data.
+    
+    Args:
+        conversation_id: Conversation ID string
+        conversation_name: Name of the conversation
+        document_map: 2D coordinates for visualization
+        cluster_layers: Cluster assignments for each layer
+        comment_texts: List of comment text strings
+        output_dir: Directory to save visualizations
+        layer_data: Optional dictionary with layer data including characteristics and enhanced topic names
+        
+    Returns:
+        The path to the index file
+    """
+    # If layer_data not provided, generate it
+    if layer_data is None:
+        logger.info("Layer data not provided, generating it...")
+        layer_data = {}
+        for layer_idx, cluster_layer in enumerate(cluster_layers):
+            # Generate cluster characteristics
+            characteristics = characterize_comment_clusters(
+                cluster_layer, comment_texts
+            )
+            
+            # Create basic numeric topic names
+            numeric_labels = {i: f"Topic {i}" for i in np.unique(cluster_layer[cluster_layer >= 0])}
+            
+            layer_data[layer_idx] = {
+                'characteristics': characteristics,
+                'numeric_topic_names': numeric_labels
+            }
+    
+    # Create visualizations
+    layer_files = []
+    layer_info = []
+    
+    for layer_idx, cluster_layer in enumerate(cluster_layers):
+        if layer_idx not in layer_data:
+            logger.warning(f"No layer data for layer {layer_idx}, skipping visualization...")
+            continue
+            
+        # Get characteristics and numeric topic names
+        characteristics = layer_data[layer_idx]['characteristics']
+        numeric_topic_names = layer_data[layer_idx]['numeric_topic_names']
+        
+        # Create hover information
+        hover_info = create_comment_hover_info(
+            cluster_layer, characteristics, comment_texts
+        )
+        
+        # Create basic visualization
+        basic_file = create_basic_layer_visualization(
+            output_dir,
+            f"{conversation_id}_comment_layer_{layer_idx}_basic",
+            document_map,
+            cluster_layer,
+            characteristics,
+            numeric_topic_names,
+            hover_info,
+            f"{conversation_name} Comment Layer {layer_idx} - {len(np.unique(cluster_layer[cluster_layer >= 0]))} topics",
+            f"Comment topics with numeric labels"
+        )
+        
+        # Create named visualization with just numeric topic names for now
+        # (LLM names will be added in a separate step later)
+        named_file = create_named_layer_visualization(
+            output_dir,
+            f"{conversation_id}_comment_layer_{layer_idx}_named",
+            document_map,
+            cluster_layer,
+            numeric_topic_names,
+            hover_info,
+            f"{conversation_name} Comment Layer {layer_idx} - {len(np.unique(cluster_layer[cluster_layer >= 0]))} topics",
+            f"Comment topics (to be updated with LLM topic names)"
+        )
+        
+        # Add to list of layer files and info
+        if named_file:
+            layer_files.append(named_file)
+            layer_info.append((layer_idx, len(np.unique(cluster_layer[cluster_layer >= 0]))))
+    
+    # Create index file
+    index_file = create_enhanced_multilayer_index(
+        output_dir,
+        conversation_id,
+        layer_files,
+        layer_info
+    )
+    
+    logger.info(f"Visualization creation complete!")
+    logger.info(f"Index file available at: {index_file}")
+    
+    # Try to open in browser
+    try:
+        import webbrowser
+        webbrowser.open(f"file://{index_file}")
+    except:
+        pass
+        
+    return index_file
+
+
+def process_layers_and_create_visualizations(
+    conversation_id,
+    conversation_name,
+    document_map,
+    cluster_layers,
+    comment_texts,
+    output_dir,
+    use_ollama=False,
+    dynamo_storage=None
+):
+    """
+    Process layers, store data, and create visualizations.
+    
+    Args:
+        conversation_id: Conversation ID string
+        conversation_name: Name of the conversation
+        document_map: 2D coordinates for visualization
+        cluster_layers: Cluster assignments for each layer
+        comment_texts: List of comment text strings
+        output_dir: Directory to save visualizations
+        use_ollama: Whether to use Ollama for topic naming (deprecated, will be moved to separate script)
+        dynamo_storage: Optional DynamoDBStorage object for storing in DynamoDB
+    """
+    # Process layers and store characteristics
+    layer_data = process_layers_and_store_characteristics(
+        conversation_id,
+        cluster_layers,
+        comment_texts,
+        output_dir=output_dir,
+        dynamo_storage=dynamo_storage
+    )
+    
+    # Create visualizations
+    index_file = create_visualizations(
+        conversation_id,
+        conversation_name,
+        document_map,
+        cluster_layers,
+        comment_texts,
+        output_dir,
+        layer_data=layer_data
+    )
+    
+    # If Ollama is requested, warn that this is deprecated
+    if use_ollama:
+        logger.warning(
+            "Ollama topic naming is moving to a separate process to improve reliability. "
+            "Use the new update_with_ollama.py script to update topic names with LLM after processing."
+        )
+        
+        # For backward compatibility, still run with Ollama if requested
+        for layer_idx, cluster_layer in enumerate(cluster_layers):
+            characteristics = layer_data[layer_idx]['characteristics']
+            
+            # Generate topic labels with Ollama
+            logger.info(f"Generating LLM topic names for layer {layer_idx} with Ollama...")
+            cluster_labels = generate_cluster_topic_labels(
+                characteristics,
+                comment_texts=comment_texts,
+                layer=cluster_layer,
+                conversation_name=conversation_name,
+                use_ollama=True
+            )
+            
+            # Save LLM topic names
+            with open(os.path.join(output_dir, f"{conversation_id}_comment_layer_{layer_idx}_labels.json"), 'w') as f:
+                json.dump(cluster_labels, f, indent=2)
+            
+            # Store in DynamoDB if provided
+            if dynamo_storage:
+                logger.info(f"Storing LLM topic names for layer {layer_idx} in DynamoDB...")
+                llm_topic_models = DataConverter.batch_convert_llm_topic_names(
+                    conversation_id,
+                    cluster_labels,
+                    layer_idx,
+                    model_name="gemma3:12b"  # Model used by Ollama
+                )
+                result = dynamo_storage.batch_create_llm_topic_names(llm_topic_models)
+                logger.info(f"Stored {result['success']} LLM topic names with {result['failure']} failures")
+    
+    return index_file
+
+def create_enhanced_multilayer_index(
+    output_path,
+    conversation_name,
+    layer_files,
+    layer_info
+):
+    """
+    Create an index HTML file linking to all enhanced layer visualizations.
+    
+    Args:
+        output_path: Path to save the index file
+        conversation_name: Name of the conversation
+        layer_files: List of paths to layer visualization files
+        layer_info: List of tuples (layer_idx, num_clusters) for each layer
+    
+    Returns:
+        file_path: Path to the saved index file
+    """
+    index_file = os.path.join(output_path, f"{conversation_name}_comment_enhanced_index.html")
+    
+    with open(index_file, 'w') as f:
+        f.write(f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>{conversation_name} - Enhanced Multi-layer Comment Visualization</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        h1 {{ color: #333; }}
+        .layer-container {{ margin-bottom: 30px; }}
+        .description {{ margin-bottom: 10px; }}
+        iframe {{ border: 1px solid #ddd; width: 100%; height: 600px; }}
+        .button-container {{ margin-bottom: 10px; }}
+        .button {{
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }}
+        .view-options {{
+            margin: 10px 0;
+            display: flex;
+            gap: 10px;
+        }}
+        .view-link {{
+            padding: 5px 10px;
+            background-color: #f0f0f0;
+            color: #333;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+        }}
+        .view-link:hover {{
+            background-color: #e0e0e0;
+        }}
+        .active {{
+            background-color: #007BFF;
+            color: white;
+        }}
+    </style>
+</head>
+<body>
+    <h1>{conversation_name} - Enhanced Multi-layer Comment Visualization</h1>
+    <p>This page provides access to different layers of clustering granularity with topic labeling:</p>
+    
+    <div class="button-container">
+        <button class="button" onclick="window.location.reload();">Refresh Page</button>
+    </div>
+""")
+        
+        # Add links to each layer
+        for (layer_idx, num_clusters), file_path in zip(layer_info, layer_files):
+            file_name = os.path.basename(file_path)
+            basic_view_file = file_name.replace("_named.html", "_enhanced.html")
+            named_view_file = file_name
+            
+            description = "Fine-grained grouping" if layer_idx == 0 else "Coarser grouping" if layer_idx == len(layer_info) - 1 else "Medium granularity"
+            
+            f.write(f"""
+    <div class="layer-container">
+        <h2>Layer {layer_idx}</h2>
+        <p class="description">{description} with topic labels</p>
+        <div class="view-options">
+            <a href="{basic_view_file}" class="view-link " target="_blank">Basic View</a>
+            <a href="{named_view_file}" class="view-link active" target="_blank">Named View (LLM-labeled)</a>
+        </div>
+        <iframe src="{named_view_file}"></iframe>
+    </div>
+""")
+        
+        f.write("""
+</body>
+</html>
+""")
+    
+    logger.info(f"Created enhanced multi-layer index at {index_file}")
+    return index_file
+
+
+def process_conversation(zid, export_dynamo=True, use_ollama=False):
+    """
+    Main function to process a conversation and generate visualizations.
+    
+    Args:
+        zid: Conversation ID
+        export_dynamo: Whether to export results to DynamoDB
+        use_ollama: Whether to use Ollama for topic naming
+    """
+    # Create conversation directory
+    output_dir = os.path.join("polis_data", str(zid), "python_output", "comments_enhanced_multilayer")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Fetch data from PostgreSQL
+    comments, metadata = fetch_conversation_data(zid)
+    if not comments:
+        logger.error("Failed to fetch conversation data.")
+        return False
+    
+    conversation_id = str(zid)
+    conversation_name = metadata.get('conversation_name', f"Conversation {zid}")
+    
+    # Process comments
+    document_map, document_vectors, cluster_layers, comment_texts, comment_ids = process_comments(
+        comments, conversation_id
+    )
+    
+    # Initialize DynamoDB storage if requested
+    dynamo_storage = None
+    if export_dynamo:
+        dynamo_storage = DynamoDBStorage(
+            region_name='us-west-2',
+            endpoint_url='http://localhost:8000'
+        )
+        
+        # Store basic data in DynamoDB
+        logger.info(f"Storing basic data in DynamoDB for conversation {conversation_id}...")
+        
+        # Store conversation metadata
+        logger.info("Storing conversation metadata...")
+        conversation_meta = DataConverter.create_conversation_meta(
+            conversation_id,
+            document_vectors,
+            cluster_layers,
+            metadata
+        )
+        dynamo_storage.create_conversation_meta(conversation_meta)
+        
+        # Store embeddings
+        logger.info("Storing comment embeddings...")
+        embedding_models = DataConverter.batch_convert_embeddings(
+            conversation_id,
+            document_vectors
+        )
+        result = dynamo_storage.batch_create_comment_embeddings(embedding_models)
+        logger.info(f"Stored {result['success']} embeddings with {result['failure']} failures")
+        
+        # Store UMAP graph edges
+        logger.info("Storing UMAP graph edges...")
+        edge_models = DataConverter.batch_convert_umap_edges(
+            conversation_id,
+            document_map,
+            cluster_layers
+        )
+        result = dynamo_storage.batch_create_graph_edges(edge_models)
+        logger.info(f"Stored {result['success']} UMAP graph edges with {result['failure']} failures")
+        
+        # Store cluster assignments
+        logger.info("Storing comment cluster assignments...")
+        cluster_models = DataConverter.batch_convert_clusters(
+            conversation_id,
+            cluster_layers,
+            document_map
+        )
+        result = dynamo_storage.batch_create_comment_clusters(cluster_models)
+        logger.info(f"Stored {result['success']} cluster assignments with {result['failure']} failures")
+        
+        # Store cluster topics (basic info only)
+        logger.info("Storing cluster topics...")
+        topic_models = DataConverter.batch_convert_topics(
+            conversation_id,
+            cluster_layers,
+            document_map,
+            topic_names={},  # No topic names yet
+            characteristics={},  # No characteristics yet
+            comments=[{'body': comment['txt']} for comment in comments]
+        )
+        result = dynamo_storage.batch_create_cluster_topics(topic_models)
+        logger.info(f"Stored {result['success']} topics with {result['failure']} failures")
+    
+    # Process layers, store characteristics, and create visualizations
+    process_layers_and_create_visualizations(
+        conversation_id,
+        conversation_name,
+        document_map,
+        cluster_layers,
+        comment_texts,
+        output_dir,
+        use_ollama=use_ollama,
+        dynamo_storage=dynamo_storage
+    )
+    
+    # Save metadata
+    with open(os.path.join(output_dir, f"{conversation_id}_metadata.json"), 'w') as f:
+        json.dump(metadata, f, indent=2)
+    
+    logger.info(f"Processing of conversation {conversation_id} complete!")
+    
+    return True
+
+def main():
+    """Main entry point."""
+    # Parse arguments
+    import argparse
+    parser = argparse.ArgumentParser(description='Process Polis conversation from PostgreSQL')
+    parser.add_argument('--zid', type=int, required=False, default=22154,
+                      help='Conversation ID to process')
+    parser.add_argument('--no-dynamo', action='store_true',
+                      help='Skip exporting to DynamoDB')
+    parser.add_argument('--db-host', type=str, default=None,
+                       help='PostgreSQL host')
+    parser.add_argument('--db-port', type=int, default=None,
+                       help='PostgreSQL port')
+    parser.add_argument('--db-name', type=str, default=None,
+                       help='PostgreSQL database name')
+    parser.add_argument('--db-user', type=str, default=None,
+                       help='PostgreSQL user')
+    parser.add_argument('--db-password', type=str, default=None,
+                       help='PostgreSQL password')
+    parser.add_argument('--use-mock-data', action='store_true',
+                       help='Use mock data instead of connecting to PostgreSQL')
+    parser.add_argument('--use-ollama', action='store_true',
+                       help='Use Ollama for topic naming')
+    
+    args = parser.parse_args()
+    
+    # Set up environment
+    setup_environment(
+        db_host=args.db_host,
+        db_port=args.db_port,
+        db_name=args.db_name,
+        db_user=args.db_user,
+        db_password=args.db_password
+    )
+    
+    # Log Ollama usage
+    if args.use_ollama:
+        logger.info("Ollama will be used for topic naming")
+    
+    # Process conversation
+    if args.use_mock_data:
+        logger.info("Using mock data instead of connecting to PostgreSQL")
+        # Create mock comments data
+        mock_comments = []
+        for i in range(100):
+            mock_comments.append({
+                'tid': i,
+                'zid': args.zid,
+                'txt': f"This is a mock comment {i} for testing purposes without PostgreSQL connection.",
+                'created': datetime.now().isoformat(),
+                'pid': i % 20,  # Mock 20 different participants
+                'active': True
+            })
+        
+        # Create mock metadata
+        mock_metadata = {
+            'conversation_id': str(args.zid),
+            'zid': args.zid,
+            'conversation_name': f"Mock Conversation {args.zid}",
+            'description': "Mock conversation for testing without PostgreSQL",
+            'created': datetime.now().isoformat(),
+            'modified': datetime.now().isoformat(),
+            'owner': 'mock_user',
+            'num_comments': len(mock_comments)
+        }
+        
+        # Process with mock data
+        document_map, document_vectors, cluster_layers, comment_texts, comment_ids = process_comments(
+            mock_comments, str(args.zid)
+        )
+        
+        # Store in DynamoDB if requested
+        if not args.no_dynamo:
+            store_in_dynamo(
+                str(args.zid), 
+                document_vectors, 
+                document_map, 
+                cluster_layers, 
+                mock_comments, 
+                comment_ids
+            )
+        
+        # Process each layer and create visualizations
+        output_dir = os.path.join("polis_data", str(args.zid), "python_output", "comments_enhanced_multilayer")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        process_layers_and_create_visualizations(
+            str(args.zid),
+            mock_metadata.get('conversation_name'),
+            document_map,
+            cluster_layers,
+            comment_texts,
+            output_dir,
+            use_ollama=args.use_ollama
+        )
+    else:
+        # Process with real data from PostgreSQL
+        process_conversation(args.zid, export_dynamo=not args.no_dynamo, use_ollama=args.use_ollama)
+
+if __name__ == "__main__":
+    main()

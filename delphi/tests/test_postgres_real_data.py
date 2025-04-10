@@ -106,9 +106,9 @@ def connect_to_db():
     """Connect to PostgreSQL database."""
     try:
         conn = psycopg2.connect(
-            dbname="polis_subset",
-            user="christian",
-            password="christian",
+            dbname="polisDB_prod_local_mar14",
+            user="colinmegill",
+            password="",
             host="localhost"
         )
         print("Connected to database successfully")
@@ -1058,9 +1058,9 @@ def test_conversation_client_api():
     """
     # Create PostgreSQL client
     config = PostgresConfig(
-        database="polis_subset",
-        user="christian",
-        password="christian",
+        database="polisDB_prod_local_mar14",
+        user="colinmegill",
+        password="",
         host="localhost"
     )
     

@@ -4,9 +4,10 @@ math_env: dev
 # Data storage
 data_dir: "./data"
 
-# Database settings - disabled for testing
+# Database settings
 database:
-  enabled: false
+  enabled: true
+  url: "postgresql://colinmegill@localhost:5432/polisDB_prod_local_mar14"
 
 # Server settings
 server:
