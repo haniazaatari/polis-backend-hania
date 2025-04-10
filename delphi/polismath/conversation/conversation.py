@@ -83,6 +83,7 @@ class Conversation:
         self.consensus = []
         self.participant_info = {}
         self.vote_stats = {}
+        self.group_votes = {}  # Initialize group_votes to avoid attribute errors
         
         # Initialize with votes if provided
         if votes:
@@ -1506,6 +1507,11 @@ class Conversation:
         # Add empty subgroup structures
         result['subgroup-votes'] = {}
         result['subgroup-repness'] = {}
+        
+        # Initialize group_votes if missing to avoid errors
+        if not hasattr(self, 'group_votes'):
+            logger.info("Adding empty group_votes attribute")
+            self.group_votes = {}
         
         # Add group-aware consensus with optimized calculation
         consensus_start = time.time()
