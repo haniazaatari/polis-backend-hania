@@ -84,11 +84,11 @@ if ! docker ps | grep -q delphi-dynamodb-local; then
   echo "Waiting for DynamoDB to start..."
   sleep 5
   # Verify that DynamoDB is accessible
-  if ! docker exec delphi-dynamodb-local aws dynamodb list-tables --endpoint-url http://localhost:8000 --region us-west-2; then
+  if ! docker exec delphi-dynamodb-local aws dynamodb list-tables --endpoint-url http://dynamodb-local:8000 --region us-west-2; then
     echo -e "${YELLOW}Installing AWS CLI in DynamoDB container for validation...${NC}"
     docker exec delphi-dynamodb-local apt-get update && docker exec delphi-dynamodb-local apt-get install -y awscli
     echo "Verifying DynamoDB is accessible..."
-    docker exec delphi-dynamodb-local aws dynamodb list-tables --endpoint-url http://localhost:8000 --region us-west-2 || true
+    docker exec delphi-dynamodb-local aws dynamodb list-tables --endpoint-url http://dynamodb-local:8000 --region us-west-2 || true
   fi
 fi
 
@@ -102,9 +102,9 @@ if ! docker ps | grep -q delphi-app; then
   sleep 5
 fi
 
-# Skipping DynamoDB table creation for now (to avoid hanging issues)
-echo -e "${YELLOW}Note: DynamoDB table creation is skipped to avoid potential hanging issues${NC}"
-echo -e "${YELLOW}If this is your first run, you may need to create tables manually${NC}"
+# Create DynamoDB tables if they don't exist
+echo -e "${YELLOW}Creating DynamoDB tables if they don't exist...${NC}"
+docker exec -e PYTHONPATH=/app delphi-app python /app/create_dynamodb_tables.py --endpoint-url http://dynamodb-local:8000
 
 # Fix the umap_narrative directory once and for all
 echo -e "${YELLOW}Fixing umap_narrative directory in the container...${NC}"
