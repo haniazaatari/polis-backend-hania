@@ -52,3 +52,6 @@ logs/
 
 # Generated files
 *.so
+
+# Evoc. 
+evoc/
