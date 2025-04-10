@@ -1,6 +1,0 @@
-boto3==1.34.70
-numpy==1.26.4
-pandas==2.1.4
-psycopg2-binary==2.9.9
-# Include the polismath package installed in development mode
-# -e ../

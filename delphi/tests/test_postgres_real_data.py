@@ -27,121 +27,78 @@ from polismath.math.named_matrix import NamedMatrix
 
 def init_dynamodb():
     """
-    Initialize a connection to DynamoDB on localhost:8000.
+    Initialize the DynamoDB client for testing.
     
     Returns:
-        DynamoDB resource and metadata about created tables
+        Initialized DynamoDBClient
     """
-    # Connect to local DynamoDB
-    print("Connecting to local DynamoDB at localhost:8000")
-    dynamodb = boto3.resource(
-        'dynamodb',
+    # Import the DynamoDB client
+    from polismath.database.dynamodb import DynamoDBClient
+    
+    print("Initializing DynamoDBClient with localhost:8000 endpoint")
+    
+    # Create and initialize the client
+    client = DynamoDBClient(
         endpoint_url='http://localhost:8000',
         region_name='us-west-2',
         aws_access_key_id='dummy',
         aws_secret_access_key='dummy'
     )
     
-    # Create tables if they don't exist
-    tables = list(dynamodb.tables.all())
-    table_names = [table.name for table in tables]
+    # Initialize the connection and tables
+    client.initialize()
+    print("DynamoDB client initialized with tables:", list(client.tables.keys()))
     
-    # Create conversations table if it doesn't exist
-    if 'polis_conversations' not in table_names:
-        print("Creating polis_conversations table")
-        conversations_table = dynamodb.create_table(
-            TableName='polis_conversations',
-            KeySchema=[
-                {'AttributeName': 'zid', 'KeyType': 'HASH'}  # Partition key
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'zid', 'AttributeType': 'S'}
-            ],
-            ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
-        )
-        # Wait for table creation
-        conversations_table.meta.client.get_waiter('table_exists').wait(TableName='polis_conversations')
-        print("polis_conversations table created")
-    else:
-        conversations_table = dynamodb.Table('polis_conversations')
-        print("Using existing polis_conversations table")
-    
-    # Create math table if it doesn't exist
-    if 'polis_math' not in table_names:
-        print("Creating polis_math table")
-        math_table = dynamodb.create_table(
-            TableName='polis_math',
-            KeySchema=[
-                {'AttributeName': 'zid', 'KeyType': 'HASH'}  # Partition key
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'zid', 'AttributeType': 'S'}
-            ],
-            ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
-        )
-        # Wait for table creation
-        math_table.meta.client.get_waiter('table_exists').wait(TableName='polis_math')
-        print("polis_math table created")
-    else:
-        math_table = dynamodb.Table('polis_math')
-        print("Using existing polis_math table")
-    
-    return {
-        'dynamodb': dynamodb,
-        'conversations_table': conversations_table,
-        'math_table': math_table
-    }
+    return client
 
 
-def write_to_dynamodb(dynamodb_resources, conversation_id, conv_data):
+def write_to_dynamodb(dynamodb_client, conversation_id, conv):
     """
-    Write conversation data to DynamoDB.
+    Write conversation data to DynamoDB using the new optimized schema.
+    This function ensures the optimized to_dynamo_dict method is used when available.
     
     Args:
-        dynamodb_resources: Dictionary with DynamoDB resources
+        dynamodb_client: Initialized DynamoDBClient
         conversation_id: Conversation ID (zid)
-        conv_data: Conversation data from conv.to_dict()
+        conv: Conversation object
         
     Returns:
         Success status
     """
-    math_table = dynamodb_resources['math_table']
-    conversations_table = dynamodb_resources['conversations_table']
-    
+    import time
     try:
-        print(f"Writing conversation {conversation_id} to DynamoDB")
+        start_time = time.time()
+        print(f"Writing conversation {conversation_id} to DynamoDB using optimized schema")
         
-        # Prepare math data record
-        # Need to convert all data to DynamoDB compatible format
-        # We'll store a serialized version in the DynamoDB table
-        math_json = json.dumps(conv_data)
+        # Check if the conversation has the optimized method
+        has_optimized = hasattr(conv, 'to_dynamo_dict')
+        print(f"Using {'optimized' if has_optimized else 'standard'} conversion method")
         
-        # Put math data
-        math_table.put_item(
-            Item={
-                'zid': str(conversation_id),
-                'math_data': math_json,
-                'last_updated': int(time.time())
-            }
-        )
-        print(f"Math data written to DynamoDB for conversation {conversation_id}")
+        # Measure conversion time separately if using optimized method
+        if has_optimized:
+            conversion_start = time.time()
+            dynamo_data = conv.to_dynamo_dict()
+            conversion_time = time.time() - conversion_start
+            print(f"to_dynamo_dict conversion completed in {conversion_time:.2f}s with {len(dynamo_data)} top-level keys")
         
-        # Create a summary record for the conversations table
-        summary = {
-            'zid': str(conversation_id),
-            'participant_count': conv_data.get('n', 0),
-            'comment_count': conv_data.get('n-cmts', 0),
-            'group_count': len(conv_data.get('group-clusters', [])),
-            'last_updated': int(time.time())
-        }
+        # Use the optimized export_to_dynamodb method which leverages to_dynamo_dict
+        success = conv.export_to_dynamodb(dynamodb_client)
         
-        # Put conversation summary
-        conversations_table.put_item(Item=summary)
-        print(f"Conversation summary written to DynamoDB for conversation {conversation_id}")
-        
-        return True
+        # Log performance info
+        write_time = time.time() - start_time
+        if success:
+            print(f"Successfully exported conversation {conversation_id} to DynamoDB in {write_time:.2f}s")
+            # For large conversations like Pakistan, log additional stats
+            if hasattr(conv, 'participant_count') and conv.participant_count > 1000:
+                print(f"Exported {conv.participant_count} participants and {conv.comment_count} comments")
+        else:
+            print(f"Failed to export conversation {conversation_id} to DynamoDB after {write_time:.2f}s")
+            
+        return success
     except Exception as e:
         print(f"Error writing to DynamoDB: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -717,15 +674,17 @@ def test_conversation_from_postgres():
             try:
                 print(f"[{time.time() - start_time:.2f}s] Initializing DynamoDB connection...")
                 dynamo_start = time.time()
-                dynamodb_resources = init_dynamodb()
+                dynamodb_client = init_dynamodb()
                 print(f"[{time.time() - start_time:.2f}s] DynamoDB initialized in {time.time() - dynamo_start:.2f}s")
                 
                 print(f"[{time.time() - start_time:.2f}s] Writing to DynamoDB...")
                 write_start = time.time()
-                success = write_to_dynamodb(dynamodb_resources, conv_id, conv_data)
+                success = write_to_dynamodb(dynamodb_client, conv_id, conv)
                 print(f"[{time.time() - start_time:.2f}s] DynamoDB write {'succeeded' if success else 'failed'} in {time.time() - write_start:.2f}s")
             except Exception as e:
                 print(f"[{time.time() - start_time:.2f}s] Error with DynamoDB: {e}")
+                import traceback
+                traceback.print_exc()
             
             # Perform basic assertions
             print(f"[{time.time() - start_time:.2f}s] Running tests...")
@@ -842,7 +801,7 @@ def test_dynamodb_direct():
     Test writing directly to DynamoDB without PostgreSQL.
     This is useful for directly testing the DynamoDB functionality.
     """
-    print("\nTesting direct DynamoDB write functionality")
+    print("\nTesting direct DynamoDB write functionality with new schema")
     
     try:
         # Create a dummy conversation
@@ -871,52 +830,96 @@ def test_dynamodb_direct():
         print("Recomputing conversation")
         conv = conv.recompute()
         
-        # Get conversation data
-        conv_data = conv.to_dict()
+        # Initialize DynamoDB client
+        print("Initializing DynamoDB client")
+        dynamodb_client = init_dynamodb()
         
-        # Initialize DynamoDB
-        print("Initializing DynamoDB connection")
-        dynamodb_resources = init_dynamodb()
-        
-        # Write to DynamoDB
+        # Write to DynamoDB using the export method
         print(f"Writing conversation {conv_id} to DynamoDB")
-        success = write_to_dynamodb(dynamodb_resources, conv_id, conv_data)
+        success = write_to_dynamodb(dynamodb_client, conv_id, conv)
         
         if success:
             print("Successfully wrote test data to DynamoDB")
             
-            # Verify the data was written
-            math_table = dynamodb_resources['math_table']
-            
-            # Get the item from DynamoDB
-            response = math_table.get_item(Key={'zid': conv_id})
-            
-            # Check if item exists
-            if 'Item' in response:
-                print("Successfully retrieved data from DynamoDB")
+            # Verify the data was written by reading from PolisMathConversations table
+            conversations_table = dynamodb_client.tables.get('PolisMathConversations')
+            if conversations_table:
+                response = conversations_table.get_item(Key={'zid': conv_id})
                 
-                # Load and validate a portion of the data
-                stored_data = json.loads(response['Item']['math_data'])
-                
-                # Print stored data structure for debugging
-                print("DynamoDB stored data structure:", json.dumps(stored_data, indent=2)[:500] + "...")
-                
-                # Perform basic validation - data formats might vary, so we'll check for common fields
-                # or at least that we got a valid JSON structure
-                assert isinstance(stored_data, dict), "Stored data is not a dictionary"
-                
-                # Check for either n/n-cmts or participant_count/comment_count
-                has_required_fields = (
-                    ('n' in stored_data and 'n-cmts' in stored_data) or
-                    ('participant_count' in stored_data and 'comment_count' in stored_data) or
-                    (len(stored_data) > 0)  # At minimum, data should not be empty
-                )
-                assert has_required_fields, "Missing required fields in stored data"
-                
-                print("Data validation successful")
-                return True
+                # Check if item exists
+                if 'Item' in response:
+                    print("Successfully retrieved conversation metadata from DynamoDB")
+                    conversation_item = response['Item']
+                    
+                    # Print conversation metadata for debugging
+                    print(f"Conversation metadata: {conversation_item}")
+                    
+                    # Get math tick to query other tables
+                    math_tick = conversation_item.get('latest_math_tick')
+                    if math_tick:
+                        print(f"Found math tick: {math_tick}")
+                        
+                        # Check if we can read from analysis table
+                        analysis_table = dynamodb_client.tables.get('PolisMathAnalysis')
+                        if analysis_table:
+                            analysis_response = analysis_table.get_item(
+                                Key={'zid': conv_id, 'math_tick': math_tick}
+                            )
+                            
+                            if 'Item' in analysis_response:
+                                print("Successfully retrieved analysis data")
+                                
+                                # Validate that we have PCA data
+                                analysis_item = analysis_response['Item']
+                                has_pca = 'pca' in analysis_item and isinstance(analysis_item['pca'], dict)
+                                
+                                if has_pca:
+                                    print("PCA data found in analysis")
+                                    # Check for components with Python-native naming
+                                    if 'components' in analysis_item['pca']:
+                                        print("   Using Python-native naming (components)")
+                                    # Check for legacy Clojure-compatible naming
+                                    elif 'comps' in analysis_item['pca']:
+                                        print("   Using legacy naming (comps)")
+                                else:
+                                    print("Warning: No PCA data found in analysis")
+                        
+                        # Check if groups were stored
+                        groups_table = dynamodb_client.tables.get('PolisMathGroups')
+                        if groups_table:
+                            zid_tick = f"{conv_id}:{math_tick}"
+                            groups_response = groups_table.query(
+                                KeyConditionExpression='zid_tick = :zid_tick',
+                                ExpressionAttributeValues={':zid_tick': zid_tick}
+                            )
+                            
+                            if 'Items' in groups_response and groups_response['Items']:
+                                print(f"Successfully retrieved {len(groups_response['Items'])} groups")
+                                
+                                # Check if we can read participant projections
+                                projections_table = dynamodb_client.tables.get('PolisMathProjections')
+                                if projections_table:
+                                    projections_response = projections_table.query(
+                                        KeyConditionExpression='zid_tick = :zid_tick',
+                                        ExpressionAttributeValues={':zid_tick': zid_tick},
+                                        Limit=5  # Just check a few
+                                    )
+                                    
+                                    if 'Items' in projections_response and projections_response['Items']:
+                                        print(f"Successfully retrieved participant projections")
+                                        print(f"Found {len(projections_response['Items'])} projections")
+                    
+                    # Basic validation
+                    assert 'participant_count' in conversation_item, "Missing participant_count in conversation metadata"
+                    assert 'comment_count' in conversation_item, "Missing comment_count in conversation metadata"
+                    
+                    print("Data validation successful")
+                    return True
+                else:
+                    print("Failed to retrieve data from DynamoDB")
+                    return False
             else:
-                print("Failed to retrieve data from DynamoDB")
+                print("PolisMathConversations table not found")
                 return False
         else:
             print("Failed to write test data to DynamoDB")
@@ -930,58 +933,116 @@ def test_dynamodb_direct():
 
 
 def inspect_dynamodb_data():
-    """Inspect data in DynamoDB tables"""
-    print("\nInspecting DynamoDB data")
+    """Inspect data in DynamoDB tables using the new schema"""
+    print("\nInspecting DynamoDB data with new schema")
     
-    # Initialize DynamoDB
-    dynamodb_resources = init_dynamodb()
-    math_table = dynamodb_resources['math_table']
-    conversations_table = dynamodb_resources['conversations_table']
+    # Initialize DynamoDB client
+    dynamodb_client = init_dynamodb()
+    
+    # Get list of available tables
+    available_tables = list(dynamodb_client.tables.keys())
+    print(f"\nAvailable tables: {available_tables}")
     
     # Scan the conversations table
+    conversations_table = dynamodb_client.tables.get('PolisMathConversations')
+    if not conversations_table:
+        print("PolisMathConversations table not found")
+        return False
+    
     response = conversations_table.scan()
     items = response.get('Items', [])
     print(f"\nFound {len(items)} conversations:")
     for item in items:
-        print(f"  - {item['zid']}: {item.get('participant_count', 0)} participants, {item.get('comment_count', 0)} comments")
+        print(f"  - {item['zid']}: {item.get('participant_count', 0)} participants, "
+              f"{item.get('comment_count', 0)} comments, "
+              f"{item.get('group_count', 0)} groups")
     
-    # If only one conversation, show it automatically
-    if len(items) == 1:
+    # Always show the most recent conversation automatically
+    if items:
+        # Sort by last_updated if available
+        items.sort(key=lambda x: x.get('last_updated', 0), reverse=True)
         zid = items[0]['zid']
-        print(f"\nAutomatically showing conversation {zid} (only one available)")
-        response = math_table.get_item(Key={'zid': zid})
-        item = response.get('Item')
-        if item:
-            math_data = json.loads(item['math_data'])
-            print(f"\nConversation {zid} summary:")
-            print(f"  - Participants: {math_data.get('n', 0)}")
-            print(f"  - Comments: {math_data.get('n-cmts', 0)}")
-            print(f"  - Groups: {len(math_data.get('group-clusters', []))}")
-            
-            # Show group details
-            for i, group in enumerate(math_data.get('group-clusters', [])):
-                print(f"\nGroup {i+1} (ID: {group.get('id')})")
-                print(f"  - Members: {len(group.get('members', []))}")
-                print(f"  - Center: {group.get('center', [])}")
+        math_tick = items[0].get('latest_math_tick')
+        print(f"\nAutomatically showing conversation {zid} (most recent)")
+        
+        # Get analysis data
+        analysis_table = dynamodb_client.tables.get('PolisMathAnalysis')
+        if analysis_table and math_tick:
+            response = analysis_table.get_item(Key={'zid': zid, 'math_tick': math_tick})
+            item = response.get('Item')
+            if item:
+                print(f"\nConversation {zid} analysis summary:")
+                print(f"  - Math tick: {item.get('math_tick')}")
+                print(f"  - Participants: {item.get('participant_count', 0)}")
+                print(f"  - Comments: {item.get('comment_count', 0)}")
+                print(f"  - Group count: {item.get('group_count', 0)}")
+                
+                # Get group details
+                zid_tick = f"{zid}:{math_tick}"
+                groups_table = dynamodb_client.tables.get('PolisMathGroups')
+                if groups_table:
+                    groups_response = groups_table.query(
+                        KeyConditionExpression='zid_tick = :zid_tick',
+                        ExpressionAttributeValues={':zid_tick': zid_tick}
+                    )
+                    
+                    print("\nGroups:")
+                    for group in groups_response.get('Items', []):
+                        group_id = group.get('group_id')
+                        members_count = group.get('member_count', 0)
+                        print(f"  - Group {group_id}: {members_count} members")
+                        
+                        # Get representative comments for this group
+                        repness_table = dynamodb_client.tables.get('PolisMathRepness')
+                        if repness_table:
+                            zid_tick_gid = f"{zid}:{math_tick}:{group_id}"
+                            repness_response = repness_table.query(
+                                KeyConditionExpression='zid_tick_gid = :key',
+                                ExpressionAttributeValues={':key': zid_tick_gid},
+                                Limit=5  # Show top 5 comments
+                            )
+                            
+                            print(f"    Representative comments:")
+                            for i, rep_item in enumerate(repness_response.get('Items', [])):
+                                comment_id = rep_item.get('comment_id')
+                                # Check for both naming conventions for repness value
+                                repness = rep_item.get('repness', 0)
+                                group_id = rep_item.get('group_id')
+                                print(f"      {i+1}. Comment {comment_id} in group {group_id} (Repness: {repness:.4f})")
+            else:
+                print(f"No analysis data found for conversation {zid}")
     else:
         # If multiple conversations, try to get input but handle EOFError
         try:
             zid = input("\nEnter a conversation ID to inspect (or press Enter to skip): ")
             if zid:
-                response = math_table.get_item(Key={'zid': zid})
+                # Get conversation metadata
+                response = conversations_table.get_item(Key={'zid': zid})
                 item = response.get('Item')
                 if item:
-                    math_data = json.loads(item['math_data'])
-                    print(f"\nConversation {zid} summary:")
-                    print(f"  - Participants: {math_data.get('n', 0)}")
-                    print(f"  - Comments: {math_data.get('n-cmts', 0)}")
-                    print(f"  - Groups: {len(math_data.get('group-clusters', []))}")
+                    math_tick = item.get('latest_math_tick')
                     
-                    # Show group details by default
-                    for i, group in enumerate(math_data.get('group-clusters', [])):
-                        print(f"\nGroup {i+1} (ID: {group.get('id')})")
-                        print(f"  - Members: {len(group.get('members', []))}")
-                        print(f"  - Center: {group.get('center', [])}")
+                    print(f"\nConversation {zid} summary:")
+                    print(f"  - Participants: {item.get('participant_count', 0)}")
+                    print(f"  - Comments: {item.get('comment_count', 0)}")
+                    print(f"  - Groups: {item.get('group_count', 0)}")
+                    
+                    # Get detailed data
+                    if math_tick:
+                        # Get group details
+                        zid_tick = f"{zid}:{math_tick}"
+                        groups_table = dynamodb_client.tables.get('PolisMathGroups')
+                        if groups_table:
+                            groups_response = groups_table.query(
+                                KeyConditionExpression='zid_tick = :zid_tick',
+                                ExpressionAttributeValues={':zid_tick': zid_tick}
+                            )
+                            
+                            print("\nGroups:")
+                            for group in groups_response.get('Items', []):
+                                group_id = group.get('group_id')
+                                members_count = group.get('member_count', 0)
+                                print(f"  - Group {group_id}: {members_count} members")
                 else:
                     print(f"Conversation {zid} not found")
         except EOFError:
@@ -1091,18 +1152,20 @@ def test_conversation_client_api():
         
         # Save to DynamoDB
         try:
-            print("\nInitializing DynamoDB connection...")
-            dynamodb_resources = init_dynamodb()
-            print("DynamoDB initialized")
+            print("\nInitializing DynamoDB client...")
+            dynamodb_client = init_dynamodb()
+            print("DynamoDB client initialized")
             
-            print(f"Writing conversation {zid} to DynamoDB...")
-            success = write_to_dynamodb(dynamodb_resources, zid, math_data)
+            print(f"Writing conversation {zid} to DynamoDB with new schema...")
+            success = write_to_dynamodb(dynamodb_client, zid, conv)
             if success:
                 print("Successfully wrote conversation data to DynamoDB")
             else:
                 print("Failed to write conversation data to DynamoDB")
         except Exception as e:
             print(f"Error with DynamoDB: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Basic assertions
         assert group_count >= 0, "Group count should be non-negative"

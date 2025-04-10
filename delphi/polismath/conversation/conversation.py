@@ -22,12 +22,6 @@ from polismath.math.corr import compute_correlation
 from polismath.utils.general import agree, disagree, pass_vote
 
 
-# Constants for conversation management
-MAX_PTPTS = 5000  # Maximum number of participants per conversation
-MAX_CMTS = 400    # Maximum number of comments per conversation
-SMALL_CONV_THRESHOLD = 1000  # Threshold for small vs large conversation
-
-
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -433,39 +427,7 @@ class Conversation:
             # Make a clean copy of the rating matrix
             clean_matrix = self._get_clean_matrix()
             
-            # Perform PCA based on conversation size
-            if self.participant_count <= SMALL_CONV_THRESHOLD:
-                # Regular PCA for small conversations
-                pca_results, proj_dict = pca_project_named_matrix(clean_matrix, n_components)
-            else:
-                # Sampling-based PCA for large conversations
-                try:
-                    sample_size = min(SMALL_CONV_THRESHOLD, self.participant_count)
-                    row_names = clean_matrix.rownames()
-                    sample_rows = np.random.choice(row_names, sample_size, replace=False)
-                    
-                    # Create sample matrix
-                    sample_mat = clean_matrix.rowname_subset(sample_rows)
-                    
-                    # Perform PCA on sample
-                    pca_results, _ = pca_project_named_matrix(sample_mat, n_components)
-                    
-                    # Project all participants
-                    proj_dict = {}
-                    for ptpt_id in clean_matrix.rownames():
-                        try:
-                            votes = clean_matrix.get_row_by_name(ptpt_id)
-                            from polismath.math.pca import sparsity_aware_project_ptpt
-                            proj = sparsity_aware_project_ptpt(votes, pca_results)
-                            proj_dict[ptpt_id] = proj
-                        except (KeyError, ValueError, TypeError) as e:
-                            # If we can't project this participant, use zeros
-                            proj_dict[ptpt_id] = np.zeros(2)
-                            print(f"Error projecting participant {ptpt_id}: {e}")
-                except Exception as e:
-                    # If sampling PCA fails, fall back to regular PCA
-                    print(f"Error in sampling PCA: {e}, falling back to regular PCA")
-                    pca_results, proj_dict = pca_project_named_matrix(clean_matrix, n_components)
+            pca_results, proj_dict = pca_project_named_matrix(clean_matrix, n_components)
             
             # Store results
             self.pca = pca_results
@@ -590,13 +552,198 @@ class Conversation:
         # Compute representativeness
         self.repness = conv_repness(self.rating_mat, self.group_clusters)
     
+    def _compute_participant_info_optimized(self, vote_matrix: NamedMatrix, group_clusters: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Optimized version of the participant info computation.
+        
+        Args:
+            vote_matrix: The vote matrix containing participant votes
+            group_clusters: The group clusters from clustering
+            
+        Returns:
+            Dictionary with participant information including group correlations
+        """
+        import time
+        start_time = time.time()
+        
+        if not group_clusters:
+            return {}
+        
+        # Extract values and ensure they're numeric
+        matrix_values = vote_matrix.values.copy()
+        
+        # Convert to numeric matrix with NaN for missing values
+        if not np.issubdtype(matrix_values.dtype, np.number):
+            numeric_values = np.zeros(matrix_values.shape, dtype=float)
+            for i in range(matrix_values.shape[0]):
+                for j in range(matrix_values.shape[1]):
+                    val = matrix_values[i, j]
+                    if pd.isna(val) or val is None:
+                        numeric_values[i, j] = np.nan
+                    else:
+                        try:
+                            numeric_values[i, j] = float(val)
+                        except (ValueError, TypeError):
+                            numeric_values[i, j] = np.nan
+            matrix_values = numeric_values
+        
+        # Replace NaNs with zeros for correlation calculation
+        matrix_values = np.nan_to_num(matrix_values, nan=0.0)
+        
+        # Create result structure
+        result = {
+            'participant_ids': vote_matrix.rownames(),
+            'stats': {}
+        }
+        
+        prep_time = time.time() - start_time
+        logger.info(f"Participant stats prep time: {prep_time:.2f}s")
+        
+        # For each participant, calculate statistics
+        participant_count = len(vote_matrix.rownames())
+        logger.info(f"Processing statistics for {participant_count} participants...")
+        
+        # OPTIMIZATION 1: Precompute mappings and lookup tables
+        
+        # Precompute mapping of participant IDs to indices for faster lookups
+        ptpt_idx_map = {ptpt_id: idx for idx, ptpt_id in enumerate(vote_matrix.rownames())}
+        
+        # Precompute group membership lookups
+        ptpt_group_map = {}
+        for group in group_clusters:
+            for member in group.get('members', []):
+                ptpt_group_map[member] = group.get('id', 0)
+        
+        # OPTIMIZATION 2: Precompute group data
+        
+        # Precompute group member indices for each group
+        group_member_indices = {}
+        for group in group_clusters:
+            group_id = group.get('id', 0)
+            member_indices = []
+            for member in group.get('members', []):
+                if member in ptpt_idx_map:
+                    idx = ptpt_idx_map[member]
+                    if 0 <= idx < matrix_values.shape[0]:
+                        member_indices.append(idx)
+            group_member_indices[group_id] = member_indices
+        
+        # OPTIMIZATION 3: Precompute group vote matrices and average votes
+        
+        # Precompute group vote matrices and their valid comment masks
+        group_vote_matrices = {}
+        group_avg_votes = {}
+        group_valid_masks = {}
+        
+        for group_id, member_indices in group_member_indices.items():
+            if len(member_indices) >= 3:  # Only calculate for groups with enough members
+                # Extract the group vote matrix
+                group_vote_matrix = matrix_values[member_indices, :]
+                group_vote_matrices[group_id] = group_vote_matrix
+                
+                # Calculate average votes per comment for this group
+                group_avg_votes[group_id] = np.mean(group_vote_matrix, axis=0)
+                
+                # Precompute which comments have at least 3 votes from this group
+                group_valid_masks[group_id] = np.sum(group_vote_matrix != 0, axis=0) >= 3
+        
+        # OPTIMIZATION 4: Use vectorized operations for participant stats
+        
+        process_start = time.time()
+        batch_start = time.time()
+        
+        for p_idx, participant_id in enumerate(vote_matrix.rownames()):
+            if p_idx >= matrix_values.shape[0]:
+                continue
+                
+            # Print progress for large participant sets
+            if participant_count > 100 and p_idx % 100 == 0:
+                now = time.time()
+                elapsed = now - process_start
+                batch_time = now - batch_start
+                batch_start = now
+                percent = (p_idx / participant_count) * 100
+                logger.info(f"Processed {p_idx}/{participant_count} participants ({percent:.1f}%) - " +
+                           f"Elapsed: {elapsed:.2f}s, Batch: {batch_time:.4f}s")
+            
+            # Get participant votes
+            participant_votes = matrix_values[p_idx, :]
+            
+            # Count votes using vectorized operations
+            n_agree = np.sum(participant_votes > 0)
+            n_disagree = np.sum(participant_votes < 0)
+            n_pass = np.sum(participant_votes == 0) 
+            n_votes = n_agree + n_disagree
+            
+            # Skip participants with no votes
+            if n_votes == 0:
+                continue
+                
+            # Find participant's group using precomputed mapping
+            participant_group = ptpt_group_map.get(participant_id)
+            
+            # OPTIMIZATION 5: Efficient group correlation calculation
+            
+            # Calculate agreement with each group - optimized version
+            group_agreements = {}
+            
+            for group_id, member_indices in group_member_indices.items():
+                if len(member_indices) < 3:
+                    # Skip groups with too few members
+                    group_agreements[group_id] = 0.0
+                    continue
+                
+                if group_id not in group_avg_votes or group_id not in group_valid_masks:
+                    group_agreements[group_id] = 0.0
+                    continue
+                    
+                # Use precomputed data
+                g_votes = group_avg_votes[group_id]
+                valid_mask = group_valid_masks[group_id]
+                
+                if np.sum(valid_mask) >= 3:  # At least 3 valid comments
+                    # Extract only valid comment votes
+                    p_votes = participant_votes[valid_mask]
+                    g_votes_valid = g_votes[valid_mask]
+                    
+                    # Fast correlation calculation
+                    p_std = np.std(p_votes)
+                    g_std = np.std(g_votes_valid)
+                    
+                    if p_std > 0 and g_std > 0:
+                        # Use numpy's built-in correlation (faster and more numerically stable)
+                        correlation = np.corrcoef(p_votes, g_votes_valid)[0, 1]
+                        
+                        if not np.isnan(correlation):
+                            group_agreements[group_id] = correlation
+                        else:
+                            group_agreements[group_id] = 0.0
+                    else:
+                        group_agreements[group_id] = 0.0
+                else:
+                    group_agreements[group_id] = 0.0
+            
+            # Store participant stats
+            result['stats'][participant_id] = {
+                'n_agree': int(n_agree),
+                'n_disagree': int(n_disagree),
+                'n_pass': int(n_pass),
+                'n_votes': int(n_votes),
+                'group': participant_group,
+                'group_correlations': group_agreements
+            }
+        
+        total_time = time.time() - start_time
+        process_time = time.time() - process_start
+        logger.info(f"Participant stats completed in {total_time:.2f}s (preparation: {prep_time:.2f}s, processing: {process_time:.2f}s)")
+        logger.info(f"Processed {len(result['stats'])} participants with {len(group_clusters)} groups")
+        
+        return result
+
     def _compute_participant_info(self) -> None:
         """
         Compute information about participants.
         """
-        # Make sure numpy and pandas are imported
-        import numpy as np
-        import pandas as pd
         import time
         
         start_time = time.time()
@@ -607,20 +754,8 @@ class Conversation:
             self.participant_info = {}
             return
         
-        # Use optimized participant stats calculation for better performance
-        try:
-            # Import the optimized version
-            from polismath.conversation.participant_info_optimization import compute_participant_info_optimized
-            logger.info("Using optimized participant info computation")
-            
-            # Use the optimized version which has better performance for large datasets
-            ptpt_stats = compute_participant_info_optimized(self.rating_mat, self.group_clusters)
-            
-        except ImportError:
-            # Fall back to original version if optimized one is not available
-            logger.info("Falling back to standard participant info computation")
-            from polismath.math.repness import participant_stats
-            ptpt_stats = participant_stats(self.rating_mat, self.group_clusters)
+        # Use the integrated optimized version directly
+        ptpt_stats = self._compute_participant_info_optimized(self.rating_mat, self.group_clusters)
         
         # Store results
         self.participant_info = ptpt_stats.get('stats', {})
@@ -709,28 +844,20 @@ class Conversation:
                     is_meta = cid in self.meta_tids
                     
                     # Get vote counts from group_votes if available
-                    if hasattr(self, 'group_votes') and self.group_votes:
-                        # Aggregate votes across all groups, just like in Clojure
-                        A, D, S, P = 0, 0, 0, 0
+                    # Aggregate votes across all groups, just like in Clojure
+                    A, D, S, P = 0, 0, 0, 0
                         
-                        # Sum votes across all groups (matches the Clojure reduce logic)
-                        for gid, group_data in self.group_votes.items():
-                            if 'votes' in group_data and cid in group_data['votes']:
-                                vote_data = group_data['votes'][cid]
-                                A += vote_data.get('A', 0)
-                                D += vote_data.get('D', 0)
-                                S += vote_data.get('S', 0)
+                    # Sum votes across all groups (matches the Clojure reduce logic)
+                    for gid, group_data in self.group_votes.items():
+                        if 'votes' in group_data and cid in group_data['votes']:
+                            vote_data = group_data['votes'][cid]
+                            A += vote_data.get('A', 0)
+                            D += vote_data.get('D', 0)
+                            S += vote_data.get('S', 0)
                                 
-                        # Calculate passes (P) as defined in Clojure: P = S - (A + D)
-                        P = S - (A + D)
-                    else:
-                        # Fallback to vote_stats if group_votes not available
-                        comment_stats = self.vote_stats.get('comment_stats', {}).get(cid, {})
-                        A = comment_stats.get('n_agree', 0)
-                        D = comment_stats.get('n_disagree', 0)
-                        S = comment_stats.get('n_votes', 0)
-                        P = S - (A + D)  # Calculate passes
-                    
+                    # Calculate passes (P) as defined in Clojure: P = S - (A + D)
+                    P = S - (A + D)
+                   
                     # Get extremity value from PCA
                     E = 0
                     if hasattr(self, 'pca') and self.pca and 'comment_extremity' in self.pca:
@@ -824,7 +951,12 @@ class Conversation:
         Returns:
             Dictionary with all conversation data
         """
+        import time
+        start_time = time.time()
+        logger.info("Starting get_full_data conversion")
+        
         # Base data
+        base_start = time.time()
         result = {
             'conversation_id': self.conversation_id,
             'last_updated': self.last_updated,
@@ -838,34 +970,72 @@ class Conversation:
                 'mod_out_ptpts': list(self.mod_out_ptpts)
             }
         }
+        logger.info(f"Base data setup: {time.time() - base_start:.4f}s")
         
         # Add PCA data
+        pca_start = time.time()
         if self.pca:
             result['pca'] = {
                 'center': self.pca['center'].tolist() if isinstance(self.pca['center'], np.ndarray) else self.pca['center'],
                 'comps': [comp.tolist() if isinstance(comp, np.ndarray) else comp for comp in self.pca['comps']]
             }
+        logger.info(f"PCA data conversion: {time.time() - pca_start:.4f}s")
         
-        # Add projection data
+        # Add projection data (this is often the largest and most time-consuming part)
+        proj_start = time.time()
         if self.proj:
-            result['proj'] = {pid: proj.tolist() if isinstance(proj, np.ndarray) else proj 
-                            for pid, proj in self.proj.items()}
+            proj_size = len(self.proj)
+            logger.info(f"Converting projections for {proj_size} participants")
+            
+            # Use chunking for large projection sets
+            if proj_size > 5000:
+                result['proj'] = {}
+                chunk_size = 1000
+                chunks_processed = 0
+                
+                # Process in chunks to avoid memory issues
+                keys = list(self.proj.keys())
+                for i in range(0, proj_size, chunk_size):
+                    chunk_start = time.time()
+                    chunk_keys = keys[i:i+chunk_size]
+                    
+                    # Process this chunk
+                    for pid in chunk_keys:
+                        proj = self.proj[pid]
+                        result['proj'][pid] = proj.tolist() if isinstance(proj, np.ndarray) else proj
+                    
+                    chunks_processed += 1
+                    logger.info(f"Processed projection chunk {chunks_processed}: {time.time() - chunk_start:.4f}s for {len(chunk_keys)} participants")
+            else:
+                # Process all at once for smaller datasets
+                result['proj'] = {pid: proj.tolist() if isinstance(proj, np.ndarray) else proj 
+                                for pid, proj in self.proj.items()}
+        logger.info(f"Projection data conversion: {time.time() - proj_start:.4f}s")
         
         # Add cluster data
+        clusters_start = time.time()
         result['group_clusters'] = self.group_clusters
+        logger.info(f"Clusters data: {time.time() - clusters_start:.4f}s")
         
         # Add representativeness data
+        repness_start = time.time()
         if self.repness:
             result['repness'] = self.repness
+        logger.info(f"Repness data: {time.time() - repness_start:.4f}s")
         
         # Add participant info
+        ptpt_info_start = time.time()
         if self.participant_info:
             result['participant_info'] = self.participant_info
+        logger.info(f"Participant info: {time.time() - ptpt_info_start:.4f}s")
         
         # Add comment priorities if available (matching Clojure format)
+        priorities_start = time.time()
         if hasattr(self, 'comment_priorities') and self.comment_priorities:
             result['comment_priorities'] = self.comment_priorities
+        logger.info(f"Comment priorities: {time.time() - priorities_start:.4f}s")
         
+        logger.info(f"Total get_full_data time: {time.time() - start_time:.4f}s")
         return result
     
     def _compute_votes_base(self) -> Dict[str, Any]:
@@ -1007,17 +1177,42 @@ class Conversation:
         Returns:
             Dictionary mapping participant IDs to vote counts
         """
+        import time
+        start_time = time.time()
+        logger.info(f"Starting _compute_user_vote_counts for {len(self.rating_mat.rownames())} participants")
+        
         vote_counts = {}
         
-        for i, pid in enumerate(self.rating_mat.rownames()):
-            # Get row of votes for this participant
-            row = self.rating_mat.values[i, :]
+        # Use more efficient approach for large datasets
+        if len(self.rating_mat.rownames()) > 1000:
+            # Create a mask of non-nan values across the entire matrix
+            non_nan_mask = ~np.isnan(self.rating_mat.values)
             
-            # Count non-nan values
-            count = np.sum(~np.isnan(row))
+            # Sum across rows using vectorized operation
+            row_sums = np.sum(non_nan_mask, axis=1)
             
-            # Store count
-            vote_counts[pid] = int(count)
+            # Convert to dictionary
+            for i, pid in enumerate(self.rating_mat.rownames()):
+                if i < len(row_sums):
+                    vote_counts[pid] = int(row_sums[i])
+                else:
+                    # Fallback if dimensions don't match
+                    vote_counts[pid] = 0
+                    
+            logger.info(f"Computed vote counts for {len(vote_counts)} participants using vectorized approach in {time.time() - start_time:.4f}s")
+        else:
+            # Original approach for smaller datasets
+            for i, pid in enumerate(self.rating_mat.rownames()):
+                # Get row of votes for this participant
+                row = self.rating_mat.values[i, :]
+                
+                # Count non-nan values
+                count = np.sum(~np.isnan(row))
+                
+                # Store count
+                vote_counts[pid] = int(count)
+            
+            logger.info(f"Computed vote counts for {len(vote_counts)} participants using original approach in {time.time() - start_time:.4f}s")
             
         return vote_counts
         
@@ -1081,131 +1276,375 @@ class Conversation:
         
         return consensus
     
-    def to_dict(self, use_clojure_format: bool = True) -> Dict[str, Any]:
+    def to_dict(self) -> Dict[str, Any]:
         """
         Convert the conversation to a dictionary for serialization.
-        
-        Args:
-            use_clojure_format: If True, use hyphenated keys to match Clojure format
+        Optimized version that handles large datasets efficiently.
         
         Returns:
             Dictionary representation of the conversation
         """
-        # Get base dictionary
-        result = self.get_full_data()
+        import numpy as np
+        import time
         
-        # Rename conversation_id to zid for Clojure compatibility
-        result['zid'] = result.pop('conversation_id')
+        # Start timing
+        overall_start_time = time.time()
+        logger.info(f"Starting optimized to_dict conversion")
         
-        # Add timestamps in Clojure format
-        result['lastVoteTimestamp'] = self.last_updated
-        result['lastModTimestamp'] = self.last_updated  # Use same value if no specific mod timestamp
+        # Initialize with basic attributes - build directly rather than using get_full_data
+        base_start = time.time()
+        result = {
+            'conversation_id': self.conversation_id,
+            'last_updated': self.last_updated,
+            'participant_count': self.participant_count,
+            'comment_count': self.comment_count,
+            'vote_stats': self.vote_stats
+        }
         
-        # Add tids (list of comment IDs)
-        # Convert comment IDs to integers when possible for Clojure compatibility
-        tid_integers = []
-        for tid in self.rating_mat.colnames():
-            try:
-                tid_integers.append(int(tid))
-            except (ValueError, TypeError):
-                tid_integers.append(tid)
+        # Add moderation data
+        result['moderation'] = {
+            'mod_out_tids': list(self.mod_out_tids),
+            'mod_in_tids': list(self.mod_in_tids),
+            'meta_tids': list(self.meta_tids),
+            'mod_out_ptpts': list(self.mod_out_ptpts)
+        }
+        
+        # Add PCA data efficiently
+        if self.pca:
+            # Function to safely convert numpy arrays to lists
+            def numpy_to_list(arr):
+                if isinstance(arr, np.ndarray):
+                    return arr.tolist()
+                elif isinstance(arr, list):
+                    return [numpy_to_list(x) for x in arr]
+                return arr
+            
+            result['pca'] = {
+                'center': numpy_to_list(self.pca['center']),
+                'comps': numpy_to_list(self.pca['comps'])
+            }
+        
+        # Add projection data efficiently (chunked for large datasets)
+        if self.proj:
+            proj_start = time.time()
+            proj_size = len(self.proj)
+            logger.info(f"Converting projections for {proj_size} participants")
+            
+            result['proj'] = {}
+            
+            # Use chunking for large projection sets
+            if proj_size > 5000:
+                chunk_size = 1000
+                keys = list(self.proj.keys())
                 
-        result['tids'] = tid_integers
+                for i in range(0, proj_size, chunk_size):
+                    chunk_start = time.time()
+                    chunk_keys = keys[i:i+chunk_size]
+                    
+                    # Process this chunk using dictionary comprehension
+                    result['proj'].update({
+                        pid: proj.tolist() if isinstance(proj, np.ndarray) else proj
+                        for pid, proj in ((pid, self.proj[pid]) for pid in chunk_keys)
+                    })
+                    
+                    logger.info(f"Processed projection chunk {i//chunk_size + 1}: {time.time() - chunk_start:.4f}s")
+            else:
+                # Process all at once for smaller datasets
+                result['proj'] = {
+                    pid: proj.tolist() if isinstance(proj, np.ndarray) else proj 
+                    for pid, proj in self.proj.items()
+                }
+            
+            logger.info(f"Projection data conversion: {time.time() - proj_start:.4f}s")
         
-        # Add count values
+        # Add clusters data
+        result['group_clusters'] = self.group_clusters
+        
+        # Add representativeness data
+        if self.repness:
+            result['repness'] = self.repness
+            
+        # Add participant info
+        if self.participant_info:
+            result['participant_info'] = self.participant_info
+            
+        # Add comment priorities if available
+        if hasattr(self, 'comment_priorities') and self.comment_priorities:
+            result['comment_priorities'] = self.comment_priorities
+            
+        logger.info(f"Base data setup: {time.time() - base_start:.4f}s")
+        
+        # Now add the Clojure-specific format data
+        clojure_start = time.time()
+        
+        # Rename conversation_id to zid and add timestamps
+        result['zid'] = result.pop('conversation_id')
+        result['lastVoteTimestamp'] = self.last_updated
+        result['lastModTimestamp'] = self.last_updated
+        
+        # Convert and add tids (comment IDs) efficiently
+        # Using a list comprehension with try/except inline for performance
+        result['tids'] = [
+            int(tid) if tid.isdigit() else tid 
+            for tid in self.rating_mat.colnames()
+        ]
+        
+        # Add count values with Clojure naming
         result['n'] = self.participant_count
         result['n-cmts'] = self.comment_count
         
-        # Add user vote counts
-        result['user-vote-counts'] = self._compute_user_vote_counts()
+        # Add user vote counts with vectorized operations
+        vote_counts_start = time.time()
         
-        # Add votes-base structure
-        result['votes-base'] = self._compute_votes_base()
+        # Use more efficient batch processing approach from to_dynamo_dict
+        user_vote_counts = {}
+        if len(self.rating_mat.rownames()) > 0:
+            # Create a mask of non-nan values and sum across rows
+            non_nan_mask = ~np.isnan(self.rating_mat.values)
+            row_sums = np.sum(non_nan_mask, axis=1)
+            
+            # Convert to dictionary with integer keys where possible
+            for i, pid in enumerate(self.rating_mat.rownames()):
+                if i < len(row_sums):
+                    # Try to convert participant ID to integer for Clojure compatibility
+                    try:
+                        user_vote_counts[int(pid)] = int(row_sums[i])
+                    except (ValueError, TypeError):
+                        user_vote_counts[pid] = int(row_sums[i])
         
-        # Add group-votes structure
-        result['group-votes'] = self._compute_group_votes()
+        result['user-vote-counts'] = user_vote_counts
+        logger.info(f"User vote counts: {time.time() - vote_counts_start:.4f}s")
         
-        # Add empty subgroup structures (to be implemented if needed)
+        # Calculate votes-base efficiently with vectorized operations
+        votes_base_start = time.time()
+        
+        # Create pre-calculated masks for agree/disagree votes
+        agree_mask = np.abs(self.rating_mat.values - 1.0) < 0.001
+        disagree_mask = np.abs(self.rating_mat.values + 1.0) < 0.001
+        valid_mask = ~np.isnan(self.rating_mat.values)
+        
+        # Compute votes base with vectorized operations
+        votes_base = {}
+        for j, tid in enumerate(self.rating_mat.colnames()):
+            if j >= self.rating_mat.values.shape[1]:
+                continue
+                
+            # Calculate vote stats with vectorized operations
+            col_agree = np.sum(agree_mask[:, j])
+            col_disagree = np.sum(disagree_mask[:, j])
+            col_total = np.sum(valid_mask[:, j])
+            
+            # Try to convert tid to int for Clojure compatibility
+            try:
+                votes_base[int(tid)] = {'A': int(col_agree), 'D': int(col_disagree), 'S': int(col_total)}
+            except (ValueError, TypeError):
+                votes_base[tid] = {'A': int(col_agree), 'D': int(col_disagree), 'S': int(col_total)}
+        
+        result['votes-base'] = votes_base
+        logger.info(f"Votes base: {time.time() - votes_base_start:.4f}s")
+        
+        # Compute group votes with optimized approach
+        group_votes_start = time.time()
+        
+        # Use the optimized implementation similar to to_dynamo_dict
+        group_votes = {}
+        
+        if self.group_clusters:
+            # Precompute indices for each participant for faster lookups
+            ptpt_indices = {ptpt_id: i for i, ptpt_id in enumerate(self.rating_mat.rownames())}
+            
+            # Process each group
+            for group in self.group_clusters:
+                group_id = group.get('id')
+                if group_id is None:
+                    continue
+                
+                # Get indices for all members of this group
+                member_indices = []
+                for member in group.get('members', []):
+                    idx = ptpt_indices.get(member)
+                    if idx is not None and idx < self.rating_mat.values.shape[0]:
+                        member_indices.append(idx)
+                
+                # Skip groups with no valid members
+                if not member_indices:
+                    continue
+                
+                # Get the vote submatrix for this group
+                group_matrix = self.rating_mat.values[member_indices, :]
+                
+                # Calculate vote stats for each comment using vectorized operations
+                votes = {}
+                for j, comment_id in enumerate(self.rating_mat.colnames()):
+                    if j >= group_matrix.shape[1]:
+                        continue
+                    
+                    # Extract column and calculate votes
+                    col = group_matrix[:, j]
+                    agree_votes = np.sum(np.abs(col - 1.0) < 0.001)
+                    disagree_votes = np.sum(np.abs(col + 1.0) < 0.001)
+                    total_votes = np.sum(~np.isnan(col))
+                    
+                    # Try to convert comment_id to int
+                    try:
+                        cid = int(comment_id)
+                    except (ValueError, TypeError):
+                        cid = comment_id
+                    
+                    # Store in result with Clojure-compatible format
+                    votes[cid] = {'A': int(agree_votes), 'D': int(disagree_votes), 'S': int(total_votes)}
+                
+                # Store this group's data
+                group_votes[str(group_id)] = {
+                    'n-members': len(member_indices),
+                    'votes': votes
+                }
+                
+        result['group-votes'] = group_votes
+        logger.info(f"Group votes: {time.time() - group_votes_start:.4f}s")
+        
+        # Add empty subgroup structures
         result['subgroup-votes'] = {}
         result['subgroup-repness'] = {}
         
-        # Add group-aware-consensus (based on Clojure implementation)
-        result['group-aware-consensus'] = self._compute_group_aware_consensus()
+        # Add group-aware consensus with optimized calculation
+        consensus_start = time.time()
+        group_consensus = {}
         
-        # Add in-conv (set of participants included in clustering)
-        # In Clojure, this is a set of participant IDs that meet certain vote count criteria
-        # Note: In Clojure, the IDs are integers, so we need to convert strings to ints when possible
-        ptpt_ids_in_conv = []
-        for pid, count in self._compute_user_vote_counts().items():
-            # Include participants who have voted on at least min(7, total_comments) comments
-            min_votes = min(7, self.comment_count)
-            if count >= min_votes:
+        # Compute in one pass using existing structure
+        if 'group-votes' in result:
+            # Store consensus values per comment ID
+            for tid in self.rating_mat.colnames():
+                # Try converting to integer for consistent keys
                 try:
-                    # Try to convert to integer to match Clojure format
-                    ptpt_ids_in_conv.append(int(pid))
+                    tid_key = int(tid)
                 except (ValueError, TypeError):
-                    # If conversion fails, keep as string
-                    ptpt_ids_in_conv.append(pid)
+                    tid_key = tid
                 
-        result['in-conv'] = ptpt_ids_in_conv
-        # Convert mod IDs to integers when possible for Clojure compatibility
-        mod_out_integers = []
-        for tid in self.mod_out_tids:
-            try:
-                mod_out_integers.append(int(tid))
-            except (ValueError, TypeError):
-                mod_out_integers.append(tid)
-        
-        mod_in_integers = []
-        for tid in self.mod_in_tids:
-            try:
-                mod_in_integers.append(int(tid))
-            except (ValueError, TypeError):
-                mod_in_integers.append(tid)
+                # Start with consensus value of 1
+                consensus_value = 1.0
+                has_data = False
                 
-        meta_integers = []
-        for tid in self.meta_tids:
-            try:
-                meta_integers.append(int(tid))
-            except (ValueError, TypeError):
-                meta_integers.append(tid)
+                # Multiply probabilities from all groups (same as reduce * in Clojure)
+                for gid, gid_data in result['group-votes'].items():
+                    votes_data = gid_data.get('votes', {})
+                    
+                    if tid_key in votes_data:
+                        vote_stats = votes_data[tid_key]
+                        agree_count = vote_stats.get('A', 0)
+                        total_count = vote_stats.get('S', 0)
+                        
+                        # Calculate probability with Laplace smoothing
+                        if total_count > 0:
+                            prob = (agree_count + 1.0) / (total_count + 2.0)
+                            consensus_value *= prob
+                            has_data = True
+                
+                # Only store if we have actual data
+                if has_data:
+                    group_consensus[tid_key] = consensus_value
         
-        result['mod-out'] = mod_out_integers
-        result['mod-in'] = mod_in_integers
-        result['meta-tids'] = meta_integers
+        result['group-aware-consensus'] = group_consensus
+        logger.info(f"Group consensus: {time.time() - consensus_start:.4f}s")
         
-        # Calculate a math_tick value (used in Clojure version to track updates)
-        # Will be added to the result after conversion
+        # Calculate in-conv participants
+        in_conv_start = time.time()
         
-        # Add base-clusters (in Clojure these are lower-level clusters)
-        # For simplicity, we'll use the same group clusters for now
+        # Use pre-calculated vote counts to avoid recalculation
+        in_conv = []
+        min_votes = min(7, self.comment_count)
+        
+        for pid, count in result['user-vote-counts'].items():
+            if count >= min_votes:
+                in_conv.append(pid)  # pid is already converted to int where possible
+        
+        result['in-conv'] = in_conv
+        logger.info(f"In-conv: {time.time() - in_conv_start:.4f}s")
+        
+        # Convert moderation IDs to integers when possible
+        mod_start = time.time()
+        
+        # Convert moderation lists with list comprehensions for performance
+        result['mod-out'] = [
+            int(tid) if isinstance(tid, str) and tid.isdigit() else tid 
+            for tid in self.mod_out_tids
+        ]
+        
+        result['mod-in'] = [
+            int(tid) if isinstance(tid, str) and tid.isdigit() else tid 
+            for tid in self.mod_in_tids
+        ]
+        
+        result['meta-tids'] = [
+            int(tid) if isinstance(tid, str) and tid.isdigit() else tid 
+            for tid in self.meta_tids
+        ]
+        
+        logger.info(f"Moderation data: {time.time() - mod_start:.4f}s")
+        
+        # Add base clusters (same as group clusters)
         result['base-clusters'] = self.group_clusters
         
-        # Add separate consensus field (same structure as in Clojure)
+        # Add empty consensus structure for compatibility
         result['consensus'] = {
-            'agree': [],      # List of agreed-upon comments
-            'disagree': [],   # List of disagreed-upon comments
-            'comment-stats': {} # Statistics on comments
+            'agree': [],
+            'disagree': [],
+            'comment-stats': {}
         }
         
-        # Use a smaller, more consistent math_tick value to match the Clojure format
-        # Instead of using a full timestamp, use a simpler number similar to Clojure's
-        # For the biodiversity dataset, Clojure used 25221
+        # Add math_tick value
         current_time = int(time.time())
-        math_tick_value = 25000 + (current_time % 10000)  # Will be in the range 25000-35000
+        math_tick_value = 25000 + (current_time % 10000)  # Range 25000-35000
         
-        if use_clojure_format:
-            # Recursively convert all Python underscores to Clojure hyphens throughout the data structure
-            converted_result = self._convert_to_clojure_format(result)
+        logger.info(f"Clojure format setup: {time.time() - clojure_start:.4f}s")
+        
+        # Add math_tick value and return
+        result['math_tick'] = math_tick_value
+        logger.info(f"Total to_dict time: {time.time() - overall_start_time:.4f}s")
+        return result
+    
+    def _convert_structure(self, data):
+        """
+        Optimized conversion of nested data structures for Clojure compatibility.
+        Much faster than the full recursive conversion.
+        
+        Args:
+            data: The data structure to convert
             
-            # Add math_tick with underscore directly to avoid conversion to hyphen
-            # This matches Clojure's format exactly
-            converted_result['math_tick'] = math_tick_value
+        Returns:
+            Converted data structure
+        """
+        import numpy as np
+        
+        # For primitive types, just return
+        if data is None or isinstance(data, (int, float, bool, str)):
+            return data
             
-            return converted_result
-        else:
-            result['math_tick'] = math_tick_value
+        # For numpy arrays, convert to list
+        if isinstance(data, np.ndarray):
+            return data.tolist()
+            
+        # For lists, convert each element
+        if isinstance(data, list):
+            return [self._convert_structure(item) for item in data]
+            
+        # For dictionaries, convert keys and values
+        if isinstance(data, dict):
+            result = {}
+            for k, v in data.items():
+                # Convert key if it's a string
+                new_key = k.replace('_', '-') if isinstance(k, str) else k
+                
+                # Convert value
+                result[new_key] = self._convert_structure(v)
+                
             return result
+            
+        # For any other type, return as is
+        return data
+    
+    # Cache for memoization to avoid repeating conversions
+    _conversion_cache = {}
     
     @staticmethod
     def _convert_to_clojure_format(data: Any) -> Any:
@@ -1218,49 +1657,156 @@ class Conversation:
         Returns:
             Converted data structure with hyphenated keys
         """
-        # Base cases: primitive types
-        if data is None or isinstance(data, (str, int, float, bool)):
-            return data
+        import time
+        detail_start = time.time()
+        
+        # Count objects processed for debugging
+        processed_count = {
+            'dict': 0,
+            'list': 0,
+            'tuple': 0,
+            'primitive': 0,
+            'numpy': 0,
+            'cache_hit': 0,
+            'total': 0
+        }
+        
+        def _convert_inner(data, depth=0):
+            processed_count['total'] += 1
             
-        # Handle numpy arrays and convert to lists
-        if hasattr(data, 'tolist') and callable(getattr(data, 'tolist')):
-            return data.tolist()
-            
-        # Recursive case: dictionaries
-        if isinstance(data, dict):
-            converted_dict = {}
-            for key, value in data.items():
-                # Try to convert string keys to integers for specific fields
-                if key in ('proj', 'comment-priorities'):
-                    # For these special fields, try to convert string keys to integers
-                    # This makes the Python output match Clojure's integer IDs
-                    if isinstance(value, dict):
-                        int_keyed_dict = {}
-                        for k, v in value.items():
-                            try:
-                                # Try to convert key to integer
-                                int_k = int(k)
-                                int_keyed_dict[int_k] = Conversation._convert_to_clojure_format(v)
-                            except (ValueError, TypeError):
-                                # Keep as is if conversion fails
-                                int_keyed_dict[k] = Conversation._convert_to_clojure_format(v)
-                        converted_dict[key.replace('_', '-') if isinstance(key, str) else key] = int_keyed_dict
-                        continue
+            # For immutable types, use memoization to avoid re-processing
+            if isinstance(data, (str, int, float, bool, tuple)) or data is None:
+                # We can only cache immutable types as dict keys
+                cache_key = (id(data), str(type(data))) if isinstance(data, tuple) else data
                 
-                # Convert the key from underscore to hyphen format
-                hyphenated_key = key.replace('_', '-') if isinstance(key, str) else key
-                # Recursively convert the value
-                converted_value = Conversation._convert_to_clojure_format(value)
-                converted_dict[hyphenated_key] = converted_value
-            return converted_dict
+                if cache_key in Conversation._conversion_cache:
+                    processed_count['cache_hit'] += 1
+                    return Conversation._conversion_cache[cache_key]
             
-        # Recursive case: lists or tuples
-        if isinstance(data, (list, tuple)):
-            return [Conversation._convert_to_clojure_format(item) for item in data]
+            # Base cases: primitive types
+            if data is None or isinstance(data, (str, int, float, bool)):
+                processed_count['primitive'] += 1
+                Conversation._conversion_cache[data] = data
+                return data
+                
+            # Handle numpy arrays and convert to lists
+            if hasattr(data, 'tolist') and callable(getattr(data, 'tolist')):
+                processed_count['numpy'] += 1
+                result = data.tolist()
+                return result
             
-        # For any other type (like sets, custom objects, etc.), just return as is
-        # This is a simplification and might need to be extended for other types
-        return data
+            # Special case for empty dictionaries and lists to avoid recursion
+            if isinstance(data, dict) and not data:
+                return {}
+            if isinstance(data, (list, tuple)) and not data:
+                return []
+                
+            # Recursive case: dictionaries
+            if isinstance(data, dict):
+                processed_count['dict'] += 1
+                dict_start = time.time()
+                
+                # Special optimization for large dictionaries:
+                # Pre-process all string keys at once to avoid repeated string replacements
+                keys_map_start = time.time()
+                keys_map = {k: k.replace('_', '-') if isinstance(k, str) else k for k in data.keys()}
+                keys_map_time = time.time() - keys_map_start
+                
+                # Debug for large dictionaries
+                if len(data) > 1000 and depth == 0:
+                    logger.info(f"Processing large dictionary with {len(data)} keys, keys_map time: {keys_map_time:.4f}s")
+                
+                converted_dict = {}
+                special_cases_time = 0
+                regular_cases_time = 0
+                
+                for key, value in data.items():
+                    # Handle special cases where we need to try converting string keys to integers
+                    if key in ('proj', 'comment-priorities'):
+                        special_start = time.time()
+                        if isinstance(value, dict):
+                            # Process this special dictionary more efficiently
+                            int_keyed_dict = {}
+                            for k, v in value.items():
+                                try:
+                                    # Try to convert key to integer
+                                    int_k = int(k)
+                                    int_keyed_dict[int_k] = _convert_inner(v, depth+1)
+                                except (ValueError, TypeError):
+                                    # Keep as is if conversion fails
+                                    int_keyed_dict[k] = _convert_inner(v, depth+1)
+                            converted_dict[keys_map[key]] = int_keyed_dict
+                            special_cases_time += time.time() - special_start
+                            continue
+                    
+                    # For regular keys, use the pre-computed hyphenated key
+                    regular_start = time.time()
+                    converted_dict[keys_map[key]] = _convert_inner(value, depth+1)
+                    regular_cases_time += time.time() - regular_start
+                
+                # Debug for large dictionaries or projection data (which is typically the largest)
+                if (len(data) > 1000 or key == 'proj') and depth == 0:
+                    total_dict_time = time.time() - dict_start
+                    logger.info(f"Dictionary processing: total={total_dict_time:.4f}s, special={special_cases_time:.4f}s, regular={regular_cases_time:.4f}s")
+                
+                return converted_dict
+                
+            # Recursive case: lists or tuples
+            if isinstance(data, (list, tuple)):
+                if isinstance(data, list):
+                    processed_count['list'] += 1
+                else:
+                    processed_count['tuple'] += 1
+                
+                # Debug for large lists
+                list_start = time.time()
+                if len(data) > 1000 and depth == 0:
+                    logger.info(f"Processing large list with {len(data)} items")
+                
+                # For tuples, we'll cache the result
+                result = [_convert_inner(item, depth+1) for item in data]
+                
+                # Debug for large lists
+                if len(data) > 1000 and depth == 0:
+                    logger.info(f"Large list processing completed in {time.time() - list_start:.4f}s")
+                
+                if isinstance(data, tuple):
+                    # We need to use an ID-based key for tuples
+                    cache_key = (id(data), str(type(data)))
+                    Conversation._conversion_cache[cache_key] = result
+                    
+                return result
+                
+            # For any other type (like sets, custom objects, etc.), just return as is
+            return data
+        
+        # Start the conversion process
+        result = _convert_inner(data)
+        
+        # Log summary statistics
+        detail_time = time.time() - detail_start
+        if processed_count['total'] > 1000:
+            logger.info(f"Conversion stats: processed {processed_count['total']} objects in {detail_time:.4f}s")
+            logger.info(f"    - Dictionaries: {processed_count['dict']}")
+            logger.info(f"    - Lists: {processed_count['list']}")
+            logger.info(f"    - Tuples: {processed_count['tuple']}")
+            logger.info(f"    - Primitives: {processed_count['primitive']}")
+            logger.info(f"    - NumPy arrays: {processed_count['numpy']}")
+            logger.info(f"    - Cache hits: {processed_count['cache_hit']}")
+            
+            if processed_count['dict'] > 0:
+                logger.info(f"    - Average time per object: {(detail_time/processed_count['total'])*1000:.4f}ms")
+            
+            cache_size = len(Conversation._conversion_cache)
+            logger.info(f"    - Cache size: {cache_size} entries")
+        
+        return result
+    
+    # Reset the conversion cache whenever needed
+    @staticmethod
+    def _reset_conversion_cache():
+        """Clear the conversion cache to free memory."""
+        Conversation._conversion_cache = {}
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Conversation':
@@ -1268,7 +1814,7 @@ class Conversation:
         Create a conversation from a dictionary.
         
         Args:
-            data: Dictionary representation of a conversation
+           data: Dictionary representation of a conversation
             
         Returns:
             Conversation instance
@@ -1313,4 +1859,381 @@ class Conversation:
         # Restore participant info
         conv.participant_info = data.get('participant_info', {})
         
+        # Restore comment priorities if available
+        if 'comment_priorities' in data:
+            conv.comment_priorities = data.get('comment_priorities', {})
+        
         return conv
+        
+    def to_dynamo_dict(self) -> Dict[str, Any]:
+        """
+        Convert the conversation to a dictionary optimized for DynamoDB export.
+        This method is specifically optimized for performance with large datasets
+        and uses Python-native naming conventions (underscores instead of hyphens).
+        
+        Returns:
+            Dictionary representation optimized for DynamoDB
+        """
+        import numpy as np
+        import time
+        import decimal
+        
+        # Start timing
+        start_time = time.time()
+        logger.info("Starting conversion to DynamoDB format...")
+        
+        # Initialize result with basic attributes
+        result = {
+            'zid': self.conversation_id,
+            'last_updated': self.last_updated,
+            'last_vote_timestamp': self.last_updated,
+            'last_mod_timestamp': self.last_updated,
+            'participant_count': self.participant_count,
+            'comment_count': self.comment_count,
+            'group_count': len(self.group_clusters) if hasattr(self, 'group_clusters') else 0
+        }
+        
+        # Function to convert numpy arrays to lists
+        def numpy_to_list(obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, list):
+                return [numpy_to_list(item) for item in obj]
+            elif isinstance(obj, dict):
+                return {k: numpy_to_list(v) for k, v in obj.items()}
+            elif isinstance(obj, (np.int64, np.int32, np.int16, np.int8)):
+                return int(obj)
+            elif isinstance(obj, (np.float64, np.float32, np.float16)):
+                return float(obj)
+            return obj
+        
+        # Function to convert floats to Decimal for DynamoDB compatibility
+        def float_to_decimal(obj):
+            if isinstance(obj, float):
+                return decimal.Decimal(str(obj))
+            elif isinstance(obj, dict):
+                return {k: float_to_decimal(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [float_to_decimal(x) for x in obj]
+            return obj
+        
+        # Add comment IDs list (tids)
+        logger.info(f"[{time.time() - start_time:.2f}s] Processing comment IDs...")
+        tid_integers = []
+        for tid in self.rating_mat.colnames():
+            try:
+                tid_integers.append(int(tid))
+            except (ValueError, TypeError):
+                tid_integers.append(tid)
+        result['comment_ids'] = tid_integers
+        
+        # Add moderation data with integer conversion where possible
+        logger.info(f"[{time.time() - start_time:.2f}s] Processing moderation data...")
+        result['moderated_out'] = []
+        for tid in self.mod_out_tids:
+            try:
+                result['moderated_out'].append(int(tid))
+            except (ValueError, TypeError):
+                result['moderated_out'].append(tid)
+        
+        result['moderated_in'] = []
+        for tid in self.mod_in_tids:
+            try:
+                result['moderated_in'].append(int(tid))
+            except (ValueError, TypeError):
+                result['moderated_in'].append(tid)
+        
+        result['meta_comments'] = []
+        for tid in self.meta_tids:
+            try:
+                result['meta_comments'].append(int(tid))
+            except (ValueError, TypeError):
+                result['meta_comments'].append(tid)
+        
+        # Add user vote counts (more efficient approach)
+        logger.info(f"[{time.time() - start_time:.2f}s] Computing user vote counts...")
+        user_vote_counts = {}
+        for i, pid in enumerate(self.rating_mat.rownames()):
+            # Skip if index is out of bounds
+            if i >= self.rating_mat.values.shape[0]:
+                continue
+                
+            # Count votes with efficient numpy operations
+            row = self.rating_mat.values[i, :]
+            count = int(np.sum(~np.isnan(row)))
+            
+            # Try to convert pid to int for DynamoDB
+            try:
+                user_vote_counts[int(pid)] = count
+            except (ValueError, TypeError):
+                user_vote_counts[pid] = count
+        
+        result['user_vote_counts'] = user_vote_counts
+        
+        # Calculate included participants (meeting vote threshold)
+        logger.info(f"[{time.time() - start_time:.2f}s] Computing included participants...")
+        included_participants = []
+        min_votes = min(7, self.comment_count)
+        
+        for pid, count in user_vote_counts.items():
+            if count >= min_votes:
+                included_participants.append(pid)  # Already converted above
+        
+        result['included_participants'] = included_participants
+        
+        # Add votes base structure (optimized batch conversion)
+        logger.info(f"[{time.time() - start_time:.2f}s] Computing votes base structure...")
+        votes_base_start = time.time()
+        votes_base = {}
+        
+        # Pre-identify agree, disagree, and voteless masks
+        agree_mask = np.abs(self.rating_mat.values - 1.0) < 0.001
+        disagree_mask = np.abs(self.rating_mat.values + 1.0) < 0.001
+        valid_mask = ~np.isnan(self.rating_mat.values)
+        
+        # Process column by column
+        for j, tid in enumerate(self.rating_mat.colnames()):
+            if j >= self.rating_mat.values.shape[1]:
+                continue
+                
+            # Get the column
+            try:
+                # Calculate stats with vectorized operations
+                col_agree = np.sum(agree_mask[:, j])
+                col_disagree = np.sum(disagree_mask[:, j])
+                col_total = np.sum(valid_mask[:, j])
+                
+                # Try to convert tid to int for compatibility
+                try:
+                    votes_base[int(tid)] = {'agree': int(col_agree), 'disagree': int(col_disagree), 'total': int(col_total)}
+                except (ValueError, TypeError):
+                    votes_base[tid] = {'agree': int(col_agree), 'disagree': int(col_disagree), 'total': int(col_total)}
+            except (IndexError, ValueError, TypeError):
+                # Handle any errors gracefully
+                continue
+        
+        logger.info(f"[{time.time() - start_time:.2f}s] votes_base computed in {time.time() - votes_base_start:.2f}s")
+        result['votes_base'] = votes_base
+        
+        # Compute group votes structure with optimized approach
+        logger.info(f"[{time.time() - start_time:.2f}s] Computing group votes structure...")
+        group_votes_start = time.time()
+        
+        # Initialize with empty structure
+        result['group_votes'] = {}
+        
+        # Process groups only if they exist
+        if self.group_clusters:
+            # Precompute indices for each participant
+            ptpt_indices = {}
+            for i, ptpt_id in enumerate(self.rating_mat.rownames()):
+                ptpt_indices[ptpt_id] = i
+            
+            # Process each group
+            for group in self.group_clusters:
+                group_id = group.get('id')
+                if group_id is None:
+                    continue
+                
+                # Get indices for group members
+                member_indices = []
+                for member in group.get('members', []):
+                    idx = ptpt_indices.get(member)
+                    if idx is not None and idx < self.rating_mat.values.shape[0]:
+                        member_indices.append(idx)
+                
+                # Skip groups with no valid members
+                if not member_indices:
+                    continue
+                
+                # Get the submatrix for this group
+                group_matrix = self.rating_mat.values[member_indices, :]
+                
+                # Calculate votes for each comment
+                group_votes = {}
+                for j, comment_id in enumerate(self.rating_mat.colnames()):
+                    if j >= group_matrix.shape[1]:
+                        continue
+                        
+                    # Extract the column for this comment
+                    col = group_matrix[:, j]
+                    
+                    # Calculate vote counts
+                    agree_votes = np.sum(np.abs(col - 1.0) < 0.001)
+                    disagree_votes = np.sum(np.abs(col + 1.0) < 0.001)
+                    total_votes = np.sum(~np.isnan(col))
+                    
+                    # Try to convert comment_id to int
+                    try:
+                        cid = int(comment_id)
+                    except (ValueError, TypeError):
+                        cid = comment_id
+                        
+                    # Store in result
+                    group_votes[cid] = {
+                        'agree': int(agree_votes), 
+                        'disagree': int(disagree_votes), 
+                        'total': int(total_votes)
+                    }
+                
+                # Add this group's data to result
+                result['group_votes'][str(group_id)] = {
+                    'member_count': len(member_indices),
+                    'votes': group_votes
+                }
+        
+        logger.info(f"[{time.time() - start_time:.2f}s] group_votes computed in {time.time() - group_votes_start:.2f}s")
+        
+        # Add empty subgroup structures (to be implemented if needed)
+        result['subgroup_votes'] = {}
+        result['subgroup_repness'] = {}
+        
+        # Add group-aware consensus
+        logger.info(f"[{time.time() - start_time:.2f}s] Computing group consensus values...")
+        consensus_start = time.time()
+        
+        # Simplified implementation
+        result['group_consensus'] = {}
+        if self.group_clusters and 'group_votes' in result:
+            group_votes = result['group_votes']
+            
+            # Process each comment across all groups
+            for tid in self.rating_mat.colnames():
+                try:
+                    tid_key = int(tid)
+                except (ValueError, TypeError):
+                    tid_key = tid
+                
+                # Calculate consensus by group probabilities
+                consensus_value = 1.0
+                group_probs = {}
+                
+                # Collect probabilities for all groups
+                for gid, gid_stats in group_votes.items():
+                    votes_data = gid_stats.get('votes', {})
+                    if tid_key in votes_data:
+                        vote_stats = votes_data[tid_key]
+                        # Get vote counts with defaults
+                        agree_count = vote_stats.get('agree', 0)
+                        total_count = vote_stats.get('total', 0)
+                        
+                        # Calculate probability with Laplace smoothing
+                        prob = (agree_count + 1.0) / (total_count + 2.0)
+                        group_probs[gid] = prob
+                
+                # Multiply probabilities for consensus
+                if group_probs:
+                    for prob in group_probs.values():
+                        consensus_value *= prob
+                    
+                    # Store result with decimal conversion for DynamoDB
+                    result['group_consensus'][tid_key] = decimal.Decimal(str(consensus_value))
+        
+        logger.info(f"[{time.time() - start_time:.2f}s] group_consensus computed in {time.time() - consensus_start:.2f}s")
+        
+        # Add base-clusters and PCA data
+        logger.info(f"[{time.time() - start_time:.2f}s] Processing PCA and cluster data...")
+        
+        # Convert group clusters
+        base_clusters = []
+        for cluster in self.group_clusters:
+            # Convert to a dict without numpy arrays
+            clean_cluster = {
+                'id': cluster.get('id'),
+                'members': cluster.get('members', []),
+                'center': numpy_to_list(cluster.get('center', [])),
+            }
+            base_clusters.append(clean_cluster)
+        
+        # Convert to decimals for DynamoDB
+        result['base_clusters'] = float_to_decimal(base_clusters)
+        result['group_clusters'] = result['base_clusters']  # Same data
+        
+        # Process PCA data
+        if self.pca:
+            pca_data = {
+                'center': numpy_to_list(self.pca.get('center', [])),
+                'components': numpy_to_list(self.pca.get('comps', []))
+            }
+            result['pca'] = float_to_decimal(pca_data)
+        
+        # Add consensus structure
+        result['consensus'] = {
+            'agree': [],
+            'disagree': [],
+            'comment_stats': {}
+        }
+        
+        # Add math_tick value
+        current_time = int(time.time())
+        math_tick = 25000 + (current_time % 10000)
+        result['math_tick'] = math_tick
+        
+        # Process comment priorities
+        if hasattr(self, 'comment_priorities') and self.comment_priorities:
+            logger.info(f"[{time.time() - start_time:.2f}s] Processing comment priorities...")
+            priorities = {}
+            for cid, priority in self.comment_priorities.items():
+                try:
+                    priorities[int(cid)] = int(priority)
+                except (ValueError, TypeError):
+                    priorities[cid] = int(priority)
+            result['comment_priorities'] = priorities
+        
+        # Process repness data efficiently
+        if self.repness and 'comment_repness' in self.repness:
+            logger.info(f"[{time.time() - start_time:.2f}s] Processing representativeness data...")
+            repness_start = time.time()
+            
+            # Process in batch to be more efficient
+            repness_data = []
+            for item in self.repness['comment_repness']:
+                # Convert using try/except to handle mixed formats
+                try:
+                    gid = item.get('gid', 0)
+                    tid = item.get('tid', '')
+                    rep_value = item.get('repness', 0)
+                    
+                    # Try to convert tid to integer
+                    try:
+                        tid = int(tid)
+                    except (ValueError, TypeError):
+                        pass
+                     
+                    # Add to results with Decimal conversion for DynamoDB
+                    repness_data.append({
+                        'group_id': gid,
+                        'comment_id': tid,
+                        'repness': decimal.Decimal(str(rep_value))
+                    })
+                except Exception as e:
+                    logger.warning(f"Error processing repness item: {e}")
+            
+            # Add to result
+            result['repness'] = {
+                'comment_repness': repness_data
+            }
+            
+            logger.info(f"[{time.time() - start_time:.2f}s] Representativeness data processed in {time.time() - repness_start:.2f}s")
+        
+        # The proj attribute (participant projections) is handled separately by the DynamoDB client
+        # for efficiency with large datasets
+        
+        logger.info(f"[{time.time() - start_time:.2f}s] Conversion to DynamoDB format completed")
+        return result
+
+    def export_to_dynamodb(self, dynamodb_client) -> bool:
+        """
+        Export conversation data directly to DynamoDB.
+        
+        Args:
+            dynamodb_client: An initialized DynamoDBClient instance
+            
+        Returns:
+            Success status
+        """
+        # Export the conversation data to DynamoDB
+        logger.info(f"Exporting conversation {self.conversation_id} to DynamoDB")
+        
+        # Write everything in a single call, letting the DynamoDB client handle the details
+        return dynamodb_client.write_conversation(self)
