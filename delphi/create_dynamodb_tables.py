@@ -1,0 +1,412 @@
+#!/usr/bin/env python3
+"""
+Create all DynamoDB tables for Delphi system.
+
+This script creates all necessary DynamoDB tables for both the Polis math system
+and the EVōC (Efficient Visualization of Clusters) pipeline.
+
+Usage:
+    python create_dynamodb_tables.py [options]
+
+Options:
+    --endpoint-url ENDPOINT_URL   DynamoDB endpoint URL (default: http://localhost:8000)
+    --region REGION               AWS region (default: us-west-2)
+    --delete-existing             Delete existing tables before creating new ones
+    --evoc-only                   Create only EVōC tables
+    --polismath-only              Create only Polis math tables
+    --aws-profile PROFILE         AWS profile to use (optional)
+"""
+
+import boto3
+import os
+import logging
+import argparse
+import time
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def create_polis_math_tables(dynamodb, delete_existing=False):
+    """
+    Create all tables for the Polis math system.
+    
+    Args:
+        dynamodb: boto3 DynamoDB resource
+        delete_existing: If True, delete existing tables before creating new ones
+    """
+    # Get list of existing tables
+    existing_tables = [t.name for t in dynamodb.tables.all()]
+    
+    # Define table schemas for Polis math
+    tables = {
+        # Main conversation metadata table
+        'PolisMathConversations': {
+            'KeySchema': [
+                {'AttributeName': 'zid', 'KeyType': 'HASH'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'zid', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        # PCA and cluster data
+        'PolisMathAnalysis': {
+            'KeySchema': [
+                {'AttributeName': 'zid', 'KeyType': 'HASH'},
+                {'AttributeName': 'math_tick', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'zid', 'AttributeType': 'S'},
+                {'AttributeName': 'math_tick', 'AttributeType': 'N'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        # Group data
+        'PolisMathGroups': {
+            'KeySchema': [
+                {'AttributeName': 'zid_tick', 'KeyType': 'HASH'},
+                {'AttributeName': 'group_id', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'zid_tick', 'AttributeType': 'S'},
+                {'AttributeName': 'group_id', 'AttributeType': 'N'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        # Comment data with priorities
+        'PolisMathComments': {
+            'KeySchema': [
+                {'AttributeName': 'zid_tick', 'KeyType': 'HASH'},
+                {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'zid_tick', 'AttributeType': 'S'},
+                {'AttributeName': 'comment_id', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        # Representativeness data
+        'PolisMathRepness': {
+            'KeySchema': [
+                {'AttributeName': 'zid_tick_gid', 'KeyType': 'HASH'},
+                {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'zid_tick_gid', 'AttributeType': 'S'},
+                {'AttributeName': 'comment_id', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        # Participant projection data
+        'PolisMathProjections': {
+            'KeySchema': [
+                {'AttributeName': 'zid_tick', 'KeyType': 'HASH'},
+                {'AttributeName': 'participant_id', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'zid_tick', 'AttributeType': 'S'},
+                {'AttributeName': 'participant_id', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        }
+    }
+    
+    # Handle table deletion if requested
+    if delete_existing:
+        _delete_tables(dynamodb, tables.keys(), existing_tables)
+        # Update list of existing tables
+        existing_tables = [t.name for t in dynamodb.tables.all()]
+    
+    # Create tables
+    created_tables = _create_tables(dynamodb, tables, existing_tables)
+    
+    return created_tables
+
+def create_evoc_tables(dynamodb, delete_existing=False):
+    """
+    Create all tables for the EVōC (Efficient Visualization of Clusters) pipeline.
+    
+    Args:
+        dynamodb: boto3 DynamoDB resource
+        delete_existing: If True, delete existing tables before creating new ones
+    """
+    # Get list of existing tables
+    existing_tables = [t.name for t in dynamodb.tables.all()]
+    
+    # Define table schemas for EVōC
+    tables = {
+        # Report table
+        'report_narrative_store': {
+            'KeySchema': [
+                {'AttributeName': 'rid_section_model', 'KeyType': 'HASH'},
+                {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'rid_section_model', 'AttributeType': 'S'},
+                {'AttributeName': 'timestamp', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        # Core tables
+        'ConversationMeta': {
+            'KeySchema': [
+                {'AttributeName': 'conversation_id', 'KeyType': 'HASH'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        'CommentEmbeddings': {
+            'KeySchema': [
+                {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
+                {'AttributeName': 'comment_id', 'AttributeType': 'N'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        'CommentClusters': {
+            'KeySchema': [
+                {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
+                {'AttributeName': 'comment_id', 'AttributeType': 'N'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        'ClusterTopics': {
+            'KeySchema': [
+                {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'cluster_key', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
+                {'AttributeName': 'cluster_key', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        'UMAPGraph': {
+            'KeySchema': [
+                {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'edge_id', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
+                {'AttributeName': 'edge_id', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        
+        # Extended tables
+        'ClusterCharacteristics': {
+            'KeySchema': [
+                {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'cluster_key', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
+                {'AttributeName': 'cluster_key', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
+        'LLMTopicNames': {
+            'KeySchema': [
+                {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'topic_key', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
+                {'AttributeName': 'topic_key', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        }
+    }
+    
+    # Handle table deletion if requested
+    if delete_existing:
+        _delete_tables(dynamodb, tables.keys(), existing_tables)
+        # Update list of existing tables
+        existing_tables = [t.name for t in dynamodb.tables.all()]
+    
+    # Create tables
+    created_tables = _create_tables(dynamodb, tables, existing_tables)
+    
+    return created_tables
+
+def _delete_tables(dynamodb, table_names, existing_tables):
+    """Helper function to delete tables."""
+    for table_name in table_names:
+        if table_name in existing_tables:
+            try:
+                table = dynamodb.Table(table_name)
+                table.delete()
+                logger.info(f"Deleted table {table_name}")
+                # Wait for table to be deleted
+                table.meta.client.get_waiter('table_not_exists').wait(TableName=table_name)
+            except Exception as e:
+                logger.error(f"Error deleting table {table_name}: {str(e)}")
+
+def _create_tables(dynamodb, tables, existing_tables):
+    """Helper function to create tables."""
+    created_tables = []
+    
+    for table_name, table_schema in tables.items():
+        if table_name in existing_tables:
+            logger.info(f"Table {table_name} already exists, skipping creation")
+            continue
+        
+        try:
+            table = dynamodb.create_table(
+                TableName=table_name,
+                **table_schema
+            )
+            logger.info(f"Created table {table_name}")
+            created_tables.append(table_name)
+        except Exception as e:
+            logger.error(f"Error creating table {table_name}: {str(e)}")
+    
+    return created_tables
+
+def create_tables(endpoint_url='http://localhost:8000', region_name='us-west-2', 
+                 delete_existing=False, evoc_only=False, polismath_only=False,
+                 aws_profile=None):
+    """
+    Create all necessary DynamoDB tables for both systems.
+    
+    Args:
+        endpoint_url: URL of the DynamoDB endpoint (local or AWS)
+        region_name: AWS region name
+        delete_existing: If True, delete existing tables before creating new ones
+        evoc_only: If True, create only EVōC tables
+        polismath_only: If True, create only Polis math tables
+        aws_profile: AWS profile to use (optional)
+    """
+    # Set up environment variables for credentials if not already set (for local development)
+    if not os.environ.get('AWS_ACCESS_KEY_ID') and endpoint_url and 'localhost' in endpoint_url:
+        os.environ['AWS_ACCESS_KEY_ID'] = 'fakeMyKeyId'
+    
+    if not os.environ.get('AWS_SECRET_ACCESS_KEY') and endpoint_url and 'localhost' in endpoint_url:
+        os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
+    
+    # Create DynamoDB session and resource
+    session_args = {'region_name': region_name}
+    if aws_profile:
+        session_args['profile_name'] = aws_profile
+    
+    session = boto3.Session(**session_args)
+    
+    dynamodb_args = {}
+    if endpoint_url:
+        dynamodb_args['endpoint_url'] = endpoint_url
+    
+    dynamodb = session.resource('dynamodb', **dynamodb_args)
+    
+    # Get list of existing tables before any operations
+    existing_tables = [t.name for t in dynamodb.tables.all()]
+    logger.info(f"Existing tables before operations: {existing_tables}")
+    
+    created_tables = []
+    
+    # Create tables based on flags
+    if not polismath_only:
+        logger.info("Creating EVōC tables...")
+        evoc_tables = create_evoc_tables(dynamodb, delete_existing)
+        created_tables.extend(evoc_tables)
+    
+    if not evoc_only:
+        logger.info("Creating Polis math tables...")
+        polismath_tables = create_polis_math_tables(dynamodb, delete_existing)
+        created_tables.extend(polismath_tables)
+    
+    # Check that requested tables were created
+    if created_tables:
+        logger.info(f"Created {len(created_tables)} new tables: {created_tables}")
+    else:
+        logger.info("No new tables were created")
+    
+    # Final list of all tables
+    updated_tables = [t.name for t in dynamodb.tables.all()]
+    logger.info(f"All tables after creation: {updated_tables}")
+    
+    return created_tables
+
+def main():
+    # Parse arguments
+    parser = argparse.ArgumentParser(description='Create DynamoDB tables for Delphi system')
+    parser.add_argument('--endpoint-url', type=str, default='http://localhost:8000',
+                      help='DynamoDB endpoint URL (default: http://localhost:8000)')
+    parser.add_argument('--region', type=str, default='us-west-2',
+                      help='AWS region (default: us-west-2)')
+    parser.add_argument('--delete-existing', action='store_true',
+                      help='Delete existing tables before creating new ones')
+    parser.add_argument('--evoc-only', action='store_true',
+                      help='Create only EVōC tables')
+    parser.add_argument('--polismath-only', action='store_true',
+                      help='Create only Polis math tables')
+    parser.add_argument('--aws-profile', type=str,
+                      help='AWS profile to use (optional)')
+    args = parser.parse_args()
+    
+    # Create tables
+    start_time = time.time()
+    create_tables(
+        endpoint_url=args.endpoint_url,
+        region_name=args.region,
+        delete_existing=args.delete_existing,
+        evoc_only=args.evoc_only,
+        polismath_only=args.polismath_only,
+        aws_profile=args.aws_profile
+    )
+    elapsed_time = time.time() - start_time
+    logger.info(f"Table creation completed in {elapsed_time:.2f} seconds")
+
+if __name__ == "__main__":
+    main()
