@@ -827,9 +827,31 @@ class PostgresManager:
         """
         with cls._lock:
             if cls._client is None:
+                # Create a new client
                 cls._client = PostgresClient(config)
-                cls._client.initialize()
-
+                
+                # Make sure to actually initialize the client
+                try:
+                    logger.info("Initializing PostgreSQL client...")
+                    cls._client.initialize()
+                    logger.info("PostgreSQL client initialized successfully")
+                except Exception as e:
+                    logger.error(f"Error initializing PostgreSQL client: {e}")
+                    # Reset client to None to allow retry
+                    cls._client = None
+                    raise e
+            
+            # Make sure client is initialized before returning
+            if cls._client and not cls._client._initialized:
+                try:
+                    logger.info("Ensuring PostgreSQL client is initialized...")
+                    cls._client.initialize()
+                except Exception as e:
+                    logger.error(f"Error initializing PostgreSQL client: {e}")
+                    # Reset client to None to allow retry
+                    cls._client = None
+                    raise e
+                
             return cls._client
 
     @classmethod
