@@ -22,6 +22,10 @@ COPY requirements.txt .
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+# Install additional dependencies needed for the orchestrator and make sure they're in the path
+RUN pip install --no-cache-dir colorlog fastapi==0.115.0 pydantic
+# Verify FastAPI installation
+RUN pip list | grep fastapi
 
 # Clone and install evoc
 RUN git clone https://github.com/TutteInstitute/evoc && \
@@ -40,7 +44,8 @@ RUN mkdir -p data
 # Use ARG/ENV to make this configurable if needed
 EXPOSE 8080
 
-# Define the command to run the application
-# This will execute 'polismath' when the container launches
-# Add any default arguments needed, e.g., config file path if required
-CMD ["polismath"]
+# Set PYTHONPATH to include current directory
+ENV PYTHONPATH "${PYTHONPATH}:/app"
+
+# Print Python path and installed packages for debugging
+CMD ["bash", "-c", "echo 'PYTHONPATH:' $PYTHONPATH && echo 'Installed packages:' && pip list && echo 'Starting polismath...' && polismath"]
