@@ -106,6 +106,8 @@ const generateAndRegisterZinvite = CreateUser.generateAndRegisterZinvite;
 const generateToken = Password.generateToken;
 const generateTokenP = Password.generateTokenP;
 
+const stripe = require('stripe')(Config.stripeKey);
+
 // TODO: Maybe able to remove
 import { checkPassword, generateHashedPassword } from "./auth/password";
 import cookies from "./utils/cookies";
@@ -922,6 +924,24 @@ function initializePolisHelpers() {
           next(err || "polis_err_auth_error_432");
         });
     };
+  }
+  async function customerORAdmin(req: any, res: any, next: any) {
+    // error handling
+    const customer = await stripe.customers.search({
+      query: `email:'${req.p.email}'`,
+    });
+    if (customer.data?.length) {
+      const { id } = customer.data[0];
+      const activeEntitlements = await stripe.entitlements.activeEntitlements.list({
+        customer: id,
+      });
+      const { lookup_key } = activeEntitlements.data[0];
+      if (lookup_key === "paid-access") {
+        return next();
+      }
+      return res.status(401);
+    }
+    return res.status(401);
   }
   // input token from body or query, and populate req.body.u with userid.
   function authOptional(assigner: any) {
@@ -11764,6 +11784,7 @@ Thanks for using Polis!
     handle_PUT_ptptois,
     handle_PUT_reports,
     handle_PUT_users,
+    customerORAdmin,
 
     // Debugging
     //getNextPrioritizedComment,

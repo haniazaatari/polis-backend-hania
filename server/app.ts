@@ -41,6 +41,7 @@ helpersInitialized.then(
     const {
       addCorsHeader,
       auth,
+      customerORAdmin,
       authOptional,
       COOKIES,
       denyIfNotFromWhitelistedDomain,
@@ -1199,6 +1200,7 @@ helpersInitialized.then(
       "/api/v3/reportNarrative",
       moveToBody,
       need("report_id", getReportIdFetchRid, assignToPCustom("rid")),
+      customerORAdmin,
       handle_GET_reportNarrative
     );
 
