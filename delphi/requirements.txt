@@ -2,21 +2,34 @@ numpy==1.26.4
 pandas==2.1.4
 sqlalchemy==2.0.29
 psycopg2-binary==2.9.9
+boto3==1.34.70
 scikit-learn==1.4.2
 scipy==1.12.0
-boto3==1.34.70
 pytest==8.0.0
 tqdm==4.66.2
 matplotlib==3.8.3
-
-# Core requirements for the orchestrator
 fastapi>=0.115.0
+
+# orchestrator
 colorlog>=6.9.0
 
 # umap_narrative
 # Clustering and dimensionality reduction
 umap-learn>=0.5.2
 sentence-transformers>=2.2.0
+hdbscan>=0.8.40
+torch>=1.11.0
+numba>=0.56.4
+llvmlite>=0.39.0
+
+# API dependencies
+uvicorn>=0.20.0
+starlette>=0.22.0
+python-multipart>=0.0.5
+itsdangerous>=2.0.0
+jinja2>=3.0.0
+pydantic>=1.10.0
+python-dotenv>=0.21.0
 
 # Visualization
 tqdm>=4.62.0
@@ -24,11 +37,19 @@ datamapplot>=0.5.1
 
 # AWS and DynamoDB
 pynamodb>=5.4.0
+aws-lambda-powertools>=2.15.0
+aws-xray-sdk>=2.12.0
 
 # LLM and reporting
 requests>=2.28.0
 ollama>=0.1.2
 xmltodict>=0.13.0
+
+# Testing
+httpx>=0.23.0
+moto>=4.1.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
 
 # Optional: Anthropic API (uncomment to use)
 # anthropic>=0.5.0

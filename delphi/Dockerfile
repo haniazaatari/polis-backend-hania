@@ -8,9 +8,10 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Ensure Python output is sent straight to terminal
 ENV PYTHONUNBUFFERED=1
 
-# Install git (needed to clone evoc)
+# Install dependencies needed for building packages and cloning evoc
 RUN apt-get update && \
-    apt-get install -y git && \
+    apt-get install -y git build-essential cmake \
+    gcc g++ gfortran libopenblas-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
