@@ -92,14 +92,27 @@ if ! docker ps | grep -q delphi-dynamodb-local; then
   fi
 fi
 
-# Check if Delphi container is running
-if ! docker ps | grep -q delphi-app; then
-  echo -e "${YELLOW}Delphi container not running. Starting it now...${NC}"
-  docker-compose up -d delphi-app
+# Check if containers are running - start them if not
+if ! docker ps | grep -q delphi-app || ! docker ps | grep -q delphi-ollama || ! docker ps | grep -q delphi-dynamodb-local; then
+  echo -e "${YELLOW}Starting all required containers...${NC}"
+  docker-compose up -d
   
-  # Wait for Delphi to start
-  echo "Waiting for Delphi container to start..."
+  # Wait for containers to start
+  echo "Waiting for containers to start..."
   sleep 5
+fi
+
+# Set model without pulling it
+MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+echo -e "${YELLOW}Using Ollama model: $MODEL${NC}"
+
+# Health check: verify that the Ollama API is accessible from the delphi-app container
+echo -e "${YELLOW}Checking Ollama API health from delphi-app container...${NC}"
+if docker exec delphi-app curl -s --connect-timeout 5 http://ollama:11434/api/tags >/dev/null; then
+  echo -e "${GREEN}Ollama API is accessible from delphi-app${NC}"
+else
+  echo -e "${RED}Warning: Ollama API is not accessible from delphi-app${NC}"
+  echo -e "${YELLOW}This may cause issues with LLM topic naming${NC}"
 fi
 
 # Create DynamoDB tables if they don't exist
@@ -202,15 +215,14 @@ docker exec delphi-app bash -c "export PYTHONPATH=/app:$PYTHONPATH && echo PYTHO
 # Run the UMAP narrative pipeline directly
 echo -e "${GREEN}Running UMAP narrative pipeline...${NC}"
 
-# Prepare ollama flag if verbose is enabled
-USE_OLLAMA=""
-if [ "$FORCE" == "--force" ]; then
-  USE_OLLAMA="--use-ollama"
-  echo -e "${YELLOW}Force mode enabled, using Ollama for topic naming${NC}"
-fi
+# Always use Ollama for topic naming
+USE_OLLAMA="--use-ollama"
+echo -e "${YELLOW}Using Ollama for topic naming${NC}"
 
 # Run the pipeline directly, using dynamodb-local as the endpoint
-docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 delphi-app python /app/umap_narrative/run_pipeline.py --zid=${ZID} ${USE_OLLAMA}
+# Pass OLLAMA_HOST to make sure it connects to the Ollama container
+# Also pass the model that we pulled
+docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 -e OLLAMA_HOST=http://ollama:11434 -e OLLAMA_MODEL=${MODEL} delphi-app python /app/umap_narrative/run_pipeline.py --zid=${ZID} ${USE_OLLAMA}
 
 # Save the exit code
 PIPELINE_EXIT_CODE=$?
