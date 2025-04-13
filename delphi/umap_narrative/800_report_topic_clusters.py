@@ -34,8 +34,11 @@ from xml.dom.minidom import parseString
 import csv
 import io
 import xmltodict
-import ollama
 from collections import defaultdict
+
+# Import the model provider
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from umap_narrative.llm_factory_constructor import get_model_provider
 
 # Import from local modules
 from polismath_commentgraph.utils.storage import PostgresClient, DynamoDBStorage
@@ -279,7 +282,9 @@ class ReportGenerator:
         self.group_processor = GroupDataProcessor(self.postgres_client)
         
         # Set up base path for prompt templates
-        self.prompt_base_path = Path("report_experimental")
+        # Get the current script's directory and use it as base for prompt templates
+        current_dir = Path(__file__).parent
+        self.prompt_base_path = current_dir / "report_experimental"
         
         # Set up sections with their templates and filters
         self.sections = {
@@ -746,52 +751,56 @@ class ReportGenerator:
                 - Include relevant citations to comment IDs in the data
               """
             
-            # Use Ollama to call the model
-            model_name = model_version or "llama3"
+            # Use Claude 3.7 Sonnet for high quality report generation
+            model_name = model_version or os.environ.get("ANTHROPIC_MODEL", "claude-3-7-sonnet-20250219")
             
-            # Check if model exists, otherwise try alternatives
+            # Log which model we're using
+            logger.info(f"Using Claude model: {model_name}")
+            
             try:
-                # List available models
-                models_response = ollama.list()
-                # Handle new Ollama API response format which has a 'models' list of Model objects
-                if hasattr(models_response, 'models') and isinstance(models_response.models, list):
-                    available_models = [m.model for m in models_response.models]
-                else:
-                    # Fallback for older API versions or different response format
-                    available_models = []
-                    logger.warning(f"Unexpected Ollama API response format: {models_response}")
+                # Get the model provider for Claude
+                provider = get_model_provider("anthropic", model_name)
+                logger.info(f"Successfully initialized Anthropic provider")
                 
-                logger.info(f"Available models: {available_models}")
+                # Generate report with Claude
+                response_text = provider.get_response(system_lore, model_prompt)
+                result = response_text.strip()
                 
-                if model_name not in available_models:
-                    # Try some alternatives
-                    alternatives = ["llama3.1:8b", "gemma3:12b", "llama3", "llama2", "gemma:2b", "mistral"]
-                    for alt in alternatives:
-                        if alt in available_models:
-                            model_name = alt
-                            logger.info(f"Using alternative model: {model_name}")
-                            break
-                    else:
-                        # If no alternatives found, use the first available model
-                        if available_models:
-                            model_name = available_models[0]
-                            logger.info(f"Using first available model: {model_name}")
-                        else:
-                            raise Exception("No models available in Ollama")
+                # Log success
+                logger.info(f"Successfully generated report with Claude ({len(result)} characters)")
                 
-                response = ollama.chat(
-                    model=model_name,
-                    messages=[
-                        {"role": "system", "content": system_lore},
-                        {"role": "user", "content": model_prompt}
-                    ]
-                )
             except Exception as e:
-                logger.error(f"Error using Ollama: {e}")
-                raise
-            
-            # Extract the text content
-            result = response['message']['content'].strip()
+                logger.error(f"Error using Claude: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                
+                # Return a meaningful error message
+                error_msg = f"Failed to generate report with Claude: {str(e)}"
+                logger.error(error_msg)
+                
+                # Return an error JSON
+                result = json.dumps({
+                    "id": "polis_narrative_error_message",
+                    "title": "Error Generating Report",
+                    "paragraphs": [
+                        {
+                            "id": "polis_narrative_error_message",
+                            "title": "Model Access Error",
+                            "sentences": [
+                                {
+                                    "clauses": [
+                                        {
+                                            "text": error_msg,
+                                            "citations": []
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                })
+                
+                # We still want to continue, so we don't re-raise the exception
             
             # Ensure it starts with a valid JSON object
             if not result.startswith('{'):
@@ -1547,8 +1556,8 @@ async def main():
     parser = argparse.ArgumentParser(description='Generate reports for Polis conversations')
     parser.add_argument('--conversation_id', '--zid', type=str, required=True,
                         help='Conversation ID to process')
-    parser.add_argument('--model', type=str, default='gemma',
-                        help='LLM model to use (default: llama3)')
+    parser.add_argument('--model', type=str, default='claude-3-7-sonnet-20250219',
+                        help='LLM model to use (default: claude-3-7-sonnet-20250219)')
     parser.add_argument('--no-cache', action='store_true',
                         help='Ignore cached report data')
     parser.add_argument('--section', type=str, default=None,

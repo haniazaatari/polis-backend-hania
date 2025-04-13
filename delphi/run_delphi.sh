@@ -230,6 +230,27 @@ PIPELINE_EXIT_CODE=$?
 if [ $PIPELINE_EXIT_CODE -eq 0 ]; then
   echo -e "${GREEN}UMAP Narrative pipeline completed successfully!${NC}"
   echo "Results stored in DynamoDB and visualizations for conversation ${ZID}"
+  
+  # Run the report generator with Claude 3.7 Sonnet
+  if [ -n "$ANTHROPIC_API_KEY" ]; then
+    echo -e "${YELLOW}Generating report with Claude 3.7 Sonnet...${NC}"
+    # Pass environment variables to ensure Claude is used
+    docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 -e LLM_PROVIDER=anthropic -e ANTHROPIC_MODEL=claude-3-7-sonnet-20250219 -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} delphi-app python /app/umap_narrative/800_report_topic_clusters.py --conversation_id=${ZID} --model=claude-3-7-sonnet-20250219
+    
+    # Save the exit code
+    REPORT_EXIT_CODE=$?
+    
+    if [ $REPORT_EXIT_CODE -eq 0 ]; then
+      echo -e "${GREEN}Report generation completed successfully!${NC}"
+      echo "Report stored in DynamoDB for conversation ${ZID}"
+    else
+      echo -e "${RED}Warning: Report generation returned non-zero exit code: ${REPORT_EXIT_CODE}${NC}"
+      echo "The narrative report may not have been generated properly."
+    fi
+  else
+    echo -e "${YELLOW}Skipping report generation - ANTHROPIC_API_KEY not set.${NC}"
+    echo "To generate narrative reports, set the ANTHROPIC_API_KEY environment variable."
+  fi
 else 
   echo -e "${RED}Warning: UMAP Narrative pipeline returned non-zero exit code: ${PIPELINE_EXIT_CODE}${NC}"
   echo "The pipeline may have encountered errors but might still have produced partial results."
