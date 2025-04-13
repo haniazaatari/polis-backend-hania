@@ -195,57 +195,107 @@ class GroupDataProcessor:
                         group_assignments = ptptogroup
                         logger.info(f"Found group assignments in participation.ptptogroup")
                         
-            # Check for group-clusters which has group membership information
-            if not group_assignments and isinstance(math_data, dict) and 'group-clusters' in math_data:
+            # First check group-clusters to define primary group structure
+            primary_group_clusters = {}
+            
+            if isinstance(math_data, dict) and 'group-clusters' in math_data:
                 group_clusters = math_data['group-clusters']
                 if isinstance(group_clusters, list) and len(group_clusters) > 0:
                     try:
-                        # Group clusters may contain membership info
+                        # Log group clusters information
                         logger.info(f"Group-clusters list has {len(group_clusters)} items")
                         
-                        # The data might be in various formats depending on the algorithm used
-                        # Let's log some debug info to see the structure
-                        if len(group_clusters) > 0:
-                            first_cluster = group_clusters[0]
-                            logger.info(f"First cluster type: {type(first_cluster)}")
-                            
-                            # Check if it's a list of lists (direct group memberships)
-                            if isinstance(first_cluster, list) and len(first_cluster) > 0:
-                                # This may be a list of group IDs
-                                # Let's try to generate group assignments
-                                temp_assignments = {}
-                                
-                                # Interpret group-clusters as a list of groups, with each entry being a list of participant IDs
-                                for group_id, group_members in enumerate(group_clusters):
-                                    if isinstance(group_members, list):
-                                        for pid in group_members:
-                                            temp_assignments[str(pid)] = group_id
-                                            
-                                if temp_assignments:
-                                    group_assignments = temp_assignments
-                                    logger.info(f"Extracted {len(group_assignments)} group assignments from group-clusters list")
-                            
-                            # Check if it's a list of dictionaries (more complex structure)
-                            elif isinstance(first_cluster, dict):
-                                logger.info(f"First cluster keys: {list(first_cluster.keys()) if first_cluster else 'empty'}")
-                                
-                                # Try to extract members if available
-                                temp_assignments = {}
-                                
-                                for group_id, cluster_info in enumerate(group_clusters):
-                                    if isinstance(cluster_info, dict):
-                                        # Check various possible keys for member information
-                                        for key in ['members', 'ids', 'pids', 'participants']:
-                                            if key in cluster_info and isinstance(cluster_info[key], list):
-                                                for pid in cluster_info[key]:
-                                                    temp_assignments[str(pid)] = group_id
-                                
-                                if temp_assignments:
-                                    group_assignments = temp_assignments
-                                    logger.info(f"Extracted {len(group_assignments)} group assignments from group-clusters dictionaries")
-                            
+                        # Process each primary group cluster
+                        for cluster in group_clusters:
+                            if isinstance(cluster, dict) and 'id' in cluster:
+                                group_id = cluster['id']
+                                # Store center coordinates for later base-cluster mapping
+                                if 'center' in cluster:
+                                    primary_group_clusters[group_id] = {
+                                        'center': cluster['center'],
+                                        'members': []
+                                    }
+                                    
+                                # Extract direct group assignments from members if available
+                                if 'members' in cluster and isinstance(cluster['members'], list):
+                                    # Record members in primary group
+                                    primary_group_clusters[group_id]['members'] = cluster['members']
+                                    
+                                    # Add these to group assignments
+                                    for pid in cluster['members']:
+                                        group_assignments[str(pid)] = group_id
+                        
+                        if group_assignments:
+                            logger.info(f"Extracted {len(group_assignments)} direct group assignments from group-clusters")
+                    
                     except Exception as e:
-                        logger.error(f"Error extracting group assignments from group-clusters: {e}")
+                        logger.error(f"Error processing group-clusters: {e}")
+                        import traceback
+                        logger.error(traceback.format_exc())
+            
+            # Now check for base-clusters structure which contains the full participant mapping
+            if isinstance(math_data, dict) and 'base-clusters' in math_data and primary_group_clusters:
+                base_clusters = math_data['base-clusters']
+                
+                # Verify base_clusters has the expected structure
+                if (isinstance(base_clusters, dict) and 
+                    'id' in base_clusters and isinstance(base_clusters['id'], list) and
+                    'members' in base_clusters and isinstance(base_clusters['members'], list) and
+                    'x' in base_clusters and isinstance(base_clusters['x'], list) and
+                    'y' in base_clusters and isinstance(base_clusters['y'], list)):
+                    
+                    try:
+                        # Log base clusters information
+                        num_base_clusters = len(base_clusters['id'])
+                        logger.info(f"Processing base-clusters structure with {num_base_clusters} base clusters")
+                        
+                        # Map each base cluster to its closest primary group cluster
+                        base_cluster_to_group = {}
+                        
+                        for i in range(num_base_clusters):
+                            base_id = base_clusters['id'][i]
+                            base_x = base_clusters['x'][i]
+                            base_y = base_clusters['y'][i]
+                            
+                            # Find the closest primary group cluster by euclidean distance
+                            min_dist = float('inf')
+                            closest_group = None
+                            
+                            for group_id, group_info in primary_group_clusters.items():
+                                if 'center' in group_info:
+                                    group_x, group_y = group_info['center']
+                                    
+                                    # Calculate Euclidean distance
+                                    dist = ((base_x - group_x) ** 2 + (base_y - group_y) ** 2) ** 0.5
+                                    
+                                    if dist < min_dist:
+                                        min_dist = dist
+                                        closest_group = group_id
+                            
+                            # Assign this base cluster to the closest primary group
+                            if closest_group is not None:
+                                base_cluster_to_group[base_id] = closest_group
+                        
+                        # Now assign all participants in base clusters to their mapped primary group
+                        for i in range(num_base_clusters):
+                            base_id = base_clusters['id'][i]
+                            if base_id in base_cluster_to_group:
+                                group_id = base_cluster_to_group[base_id]
+                                
+                                # Get all participants in this base cluster
+                                if i < len(base_clusters['members']):
+                                    members = base_clusters['members'][i]
+                                    
+                                    # Assign each participant to the mapped group
+                                    for pid in members:
+                                        # Only assign if not already directly assigned through group-clusters
+                                        if str(pid) not in group_assignments:
+                                            group_assignments[str(pid)] = group_id
+                        
+                        logger.info(f"After processing base-clusters, total group assignments: {len(group_assignments)}")
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing base-clusters: {e}")
                         import traceback
                         logger.error(traceback.format_exc())
             
