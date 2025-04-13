@@ -410,7 +410,6 @@ class DynamoDBStorage:
             'cluster_topics': 'ClusterTopics',
             'umap_graph': 'UMAPGraph',
             'cluster_characteristics': 'ClusterCharacteristics',
-            'enhanced_topic_names': 'EnhancedTopicNames', 
             'llm_topic_names': 'LLMTopicNames'
             # Note: CommentTexts table is intentionally excluded
             # Comment texts are stored in PostgreSQL as the single source of truth

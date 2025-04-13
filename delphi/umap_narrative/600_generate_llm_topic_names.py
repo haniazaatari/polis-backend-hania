@@ -249,35 +249,6 @@ def load_layer_data(conversation_id, layer_id, dynamo_storage=None, output_base_
     except Exception as e:
         logger.error(f"Error loading cluster characteristics from DynamoDB: {e}")
     
-    # Try to load enhanced topic names
-    try:
-        # Query EnhancedTopicNames for this layer
-        table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['enhanced_topic_names'])
-        response = table.query(
-            KeyConditionExpression=Key('conversation_id').eq(conversation_id)
-        )
-        topics = response.get('Items', [])
-        
-        # Handle pagination if needed
-        while 'LastEvaluatedKey' in response:
-            response = table.query(
-                KeyConditionExpression=Key('conversation_id').eq(conversation_id),
-                ExclusiveStartKey=response['LastEvaluatedKey']
-            )
-            topics.extend(response.get('Items', []))
-        
-        # Filter to just this layer
-        for topic in topics:
-            if topic.get('layer_id') == layer_id:
-                cluster_id = topic.get('cluster_id')
-                if cluster_id is not None:
-                    topic_name = topic.get('topic_name', f"Topic {cluster_id}")
-                    layer_data["enhanced_topic_names"][int(cluster_id)] = topic_name
-        
-        logger.info(f"Loaded {len(layer_data['enhanced_topic_names'])} enhanced topic names")
-    except Exception as e:
-        logger.error(f"Error loading enhanced topic names: {e}")
-    
     # Validate that we have at least the minimum required data
     if not layer_data["clusters"]:
         logger.error("No clusters found for this layer")
