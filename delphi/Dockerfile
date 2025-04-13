@@ -11,7 +11,7 @@ ENV PYTHONUNBUFFERED=1
 # Install dependencies needed for building packages and cloning evoc
 RUN apt-get update && \
     apt-get install -y git build-essential cmake \
-    gcc g++ gfortran libopenblas-dev && \
+    gcc g++ gfortran libopenblas-dev curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
