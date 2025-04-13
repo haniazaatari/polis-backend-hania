@@ -14,6 +14,20 @@ services:
       - delphi-network
     user: root
 
+  # Ollama for LLM processing
+  ollama:
+    image: ollama/ollama:latest
+    container_name: delphi-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - delphi-network
+    # Run ollama server
+    command: serve
+    restart: unless-stopped
+
   # Delphi Application
   delphi-app:
     build:
@@ -22,6 +36,7 @@ services:
     container_name: delphi-app
     depends_on:
       - dynamodb-local
+      - ollama
     environment:
       - AWS_ACCESS_KEY_ID=fakeMyKeyId
       - AWS_SECRET_ACCESS_KEY=fakeSecretAccessKey
@@ -31,6 +46,8 @@ services:
       - DATABASE_URL=postgresql://colinmegill@host.docker.internal:5432/polisDB_prod_local_mar14
       # Set Python path explicitly
       - PYTHONPATH=/app
+      # Ollama configuration
+      - OLLAMA_HOST=http://ollama:11434
     ports:
       - "8080:8080"
     extra_hosts:
@@ -59,6 +76,7 @@ services:
 
 volumes:
   dynamodb-data:
+  ollama-models:
 
 networks:
   delphi-network:
