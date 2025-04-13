@@ -62,7 +62,7 @@ class ReportStorageService:
         # Set up DynamoDB client
         self.dynamodb = boto3.resource(
             'dynamodb',
-            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000'),
+            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
             region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-west-2'),
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
@@ -935,7 +935,7 @@ class ReportGenerator:
         """Get topics for the conversation from DynamoDB."""
         # Get topics from ClusterTopics table
         dynamo_storage = DynamoDBStorage(
-            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000')
+            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT')
         )
         
         # Get topic data from DynamoDB

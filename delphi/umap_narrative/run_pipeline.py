@@ -71,15 +71,23 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
     logger.info(f"- USER: {os.environ.get('DATABASE_USER')}")
     
     # DynamoDB settings (for local DynamoDB)
-    # Only set if not already set in environment
-    if 'DYNAMODB_ENDPOINT' not in os.environ:
+    # Don't override if already set in environment
+    dynamo_endpoint = os.environ.get('DYNAMODB_ENDPOINT')
+    if not dynamo_endpoint:
         os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
-    logger.info(f"Using DynamoDB endpoint: {os.environ.get('DYNAMODB_ENDPOINT')}")
+        logger.info("Setting default DynamoDB endpoint: http://localhost:8000")
+    else:
+        logger.info(f"Using existing DynamoDB endpoint: {dynamo_endpoint}")
     
-    # Always set these credentials for local development
-    os.environ['AWS_ACCESS_KEY_ID'] = 'fakeMyKeyId'
-    os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
-    os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
+    # Always set these credentials for local development if not already set
+    if not os.environ.get('AWS_ACCESS_KEY_ID'):
+        os.environ['AWS_ACCESS_KEY_ID'] = 'fakeMyKeyId'
+    
+    if not os.environ.get('AWS_SECRET_ACCESS_KEY'):
+        os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
+    
+    if not os.environ.get('AWS_DEFAULT_REGION') and not os.environ.get('AWS_REGION'):
+        os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
 
 def fetch_conversation_data(zid):
     """
@@ -909,9 +917,13 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False):
     # Initialize DynamoDB storage if requested
     dynamo_storage = None
     if export_dynamo:
+        # Use endpoint from environment if available
+        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
+        logger.info(f"Using DynamoDB endpoint from environment: {endpoint_url}")
+        
         dynamo_storage = DynamoDBStorage(
             region_name='us-west-2',
-            endpoint_url='http://localhost:8000'
+            endpoint_url=endpoint_url
         )
         
         # Store basic data in DynamoDB
