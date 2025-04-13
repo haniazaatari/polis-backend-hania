@@ -389,9 +389,8 @@ def generate_topic_names(layer_data, conversation_name=None, model_name=None, pr
             # Further clean up to ensure it's just a label
             topic = topic.replace("Topic label:", "").strip()
             
-            # Remove quotes if they're present
-            if topic.startswith('"') and topic.endswith('"'):
-                topic = topic[1:-1]
+            # Remove quotes if they're present (handle any quote combination)
+            topic = topic.strip('"\'')  # Strip both double and single quotes
                 
             if len(topic) > 50:  # If it's too long, truncate
                 topic = topic[:50] + "..."
