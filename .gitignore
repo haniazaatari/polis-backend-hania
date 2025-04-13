@@ -9,3 +9,5 @@ prod.env
 xids.csv
 preprod.env 
 .venv
+
+delphi/umap_narrative/__init__.py
