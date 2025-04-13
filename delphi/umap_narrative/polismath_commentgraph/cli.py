@@ -305,7 +305,12 @@ def lambda_local(args):
         os.environ['DATABASE_PASSWORD'] = args.pg_password
         
     # Set up DynamoDB environment variables for local testing
-    os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
+    # Only set if not already in environment
+    if not os.environ.get('DYNAMODB_ENDPOINT'):
+        os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
+    
+    # Log the endpoint being used
+    logger.info(f"Using DynamoDB endpoint: {os.environ.get('DYNAMODB_ENDPOINT')}")
     os.environ['AWS_ACCESS_KEY_ID'] = 'fakeMyKeyId'
     os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
     os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
@@ -315,7 +320,7 @@ def lambda_local(args):
     global dynamo_storage
     dynamo_storage = DynamoDBStorage(
         region_name='us-west-2',
-        endpoint_url='http://localhost:8000'
+        endpoint_url=os.environ.get('DYNAMODB_ENDPOINT')
     )
     
     # Import the handler

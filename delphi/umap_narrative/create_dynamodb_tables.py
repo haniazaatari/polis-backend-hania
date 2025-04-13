@@ -22,7 +22,12 @@ import argparse
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def create_tables(endpoint_url='http://localhost:8000', delete_existing=False):
+def create_tables(endpoint_url=None, delete_existing=False):
+    # Use the environment variable if endpoint_url is not provided
+    if endpoint_url is None:
+        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000')
+    
+    logger.info(f"Creating tables with DynamoDB endpoint: {endpoint_url}")
     """
     Create all necessary DynamoDB tables for the EVōC pipeline.
     

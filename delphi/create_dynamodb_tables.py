@@ -315,9 +315,14 @@ def _create_tables(dynamodb, tables, existing_tables):
     
     return created_tables
 
-def create_tables(endpoint_url='http://localhost:8000', region_name='us-west-2', 
+def create_tables(endpoint_url=None, region_name='us-west-2', 
                  delete_existing=False, evoc_only=False, polismath_only=False,
                  aws_profile=None):
+    # Use the environment variable if endpoint_url is not provided
+    if endpoint_url is None:
+        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000')
+    
+    logger.info(f"Creating tables with DynamoDB endpoint: {endpoint_url}")
     """
     Create all necessary DynamoDB tables for both systems.
     
@@ -381,8 +386,8 @@ def create_tables(endpoint_url='http://localhost:8000', region_name='us-west-2',
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser(description='Create DynamoDB tables for Delphi system')
-    parser.add_argument('--endpoint-url', type=str, default='http://localhost:8000',
-                      help='DynamoDB endpoint URL (default: http://localhost:8000)')
+    parser.add_argument('--endpoint-url', type=str, default=None,
+                      help='DynamoDB endpoint URL (default: use DYNAMODB_ENDPOINT env var or http://localhost:8000)')
     parser.add_argument('--region', type=str, default='us-west-2',
                       help='AWS region (default: us-west-2)')
     parser.add_argument('--delete-existing', action='store_true',

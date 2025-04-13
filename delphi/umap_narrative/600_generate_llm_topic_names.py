@@ -46,7 +46,13 @@ def setup_environment(dynamo_endpoint=None):
     if dynamo_endpoint:
         os.environ['DYNAMODB_ENDPOINT'] = dynamo_endpoint
     elif not os.environ.get('DYNAMODB_ENDPOINT'):
-        os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
+        # Only set if not already in environment
+        if not os.environ.get('DYNAMODB_ENDPOINT'):
+            os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
+        
+        # Log the endpoint being used
+        endpoint = os.environ.get('DYNAMODB_ENDPOINT')
+        logger.info(f"Using DynamoDB endpoint: {endpoint}")
     
     # Set up dummy credentials for local DynamoDB if not already set
     if not os.environ.get('AWS_ACCESS_KEY_ID'):
