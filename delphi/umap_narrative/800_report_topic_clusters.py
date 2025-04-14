@@ -751,8 +751,8 @@ class ReportGenerator:
                 - Include relevant citations to comment IDs in the data
               """
             
-            # Use Claude 3.7 Sonnet for high quality report generation
-            model_name = model_version or os.environ.get("ANTHROPIC_MODEL", "claude-3-7-sonnet-20250219")
+            # Use Claude 3.5 Sonnet for high quality report generation
+            model_name = model_version or os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
             
             # Log which model we're using
             logger.info(f"Using Claude model: {model_name}")
@@ -991,28 +991,43 @@ class ReportGenerator:
                     
                     # Look up a more descriptive name in LLMTopicNames if available
                     llm_table = dynamo_storage.dynamodb.Table('LLMTopicNames')
-                    llm_response = llm_table.query(
-                        KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id),
-                        FilterExpression=boto3.dynamodb.conditions.Attr('cluster_id').eq(
-                            {'N': self.cluster_id}) & boto3.dynamodb.conditions.Attr('layer_id').eq({'N': '0'})
+                    logger.info(f"Looking for topic name for cluster {self.cluster_id} in layer 0")
+                    
+                    # Use scan instead of query with filter expression
+                    llm_response = llm_table.scan(
+                        FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(self.conversation_id) &
+                                         boto3.dynamodb.conditions.Attr('cluster_id').eq(int(self.cluster_id)) &
+                                         boto3.dynamodb.conditions.Attr('layer_id').eq(0)
                     )
                     
                     llm_items = llm_response.get('Items', [])
-                    if llm_items and 'topic_name' in llm_items[0]:
-                        topic_label = llm_items[0]['topic_name']['S']
+                    logger.info(f"Found {len(llm_items)} LLMTopicNames entries for cluster {self.cluster_id}")
+                    
+                    if llm_items:
+                        for item in llm_items:
+                            logger.info(f"Topic name item: {item}")
+                        
+                        if 'topic_name' in llm_items[0]:
+                            topic_label = llm_items[0]['topic_name']
+                            logger.info(f"Using topic name from LLMTopicNames: {topic_label}")
                     
                     # Get sample comments
                     sample_comments = []
-                    if 'sample_comments' in cluster_item and 'L' in cluster_item['sample_comments']:
-                        for comment in cluster_item['sample_comments']['L']:
-                            if 'S' in comment:
-                                sample_comments.append(comment['S'])
+                    if 'sample_comments' in cluster_item:
+                        if isinstance(cluster_item['sample_comments'], list):
+                            sample_comments = cluster_item['sample_comments']
+                        elif isinstance(cluster_item['sample_comments'], dict) and 'L' in cluster_item['sample_comments']:
+                            for comment in cluster_item['sample_comments']['L']:
+                                if 'S' in comment:
+                                    sample_comments.append(comment['S'])
+                        else:
+                            logger.warning(f"Unexpected sample_comments format: {type(cluster_item['sample_comments'])}")
                     
                     # Create the topic structure
                     topic = {
                         "name": topic_label,
                         "citations": comment_ids,
-                        "sample_comments": sample_comments if 'sample_comments' in cluster_item else []
+                        "sample_comments": sample_comments
                     }
                     
                     # Log information about this topic
@@ -1028,21 +1043,24 @@ class ReportGenerator:
                     return []
             
             # Standard topic processing when no specific cluster ID is provided
-            # Check for LLMTopicNames entries
+            # Get all LLMTopicNames entries for layer 0
             table = dynamo_storage.dynamodb.Table('LLMTopicNames')
-            response = table.query(
-                KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id)
+            response = table.scan(
+                FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(self.conversation_id) &
+                                 boto3.dynamodb.conditions.Attr('layer_id').eq(0)
             )
             
-            topic_names = response.get('Items', [])
+            topic_names_items = response.get('Items', [])
+            logger.info(f"Found {len(topic_names_items)} layer 0 topic names in LLMTopicNames")
             
-            # Get cluster information from CommentClusters
+            # Get all comment clusters
             clusters_table = dynamo_storage.dynamodb.Table('CommentClusters')
             response = clusters_table.scan(
                 FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(self.conversation_id)
             )
             
             clusters = response.get('Items', [])
+            logger.info(f"Found {len(clusters)} comment cluster entries")
             
             # Process clusters to get comment IDs for each topic
             topic_comments = defaultdict(list)
@@ -1054,43 +1072,50 @@ class ReportGenerator:
                     if comment_id:
                         topic_comments[cluster_id].append(int(comment_id))
             
-            # Create topics data structure
-            for topic_item in topic_names:
-                if topic_item.get('layer_id') == 0:  # Only use layer 0
-                    cluster_id = topic_item.get('cluster_id')
-                    if cluster_id is not None:
-                        # Try to get sample comments for this topic
-                        sample_comments = []
-                        cluster_response = dynamo_storage.dynamodb.Table('ClusterTopics').query(
-                            KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id) &
-                                                 boto3.dynamodb.conditions.Key('cluster_key').eq(f'layer0_{cluster_id}')
-                        )
-                        
-                        if cluster_response.get('Items'):
-                            cluster_item = cluster_response.get('Items')[0]
-                            if 'sample_comments' in cluster_item:
-                                if isinstance(cluster_item['sample_comments'], list):
-                                    sample_comments = cluster_item['sample_comments']
-                                elif 'L' in cluster_item['sample_comments']:
-                                    # Extract from DynamoDB attribute
-                                    for comment in cluster_item['sample_comments']['L']:
-                                        if 'S' in comment:
-                                            sample_comments.append(comment['S'])
-                        
-                        topic = {
-                            "name": topic_item.get('topic_name', f"Topic {cluster_id}"),
-                            "citations": topic_comments.get(cluster_id, []),
-                            "sample_comments": sample_comments
-                        }
-                        topics.append(topic)
+            logger.info(f"Collected comments for {len(topic_comments)} clusters")
             
-            logger.info(f"Found {len(topics)} topics for conversation {self.conversation_id}")
+            # Create topics data structure
+            for topic_item in topic_names_items:
+                cluster_id = topic_item.get('cluster_id')
+                topic_name = topic_item.get('topic_name', f"Topic {cluster_id}")
+                
+                logger.info(f"Processing topic for cluster {cluster_id}: {topic_name}")
+                
+                if cluster_id is not None:
+                    # Try to get sample comments for this topic
+                    sample_comments = []
+                    cluster_response = dynamo_storage.dynamodb.Table('ClusterTopics').query(
+                        KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id) &
+                                             boto3.dynamodb.conditions.Key('cluster_key').eq(f'layer0_{cluster_id}')
+                    )
+                    
+                    if cluster_response.get('Items'):
+                        cluster_item = cluster_response.get('Items')[0]
+                        if 'sample_comments' in cluster_item:
+                            if isinstance(cluster_item['sample_comments'], list):
+                                sample_comments = cluster_item['sample_comments']
+                            elif isinstance(cluster_item['sample_comments'], dict) and 'L' in cluster_item['sample_comments']:
+                                for comment in cluster_item['sample_comments']['L']:
+                                    if 'S' in comment:
+                                        sample_comments.append(comment['S'])
+                    
+                    # Create topic entry
+                    topic = {
+                        "name": topic_name,
+                        "citations": topic_comments.get(cluster_id, []),
+                        "sample_comments": sample_comments
+                    }
+                    topics.append(topic)
+            
+            logger.info(f"Created {len(topics)} topics for conversation {self.conversation_id}")
             
             # Sort topics by number of citations (descending)
             topics.sort(key=lambda x: len(x['citations']), reverse=True)
             
             # Limit to top 10 topics
-            topics = topics[:10]
+            if len(topics) > 10:
+                logger.info(f"Limiting from {len(topics)} to 10 topics")
+                topics = topics[:10]
             
             return topics
         
@@ -1551,13 +1576,166 @@ class ReportGenerator:
         
         return results
 
+async def check_report_status(conversation_id, model, report_storage=None):
+    """Check the status of existing reports for a conversation.
+    
+    Args:
+        conversation_id: Conversation ID to check
+        model: Model to check reports for
+        report_storage: Optional ReportStorageService instance
+        
+    Returns:
+        Dictionary mapping cluster_ids to report status
+    """
+    if report_storage is None:
+        report_storage = ReportStorageService()
+    
+    # Get all reports for this conversation
+    all_items = report_storage.get_all_by_report_id(conversation_id)
+    
+    # Filter for topic reports with the specified model
+    topic_reports = {}
+    
+    for item in all_items:
+        rid_section_model = item.get('rid_section_model', '')
+        if not rid_section_model.startswith(f"{conversation_id}#topic_"):
+            continue
+            
+        # Extract the model name
+        parts = rid_section_model.split('#')
+        if len(parts) != 3 or parts[2] != model:
+            continue
+            
+        # Extract the topic/cluster name
+        topic_part = parts[1].replace('topic_', '')
+        
+        # Try to extract JSON from the report data
+        report_data = item.get('report_data', '{}')
+        try:
+            data = json.loads(report_data)
+            
+            # Check if this is an error response
+            is_error = False
+            if "title" in data and "paragraphs" in data:
+                title = data.get("title", "")
+                if "error" in title.lower() or "missing" in title.lower() or "too many" in title.lower():
+                    is_error = True
+                    
+            # Store the status
+            topic_reports[topic_part] = {
+                "status": "error" if is_error else "valid",
+                "timestamp": item.get('timestamp', ''),
+                "error_title": data.get("title") if is_error else None
+            }
+            
+        except json.JSONDecodeError:
+            # Invalid JSON
+            topic_reports[topic_part] = {
+                "status": "invalid_json",
+                "timestamp": item.get('timestamp', '')
+            }
+    
+    return topic_reports
+
+async def process_all_layer0_clusters(conversation_id, model, no_cache=False, only_errors=True):
+    """Process all clusters in layer 0 for a specific conversation.
+    
+    Args:
+        conversation_id: Conversation ID to process
+        model: Model to use for generation
+        no_cache: Whether to ignore cached results
+        only_errors: Only regenerate reports that have errors or are missing
+    """
+    # Get all cluster IDs for layer 0
+    dynamo_storage = DynamoDBStorage(
+        endpoint_url=os.environ.get('DYNAMODB_ENDPOINT')
+    )
+    
+    # Set up report storage
+    report_storage = ReportStorageService(disable_cache=no_cache)
+    
+    # Check status of existing reports if only processing errors
+    report_status = {}
+    if only_errors:
+        report_status = await check_report_status(conversation_id, model, report_storage)
+        logger.info(f"Found {len(report_status)} existing topic reports")
+        
+        # Count report statuses
+        valid_count = sum(1 for status in report_status.values() if status['status'] == 'valid')
+        error_count = sum(1 for status in report_status.values() if status['status'] == 'error')
+        logger.info(f"Valid reports: {valid_count}, Error reports: {error_count}")
+    
+    # Query LLMTopicNames to get all layer 0 topics
+    logger.info(f"Getting all layer 0 topics for conversation {conversation_id}")
+    
+    try:
+        table = dynamo_storage.dynamodb.Table('LLMTopicNames')
+        response = table.scan(
+            FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(conversation_id) & 
+                             boto3.dynamodb.conditions.Attr('layer_id').eq(0)
+        )
+        
+        topics = response.get('Items', [])
+        logger.info(f"Found {len(topics)} topics in layer 0")
+        
+        # Process each cluster
+        processed_count = 0
+        for topic in topics:
+            cluster_id = topic.get('cluster_id')
+            topic_name = topic.get('topic_name')
+            
+            if cluster_id is not None:
+                # Check if we need to process this cluster
+                topic_key = f"{topic_name.lower().replace(' ', '_')}"
+                should_process = True
+                
+                if only_errors:
+                    # Skip if report exists and is valid
+                    if topic_key in report_status and report_status[topic_key]['status'] == 'valid':
+                        logger.info(f"Skipping cluster {cluster_id}: '{topic_name}' - already has valid report")
+                        should_process = False
+                    else:
+                        status = "missing" if topic_key not in report_status else report_status[topic_key]['status']
+                        logger.info(f"Processing cluster {cluster_id}: '{topic_name}' - status: {status}")
+                        
+                if should_process:
+                    # Create a report generator for this cluster
+                    generator = ReportGenerator(
+                        conversation_id=conversation_id,
+                        model=model,
+                        no_cache=no_cache,
+                        cluster_id=cluster_id
+                    )
+                    
+                    # Generate the topic report
+                    topic_results = await generator.handle_topics(limit_topics=1)
+                    
+                    # Print the results for this topic
+                    logger.info(f"Report for cluster {cluster_id} ({topic_name}) generated")
+                    print(f"\n------- Cluster {cluster_id}: {topic_name} -------")
+                    print(json.dumps(topic_results, indent=2))
+                    
+                    processed_count += 1
+                    
+                    # Add a delay to avoid rate limiting
+                    await asyncio.sleep(1)
+        
+        logger.info(f"Processed {processed_count} of {len(topics)} topics in layer 0")
+        return True
+    
+    except Exception as e:
+        logger.error(f"Error processing all layer 0 clusters: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
 async def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description='Generate reports for Polis conversations')
     parser.add_argument('--conversation_id', '--zid', type=str, required=True,
                         help='Conversation ID to process')
-    parser.add_argument('--model', type=str, default='claude-3-7-sonnet-20250219',
-                        help='LLM model to use (default: claude-3-7-sonnet-20250219)')
+    parser.add_argument('--model', type=str, default='claude-3-5-sonnet-20241022',
+                        help='LLM model to use (default: claude-3-5-sonnet-20241022)')
     parser.add_argument('--no-cache', action='store_true',
                         help='Ignore cached report data')
     parser.add_argument('--section', type=str, default=None,
@@ -1566,6 +1744,12 @@ async def main():
                         help='Limit number of topics to process (default: 3)')
     parser.add_argument('--cluster-id', type=str, default=None,
                         help='Process only a specific cluster ID (e.g., 109 for a specific layer 0 cluster)')
+    parser.add_argument('--all-layer0', action='store_true',
+                        help='Process all layer 0 clusters')
+    parser.add_argument('--check-reports', action='store_true',
+                        help='Check status of existing reports without generating new ones')
+    parser.add_argument('--regenerate-all', action='store_true',
+                        help='Regenerate reports for all clusters (not just error ones)')
     args = parser.parse_args()
     
     # Set up environment variables for database connections
@@ -1587,6 +1771,47 @@ async def main():
     logger.info(f"- Conversation ID: {args.conversation_id}")
     logger.info(f"- Model: {args.model}")
     logger.info(f"- Cache: {'disabled' if args.no_cache else 'enabled'}")
+    
+    # Special case for just checking report status
+    if args.check_reports:
+        logger.info(f"Checking report status for conversation {args.conversation_id}")
+        report_status = await check_report_status(args.conversation_id, args.model)
+        
+        # Print report status summary
+        print("\n===== Report Status Summary =====")
+        valid_count = sum(1 for status in report_status.values() if status['status'] == 'valid')
+        error_count = sum(1 for status in report_status.values() if status['status'] == 'error')
+        invalid_count = sum(1 for status in report_status.values() if status['status'] == 'invalid_json')
+        
+        print(f"Total reports: {len(report_status)}")
+        print(f"Valid reports: {valid_count}")
+        print(f"Error reports: {error_count}")
+        print(f"Invalid JSON: {invalid_count}")
+        
+        # Print details of error reports
+        if error_count > 0:
+            print("\n----- Error Reports -----")
+            for topic, status in report_status.items():
+                if status['status'] == 'error':
+                    print(f"Topic: {topic}")
+                    print(f"Error: {status.get('error_title', 'Unknown error')}")
+                    print(f"Timestamp: {status['timestamp']}")
+                    print("")
+                    
+        return
+    
+    # Special case for processing all layer 0 clusters
+    if args.all_layer0:
+        logger.info(f"Processing all layer 0 clusters for conversation {args.conversation_id}")
+        await process_all_layer0_clusters(
+            args.conversation_id, 
+            args.model, 
+            args.no_cache, 
+            only_errors=not args.regenerate_all
+        )
+        return
+    
+    # Standard processing for a single section or cluster
     logger.info(f"- Section: {args.section or 'all sections'}")
     logger.info(f"- Topic limit: {args.topic_limit}")
     
