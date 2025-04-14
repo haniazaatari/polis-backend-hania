@@ -13,3 +13,7 @@ preprod.env
 delphi/umap_narrative/__init__.py
 
 *.html
+
+*.png
+
+*.svg
