@@ -1,3 +1,5 @@
+import { config } from 'dotenv'
+config()
 import path from 'path'
 import HtmlWebPackPlugin from 'html-webpack-plugin'
 import LodashModuleReplacementPlugin from 'lodash-webpack-plugin'
@@ -5,6 +7,7 @@ import CompressionPlugin from 'compression-webpack-plugin'
 import CopyPlugin from 'copy-webpack-plugin'
 import TerserPlugin from 'terser-webpack-plugin'
 import EventHooksPlugin from 'event-hooks-webpack-plugin'
+import webpack from 'webpack'
 import * as glob from 'glob'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
@@ -75,6 +78,11 @@ export default (env, argv) => {
         template: 'public/index.html',
         filename: isProduction ? 'index_admin.html' : 'index.html',
         inject: 'body',
+      }),
+      new webpack.DefinePlugin({
+        'process.env.SUBSCRIPTION_LINK': JSON.stringify(process.env.SUBSCRIPTION_LINK),
+        'process.env.SUBSCRIPTION_ID': JSON.stringify(process.env.SUBSCRIPTION_ID),
+        'process.env.SUBSCRIPTION_KEY': JSON.stringify(process.env.SUBSCRIPTION_KEY),
       }),
 
       // Production-only plugins

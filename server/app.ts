@@ -687,6 +687,7 @@ helpersInitialized.then(
       "/api/v3/users",
       moveToBody,
       authOptional(assignToP),
+      customerORAdmin,
       want("errIfNoAuth", getBool, assignToP),
       handle_GET_users
     );
@@ -1051,6 +1052,7 @@ helpersInitialized.then(
       "/api/v3/users",
       moveToBody,
       auth(assignToP),
+      customerORAdmin,
       want("email", getEmail, assignToP),
       want("hname", getOptionalStringLimitLength(9999), assignToP),
       want("uid_of_user", getInt, assignToP),
@@ -1199,6 +1201,7 @@ helpersInitialized.then(
     app.get(
       "/api/v3/reportNarrative",
       moveToBody,
+      auth(assignToP),
       need("report_id", getReportIdFetchRid, assignToPCustom("rid")),
       customerORAdmin,
       handle_GET_reportNarrative

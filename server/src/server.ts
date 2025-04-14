@@ -926,22 +926,31 @@ function initializePolisHelpers() {
     };
   }
   async function customerORAdmin(req: any, res: any, next: any) {
-    // error handling
-    const customer = await stripe.customers.search({
-      query: `email:'${req.p.email}'`,
-    });
-    if (customer.data?.length) {
-      const { id } = customer.data[0];
-      const activeEntitlements = await stripe.entitlements.activeEntitlements.list({
-        customer: id,
+    try {
+      const { email } = await User.getUser(req.p.uid, undefined, undefined, undefined) as unknown as { email: string }
+      // error handling
+      const customer = await stripe.customers.search({
+        query: `email:'${email}'`,
       });
-      const { lookup_key } = activeEntitlements.data[0];
-      if (lookup_key === "paid-access") {
-        return next();
+      if (customer.data?.length) {
+        const { id } = customer.data[0];
+        const activeEntitlements = await stripe.entitlements.activeEntitlements.list({
+          customer: id,
+        });
+        const { lookup_key } = activeEntitlements.data[0];
+        if (lookup_key === "paid-access") {
+          req.p.isPaid = true;
+          return next();
+        }
+        res.status(401);
+        next("user unauthorized")
       }
-      return res.status(401);
+      res.status(401);
+      next("user unauthorized")
+    } catch (err) {
+      logger.error("polis_err_subscription", err);
+      next(err || "polis_err_subscription");
     }
-    return res.status(401);
   }
   // input token from body or query, and populate req.body.u with userid.
   function authOptional(assigner: any) {
@@ -4792,7 +4801,7 @@ Email verified! You can close this tab or hit the back button.
   }
 
   function handle_GET_users(
-    req: { p: { uid?: any; errIfNoAuth: any; xid: any; owner_uid?: any } },
+    req: { p: { uid?: any; errIfNoAuth: any; xid: any; owner_uid?: any, isPaid?: any } },
     res: {
       status: (
         arg0: number
@@ -4809,6 +4818,7 @@ Email verified! You can close this tab or hit the back button.
     getUser(uid, null, req.p.xid, req.p.owner_uid)
       .then(
         function (user: any) {
+          if (req.p.isPaid) user.isPaidAccount = true;
           res.status(200).json(user);
         },
         function (err: any) {
