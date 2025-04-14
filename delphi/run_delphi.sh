@@ -228,6 +228,25 @@ docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 -
 PIPELINE_EXIT_CODE=$?
 
 if [ $PIPELINE_EXIT_CODE -eq 0 ]; then
+  echo -e "${YELLOW}Creating visualizations with datamapplot...${NC}"
+  
+  # Generate layer 0 visualization
+  docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 delphi-app python /app/umap_narrative/700_datamapplot_for_layer.py --conversation_id=${ZID} --layer=0 --output_dir=/app/polis_data/${ZID}/python_output/comments_enhanced_multilayer
+  
+  # Generate layer 1 visualization (if available)
+  docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 delphi-app python /app/umap_narrative/700_datamapplot_for_layer.py --conversation_id=${ZID} --layer=1 --output_dir=/app/polis_data/${ZID}/python_output/comments_enhanced_multilayer
+  
+  # Create a dedicated visualization folder and copy visualizations there
+  echo -e "${YELLOW}Copying visualizations to dedicated folder...${NC}"
+  VIZ_FOLDER="visualizations/${ZID}"
+  mkdir -p ${VIZ_FOLDER}
+  
+  # Copy from Docker container to local folder
+  docker cp delphi-app:/app/polis_data/${ZID}/python_output/comments_enhanced_multilayer/${ZID}_layer_0_datamapplot.html ${VIZ_FOLDER}/ || echo "Layer 0 visualization not found"
+  docker cp delphi-app:/app/polis_data/${ZID}/python_output/comments_enhanced_multilayer/${ZID}_layer_1_datamapplot.html ${VIZ_FOLDER}/ || echo "Layer 1 visualization not found"
+  docker cp delphi-app:/app/polis_data/${ZID}/python_output/comments_enhanced_multilayer/${ZID}_comment_enhanced_index.html ${VIZ_FOLDER}/ || echo "Index file not found"
+  
+  echo -e "${GREEN}Visualizations copied to ${VIZ_FOLDER}${NC}"
   echo -e "${GREEN}UMAP Narrative pipeline completed successfully!${NC}"
   echo "Results stored in DynamoDB and visualizations for conversation ${ZID}"
   

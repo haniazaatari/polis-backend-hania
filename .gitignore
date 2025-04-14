@@ -11,3 +11,5 @@ preprod.env
 .venv
 
 delphi/umap_narrative/__init__.py
+
+*.html
