@@ -22,9 +22,53 @@ from boto3.dynamodb.conditions import Key
 # Import from local modules
 from polismath_commentgraph.utils.storage import PostgresClient, DynamoDBStorage
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging with more detailed information
+logging.basicConfig(
+    level=logging.DEBUG, 
+    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+
+# Add a file handler to log to a file as well
+def setup_file_logging(zid):
+    """Set up file logging for a specific conversation."""
+    try:
+        # Create log directory if it doesn't exist
+        log_dir = os.path.join("polis_data", str(zid), "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        
+        # Create a file handler
+        log_file = os.path.join(log_dir, f"datamapplot_{zid}_{int(time.time())}.log")
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)
+        
+        # Create a formatter and add it to the handler
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+        file_handler.setFormatter(formatter)
+        
+        # Add the handler to the logger
+        logger.addHandler(file_handler)
+        logger.info(f"Logging to file: {log_file}")
+    except Exception as e:
+        logger.error(f"Failed to set up file logging: {e}")
+
+# Function to log the Python environment
+def log_environment_info():
+    """Log information about the Python environment."""
+    try:
+        logger.info(f"Python version: {sys.version}")
+        logger.info(f"Platform: {sys.platform}")
+        logger.info(f"Current working directory: {os.getcwd()}")
+        logger.info(f"Environment variables:")
+        for key in ['PYTHONPATH', 'DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_NAME', 
+                    'DATABASE_USER', 'DYNAMODB_ENDPOINT', 'AWS_DEFAULT_REGION']:
+            logger.info(f"  {key}: {os.environ.get(key, 'Not set')}")
+    except Exception as e:
+        logger.error(f"Error logging environment info: {e}")
+
+# Import these modules here to avoid circular imports
+import sys
+import time
 
 def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db_password=None):
     """Set up environment variables for database connections."""
@@ -138,15 +182,19 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
     
     # Try to get conversation metadata
     try:
+        logger.debug(f"Getting conversation metadata for {zid}...")
         meta = dynamo_storage.get_conversation_meta(zid)
         if not meta:
             logger.error(f"No metadata found for conversation {zid}")
             return None
             
         logger.info(f"Conversation name: {meta.get('conversation_name', f'Conversation {zid}')}")
+        logger.debug(f"Metadata: {meta}")
         data["meta"] = meta
     except Exception as e:
         logger.error(f"Error getting conversation metadata: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return None
     
     # Load comment embeddings to get comment IDs in order
@@ -154,6 +202,8 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         # Query CommentEmbeddings for this conversation
         logger.info(f"Loading comment embeddings to get full comment list...")
         table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['comment_embeddings'])
+        logger.debug(f"CommentEmbeddings table name: {dynamo_storage.table_names['comment_embeddings']}")
+        
         response = table.query(
             KeyConditionExpression=Key('conversation_id').eq(str(zid))
         )
@@ -161,6 +211,7 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         
         # Handle pagination if needed
         while 'LastEvaluatedKey' in response:
+            logger.debug(f"Handling pagination for comment embeddings...")
             response = table.query(
                 KeyConditionExpression=Key('conversation_id').eq(str(zid)),
                 ExclusiveStartKey=response['LastEvaluatedKey']
@@ -171,13 +222,19 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         comment_ids = [int(item['comment_id']) for item in embeddings]
         data["comment_ids"] = comment_ids
         logger.info(f"Loaded {len(comment_ids)} comment IDs from embeddings")
+        logger.debug(f"Sample comment IDs: {comment_ids[:5] if comment_ids else []}")
     except Exception as e:
         logger.error(f"Error retrieving comment embeddings: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         
     # Get comment clusters
     try:
         # Query CommentClusters for this conversation
+        logger.info(f"Loading cluster assignments from CommentClusters...")
         table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['comment_clusters'])
+        logger.debug(f"CommentClusters table name: {dynamo_storage.table_names['comment_clusters']}")
+        
         response = table.query(
             KeyConditionExpression=Key('conversation_id').eq(str(zid))
         )
@@ -185,6 +242,7 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         
         # Handle pagination if needed
         while 'LastEvaluatedKey' in response:
+            logger.debug(f"Handling pagination for comment clusters...")
             response = table.query(
                 KeyConditionExpression=Key('conversation_id').eq(str(zid)),
                 ExclusiveStartKey=response['LastEvaluatedKey']
@@ -193,9 +251,21 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         
         logger.info(f"Retrieved {len(clusters)} comment cluster assignments")
         
+        # Log sample item for debugging
+        if clusters:
+            logger.debug(f"Sample CommentClusters item: {clusters[0]}")
+        
+        # Check if any items have position data
+        position_items = [item for item in clusters if 'position' in item and isinstance(item['position'], dict)]
+        logger.debug(f"Number of items with position field: {len(position_items)}")
+        
         # Extract positions and cluster assignments for the specified layer
         position_column = f"position"
         cluster_column = f"layer{layer_id}_cluster_id"
+        
+        logger.debug(f"Looking for position column '{position_column}' and cluster column '{cluster_column}'")
+        positions_found = 0
+        clusters_found = 0
         
         for item in clusters:
             comment_id = int(item.get('comment_id'))
@@ -207,12 +277,16 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
                 pos = item[position_column]
                 if 'x' in pos and 'y' in pos:
                     data["comment_positions"][comment_id] = [float(pos['x']), float(pos['y'])]
+                    positions_found += 1
+                    if positions_found <= 3:  # Log first few positions
+                        logger.debug(f"Found position for comment {comment_id} in CommentClusters: {pos}")
             
             # Extract cluster assignment for this layer
             if cluster_column in item:
                 data["cluster_assignments"][comment_id] = int(item[cluster_column])
+                clusters_found += 1
         
-        logger.info(f"Extracted {len(data['comment_positions'])} positions and {len(data['cluster_assignments'])} cluster assignments")
+        logger.info(f"Extracted {positions_found} positions and {clusters_found} cluster assignments")
         
         # If positions were not found, try to get them from UMAP graph
         if len(data["comment_positions"]) == 0:
@@ -222,6 +296,8 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
             try:
                 # Get all edges from UMAPGraph for this conversation
                 umap_table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['umap_graph'])
+                logger.debug(f"UMAPGraph table name: {dynamo_storage.table_names['umap_graph']}")
+                
                 response = umap_table.query(
                     KeyConditionExpression=Key('conversation_id').eq(str(zid))
                 )
@@ -229,6 +305,7 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
                 
                 # Handle pagination if needed
                 while 'LastEvaluatedKey' in response:
+                    logger.debug(f"Handling pagination for UMAP graph...")
                     response = umap_table.query(
                         KeyConditionExpression=Key('conversation_id').eq(str(zid)),
                         ExclusiveStartKey=response['LastEvaluatedKey']
@@ -237,17 +314,46 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
                 
                 logger.info(f"Retrieved {len(edges)} edges from UMAPGraph")
                 
-                # Extract positions from edges
+                # No need to log edge details
+                # - intentionally blank
+                
+                # Check how many edges have position data
+                edges_with_position = [e for e in edges if 'position' in e and isinstance(e['position'], dict)]
+                logger.debug(f"Number of edges with position field: {len(edges_with_position)}")
+                
+                # Check how many are self-referencing edges
+                self_ref_edges = [e for e in edges if 'source_id' in e and 'target_id' in e and str(e['source_id']) == str(e['target_id'])]
+                logger.debug(f"Number of self-referencing edges: {len(self_ref_edges)}")
+                
+                # Check how many self-referencing edges have position data
+                self_ref_with_pos = [e for e in self_ref_edges if 'position' in e and isinstance(e['position'], dict)]
+                logger.debug(f"Number of self-referencing edges with position: {len(self_ref_with_pos)}")
+                
+                # Extract positions from edges - only self-referring edges have position data
                 positions = {}
+                position_count = 0
+                
                 for edge in edges:
                     # Check if this edge has position information
                     if 'position' in edge and isinstance(edge['position'], dict) and 'x' in edge['position'] and 'y' in edge['position']:
                         pos = edge['position']
-                        # Determine which comment this position belongs to
-                        if 'source_id' in edge:
+                        
+                        # Check if this is a self-referencing edge
+                        is_self_ref = False
+                        if 'source_id' in edge and 'target_id' in edge:
+                            is_self_ref = str(edge['source_id']) == str(edge['target_id'])
+                        
+                        # Only self-referencing edges contain the position data
+                        if is_self_ref:
                             comment_id = int(edge['source_id'])
                             positions[comment_id] = [float(pos['x']), float(pos['y'])]
-                        
+                            position_count += 1
+                            
+                            # Don't log individual positions as they're too verbose
+                            pass
+                
+                logger.debug(f"Extracted {position_count} positions from self-referencing edges")
+                
                 # Map positions to comment IDs
                 for comment_id in data["cluster_assignments"].keys():
                     if comment_id in positions:
@@ -258,15 +364,26 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
                 # If we still don't have all positions, check if we can use the comment embeddings
                 if len(data['comment_positions']) < len(data['cluster_assignments']):
                     logger.info(f"Still missing positions for {len(data['cluster_assignments']) - len(data['comment_positions'])} comments")
+                    
+                    # Log some IDs that are missing positions
+                    missing_ids = [cid for cid in data['cluster_assignments'].keys() if cid not in data['comment_positions']]
+                    logger.debug(f"Sample missing comment IDs: {missing_ids[:5] if missing_ids else []}")
             except Exception as e:
                 logger.error(f"Error retrieving positions from UMAPGraph: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
     except Exception as e:
         logger.error(f"Error retrieving comment clusters: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
     
     # Get topic names from LLMTopicNames
     try:
         # Query LLMTopicNames for this conversation and layer
+        logger.info(f"Loading topic names from LLMTopicNames...")
         table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['llm_topic_names'])
+        logger.debug(f"LLMTopicNames table name: {dynamo_storage.table_names['llm_topic_names']}")
+        
         response = table.query(
             KeyConditionExpression=Key('conversation_id').eq(str(zid))
         )
@@ -274,22 +391,39 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         
         # Handle pagination if needed
         while 'LastEvaluatedKey' in response:
+            logger.debug(f"Handling pagination for topic names...")
             response = table.query(
                 KeyConditionExpression=Key('conversation_id').eq(str(zid)),
                 ExclusiveStartKey=response['LastEvaluatedKey']
             )
             topic_names.extend(response.get('Items', []))
         
+        # Log sample item for debugging
+        if topic_names:
+            logger.debug(f"Sample LLMTopicNames item: {topic_names[0]}")
+            
         # Filter to this layer and extract topic names
+        topic_count = 0
         for item in topic_names:
-            if item.get('layer_id') == layer_id:
+            if str(item.get('layer_id')) == str(layer_id):
                 cluster_id = item.get('cluster_id')
                 if cluster_id is not None:
-                    data["topic_names"][int(cluster_id)] = item.get('topic_name', f"Topic {cluster_id}")
+                    topic_name = item.get('topic_name', f"Topic {cluster_id}")
+                    data["topic_names"][int(cluster_id)] = topic_name
+                    topic_count += 1
+                    
+                    if topic_count <= 3:  # Log first few topic names
+                        logger.debug(f"Found topic name for cluster {cluster_id}: {topic_name}")
         
         logger.info(f"Retrieved {len(data['topic_names'])} topic names for layer {layer_id}")
     except Exception as e:
         logger.error(f"Error retrieving topic names: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+    
+    # Final sanity checks
+    if not data["comment_positions"]:
+        logger.error("No comment positions found in any table. Visualization will fail.")
     
     return data
 
@@ -309,122 +443,217 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
     """
     # Re-import datamapplot here to ensure it's available in this function scope
     import datamapplot
-        os.makedirs(output_dir, exist_ok=True)
-    else:
-        output_dir = os.path.join("polis_data", str(zid), "python_output")
-        os.makedirs(output_dir, exist_ok=True)
-    
-    # Get conversation name
-    conversation_name = data.get("meta", {}).get("conversation_name", f"Conversation {zid}")
-    
-    # Prepare data for visualization
-    positions = data["comment_positions"]
-    cluster_assignments = data["cluster_assignments"]
-    topic_names = data["topic_names"]
-    
-    # Check if we have positions
-    if not positions:
-        logger.error("No position data found for comments")
-        return None
-    
-    # Create arrays for 2D coordinates and labels
-    comment_ids = sorted(positions.keys())
-    
-    if len(comment_ids) == 0:
-        logger.error("No comments with positions found")
-        return None
-    
-    document_map = np.array([positions[cid] for cid in comment_ids])
-    logger.info(f"Created document_map with shape {document_map.shape}")
-    
-    # Create cluster assignments array
-    cluster_labels = np.array([cluster_assignments.get(cid, -1) for cid in comment_ids])
-    
-    # Debug: Check if all comments are unclustered in this layer
-    unique_clusters = np.unique(cluster_labels)
-    logger.info(f"Unique cluster labels in this layer: {unique_clusters}")
-    
-    # Check if we have valid clusters (not just -1 which is unclustered)
-    if len(unique_clusters) == 1 and unique_clusters[0] == -1:
-        logger.error(f"All comments are unclustered in layer {layer_id}, cannot create visualization")
-        return None
-    
-    # Create hover text array with comment ID and text
-    hover_text = []
-    for cid in comment_ids:
-        text = comment_texts.get(cid, "")
-        hover_text.append(f"Comment {cid}: {text}")
-    
-    # Create label strings using the topic names and clean up formatting (remove asterisks)
-    def clean_topic_name(name):
-        # Remove asterisks from topic names (e.g., "**Topic Name**" becomes "Topic Name")
-        if isinstance(name, str):
-            return name.replace('*', '')
-        return name
-        
-    label_strings = np.array([
-        clean_topic_name(topic_names.get(label, f"Topic {label}")) if label >= 0 else "Unclustered"
-        for label in cluster_labels
-    ])
-    
-    # Create visualization
-    logger.info(f"Creating visualization for conversation {zid}, layer {layer_id}...")
-    viz_file = os.path.join(output_dir, f"{zid}_layer_{layer_id}_datamapplot.html")
+    logger.info(f"Starting visualization creation for conversation {zid}, layer {layer_id}")
     
     try:
-        # Debug info before visualization
-        logger.info(f"Document map shape: {document_map.shape}")
-        logger.info(f"Label strings shape: {label_strings.shape}")
-        logger.info(f"Number of unique labels: {len(np.unique(label_strings))}")
-        logger.info(f"Sample labels: {np.unique(label_strings)[:5]}")
+        # Setup output directory if specified
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+            logger.debug(f"Using provided output directory: {output_dir}")
+        else:
+            output_dir = os.path.join("polis_data", str(zid), "python_output")
+            os.makedirs(output_dir, exist_ok=True)
+            logger.debug(f"Created default output directory: {output_dir}")
         
-        # For large number of clusters (like layer 0), use cvd_safer=True to avoid the interp error
-        num_unique_labels = len(np.unique(label_strings))
+        # Get conversation name
+        conversation_name = data.get("meta", {}).get("conversation_name", f"Conversation {zid}")
+        logger.debug(f"Using conversation name: {conversation_name}")
         
-        # Generate interactive visualization with safer coloring for layers with many clusters
-        # Set specific color for unclustered comments (cluster -1) as darker grey
-        noise_color = "#aaaaaa"  # Darker grey color for unclustered comments
+        # Prepare data for visualization
+        positions = data.get("comment_positions", {})
+        cluster_assignments = data.get("cluster_assignments", {})
+        topic_names = data.get("topic_names", {})
         
-        # Create a dictionary to sort points by cluster - unclustered (-1) should be LAST in the array
-        # so they appear at the bottom layer in the visualization
-        sorted_indices = np.argsort([0 if x == -1 else 1 for x in cluster_labels])
-        document_map = document_map[sorted_indices]
-        label_strings = label_strings[sorted_indices]
-        hover_text = [hover_text[i] for i in sorted_indices]
+        # Log what we have for visualization
+        logger.debug(f"Data for visualization:")
+        logger.debug(f"- Positions: {len(positions)} items")
+        logger.debug(f"- Cluster assignments: {len(cluster_assignments)} items")
+        logger.debug(f"- Topic names: {len(topic_names)} items")
         
-        interactive_figure = datamapplot.create_interactive_plot(
-            document_map,
-            label_strings,
-            hover_text=hover_text,
-            title=f"{conversation_name} - Layer {layer_id}",
-            sub_title=f"Interactive map of {len(document_map)} comments with {len(topic_names)} topics",
-            point_radius_min_pixels=2,
-            point_radius_max_pixels=10,
-            width="100%",
-            height=800,
-            noise_label="Unclustered",  # The label for uncategorized comments
-            noise_color=noise_color,    # Darker grey color for uncategorized
-            cvd_safer=True if num_unique_labels > 50 else False  # Use CVD-safer coloring for layers with many clusters
-        )
+        # Check if we have positions
+        if not positions:
+            logger.error("No position data found for comments")
+            return None
         
-        # Save the visualization
-        interactive_figure.save(viz_file)
-        logger.info(f"Saved visualization to {viz_file}")
+        # Create arrays for 2D coordinates and labels
+        comment_ids = sorted(positions.keys())
+        logger.debug(f"Number of comments with positions: {len(comment_ids)}")
         
-        # Try to open in browser
+        if len(comment_ids) == 0:
+            logger.error("No comments with positions found")
+            return None
+        
+        # Log a sample of the comment IDs and their positions
+        if comment_ids:
+            logger.debug(f"Sample comment IDs: {comment_ids[:5]}")
+            for cid in comment_ids[:3]:
+                logger.debug(f"Comment {cid} position: {positions[cid]}")
+        
+        # Create document_map array
+        logger.debug(f"Creating document_map array for {len(comment_ids)} comments")
+        
+        # Initialize an empty array 
+        document_map_list = []
+        for cid in comment_ids:
+            pos = positions.get(cid)
+            if pos is not None:
+                document_map_list.append(pos)
+            else:
+                logger.warning(f"Missing position for comment ID {cid} - this should not happen")
+                
+        # Convert to numpy array
+        document_map = np.array(document_map_list)
+        logger.info(f"Created document_map with shape {document_map.shape}")
+        
+        # Create cluster assignments array
+        logger.debug(f"Creating cluster assignments array")
+        cluster_labels_list = []
+        for cid in comment_ids:
+            cluster_labels_list.append(cluster_assignments.get(cid, -1))
+            
+        cluster_labels = np.array(cluster_labels_list)
+        
+        # Debug: Check if all comments are unclustered in this layer
+        unique_clusters = np.unique(cluster_labels)
+        logger.info(f"Unique cluster labels in this layer: {unique_clusters}")
+        
+        # Check if we have valid clusters (not just -1 which is unclustered)
+        if len(unique_clusters) == 1 and unique_clusters[0] == -1:
+            logger.warning(f"All comments are unclustered in layer {layer_id}, will continue with visualization anyway")
+        
+        # Create hover text array with comment ID and text
+        logger.debug(f"Creating hover text array")
+        hover_text = []
+        missing_texts = 0
+        for cid in comment_ids:
+            text = comment_texts.get(cid, "")
+            if not text:
+                missing_texts += 1
+            hover_text.append(f"Comment {cid}: {text}")
+        
+        if missing_texts > 0:
+            logger.warning(f"Missing text for {missing_texts} comments")
+        
+        # Create label strings using the topic names and clean up formatting (remove asterisks)
+        logger.debug(f"Creating label strings array")
+        def clean_topic_name(name):
+            # Remove asterisks from topic names (e.g., "**Topic Name**" becomes "Topic Name")
+            if isinstance(name, str):
+                return name.replace('*', '')
+            return name
+        
+        label_strings_list = []
+        for label in cluster_labels:
+            if label >= 0:
+                label_strings_list.append(clean_topic_name(topic_names.get(label, f"Topic {label}")))
+            else:
+                label_strings_list.append("Unclustered")
+                
+        label_strings = np.array(label_strings_list)
+        
+        # Create visualization
+        logger.info(f"Creating visualization for conversation {zid}, layer {layer_id}...")
+        viz_file = os.path.join(output_dir, f"{zid}_layer_{layer_id}_datamapplot.html")
+        
         try:
-            import webbrowser
-            webbrowser.open(f"file://{viz_file}")
-            logger.info(f"Opened visualization in browser")
-        except:
-            logger.info(f"Visualization available at: file://{viz_file}")
-        
-        return viz_file
-    except Exception as e:
-        logger.error(f"Error creating visualization: {e}")
-        # Print full traceback for debugging
+            # Debug info before visualization
+            logger.info(f"Document map shape: {document_map.shape}")
+            logger.info(f"Label strings shape: {label_strings.shape}")
+            logger.info(f"Hover text length: {len(hover_text)}")
+            logger.info(f"Number of unique labels: {len(np.unique(label_strings))}")
+            logger.info(f"Sample labels: {np.unique(label_strings)[:5]}")
+            
+            # For large number of clusters (like layer 0), use cvd_safer=True to avoid the interp error
+            num_unique_labels = len(np.unique(label_strings))
+            
+            # Generate interactive visualization with safer coloring for layers with many clusters
+            # Set specific color for unclustered comments (cluster -1) as darker grey
+            noise_color = "#aaaaaa"  # Darker grey color for unclustered comments
+            
+            # Create a dictionary to sort points by cluster - unclustered (-1) should be LAST in the array
+            # so they appear at the bottom layer in the visualization
+            logger.debug(f"Sorting points by cluster")
+            sorted_indices = np.argsort([0 if x == -1 else 1 for x in cluster_labels])
+            document_map = document_map[sorted_indices]
+            label_strings = label_strings[sorted_indices]
+            hover_text = [hover_text[i] for i in sorted_indices]
+            
+            logger.debug(f"Creating visualization with datamapplot")
+            logger.debug(f"- Document map shape: {document_map.shape}")
+            logger.debug(f"- Label strings shape: {label_strings.shape}")
+            logger.debug(f"- Hover text length: {len(hover_text)}")
+            
+            # Verify the input arrays are not empty
+            if document_map.size == 0:
+                logger.error("Document map is empty! Cannot create visualization.")
+                return None
+                
+            if len(label_strings) == 0:
+                logger.error("Label strings array is empty! Cannot create visualization.")
+                return None
+                
+            if len(hover_text) == 0:
+                logger.error("Hover text array is empty! Cannot create visualization.")
+                return None
+                
+            # Verify the input arrays have matching dimensions
+            if document_map.shape[0] != len(label_strings):
+                logger.error(f"Document map shape {document_map.shape} doesn't match label strings length {len(label_strings)}!")
+                return None
+                
+            if document_map.shape[0] != len(hover_text):
+                logger.error(f"Document map shape {document_map.shape} doesn't match hover text length {len(hover_text)}!")
+                return None
+            
+            logger.debug(f"Creating interactive plot...")
+            interactive_figure = datamapplot.create_interactive_plot(
+                document_map,
+                label_strings,
+                hover_text=hover_text,
+                title=f"{conversation_name} - Layer {layer_id}",
+                sub_title=f"Interactive map of {len(document_map)} comments with {len(topic_names)} topics",
+                point_radius_min_pixels=2,
+                point_radius_max_pixels=10,
+                width="100%",
+                height=800,
+                noise_label="Unclustered",  # The label for uncategorized comments
+                noise_color=noise_color,    # Darker grey color for uncategorized
+                cvd_safer=True if num_unique_labels > 50 else False  # Use CVD-safer coloring for layers with many clusters
+            )
+            
+            # Save the visualization
+            logger.debug(f"Saving visualization to {viz_file}")
+            interactive_figure.save(viz_file)
+            logger.info(f"Saved visualization to {viz_file}")
+            
+            # Try to open in browser
+            try:
+                import webbrowser
+                webbrowser.open(f"file://{viz_file}")
+                logger.info(f"Opened visualization in browser")
+            except Exception as browse_error:
+                logger.debug(f"Could not open browser: {browse_error}")
+                logger.info(f"Visualization available at: file://{viz_file}")
+            
+            return viz_file
+        except Exception as e:
+            logger.error(f"Error creating visualization: {e}")
+            # Print full traceback for debugging
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            
+            # Try to capture the datamapplot version
+            try:
+                import datamapplot
+                logger.info(f"Datamapplot version: {datamapplot.__version__ if hasattr(datamapplot, '__version__') else 'unknown'}")
+            except:
+                pass
+                
+            return None
+    except Exception as outer_e:
+        logger.error(f"Outer error in create_visualization: {outer_e}")
         import traceback
-        logger.error(f"Full traceback: {traceback.format_exc()}")
+        logger.error(f"Outer traceback: {traceback.format_exc()}")
         return None
 
 def generate_visualization(zid, layer_id=0, output_dir=None, dynamo_endpoint=None):
@@ -440,38 +669,88 @@ def generate_visualization(zid, layer_id=0, output_dir=None, dynamo_endpoint=Non
     Returns:
         Path to the saved visualization
     """
-    # Setup environment
-    setup_environment()
-    
-    # Set DynamoDB endpoint if provided
-    if dynamo_endpoint:
-        os.environ['DYNAMODB_ENDPOINT'] = dynamo_endpoint
-    
-    # Initialize DynamoDB storage
-    dynamo_storage = DynamoDBStorage(
-        endpoint_url=os.environ.get('DYNAMODB_ENDPOINT')
-    )
-    
-    # Load comment texts from PostgreSQL
-    comment_texts = load_comment_texts(zid)
-    if not comment_texts:
-        logger.error("Failed to load comment texts")
-        return None
-    
-    # Load data from DynamoDB
-    data = load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage)
-    if not data:
-        logger.error("Failed to load data from DynamoDB")
-        return None
-    
-    # Create and save visualization
-    viz_file = create_visualization(zid, layer_id, data, comment_texts, output_dir)
-    
-    if viz_file:
-        logger.info(f"Successfully generated visualization for conversation {zid}, layer {layer_id}")
-        return viz_file
-    else:
-        logger.error(f"Failed to generate visualization for conversation {zid}, layer {layer_id}")
+    try:
+        # Set up file logging first
+        setup_file_logging(zid)
+        
+        # Log environment information
+        logger.info(f"Starting visualization generation for conversation {zid}, layer {layer_id}")
+        log_environment_info()
+        
+        # Setup environment
+        setup_environment()
+        logger.debug("Environment setup complete")
+        
+        # Set DynamoDB endpoint if provided
+        if dynamo_endpoint:
+            logger.info(f"Using provided DynamoDB endpoint: {dynamo_endpoint}")
+            os.environ['DYNAMODB_ENDPOINT'] = dynamo_endpoint
+        
+        logger.info(f"DynamoDB endpoint: {os.environ.get('DYNAMODB_ENDPOINT')}")
+        
+        # Initialize DynamoDB storage
+        dynamo_storage = DynamoDBStorage(
+            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT')
+        )
+        logger.debug("DynamoDB storage initialized")
+        
+        # Log DynamoDB table names
+        logger.debug(f"DynamoDB table names: {dynamo_storage.table_names}")
+        
+        # Load comment texts from PostgreSQL
+        logger.info("Loading comment texts from PostgreSQL...")
+        comment_texts = load_comment_texts(zid)
+        if not comment_texts:
+            logger.error("Failed to load comment texts")
+            return None
+        logger.info(f"Successfully loaded {len(comment_texts)} comment texts")
+        
+        # Load data from DynamoDB
+        logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id}...")
+        data = load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage)
+        if not data:
+            logger.error("Failed to load data from DynamoDB")
+            return None
+        
+        # Log the data we retrieved
+        logger.info(f"Data summary:")
+        logger.info(f"- Comment IDs: {len(data.get('comment_ids', []))}")
+        logger.info(f"- Comment positions: {len(data.get('comment_positions', {}))}")
+        logger.info(f"- Cluster assignments: {len(data.get('cluster_assignments', {}))}")
+        logger.info(f"- Topic names: {len(data.get('topic_names', {}))}")
+        
+        # Log more detailed information about positions for debugging
+        positions = data.get('comment_positions', {})
+        if positions:
+            # Log a few sample positions
+            sample_ids = list(positions.keys())[:5]
+            logger.debug(f"Sample positions: {[(cid, positions[cid]) for cid in sample_ids]}")
+            
+            # Check and log position statistics
+            x_values = [pos[0] for pos in positions.values()]
+            y_values = [pos[1] for pos in positions.values()]
+            if x_values and y_values:
+                logger.debug(f"Position X range: {min(x_values)} to {max(x_values)}")
+                logger.debug(f"Position Y range: {min(y_values)} to {max(y_values)}")
+        else:
+            logger.error("No positions found in the data")
+        
+        # Create and save visualization
+        logger.info("Creating visualization...")
+        viz_file = create_visualization(zid, layer_id, data, comment_texts, output_dir)
+        
+        if viz_file:
+            logger.info(f"Successfully generated visualization for conversation {zid}, layer {layer_id}")
+            logger.info(f"Visualization saved to: {viz_file}")
+            return viz_file
+        else:
+            logger.error(f"Failed to generate visualization for conversation {zid}, layer {layer_id}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Unexpected error in generate_visualization: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return None
 
 def main():

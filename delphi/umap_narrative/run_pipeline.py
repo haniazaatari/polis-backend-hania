@@ -292,10 +292,9 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
             
             # Function to get topic labels via Ollama
             def get_topic_name(comments, prompt_prefix=""):
-                prompt = f"{prompt_prefix}Please provide a concise topic label (3-5 words max) for the following group of comments:\n\n"
+                prompt = f"{prompt_prefix}Read these comments and provide ONLY a short topic label (3-5 words) that captures their essence. Do not include any explanations, introductions, or phrases like 'topic label' in your response. Reply with ONLY the topic label itself in quotes.\n\nComments:\n"
                 for j, comment in enumerate(comments[:5]):  # Use first 5 comments as examples
                     prompt += f"{j+1}. {comment}\n"
-                prompt += "\nTopic label:"
                 
                 try:
                     # Get model name from environment variable or use default
@@ -305,11 +304,26 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
                         model=model_name,
                         messages=[{"role": "user", "content": prompt}]
                     )
-                    # Extract just the topic name, not the explanation
-                    topic = response['message']['content'].strip().split('\n')[0]
-                    # Further clean up to ensure it's just a label
-                    topic = topic.replace("Topic label:", "").strip()
-                    # Remove asterisks from topic names (e.g., "**Topic Name**" becomes "Topic Name")
+                    
+                    # Extract just the topic name with more thorough cleaning
+                    raw_response = response['message']['content'].strip()
+                    
+                    # Clean up various prefixes
+                    for prefix in ["Topic label:", "Here is a concise topic label:", "Here's a concise topic label:", 
+                                  "Concise topic label:", "Topic:", "Label:"]:
+                        if raw_response.startswith(prefix):
+                            raw_response = raw_response.replace(prefix, "", 1).strip()
+                    
+                    # Get just the first line, as we only want the label
+                    topic = raw_response.split('\n')[0].strip()
+                    
+                    # If there are quotes, extract just what's in the quotes
+                    if '"' in topic:
+                        quoted_parts = topic.split('"')
+                        if len(quoted_parts) >= 3:  # Means there's content between quotes
+                            topic = quoted_parts[1]
+                    
+                    # Remove asterisks and other markdown formatting
                     topic = topic.replace('*', '')
                     if len(topic) > 50:  # If it's too long, truncate
                         topic = topic[:50] + "..."
