@@ -22,9 +22,9 @@ from boto3.dynamodb.conditions import Key
 # Import from local modules
 from polismath_commentgraph.utils.storage import PostgresClient, DynamoDBStorage
 
-# Configure logging with more detailed information
+# Configure logging with less verbosity
 logging.basicConfig(
-    level=logging.DEBUG, 
+    level=logging.INFO,  # Change to INFO level to reduce verbosity
     format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
