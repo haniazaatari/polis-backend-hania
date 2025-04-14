@@ -307,8 +307,8 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
     Returns:
         Path to the saved visualization
     """
-    # Setup output directory if specified
-    if output_dir:
+    # Re-import datamapplot here to ensure it's available in this function scope
+    import datamapplot
         os.makedirs(output_dir, exist_ok=True)
     else:
         output_dir = os.path.join("polis_data", str(zid), "python_output")
