@@ -118,7 +118,7 @@ export default {
   useNetworkHost: isTrue(process.env.USE_NETWORK_HOST),
   webserverPass: process.env.WEBSERVER_PASS as string,
   webserverUsername: process.env.WEBSERVER_USERNAME as string,
-  stripeKey: process.env.STRIPE_KEY as string,
+  stripeKey: process.env.STRIPE_KEY || "test-key" as string,
 
   whitelistItems: [
     process.env.DOMAIN_WHITELIST_ITEM_01 || null,
