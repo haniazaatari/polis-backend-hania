@@ -56,6 +56,8 @@ Account.propTypes = {
   user: PropTypes.shape({
     hname: PropTypes.string,
     email: PropTypes.string,
+    isPaidAccount: PropTypes.string,
+    uid: PropTypes.string,
   })
 }
 
