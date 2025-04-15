@@ -928,7 +928,11 @@ function initializePolisHelpers() {
   async function customerORAdmin(req: any, res: any, next: any) {
     try {
       const { email } = await User.getUser(req.p.uid, undefined, undefined, undefined) as unknown as { email: string }
-      // error handling
+      req.p.isPaid = false;
+      if (email?.split("@")[1] === "compdemocracy.org") {
+        req.p.isPaid = true;
+        return next();
+      }
       const customer = await stripe.customers.search({
         query: `email:'${email}'`,
       });
@@ -942,11 +946,9 @@ function initializePolisHelpers() {
           req.p.isPaid = true;
           return next();
         }
-        res.status(401);
-        next("user unauthorized")
+        next();
       }
-      res.status(401);
-      next("user unauthorized")
+      next();
     } catch (err) {
       logger.error("polis_err_subscription", err);
       next(err || "polis_err_subscription");

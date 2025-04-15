@@ -703,9 +703,14 @@ export async function handle_GET_topics(
 }
 
 export async function handle_GET_reportNarrative(
-  req: { p: { rid: string }; query: QueryParams },
-  res: Response
+  req: { p: { rid: string, isPaid: boolean }; query: QueryParams },
+  res: Response,
+  next: any,
 ) {
+  if (req.p.isPaid !== true) {
+    res.status(401);
+    return next("Unauthorized")
+  }
   const storage = new DynamoStorageService(
     "report_narrative_store",
     req.query.noCache === "true"
