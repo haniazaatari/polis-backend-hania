@@ -27,7 +27,7 @@ jobs:
 
       - name: Build and start Docker containers
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.test.yml --env-file test.env --profile postgres up -d --build
+          docker compose -f docker-compose.yml -f docker-compose.test.yml --env-file test.env --profile postgres up -d --build --force-recreate
 
       - name: Health Check the Server http response
         uses: jtalk/url-health-check-action@v4
