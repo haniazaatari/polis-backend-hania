@@ -931,7 +931,7 @@ function initializePolisHelpers() {
       req.p.isPaid = false;
       if (email?.split("@")[1] === "compdemocracy.org") {
         req.p.isPaid = true;
-        return next();
+        next();
       }
       const customer = await stripe.customers.search({
         query: `email:'${email}'`,
@@ -944,7 +944,7 @@ function initializePolisHelpers() {
         const { lookup_key } = activeEntitlements.data[0];
         if (lookup_key === "paid-access") {
           req.p.isPaid = true;
-          return next();
+          next();
         }
         next();
       }
