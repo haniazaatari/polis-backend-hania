@@ -1052,7 +1052,6 @@ helpersInitialized.then(
       "/api/v3/users",
       moveToBody,
       auth(assignToP),
-      customerORAdmin,
       want("email", getEmail, assignToP),
       want("hname", getOptionalStringLimitLength(9999), assignToP),
       want("uid_of_user", getInt, assignToP),
