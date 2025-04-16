@@ -687,8 +687,8 @@ helpersInitialized.then(
       "/api/v3/users",
       moveToBody,
       authOptional(assignToP),
-      // customerORAdmin,
       want("errIfNoAuth", getBool, assignToP),
+      customerORAdmin(assignToP),
       handle_GET_users
     );
 
@@ -1202,7 +1202,7 @@ helpersInitialized.then(
       moveToBody,
       auth(assignToP),
       need("report_id", getReportIdFetchRid, assignToPCustom("rid")),
-      // customerORAdmin,
+      customerORAdmin(assignToP),
       handle_GET_reportNarrative
     );
 
