@@ -7,7 +7,7 @@ docker-compose up -d
 ```
 
 ```bash
-docker exec delphi-app python /app/create_dynamodb_tables.py --endpoint-url=http://localhost:8000
+docker exec delphi-app python /app/create_dynamodb_tables.py --endpoint-url=http://dynamodb-local:8000
 ```
 
 ```bash

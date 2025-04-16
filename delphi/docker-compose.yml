@@ -43,7 +43,10 @@ services:
       - AWS_REGION=us-west-2
       - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
       # PostgreSQL connection settings
-      - DATABASE_URL=postgresql://colinmegill@host.docker.internal:5432/polisDB_prod_local_mar14
+      - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}
+      - DATABASE_SSL_MODE=${DATABASE_SSL_MODE}
+      - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE}
+      - DATABASE_MAX_OVERFLOW=${DATABASE_MAX_OVERFLOW}
       # Set Python path explicitly
       - PYTHONPATH=/app
       # Ollama configuration
