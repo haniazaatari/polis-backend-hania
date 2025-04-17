@@ -14,7 +14,7 @@ import scipy.cluster.hierarchy as hcluster
 from scipy.spatial.distance import pdist, squareform
 import json
 
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 
 
 def clean_named_matrix(nmat: NamedMatrix) -> NamedMatrix:

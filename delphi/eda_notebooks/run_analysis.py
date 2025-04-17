@@ -34,8 +34,8 @@ def check_environment():
     try:
         # Try importing key polismath modules
         from polismath.conversation.conversation import Conversation
-        from polismath.math.named_matrix import NamedMatrix
-        from polismath.math.pca import pca_project_named_matrix
+        from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+        from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
         
         print("Polismath modules imported successfully")
         return True
@@ -46,11 +46,11 @@ def check_environment():
 
 # Import polismath modules
 from polismath.conversation.conversation import Conversation
-from polismath.math.named_matrix import NamedMatrix
-from polismath.math.pca import pca_project_named_matrix
-from polismath.math.clusters import cluster_named_matrix
-from polismath.math.repness import conv_repness, participant_stats
-from polismath.math.corr import compute_correlation
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
+from polismath.pca_kmeans_rep.clusters import cluster_named_matrix
+from polismath.pca_kmeans_rep.repness import conv_repness, participant_stats
+from polismath.pca_kmeans_rep.corr import compute_correlation
 
 def load_votes(votes_path):
     """Load votes from a CSV file into a format suitable for the Conversation class."""

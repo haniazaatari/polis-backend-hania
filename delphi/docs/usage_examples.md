@@ -77,7 +77,7 @@ imported_id = manager.import_conversation("/path/to/export.json")
 ### Working with the Named Matrix
 
 ```python
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 import numpy as np
 
 # Create a named matrix
@@ -104,8 +104,8 @@ votes = nmat.get_row_by_name("participant1")
 ### PCA and Clustering
 
 ```python
-from polismath.math.pca import pca_project_named_matrix
-from polismath.math.clusters import cluster_named_matrix
+from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
+from polismath.pca_kmeans_rep.clusters import cluster_named_matrix
 
 # Perform PCA
 pca_results, projections = pca_project_named_matrix(nmat)
@@ -121,7 +121,7 @@ for cluster in clusters:
 ### Representativeness Calculation
 
 ```python
-from polismath.math.repness import conv_repness
+from polismath.pca_kmeans_rep.repness import conv_repness
 
 # Calculate representativeness
 repness = conv_repness(nmat, clusters)
@@ -137,7 +137,7 @@ for group_id, comments in repness["group_repness"].items():
 ### Statistical Functions
 
 ```python
-from polismath.math.stats import prop_test, two_prop_test
+from polismath.pca_kmeans_rep.stats import prop_test, two_prop_test
 
 # Test proportion difference
 z_score = prop_test(70, 100)  # 70 successes out of 100 trials

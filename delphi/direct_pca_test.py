@@ -14,8 +14,8 @@ from typing import Dict, List, Any
 # Add the parent directory to the path to import the module
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-from polismath.math.named_matrix import NamedMatrix
-from polismath.math.pca import pca_project_named_matrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
 
 def load_votes(dataset_name: str) -> NamedMatrix:
     """

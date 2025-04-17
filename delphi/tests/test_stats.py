@@ -12,7 +12,7 @@ from scipy import stats as scipy_stats
 # Add the parent directory to the path to import the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from polismath.math.stats import (
+from polismath.pca_kmeans_rep.stats import (
     prop_test, two_prop_test, z_sig_90, z_sig_95,
     shannon_entropy, gini_coefficient, weighted_stddev,
     ci_95, bayesian_ci_95, bootstrap_ci_95, binomial_test,

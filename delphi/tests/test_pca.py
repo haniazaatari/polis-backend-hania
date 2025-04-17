@@ -11,12 +11,12 @@ import os
 # Add the parent directory to the path to import the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from polismath.math.pca import (
+from polismath.pca_kmeans_rep.pca import (
     normalize_vector, vector_length, proj_vec, factor_matrix,
     power_iteration, wrapped_pca, sparsity_aware_project_ptpt,
     sparsity_aware_project_ptpts, pca_project_named_matrix
 )
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 
 
 class TestPCAUtils:

@@ -14,8 +14,8 @@ import traceback
 # Add the parent directory to the path to import the module
 sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
-from polismath.math.named_matrix import NamedMatrix
-from polismath.math.repness import conv_repness, participant_stats
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.repness import conv_repness, participant_stats
 from polismath.conversation.conversation import Conversation
 
 

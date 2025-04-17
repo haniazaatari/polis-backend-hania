@@ -14,11 +14,11 @@ import logging
 import sys
 from datetime import datetime
 
-from polismath.math.named_matrix import NamedMatrix
-from polismath.math.pca import pca_project_named_matrix
-from polismath.math.clusters import cluster_named_matrix
-from polismath.math.repness import conv_repness, participant_stats
-from polismath.math.corr import compute_correlation
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
+from polismath.pca_kmeans_rep.clusters import cluster_named_matrix
+from polismath.pca_kmeans_rep.repness import conv_repness, participant_stats
+from polismath.pca_kmeans_rep.corr import compute_correlation
 from polismath.utils.general import agree, disagree, pass_vote
 
 
@@ -483,7 +483,7 @@ class Conversation:
         )
         
         # Create a new NamedMatrix
-        from polismath.math.named_matrix import NamedMatrix
+        from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
         return NamedMatrix(df)
     
     def _compute_clusters(self) -> None:
@@ -514,7 +514,7 @@ class Conversation:
         
         # Use auto-determination of k based on data size
         # The determine_k function will handle this appropriately
-        from polismath.math.clusters import cluster_named_matrix
+        from polismath.pca_kmeans_rep.clusters import cluster_named_matrix
         
         # Let the clustering function auto-determine the appropriate number of clusters
         # Pass k=None to use the built-in determine_k function

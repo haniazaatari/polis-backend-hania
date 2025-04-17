@@ -12,8 +12,8 @@ import pytest
 # Add the parent directory to the path to import the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from polismath.math.named_matrix import NamedMatrix
-from polismath.math.pca import (
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.pca import (
     pca_project_named_matrix, powerit_pca, power_iteration,
     sparsity_aware_project_ptpt, sparsity_aware_project_ptpts
 )
