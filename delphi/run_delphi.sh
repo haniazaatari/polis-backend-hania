@@ -175,7 +175,7 @@ except Exception as e:
 
 # Ensure dependencies are installed directly in the container
 echo -e "${YELLOW}Ensuring dependencies are properly installed...${NC}"
-docker exec delphi-app pip install --no-cache-dir fastapi==0.115.0 pydantic colorlog
+docker exec delphi-app pip install --no-cache-dir fastapi==0.115.0 pydantic colorlog numpy pandas scipy scikit-learn
 
 # Debug the PostgreSQL connection to ensure the URL is configured correctly
 echo -e "${YELLOW}Testing PostgreSQL connection...${NC}"
@@ -211,6 +211,44 @@ docker exec delphi-app pip list | grep fastapi
 
 # Set up Python path
 docker exec delphi-app bash -c "export PYTHONPATH=/app:$PYTHONPATH && echo PYTHONPATH=\$PYTHONPATH"
+
+# Fix the problematic math directory by temporarily renaming it
+echo -e "${YELLOW}Temporarily renaming problematic math directory...${NC}"
+docker exec delphi-app bash -c "
+if [ -d /app/polismath/math ]; then
+  echo 'Renaming /app/polismath/math to /app/polismath/math_orig'
+  mv /app/polismath/math /app/polismath/math_orig
+fi
+"
+
+# Run the math pipeline (polismath) before UMAP pipeline
+echo -e "${GREEN}Running math pipeline (polismath)...${NC}"
+
+# For testing with limited votes
+if [ -n "$MAX_VOTES" ]; then
+  MAX_VOTES_ARG="--max-votes=${MAX_VOTES}"
+  echo -e "${YELLOW}Limiting to ${MAX_VOTES} votes for testing${NC}"
+else
+  MAX_VOTES_ARG=""
+fi
+
+# For adjusting batch size
+if [ -n "$BATCH_SIZE" ]; then
+  BATCH_SIZE_ARG="--batch-size=${BATCH_SIZE}"
+  echo -e "${YELLOW}Using batch size of ${BATCH_SIZE}${NC}"
+else
+  BATCH_SIZE_ARG="--batch-size=50000"  # Default batch size
+fi
+
+docker exec -e PYTHONPATH=/app delphi-app python /app/polismath/run_math_pipeline.py --zid=${ZID} ${MAX_VOTES_ARG} ${BATCH_SIZE_ARG}
+
+# Restore the original math directory after running the script
+docker exec delphi-app bash -c "
+if [ -d /app/polismath/math_orig ] && [ ! -d /app/polismath/math ]; then
+  echo 'Restoring original math directory'
+  mv /app/polismath/math_orig /app/polismath/math
+fi
+"
 
 # Run the UMAP narrative pipeline directly
 echo -e "${GREEN}Running UMAP narrative pipeline...${NC}"

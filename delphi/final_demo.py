@@ -5,10 +5,10 @@ Final demo script for the Pol.is math Python conversion.
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from polismath.math.named_matrix import NamedMatrix
-from polismath.math.pca import pca_project_named_matrix
-from polismath.math.clusters import cluster_named_matrix
-from polismath.math.repness import conv_repness  # Changed from compute_repness to conv_repness
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
+from polismath.pca_kmeans_rep.clusters import cluster_named_matrix
+from polismath.pca_kmeans_rep.repness import conv_repness  # Changed from compute_repness to conv_repness
 
 def main():
     print("Pol.is Math Python Conversion Demo")

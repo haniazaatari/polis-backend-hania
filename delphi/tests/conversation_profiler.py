@@ -325,7 +325,7 @@ def instrument_conversation_class():
     setattr(Conversation, 'update_votes', detailed_update_votes)
     
     # Add special instrumentation for named_matrix.update method
-    from polismath.math.named_matrix import NamedMatrix
+    from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
     original_named_matrix_update = NamedMatrix.update
     
     @wraps(original_named_matrix_update)
@@ -370,7 +370,7 @@ def restore_original_methods():
         setattr(Conversation, method_name, original_method)
     
     # Also restore NamedMatrix.update
-    from polismath.math.named_matrix import NamedMatrix
+    from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
     # This assumes we've saved the original elsewhere
     if hasattr(NamedMatrix, '_original_update'):
         setattr(NamedMatrix, 'update', getattr(NamedMatrix, '_original_update'))
@@ -423,5 +423,5 @@ def print_profiling_summary():
     print("\n===== End of Profiling Summary =====")
 
 # Store the original NamedMatrix.update method
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 NamedMatrix._original_update = NamedMatrix.update

@@ -16,7 +16,7 @@ from typing import Dict, List, Any, Union, Optional
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from polismath.conversation.conversation import Conversation
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 
 # Tolerance for numerical comparisons
 TOLERANCE = 0.2  # 20% tolerance for numerical differences
@@ -209,9 +209,9 @@ def compare_group_clusters(python_clusters, clojure_clusters):
 
 def run_manual_pipeline(conv: Conversation) -> Conversation:
     """Run a modified version of the recompute pipeline with better error handling."""
-    from polismath.math.pca import pca_project_named_matrix
-    from polismath.math.clusters import cluster_named_matrix
-    from polismath.math.repness import conv_repness
+    from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
+    from polismath.pca_kmeans_rep.clusters import cluster_named_matrix
+    from polismath.pca_kmeans_rep.repness import conv_repness
     
     # First, make a deep copy to avoid modifying the original
     import copy
@@ -256,7 +256,7 @@ def run_manual_pipeline(conv: Conversation) -> Conversation:
             index=matrix.rownames(),
             columns=matrix.colnames()
         )
-        from polismath.math.named_matrix import NamedMatrix
+        from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
         clean_matrix = NamedMatrix(clean_df)
         
         # Perform PCA
@@ -510,7 +510,7 @@ def run_real_data_comparison(dataset_name: str, votes_limit: Optional[int] = Non
         # Create raw matrix directly from numeric updates
         import pandas as pd
         import numpy as np
-        from polismath.math.named_matrix import NamedMatrix
+        from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
         
         # Get unique participant and comment IDs
         ptpt_ids = sorted(set(upd[0] for upd in numeric_updates))

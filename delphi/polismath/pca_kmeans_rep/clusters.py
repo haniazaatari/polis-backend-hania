@@ -12,7 +12,7 @@ from typing import Dict, List, Optional, Tuple, Union, Any
 import random
 from copy import deepcopy
 
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 from polismath.utils.general import weighted_mean, weighted_means
 
 

@@ -37,20 +37,16 @@ services:
     depends_on:
       - dynamodb-local
       - ollama
+    env_file:
+      - ${DELPHI_ENV_FILE:-.env}
     environment:
-      - AWS_ACCESS_KEY_ID=fakeMyKeyId
-      - AWS_SECRET_ACCESS_KEY=fakeSecretAccessKey
-      - AWS_REGION=us-west-2
-      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
-      # PostgreSQL connection settings
+     # PostgreSQL connection settings
       - DATABASE_URL=postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}
       - DATABASE_SSL_MODE=${DATABASE_SSL_MODE}
       - DATABASE_POOL_SIZE=${DATABASE_POOL_SIZE}
       - DATABASE_MAX_OVERFLOW=${DATABASE_MAX_OVERFLOW}
       # Set Python path explicitly
       - PYTHONPATH=/app
-      # Ollama configuration
-      - OLLAMA_HOST=http://ollama:11434
     ports:
       - "8080:8080"
     extra_hosts:
@@ -63,13 +59,15 @@ services:
       - ./requirements.txt:/app/requirements.txt
       # Mount polismath and other Python modules directory
       - ./polismath:/app/polismath
+      # Ensure the renamed math module is properly mounted
+      - ./polismath/pca_kmeans_rep:/app/polismath/pca_kmeans_rep
       # Mount umap_narrative directory
       - ./umap_narrative:/app/umap_narrative
     # Keep container running but install dependencies first
     command: >
       bash -c "
       echo 'Ensuring dependencies are installed...' &&
-      pip install --no-cache-dir fastapi==0.115.0 pydantic colorlog &&
+      pip install --no-cache-dir fastapi==0.115.0 pydantic colorlog numpy pandas scipy scikit-learn &&
       echo 'PYTHONPATH=$PYTHONPATH' &&
       echo 'Installed packages:' &&
       pip list | grep fastapi &&

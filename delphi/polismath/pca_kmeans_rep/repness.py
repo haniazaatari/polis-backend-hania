@@ -12,7 +12,7 @@ from copy import deepcopy
 import math
 from scipy import stats
 
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 from polismath.utils.general import agree, disagree, pass_vote
 
 

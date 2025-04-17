@@ -13,8 +13,8 @@ from typing import Dict, List, Any, Union, Optional
 # Add the parent directory to the path to import the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from polismath.math.named_matrix import NamedMatrix
-from polismath.math.pca import pca_project_named_matrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
 
 def load_votes_from_csv(votes_path: str, limit: Optional[int] = None) -> np.ndarray:
     """Load votes from a CSV file."""

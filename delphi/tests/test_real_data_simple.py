@@ -13,7 +13,7 @@ import json
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from polismath.conversation.conversation import Conversation
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 
 def load_votes(votes_path):
     """Load votes from a CSV file into a format suitable for conversion."""

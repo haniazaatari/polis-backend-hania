@@ -12,14 +12,14 @@ import random
 # Add the parent directory to the path to import the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from polismath.math.clusters import (
+from polismath.pca_kmeans_rep.clusters import (
     Cluster, euclidean_distance, init_clusters, same_clustering,
     assign_points_to_clusters, update_cluster_centers, filter_empty_clusters,
     cluster_step, most_distal, split_cluster, clean_start_clusters,
     kmeans, distance_matrix, silhouette, clusters_to_dict, clusters_from_dict,
     cluster_named_matrix
 )
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 
 
 # Set random seed for reproducibility

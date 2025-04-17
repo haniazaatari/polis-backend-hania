@@ -3,9 +3,9 @@ Simple demo script to test the core math components of the Pol.is math system.
 """
 
 import numpy as np
-from polismath.math.named_matrix import NamedMatrix
-from polismath.math.pca import pca_project_named_matrix
-from polismath.math.clusters import cluster_named_matrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
+from polismath.pca_kmeans_rep.clusters import cluster_named_matrix
 import json
 
 def main():

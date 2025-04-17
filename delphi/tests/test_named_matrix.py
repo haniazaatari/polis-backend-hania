@@ -11,7 +11,7 @@ import os
 # Add the parent directory to the path to import the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from polismath.math.named_matrix import IndexHash, NamedMatrix, create_named_matrix
+from polismath.pca_kmeans_rep.named_matrix import IndexHash, NamedMatrix, create_named_matrix
 
 
 class TestIndexHash:

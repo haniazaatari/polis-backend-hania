@@ -14,14 +14,14 @@ from scipy.spatial.distance import pdist
 # Add the parent directory to the path to import the module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from polismath.math.corr import (
+from polismath.pca_kmeans_rep.corr import (
     clean_named_matrix, transpose_named_matrix, correlation_matrix,
     hierarchical_cluster, flatten_hierarchical_cluster,
     blockify_correlation_matrix, compute_correlation,
     prepare_correlation_export, save_correlation_to_json,
     participant_correlation, participant_correlation_matrix
 )
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 
 
 class TestMatrixOperations:

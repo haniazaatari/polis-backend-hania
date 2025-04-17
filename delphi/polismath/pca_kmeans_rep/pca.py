@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Optional, Tuple, Union, Any
 
-from polismath.math.named_matrix import NamedMatrix
+from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 
 
 def normalize_vector(v: np.ndarray) -> np.ndarray:
