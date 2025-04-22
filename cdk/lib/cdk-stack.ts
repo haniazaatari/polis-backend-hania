@@ -286,6 +286,7 @@ EOF`,
       launchTemplate: webLaunchTemplate,
       minCapacity: 2,
       maxCapacity: 10,
+      desiredCapacity: 2,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       healthCheck: autoscaling.HealthCheck.elb({grace: cdk.Duration.minutes(5)})
     });
@@ -294,6 +295,7 @@ EOF`,
       vpc,
       launchTemplate: mathWorkerLaunchTemplate,
       minCapacity: 1,
+      desiredCapacity: 1,
       maxCapacity: 5,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
