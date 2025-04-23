@@ -347,6 +347,8 @@ helpersInitialized.then(
       "/api/v3/xid/:xid_report",
       moveToBody,
       need("xid_report", getStringLimitLength(1, 99), assignToP),
+      auth(assignToP),
+      customerORAdmin(assignToP),
       handle_GET_xidReport
     );
 

@@ -19,6 +19,7 @@ type Response = {
   send: (data: string) => void;
   write: (data: string) => void;
   end: () => void;
+  status: any;
 };
 
 type CommentRow = {
@@ -688,8 +689,12 @@ export async function handle_GET_reportExport(
 }
 
 export async function handle_GET_xidReport(req: {
-  p: { xid_report: string };
-}, res: Response) {
+  p: { xid_report: string, isPaid?: boolean };
+}, res: Response, next: any) {
+  if (req.p.isPaid !== true) {
+    res.status(401);
+    return next("Unauthorized")
+  }
   const { xid_report } = req.p;
   // example xid_report: "51295d48-9422-4a58-90dd-8a6e32cd1b52-xid.csv"
   try {
