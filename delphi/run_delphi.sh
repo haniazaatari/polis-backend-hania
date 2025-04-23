@@ -75,25 +75,27 @@ fi
 
 echo -e "${GREEN}Running Delphi Orchestrator for conversation $ZID...${NC}"
 
-# Check if DynamoDB container is running
-if ! docker ps | grep -q delphi-dynamodb-local; then
+# Check if DynamoDB container is running in main docker-compose
+if ! docker ps | grep -q polis-dynamodb-local; then
   echo -e "${YELLOW}DynamoDB container not running. Starting it now...${NC}"
-  docker-compose up -d dynamodb-local
+  cd ..
+  docker-compose up -d dynamodb
+  cd - > /dev/null
   
   # Wait for DynamoDB to start properly
   echo "Waiting for DynamoDB to start..."
   sleep 5
   # Verify that DynamoDB is accessible
-  if ! docker exec delphi-dynamodb-local aws dynamodb list-tables --endpoint-url http://dynamodb-local:8000 --region us-west-2; then
+  if ! docker exec polis-dynamodb-local aws dynamodb list-tables --endpoint-url http://localhost:8000 --region us-west-2; then
     echo -e "${YELLOW}Installing AWS CLI in DynamoDB container for validation...${NC}"
-    docker exec delphi-dynamodb-local apt-get update && docker exec delphi-dynamodb-local apt-get install -y awscli
+    docker exec polis-dynamodb-local apt-get update && docker exec polis-dynamodb-local apt-get install -y awscli
     echo "Verifying DynamoDB is accessible..."
-    docker exec delphi-dynamodb-local aws dynamodb list-tables --endpoint-url http://dynamodb-local:8000 --region us-west-2 || true
+    docker exec polis-dynamodb-local aws dynamodb list-tables --endpoint-url http://localhost:8000 --region us-west-2 || true
   fi
 fi
 
 # Check if containers are running - start them if not
-if ! docker ps | grep -q delphi-app || ! docker ps | grep -q delphi-ollama || ! docker ps | grep -q delphi-dynamodb-local; then
+if ! docker ps | grep -q delphi-app || ! docker ps | grep -q delphi-ollama; then
   echo -e "${YELLOW}Starting all required containers...${NC}"
   docker-compose up -d
   
@@ -117,7 +119,7 @@ fi
 
 # Create DynamoDB tables if they don't exist
 echo -e "${YELLOW}Creating DynamoDB tables if they don't exist...${NC}"
-docker exec -e PYTHONPATH=/app delphi-app python /app/create_dynamodb_tables.py --endpoint-url http://dynamodb-local:8000
+docker exec -e PYTHONPATH=/app delphi-app python /app/create_dynamodb_tables.py --endpoint-url http://host.docker.internal:8000
 
 # Fix the umap_narrative directory once and for all
 echo -e "${YELLOW}Fixing umap_narrative directory in the container...${NC}"
@@ -257,10 +259,10 @@ echo -e "${GREEN}Running UMAP narrative pipeline...${NC}"
 USE_OLLAMA="--use-ollama"
 echo -e "${YELLOW}Using Ollama for topic naming${NC}"
 
-# Run the pipeline directly, using dynamodb-local as the endpoint
+# Run the pipeline directly, using the main dynamodb as the endpoint
 # Pass OLLAMA_HOST to make sure it connects to the Ollama container
 # Also pass the model that we pulled
-docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 -e OLLAMA_HOST=http://ollama:11434 -e OLLAMA_MODEL=${MODEL} delphi-app python /app/umap_narrative/run_pipeline.py --zid=${ZID} ${USE_OLLAMA}
+docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://host.docker.internal:8000 -e OLLAMA_HOST=http://ollama:11434 -e OLLAMA_MODEL=${MODEL} delphi-app python /app/umap_narrative/run_pipeline.py --zid=${ZID} ${USE_OLLAMA}
 
 # Save the exit code
 PIPELINE_EXIT_CODE=$?
@@ -269,10 +271,10 @@ if [ $PIPELINE_EXIT_CODE -eq 0 ]; then
   echo -e "${YELLOW}Creating visualizations with datamapplot...${NC}"
   
   # Generate layer 0 visualization
-  docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 delphi-app python /app/umap_narrative/700_datamapplot_for_layer.py --conversation_id=${ZID} --layer=0 --output_dir=/app/polis_data/${ZID}/python_output/comments_enhanced_multilayer
+  docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://host.docker.internal:8000 delphi-app python /app/umap_narrative/700_datamapplot_for_layer.py --conversation_id=${ZID} --layer=0 --output_dir=/app/polis_data/${ZID}/python_output/comments_enhanced_multilayer
   
   # Generate layer 1 visualization (if available)
-  docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 delphi-app python /app/umap_narrative/700_datamapplot_for_layer.py --conversation_id=${ZID} --layer=1 --output_dir=/app/polis_data/${ZID}/python_output/comments_enhanced_multilayer
+  docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://host.docker.internal:8000 delphi-app python /app/umap_narrative/700_datamapplot_for_layer.py --conversation_id=${ZID} --layer=1 --output_dir=/app/polis_data/${ZID}/python_output/comments_enhanced_multilayer
   
   # Create a dedicated visualization folder and copy visualizations there
   echo -e "${YELLOW}Copying visualizations to dedicated folder...${NC}"
@@ -292,7 +294,7 @@ if [ $PIPELINE_EXIT_CODE -eq 0 ]; then
   if [ -n "$ANTHROPIC_API_KEY" ]; then
     echo -e "${YELLOW}Generating report with Claude 3.7 Sonnet...${NC}"
     # Pass environment variables to ensure Claude is used
-    docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://dynamodb-local:8000 -e LLM_PROVIDER=anthropic -e ANTHROPIC_MODEL=claude-3-7-sonnet-20250219 -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} delphi-app python /app/umap_narrative/800_report_topic_clusters.py --conversation_id=${ZID} --model=claude-3-7-sonnet-20250219
+    docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://host.docker.internal:8000 -e LLM_PROVIDER=anthropic -e ANTHROPIC_MODEL=claude-3-7-sonnet-20250219 -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} delphi-app python /app/umap_narrative/800_report_topic_clusters.py --conversation_id=${ZID} --model=claude-3-7-sonnet-20250219
     
     # Save the exit code
     REPORT_EXIT_CODE=$?
