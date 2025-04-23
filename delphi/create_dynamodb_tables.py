@@ -141,6 +141,86 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
     
     return created_tables
 
+def create_job_queue_table(dynamodb, delete_existing=False):
+    """
+    Create the job queue table for the Delphi distributed processing system.
+    
+    Args:
+        dynamodb: boto3 DynamoDB resource
+        delete_existing: If True, delete existing tables before creating new ones
+    """
+    # Get list of existing tables
+    existing_tables = [t.name for t in dynamodb.tables.all()]
+    
+    # Define table schema for job queue
+    tables = {
+        'DelphiJobQueue': {
+            'KeySchema': [
+                {'AttributeName': 'status', 'KeyType': 'HASH'},   # Partition key
+                {'AttributeName': 'created_at', 'KeyType': 'RANGE'}  # Sort key
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'status', 'AttributeType': 'S'},
+                {'AttributeName': 'created_at', 'AttributeType': 'S'},
+                {'AttributeName': 'job_id', 'AttributeType': 'S'},
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
+                {'AttributeName': 'job_type', 'AttributeType': 'S'},
+                {'AttributeName': 'priority', 'AttributeType': 'N'},
+                {'AttributeName': 'worker_id', 'AttributeType': 'S'},
+                {'AttributeName': 'started_at', 'AttributeType': 'S'}
+            ],
+            'GlobalSecondaryIndexes': [
+                {
+                    'IndexName': 'JobIdIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'job_id', 'KeyType': 'HASH'}
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                },
+                {
+                    'IndexName': 'ConversationIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
+                        {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                },
+                {
+                    'IndexName': 'JobTypeIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'job_type', 'KeyType': 'HASH'},
+                        {'AttributeName': 'priority', 'KeyType': 'RANGE'}
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                },
+                {
+                    'IndexName': 'WorkerIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'worker_id', 'KeyType': 'HASH'},
+                        {'AttributeName': 'started_at', 'KeyType': 'RANGE'}
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                }
+            ],
+            'ProvisionedThroughput': {'ReadCapacityUnits': 10, 'WriteCapacityUnits': 10}
+        }
+    }
+    
+    # Handle table deletion if requested
+    if delete_existing:
+        _delete_tables(dynamodb, tables.keys(), existing_tables)
+        # Update list of existing tables
+        existing_tables = [t.name for t in dynamodb.tables.all()]
+    
+    # Create tables
+    created_tables = _create_tables(dynamodb, tables, existing_tables)
+    
+    return created_tables
+
 def create_evoc_tables(dynamodb, delete_existing=False):
     """
     Create all tables for the EVōC (Efficient Visualization of Clusters) pipeline.
@@ -335,10 +415,10 @@ def create_tables(endpoint_url=None, region_name='us-west-2',
         aws_profile: AWS profile to use (optional)
     """
     # Set up environment variables for credentials if not already set (for local development)
-    if not os.environ.get('AWS_ACCESS_KEY_ID') and endpoint_url and 'localhost' in endpoint_url:
+    if not os.environ.get('AWS_ACCESS_KEY_ID') and endpoint_url and ('localhost' in endpoint_url or 'host.docker.internal' in endpoint_url):
         os.environ['AWS_ACCESS_KEY_ID'] = 'fakeMyKeyId'
     
-    if not os.environ.get('AWS_SECRET_ACCESS_KEY') and endpoint_url and 'localhost' in endpoint_url:
+    if not os.environ.get('AWS_SECRET_ACCESS_KEY') and endpoint_url and ('localhost' in endpoint_url or 'host.docker.internal' in endpoint_url):
         os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
     
     # Create DynamoDB session and resource
@@ -359,6 +439,11 @@ def create_tables(endpoint_url=None, region_name='us-west-2',
     logger.info(f"Existing tables before operations: {existing_tables}")
     
     created_tables = []
+    
+    # Always create the job queue table
+    logger.info("Creating job queue table...")
+    job_queue_tables = create_job_queue_table(dynamodb, delete_existing)
+    created_tables.extend(job_queue_tables)
     
     # Create tables based on flags
     if not polismath_only:
