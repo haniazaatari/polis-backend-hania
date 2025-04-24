@@ -325,12 +325,25 @@ class JobProcessor:
             # Change directory to delphi folder
             os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             
+            # Change directory to the root of the repository
+            script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            os.chdir(script_dir)
+            
+            # Ensure we have execute permissions on the script
+            os.chmod('./run_delphi.sh', 0o755)
+            
+            logger.info(f"Running command from {os.getcwd()}: {' '.join(cmd)}")
+            
+            # Add environment variables for Docker to work
+            env = os.environ.copy()
+            
             # Execute run_delphi.sh
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                env=env
             )
             
             # Read output lines as they are produced
@@ -402,14 +415,22 @@ def poll_and_process(processor, interval=10):
                 claimed_job = processor.claim_job(job)
                 
                 if claimed_job:
-                    # Process the job
-                    processor.process_job(claimed_job)
+                    try:
+                        # Process the job
+                        processor.process_job(claimed_job)
+                    except KeyError as ke:
+                        logger.error(f"Missing key in job data: {ke}")
+                        logger.error(f"Job keys available: {list(claimed_job.keys())}")
+                    except Exception as e:
+                        logger.error(f"Error processing job: {e}")
             
             # Wait for next poll
             if running:
                 time.sleep(interval)
         except Exception as e:
-            logger.error(f"Error in polling loop: {e}")
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Error in polling loop: {e}\nTraceback: {error_details}")
             if running:
                 time.sleep(interval)
 
