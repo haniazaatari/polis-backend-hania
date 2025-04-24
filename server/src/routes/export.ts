@@ -689,9 +689,9 @@ export async function handle_GET_reportExport(
 }
 
 export async function handle_GET_xidReport(req: {
-  p: { xid_report: string, isPaid?: boolean };
+  p: { xid_report: string, "isPremium+"?: boolean };
 }, res: Response, next: any) {
-  if (req.p.isPaid !== true) {
+  if (req.p["isPremium+"] !== true) {
     res.status(401);
     return next("Unauthorized")
   }

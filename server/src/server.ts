@@ -921,7 +921,7 @@ function initializePolisHelpers() {
           undefined
         )) as unknown) as { email: string };
         if (email?.split("@")[1] === "compdemocracy.org") {
-          assigner(req, "isPaid", true);
+          assigner(req, "isPremium+", true);
           next();
         }
         const customer = await stripe.customers.search({
@@ -935,8 +935,12 @@ function initializePolisHelpers() {
             }
           );
           const { lookup_key } = activeEntitlements.data[0];
-          if (lookup_key === "paid-access") {
-            assigner(req, "isPaid", true);
+          if (lookup_key === "polis_premium+") {
+            assigner(req, "isPremium", true);
+            next();
+          }
+          if (lookup_key === "polis_premium") {
+            assigner(req, "isPremium+", true);
             next();
           }
           next();
@@ -4089,7 +4093,7 @@ Email verified! You can close this tab or hit the back button.
   }
 
   function handle_GET_users(
-    req: { p: { uid?: any; errIfNoAuth: any; xid: any; owner_uid?: any } },
+    req: { p: { uid?: any; errIfNoAuth: any; xid: any; owner_uid?: any, isPremium?: boolean, "isPremium+": boolean } },
     res: {
       status: (
         arg0: number
@@ -4106,6 +4110,7 @@ Email verified! You can close this tab or hit the back button.
     getUser(uid, null, req.p.xid, req.p.owner_uid)
       .then(
         function (user: any) {
+          if (req.p.isPremium || req.p["isPremium+"]) user.isPaidAccount = true;
           res.status(200).json(user);
         },
         function (err: any) {
