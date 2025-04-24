@@ -1,0 +1,17 @@
+#!/bin/bash
+# Delphi Command Line Interface Wrapper
+
+# Get the directory of this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Path to the Python CLI script
+CLI_SCRIPT="$SCRIPT_DIR/scripts/delphi_cli.py"
+
+# Check if rich is installed
+if ! python3 -c "import rich" > /dev/null 2>&1; then
+    echo "Installing rich library for better interface..."
+    pip install rich
+fi
+
+# Execute the Python CLI script with all arguments
+python3 "$CLI_SCRIPT" "$@"
