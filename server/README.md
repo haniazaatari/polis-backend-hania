@@ -69,6 +69,7 @@ flavors of node.
   \i postgres/migrations/000007_drop_geolocation_fields.sql
   \i postgres/migrations/000008_add_comment_priority.sql
   \i postgres/migrations/000009_add_uuid_to_zinvites.sql
+  \i postgres/migrations/000010_update_conversation_styles.sql
   ```
 
   You can also separately run `psql -d polis -f postgres/migrations/000000_initial.sql` and

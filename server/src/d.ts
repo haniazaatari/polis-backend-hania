@@ -132,10 +132,7 @@ export type ConversationType = {
   description?: any;
   vis_type?: any;
   help_type?: any;
-  socialbtn_type?: any;
   bgcolor?: any;
-  help_color?: any;
-  help_bgcolor?: any;
   style_btn?: any;
   write_type?: any;
   importance_enabled?: any;
@@ -155,6 +152,10 @@ export type ConversationType = {
   want_inbox_item_admin_html?: any;
   want_inbox_item_participant_html?: any;
   limit?: any;
+  font_color?: any;
+  font_title?: any;
+  font_serif?: any;
+  font_sans?: any;
 };
 
 export type ParticipantOption = {

@@ -109,6 +109,7 @@ import Utils from "./utils/common";
 import SQL from "./db/sql";
 // End of re-import
 import logger from "./utils/logger";
+import { isValidColor } from "./utils/colors";
 
 // # notifications
 import emailSenders from "./email/senders";
@@ -5892,10 +5893,7 @@ Email verified! You can close this tab or hit the back button.
         description: string;
         vis_type: any;
         help_type: any;
-        socialbtn_type: any;
         bgcolor: string;
-        help_color: string;
-        help_bgcolor: string;
         style_btn: any;
         write_type: any;
         importance_enabled: any;
@@ -5905,6 +5903,10 @@ Email verified! You can close this tab or hit the back button.
         send_created_email: any;
         conversation_id: string;
         context: any;
+        font_color: any;
+        font_title: any;
+        font_serif: any;
+        font_sans: any;
       };
     },
     res: any
@@ -5960,32 +5962,21 @@ Email verified! You can close this tab or hit the back button.
         if (!_.isUndefined(req.p.help_type)) {
           fields.help_type = req.p.help_type;
         }
-        if (!_.isUndefined(req.p.socialbtn_type)) {
-          fields.socialbtn_type = req.p.socialbtn_type;
-        }
         if (!_.isUndefined(req.p.bgcolor)) {
           if (req.p.bgcolor === "default") {
             fields.bgcolor = null;
-          } else {
+          } else if (isValidColor(req.p.bgcolor)) {
             fields.bgcolor = req.p.bgcolor;
-          }
-        }
-        if (!_.isUndefined(req.p.help_color)) {
-          if (req.p.help_color === "default") {
-            fields.help_color = null;
           } else {
-            fields.help_color = req.p.help_color;
-          }
-        }
-        if (!_.isUndefined(req.p.help_bgcolor)) {
-          if (req.p.help_bgcolor === "default") {
-            fields.help_bgcolor = null;
-          } else {
-            fields.help_bgcolor = req.p.help_bgcolor;
+            throw new Error("polis_err_invalid_color_bgcolor");
           }
         }
         if (!_.isUndefined(req.p.style_btn)) {
-          fields.style_btn = req.p.style_btn;
+          if (isValidColor(req.p.style_btn)) {
+            fields.style_btn = req.p.style_btn;
+          } else {
+            throw new Error("polis_err_invalid_color_style_btn");
+          }
         }
         if (!_.isUndefined(req.p.write_type)) {
           fields.write_type = req.p.write_type;
@@ -6001,6 +5992,14 @@ Email verified! You can close this tab or hit the back button.
         }
         if (!_.isUndefined(req.p.link_url)) {
           fields.link_url = req.p.link_url;
+        }
+
+        if (!_.isUndefined(req.p.font_color)) {
+          if (isValidColor(req.p.font_color)) {
+            fields.font_color = req.p.font_color;
+          } else {
+            throw new Error("polis_err_invalid_color_font_color");
+          }
         }
 
         ifDefinedSet("subscribe_type", req.p, fields);
@@ -6082,7 +6081,11 @@ Email verified! You can close this tab or hit the back button.
         );
       })
       .catch(function (err: any) {
-        fail(res, 500, "polis_err_update_conversation", err);
+        if (err instanceof Error && err.message.startsWith("polis_err_invalid_color")) {
+          fail(res, 422, err.message, err);
+        } else {
+          fail(res, 500, "polis_err_update_conversation", err);
+        }
       });
   }
 
@@ -8758,14 +8761,15 @@ Thanks for using Polis!
           write_type: conv.write_type,
           importance_enabled: conv.importance_enabled,
           help_type: conv.help_type,
-          socialbtn_type: conv.socialbtn_type,
           bgcolor: conv.bgcolor,
-          help_color: conv.help_color,
-          help_bgcolor: conv.help_bgcolor,
           style_btn: conv.style_btn,
           auth_needed_to_vote: false,
           auth_needed_to_write: false,
           auth_opt_allow_3rdparty: auth_opt_allow_3rdparty,
+          font_color: conv.font_color,
+          font_title: conv.font_title,
+          font_serif: conv.font_serif,
+          font_sans: conv.font_sans,
         };
         conv.conversation_id = conversation_id;
         // conv = Object.assign({}, optionalResults, conv);
@@ -8871,7 +8875,6 @@ Thanks for using Polis!
     if (!_.isUndefined(req.p.bg_white)) {
       o.bgcolor = req.p.bg_white ? "#fff" : null;
     }
-    o.socialbtn_type = req.p.show_share ? 1 : 0;
     // Set stuff in cookies to be retrieved when POST participants is called.
     if (req.p.referrer) {
       setParentReferrerCookie(req, res, req.p.referrer);

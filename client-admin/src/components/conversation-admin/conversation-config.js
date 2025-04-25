@@ -22,11 +22,6 @@ class ConversationConfig extends React.Component {
   handleStringValueChange(field) {
     return () => {
       let val = this[field].value
-      if (field === 'help_bgcolor' || field === 'help_color') {
-        if (!val.length) {
-          val = 'default'
-        }
-      }
       this.props.dispatch(
         handleZidMetadataUpdate(this.props.zid_metadata, field, val)
       )
@@ -43,6 +38,15 @@ class ConversationConfig extends React.Component {
         )
       )
     }
+  }
+
+  maybeErrorMessage() {
+    let markup = ''
+    if (this.props.error) {
+      // TODO: Use strings() helper if available and appropriate for localization
+      markup = <Text sx={{ color: 'red', mt: 3 }}>{this.props.error.responseText || 'An unknown error occurred'}</Text>
+    }
+    return markup
   }
 
   render() {
@@ -180,61 +184,150 @@ class ConversationConfig extends React.Component {
         <CheckboxField field="strict_moderation">
           No comments shown without moderator approval
         </CheckboxField>
+
+        <Heading
+          as="h6"
+          sx={{
+            fontSize: [1, null, 2],
+            lineHeight: 'body',
+            my: [3, null, 4]
+          }}>
+          Theme
+        </Heading>
+        <Text sx={{ fontStyle: 'italic', color: 'gray', fontSize: 1, mb: 3 }}>
+          leave blank to use defaults
+        </Text>
+
+        <Box sx={{ mb: [3] }}>
+          <Text sx={{ display: 'block', mb: [2] }}>Background Color</Text>
+          <input
+            ref={(c) => (this.bgcolor = c)}
+            sx={{
+              display: 'block',
+              fontFamily: 'body',
+              fontSize: [2],
+              width: '35em',
+              borderRadius: 2,
+              padding: [2],
+              border: '1px solid',
+              borderColor: 'mediumGray'
+            }}
+            data-test-id="bgcolor"
+            onBlur={this.handleStringValueChange('bgcolor').bind(this)}
+            onChange={this.handleConfigInputTyping('bgcolor').bind(this)}
+            defaultValue={this.props.zid_metadata.bgcolor || 'white'}
+          />
+        </Box>
+
+        <Box sx={{ mb: [3] }}>
+          <Text sx={{ display: 'block', mb: [2] }}>Button Color</Text>
+          <input
+            ref={(c) => (this.style_btn = c)}
+            sx={{
+              display: 'block',
+              fontFamily: 'body',
+              fontSize: [2],
+              width: '35em',
+              borderRadius: 2,
+              padding: [2],
+              border: '1px solid',
+              borderColor: 'mediumGray'
+            }}
+            data-test-id="style_btn"
+            onBlur={this.handleStringValueChange('style_btn').bind(this)}
+            onChange={this.handleConfigInputTyping('style_btn').bind(this)}
+            defaultValue={this.props.zid_metadata.style_btn || '#0090ff'}
+          />
+        </Box>
+
+        <Box sx={{ mb: [3] }}>
+          <Text sx={{ display: 'block', mb: [2] }}>Font Color</Text>
+          <input
+            ref={(c) => (this.font_color = c)}
+            sx={{
+              display: 'block',
+              fontFamily: 'body',
+              fontSize: [2],
+              width: '35em',
+              borderRadius: 2,
+              padding: [2],
+              border: '1px solid',
+              borderColor: 'mediumGray'
+            }}
+            data-test-id="font_color"
+            onBlur={this.handleStringValueChange('font_color').bind(this)}
+            onChange={this.handleConfigInputTyping('font_color').bind(this)}
+            defaultValue={this.props.zid_metadata.font_color || 'rgb(0, 0, 0)'}
+          />
+        </Box>
+
+        <Box sx={{ mb: [3] }}>
+          <Text sx={{ display: 'block', mb: [2] }}>Title Font</Text>
+          <input
+            ref={(c) => (this.font_title = c)}
+            sx={{
+              display: 'block',
+              fontFamily: 'body',
+              fontSize: [2],
+              width: '35em',
+              borderRadius: 2,
+              padding: [2],
+              border: '1px solid',
+              borderColor: 'mediumGray'
+            }}
+            data-test-id="font_title"
+            onBlur={this.handleStringValueChange('font_title').bind(this)}
+            onChange={this.handleConfigInputTyping('font_title').bind(this)}
+            defaultValue={this.props.zid_metadata.font_title || 'Helvetica Neue'}
+          />
+        </Box>
+
+        <Box sx={{ mb: [3] }}>
+          <Text sx={{ display: 'block', mb: [2] }}>Sans Font</Text>
+          <input
+            ref={(c) => (this.font_sans = c)}
+            sx={{
+              display: 'block',
+              fontFamily: 'body',
+              fontSize: [2],
+              width: '35em',
+              borderRadius: 2,
+              padding: [2],
+              border: '1px solid',
+              borderColor: 'mediumGray'
+            }}
+            data-test-id="font_sans"
+            onBlur={this.handleStringValueChange('font_sans').bind(this)}
+            onChange={this.handleConfigInputTyping('font_sans').bind(this)}
+            defaultValue={this.props.zid_metadata.font_sans || 'Helvetica Neue'}
+          />
+        </Box>
+
+        <Box sx={{ mb: [3] }}>
+          <Text sx={{ display: 'block', mb: [2] }}>Serif Font</Text>
+          <input
+            ref={(c) => (this.font_serif = c)}
+            sx={{
+              display: 'block',
+              fontFamily: 'body',
+              fontSize: [2],
+              width: '35em',
+              borderRadius: 2,
+              padding: [2],
+              border: '1px solid',
+              borderColor: 'mediumGray'
+            }}
+            data-test-id="font_serif"
+            onBlur={this.handleStringValueChange('font_serif').bind(this)}
+            onChange={this.handleConfigInputTyping('font_serif').bind(this)}
+            defaultValue={this.props.zid_metadata.font_serif || 'chaparral-pro'}
+          />
+        </Box>
+
+        {this.maybeErrorMessage()}
       </Box>
     )
   }
 }
 
 export default ConversationConfig
-
-// checked={this.props.zid_metadata.is_data_open}
-// Comments, votes, and group data can be exported by any user
-
-/* <InputField
-            ref={"style_btn"}
-
-            style={{ width: 360 }}
-            onBlur={this.handleStringValueChange("style_btn").bind(this)}
-            hintText="ie., #e63082"
-            onChange={this.handleConfigInputTyping("style_btn")}
-            value={this.props.zid_metadata.style_btn}
-            floatingLabelText={
-              "Customize submit button color" + (canCustomizeColors ? "" : lockedIcon)
-            }
-            multiLine={true}
-          /> */
-
-/* <InputField
-            ref={"help_bgcolor"}
-
-            style={{ width: 360 }}
-            onBlur={this.handleStringValueChange("help_bgcolor").bind(this)}
-            onChange={this.handleConfigInputTyping("help_bgcolor")}
-            value={this.props.zid_metadata.help_bgcolor}
-            hintText="ie., #e63082"
-            floatingLabelText={
-              "Customize help text background" + (canCustomizeColors ? "" : lockedIcon)
-            }
-            multiLine={true}
-          /> */
-
-/* <InputField
-            ref={"help_color"}
-
-            style={{ width: 360 }}
-            onBlur={this.handleStringValueChange("help_color").bind(this)}
-            onChange={this.handleConfigInputTyping("help_color")}
-            value={this.props.zid_metadata.help_color}
-            hintText="ie., #e63082"
-            floatingLabelText={"Customize help text color" + (canCustomizeColors ? "" : lockedIcon)}
-            multiLine={true}
-          /> */
-
-/* <Checkbox
-            label="Social sharing buttons"
-            ref={"socialbtn_type"}
-            checked={this.props.zid_metadata.socialbtn_type === 1 ? true : false}
-            onCheck={this.handleIntegerBoolValueChange("socialbtn_type").bind(this)}
-
-
-          /> */

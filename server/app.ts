@@ -980,10 +980,7 @@ helpersInitialized.then(
       want("vis_type", getInt, assignToP),
       want("help_type", getInt, assignToP),
       want("write_type", getInt, assignToP),
-      want("socialbtn_type", getInt, assignToP),
       want("bgcolor", getOptionalStringLimitLength(20), assignToP),
-      want("help_color", getOptionalStringLimitLength(20), assignToP),
-      want("help_bgcolor", getOptionalStringLimitLength(20), assignToP),
       want("style_btn", getOptionalStringLimitLength(500), assignToP),
       want("auth_needed_to_vote", getBool, assignToP),
       want("auth_needed_to_write", getBool, assignToP),
@@ -993,6 +990,10 @@ helpersInitialized.then(
       want("context", getOptionalStringLimitLength(999), assignToP),
       want("link_url", getStringLimitLength(1, 9999), assignToP),
       want("subscribe_type", getInt, assignToP),
+      want("font_color", getOptionalStringLimitLength(20), assignToP),
+      want("font_title", getOptionalStringLimitLength(256), assignToP),
+      want("font_serif", getOptionalStringLimitLength(256), assignToP),
+      want("font_sans", getOptionalStringLimitLength(256), assignToP),
       handle_PUT_conversations
     );
 
