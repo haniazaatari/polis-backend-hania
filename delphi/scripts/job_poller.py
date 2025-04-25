@@ -2,7 +2,7 @@
 """
 Delphi Job Poller Service
 
-This script runs as a daemon to poll the DelphiJobQueue for pending jobs
+This script runs as a daemon to poll the Delphi_JobQueue for pending jobs
 and execute them using run_delphi.sh.
 
 Usage:
@@ -39,7 +39,7 @@ logger = logging.getLogger('delphi_poller')
 running = True
 
 class JobProcessor:
-    """Process jobs from the DelphiJobQueue."""
+    """Process jobs from the Delphi_JobQueue."""
     
     def __init__(self, endpoint_url=None, region='us-west-2'):
         """Initialize the job processor."""
@@ -57,14 +57,14 @@ class JobProcessor:
         self.dynamodb = boto3.resource('dynamodb', 
                                      endpoint_url=self.endpoint_url, 
                                      region_name=self.region)
-        self.table = self.dynamodb.Table('DelphiJobQueue')
+        self.table = self.dynamodb.Table('Delphi_JobQueue')
         
         # Ensure we can connect to the table
         try:
             self.table.table_status
-            logger.info("Successfully connected to DelphiJobQueue table")
+            logger.info("Successfully connected to Delphi_JobQueue table")
         except Exception as e:
-            logger.error(f"Failed to connect to DelphiJobQueue table: {e}")
+            logger.error(f"Failed to connect to Delphi_JobQueue table: {e}")
             raise
     
     def find_pending_job(self):

@@ -404,13 +404,13 @@ class DynamoDBStorage:
         
         # Define table names
         self.table_names = {
-            'conversation_meta': 'ConversationMeta',
-            'comment_embeddings': 'CommentEmbeddings',
-            'comment_clusters': 'CommentClusters',
-            'cluster_topics': 'ClusterTopics',
-            'umap_graph': 'UMAPGraph',
-            'cluster_characteristics': 'ClusterCharacteristics',
-            'llm_topic_names': 'LLMTopicNames'
+            'conversation_meta': 'Delphi_UMAPConversationConfig',
+            'comment_embeddings': 'Delphi_CommentEmbeddings',
+            'comment_clusters': 'Delphi_CommentHierarchicalClusterAssignments',
+            'cluster_topics': 'Delphi_CommentClustersStructureKeywords',
+            'umap_graph': 'Delphi_UMAPGraph',
+            'cluster_characteristics': 'Delphi_CommentClustersFeatures',
+            'llm_topic_names': 'Delphi_CommentClustersLLMTopicNames'
             # Note: CommentTexts table is intentionally excluded
             # Comment texts are stored in PostgreSQL as the single source of truth
         }

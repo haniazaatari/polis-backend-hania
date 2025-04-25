@@ -41,7 +41,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
     # Define table schemas for Polis math
     tables = {
         # Main conversation metadata table
-        'PolisMathConversations': {
+        'Delphi_PCAConversationConfig': {
             'KeySchema': [
                 {'AttributeName': 'zid', 'KeyType': 'HASH'}
             ],
@@ -54,7 +54,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
             }
         },
         # PCA and cluster data
-        'PolisMathAnalysis': {
+        'Delphi_PCAResults': {
             'KeySchema': [
                 {'AttributeName': 'zid', 'KeyType': 'HASH'},
                 {'AttributeName': 'math_tick', 'KeyType': 'RANGE'}
@@ -69,7 +69,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
             }
         },
         # Group data
-        'PolisMathGroups': {
+        'Delphi_KMeansClusters': {
             'KeySchema': [
                 {'AttributeName': 'zid_tick', 'KeyType': 'HASH'},
                 {'AttributeName': 'group_id', 'KeyType': 'RANGE'}
@@ -84,7 +84,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
             }
         },
         # Comment data with priorities
-        'PolisMathComments': {
+        'Delphi_CommentRouting': {
             'KeySchema': [
                 {'AttributeName': 'zid_tick', 'KeyType': 'HASH'},
                 {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
@@ -99,7 +99,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
             }
         },
         # Representativeness data
-        'PolisMathRepness': {
+        'Delphi_RepresentativeComments': {
             'KeySchema': [
                 {'AttributeName': 'zid_tick_gid', 'KeyType': 'HASH'},
                 {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
@@ -114,7 +114,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
             }
         },
         # Participant projection data
-        'PolisMathProjections': {
+        'Delphi_PCAParticipantProjections': {
             'KeySchema': [
                 {'AttributeName': 'zid_tick', 'KeyType': 'HASH'},
                 {'AttributeName': 'participant_id', 'KeyType': 'RANGE'}
@@ -154,7 +154,7 @@ def create_job_queue_table(dynamodb, delete_existing=False):
     
     # Define table schema for job queue - Redesigned with job_id as partition key
     tables = {
-        'DelphiJobQueue': {
+        'Delphi_JobQueue': {
             'KeySchema': [
                 {'AttributeName': 'job_id', 'KeyType': 'HASH'}   # Partition key
             ],
@@ -234,7 +234,7 @@ def create_evoc_tables(dynamodb, delete_existing=False):
     # Define table schemas for EVōC
     tables = {
         # Report table
-        'report_narrative_store': {
+        'Delphi_NarrativeReports': {
             'KeySchema': [
                 {'AttributeName': 'rid_section_model', 'KeyType': 'HASH'},
                 {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
@@ -249,7 +249,7 @@ def create_evoc_tables(dynamodb, delete_existing=False):
             }
         },
         # Core tables
-        'ConversationMeta': {
+        'Delphi_UMAPConversationConfig': {
             'KeySchema': [
                 {'AttributeName': 'conversation_id', 'KeyType': 'HASH'}
             ],
@@ -261,7 +261,7 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                 'WriteCapacityUnits': 5
             }
         },
-        'CommentEmbeddings': {
+        'Delphi_CommentEmbeddings': {
             'KeySchema': [
                 {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                 {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
@@ -275,7 +275,7 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                 'WriteCapacityUnits': 5
             }
         },
-        'CommentClusters': {
+        'Delphi_CommentHierarchicalClusterAssignments': {
             'KeySchema': [
                 {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                 {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
@@ -289,7 +289,7 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                 'WriteCapacityUnits': 5
             }
         },
-        'ClusterTopics': {
+        'Delphi_CommentClustersStructureKeywords': {
             'KeySchema': [
                 {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                 {'AttributeName': 'cluster_key', 'KeyType': 'RANGE'}
@@ -303,7 +303,7 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                 'WriteCapacityUnits': 5
             }
         },
-        'UMAPGraph': {
+        'Delphi_UMAPGraph': {
             'KeySchema': [
                 {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                 {'AttributeName': 'edge_id', 'KeyType': 'RANGE'}
@@ -319,7 +319,7 @@ def create_evoc_tables(dynamodb, delete_existing=False):
         },
         
         # Extended tables
-        'ClusterCharacteristics': {
+        'Delphi_CommentClustersFeatures': {
             'KeySchema': [
                 {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                 {'AttributeName': 'cluster_key', 'KeyType': 'RANGE'}
@@ -333,7 +333,7 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                 'WriteCapacityUnits': 5
             }
         },
-        'LLMTopicNames': {
+        'Delphi_CommentClustersLLMTopicNames': {
             'KeySchema': [
                 {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                 {'AttributeName': 'topic_key', 'KeyType': 'RANGE'}

@@ -65,7 +65,7 @@ def setup_dynamodb(endpoint_url=None, region='us-west-2'):
 
 def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50, max_votes=None, batch_size=None):
     """Submit a job to the Delphi job queue."""
-    table = dynamodb.Table('DelphiJobQueue')
+    table = dynamodb.Table('Delphi_JobQueue')
     
     # Generate a unique job ID
     job_id = str(uuid.uuid4())
@@ -149,7 +149,7 @@ def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50, max_votes=N
 
 def list_jobs(dynamodb, status=None, limit=10):
     """List jobs in the Delphi job queue."""
-    table = dynamodb.Table('DelphiJobQueue')
+    table = dynamodb.Table('Delphi_JobQueue')
     
     if status:
         # Query for jobs with specific status using the StatusCreatedIndex
@@ -209,7 +209,7 @@ def display_jobs(jobs):
 
 def get_job_details(dynamodb, job_id):
     """Get detailed information about a specific job."""
-    table = dynamodb.Table('DelphiJobQueue')
+    table = dynamodb.Table('Delphi_JobQueue')
     
     # Direct lookup by job_id (now the primary key)
     response = table.get_item(
@@ -405,9 +405,9 @@ def interactive_mode():
 
 def get_conversation_status(dynamodb, zid):
     """Get detailed information about a conversation run."""
-    # 1. Check ConversationMeta table
-    conversation_meta_table = dynamodb.Table('ConversationMeta')
-    topic_names_table = dynamodb.Table('LLMTopicNames')
+    # 1. Check Delphi_UMAPConversationConfig table (formerly ConversationMeta)
+    conversation_meta_table = dynamodb.Table('Delphi_UMAPConversationConfig')
+    topic_names_table = dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
     
     try:
         # Query with conversation_id schema
@@ -418,7 +418,7 @@ def get_conversation_status(dynamodb, zid):
         )
         
         if 'Item' not in meta_response:
-            return None, f"Conversation {zid} not found in ConversationMeta table."
+            return None, f"Conversation {zid} not found in Delphi_UMAPConversationConfig table."
         
         meta_data = meta_response['Item']
         
@@ -432,7 +432,7 @@ def get_conversation_status(dynamodb, zid):
         topics_items = topics_response.get('Items', [])
         
         # Get the most recent job for this conversation from DelphiJobQueue
-        job_table = dynamodb.Table('DelphiJobQueue')
+        job_table = dynamodb.Table('Delphi_JobQueue')
         job_response = job_table.scan(
             FilterExpression='conversation_id = :cid',
             ExpressionAttributeValues={

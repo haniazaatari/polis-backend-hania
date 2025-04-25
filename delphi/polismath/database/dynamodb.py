@@ -78,7 +78,7 @@ class DynamoDBClient:
         # Define table schemas
         table_schemas = {
             # Main conversation metadata table
-            'PolisMathConversations': {
+            'Delphi_PCAConversationConfig': {
                 'KeySchema': [
                     {'AttributeName': 'zid', 'KeyType': 'HASH'}
                 ],
@@ -91,7 +91,7 @@ class DynamoDBClient:
                 }
             },
             # PCA and cluster data
-            'PolisMathAnalysis': {
+            'Delphi_PCAResults': {
                 'KeySchema': [
                     {'AttributeName': 'zid', 'KeyType': 'HASH'},
                     {'AttributeName': 'math_tick', 'KeyType': 'RANGE'}
@@ -106,7 +106,7 @@ class DynamoDBClient:
                 }
             },
             # Group data
-            'PolisMathGroups': {
+            'Delphi_KMeansClusters': {
                 'KeySchema': [
                     {'AttributeName': 'zid_tick', 'KeyType': 'HASH'},
                     {'AttributeName': 'group_id', 'KeyType': 'RANGE'}
@@ -121,7 +121,7 @@ class DynamoDBClient:
                 }
             },
             # Comment data with priorities
-            'PolisMathComments': {
+            'Delphi_CommentRouting': {
                 'KeySchema': [
                     {'AttributeName': 'zid_tick', 'KeyType': 'HASH'},
                     {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
@@ -136,7 +136,7 @@ class DynamoDBClient:
                 }
             },
             # Representativeness data
-            'PolisMathRepness': {
+            'Delphi_RepresentativeComments': {
                 'KeySchema': [
                     {'AttributeName': 'zid_tick_gid', 'KeyType': 'HASH'},
                     {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
@@ -151,7 +151,7 @@ class DynamoDBClient:
                 }
             },
             # Participant projection data
-            'PolisMathProjections': {
+            'Delphi_PCAParticipantProjections': {
                 'KeySchema': [
                     {'AttributeName': 'zid_tick', 'KeyType': 'HASH'},
                     {'AttributeName': 'participant_id', 'KeyType': 'RANGE'}
@@ -261,8 +261,8 @@ class DynamoDBClient:
             # Create composite ID for related tables
             zid_tick = f"{zid}:{math_tick}"
             
-            # 1. Write to PolisMathConversations table
-            conversations_table = self.tables.get('PolisMathConversations')
+            # 1. Write to Delphi_PCAConversationConfig table
+            conversations_table = self.tables.get('Delphi_PCAConversationConfig')
             if conversations_table:
                 if dynamo_data:
                     # Use pre-formatted data
@@ -286,10 +286,10 @@ class DynamoDBClient:
                     })
                 logger.info(f"Written conversation metadata for {zid}")
             else:
-                logger.warning("PolisMathConversations table not available")
+                logger.warning("Delphi_PCAConversationConfig table not available")
             
-            # 2. Write to PolisMathAnalysis table
-            analysis_table = self.tables.get('PolisMathAnalysis')
+            # 2. Write to Delphi_PCAResults table
+            analysis_table = self.tables.get('Delphi_PCAResults')
             if analysis_table:
                 if dynamo_data:
                     # Use pre-formatted data
@@ -331,10 +331,10 @@ class DynamoDBClient:
                     })
                 logger.info(f"Written analysis data for {zid}")
             else:
-                logger.warning("PolisMathAnalysis table not available")
+                logger.warning("Delphi_PCAResults table not available")
             
-            # 3. Write to PolisMathGroups table
-            groups_table = self.tables.get('PolisMathGroups')
+            # 3. Write to Delphi_KMeansClusters table
+            groups_table = self.tables.get('Delphi_KMeansClusters')
             if groups_table:
                 if dynamo_data and 'group_clusters' in dynamo_data:
                     # Use pre-formatted data with Python-native keys
@@ -372,10 +372,10 @@ class DynamoDBClient:
                             })
                 logger.info(f"Written group data for {zid}")
             else:
-                logger.warning("PolisMathGroups table not available or no group data")
+                logger.warning("Delphi_KMeansClusters table not available or no group data")
             
-            # 4. Write to PolisMathComments table
-            comments_table = self.tables.get('PolisMathComments')
+            # 4. Write to Delphi_CommentRouting table
+            comments_table = self.tables.get('Delphi_CommentRouting')
             if comments_table:
                 if dynamo_data and 'votes_base' in dynamo_data:
                     # Use pre-formatted data with Python-native keys
@@ -426,10 +426,10 @@ class DynamoDBClient:
                             })
                 logger.info(f"Written comment data for {zid}")
             else:
-                logger.warning("PolisMathComments table not available")
+                logger.warning("Delphi_CommentRouting table not available")
             
-            # 5. Write to PolisMathRepness table
-            repness_table = self.tables.get('PolisMathRepness')
+            # 5. Write to Delphi_RepresentativeComments table
+            repness_table = self.tables.get('Delphi_RepresentativeComments')
             if repness_table:
                 if dynamo_data and 'repness' in dynamo_data and 'comment_repness' in dynamo_data['repness']:
                     # Use pre-formatted data with Python-native keys
@@ -469,10 +469,10 @@ class DynamoDBClient:
                             })
                 logger.info(f"Written representativeness data for {zid}")
             else:
-                logger.warning("PolisMathRepness table not available or no repness data")
+                logger.warning("Delphi_RepresentativeComments table not available or no repness data")
             
-            # 6. Write to PolisMathProjections table (most time-consuming for large conversations)
-            projections_table = self.tables.get('PolisMathProjections')
+            # 6. Write to Delphi_PCAParticipantProjections table (most time-consuming for large conversations)
+            projections_table = self.tables.get('Delphi_PCAParticipantProjections')
             if projections_table and hasattr(conv, 'proj'):
                 logger.info(f"Writing projection data for {len(conv.proj)} participants...")
                 
@@ -544,7 +544,7 @@ class DynamoDBClient:
                 
                 logger.info(f"Written projection data for {zid}")
             else:
-                logger.warning("PolisMathProjections table not available or no projection data")
+                logger.warning("Delphi_PCAParticipantProjections table not available or no projection data")
             
             logger.info(f"Successfully written conversation data for {zid}")
             return True
@@ -575,9 +575,9 @@ class DynamoDBClient:
             logger.info(f"Writing projections separately for large conversation {zid}")
             
             # Get the latest math tick from the database
-            conversations_table = self.tables.get('PolisMathConversations')
+            conversations_table = self.tables.get('Delphi_PCAConversationConfig')
             if not conversations_table:
-                logger.error(f"PolisMathConversations table not available")
+                logger.error(f"Delphi_PCAConversationConfig table not available")
                 return False
                 
             # Look up the math tick that was used for the other tables
@@ -595,9 +595,9 @@ class DynamoDBClient:
             zid_tick = f"{zid}:{math_tick}"
             
             # Check if projections table exists
-            projections_table = self.tables.get('PolisMathProjections')
+            projections_table = self.tables.get('Delphi_PCAParticipantProjections')
             if not projections_table:
-                logger.error(f"PolisMathProjections table not available")
+                logger.error(f"Delphi_PCAParticipantProjections table not available")
                 return False
                 
             # Create a mapping of participants to their groups
@@ -728,9 +728,9 @@ class DynamoDBClient:
             Conversation metadata
         """
         try:
-            conversations_table = self.tables.get('PolisMathConversations')
+            conversations_table = self.tables.get('Delphi_PCAConversationConfig')
             if not conversations_table:
-                logger.warning("PolisMathConversations table not available")
+                logger.warning("Delphi_PCAConversationConfig table not available")
                 return {}
             
             response = conversations_table.get_item(Key={'zid': str(zid)})
@@ -795,7 +795,7 @@ class DynamoDBClient:
             }
             
             # 1. Get analysis data
-            analysis_table = self.tables.get('PolisMathAnalysis')
+            analysis_table = self.tables.get('Delphi_PCAResults')
             if analysis_table:
                 response = analysis_table.get_item(Key={'zid': zid, 'math_tick': math_tick})
                 if 'Item' in response:
@@ -814,7 +814,7 @@ class DynamoDBClient:
                     result['consensus'] = analysis.get('consensus_comments', [])
             
             # 2. Get groups data
-            groups_table = self.tables.get('PolisMathGroups')
+            groups_table = self.tables.get('Delphi_KMeansClusters')
             if groups_table:
                 response = groups_table.query(
                     KeyConditionExpression='zid_tick = :zid_tick',
@@ -830,7 +830,7 @@ class DynamoDBClient:
                         })
             
             # 3. Get comment data
-            comments_table = self.tables.get('PolisMathComments')
+            comments_table = self.tables.get('Delphi_CommentRouting')
             if comments_table:
                 response = comments_table.query(
                     KeyConditionExpression='zid_tick = :zid_tick',
@@ -844,7 +844,7 @@ class DynamoDBClient:
                         result['comment_priorities'][comment_id] = comment.get('priority', 0)
             
             # 4. Get representativeness data
-            repness_table = self.tables.get('PolisMathRepness')
+            repness_table = self.tables.get('Delphi_RepresentativeComments')
             if repness_table:
                 # Query for each group
                 for group in result['group_clusters']:
@@ -865,7 +865,7 @@ class DynamoDBClient:
                             })
             
             # 5. Get projection data
-            projections_table = self.tables.get('PolisMathProjections')
+            projections_table = self.tables.get('Delphi_PCAParticipantProjections')
             if projections_table:
                 response = projections_table.query(
                     KeyConditionExpression='zid_tick = :zid_tick',

@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 class ReportStorageService:
     """Storage service for report data in DynamoDB."""
     
-    def __init__(self, table_name="report_narrative_store", disable_cache=False):
+    def __init__(self, table_name="Delphi_NarrativeReports", disable_cache=False):
         """Initialize the report storage service.
         
         Args:
@@ -956,7 +956,7 @@ class ReportGenerator:
                 logger.info(f"Processing specific cluster {self.cluster_id} for conversation {self.conversation_id}")
                 
                 # Get comment IDs for this specific cluster
-                clusters_table = dynamo_storage.dynamodb.Table('CommentClusters')
+                clusters_table = dynamo_storage.dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
                 response = clusters_table.scan(
                     FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(self.conversation_id) &
                                      boto3.dynamodb.conditions.Attr('layer0_cluster_id').eq(int(self.cluster_id))
@@ -970,7 +970,7 @@ class ReportGenerator:
                         comment_ids.append(int(comment_id))
                 
                 # Get cluster topic information from ClusterTopics
-                cluster_table = dynamo_storage.dynamodb.Table('ClusterTopics')
+                cluster_table = dynamo_storage.dynamodb.Table('Delphi_CommentClustersStructureKeywords')
                 cluster_key = f'layer0_{self.cluster_id}'
                 cluster_response = cluster_table.query(
                     KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id) &
@@ -989,8 +989,8 @@ class ReportGenerator:
                         else:
                             topic_label = str(cluster_item['topic_label'])
                     
-                    # Look up a more descriptive name in LLMTopicNames if available
-                    llm_table = dynamo_storage.dynamodb.Table('LLMTopicNames')
+                    # Look up a more descriptive name in Delphi_CommentClustersLLMTopicNames if available
+                    llm_table = dynamo_storage.dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
                     logger.info(f"Looking for topic name for cluster {self.cluster_id} in layer 0")
                     
                     # Use scan instead of query with filter expression
@@ -1044,7 +1044,7 @@ class ReportGenerator:
             
             # Standard topic processing when no specific cluster ID is provided
             # Get all LLMTopicNames entries for layer 0
-            table = dynamo_storage.dynamodb.Table('LLMTopicNames')
+            table = dynamo_storage.dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
             response = table.scan(
                 FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(self.conversation_id) &
                                  boto3.dynamodb.conditions.Attr('layer_id').eq(0)
@@ -1054,7 +1054,7 @@ class ReportGenerator:
             logger.info(f"Found {len(topic_names_items)} layer 0 topic names in LLMTopicNames")
             
             # Get all comment clusters
-            clusters_table = dynamo_storage.dynamodb.Table('CommentClusters')
+            clusters_table = dynamo_storage.dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
             response = clusters_table.scan(
                 FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(self.conversation_id)
             )
@@ -1084,7 +1084,7 @@ class ReportGenerator:
                 if cluster_id is not None:
                     # Try to get sample comments for this topic
                     sample_comments = []
-                    cluster_response = dynamo_storage.dynamodb.Table('ClusterTopics').query(
+                    cluster_response = dynamo_storage.dynamodb.Table('Delphi_CommentClustersStructureKeywords').query(
                         KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id) &
                                              boto3.dynamodb.conditions.Key('cluster_key').eq(f'layer0_{cluster_id}')
                     )
@@ -1665,11 +1665,11 @@ async def process_all_layer0_clusters(conversation_id, model, no_cache=False, on
         error_count = sum(1 for status in report_status.values() if status['status'] == 'error')
         logger.info(f"Valid reports: {valid_count}, Error reports: {error_count}")
     
-    # Query LLMTopicNames to get all layer 0 topics
+    # Query Delphi_CommentClustersLLMTopicNames to get all layer 0 topics
     logger.info(f"Getting all layer 0 topics for conversation {conversation_id}")
     
     try:
-        table = dynamo_storage.dynamodb.Table('LLMTopicNames')
+        table = dynamo_storage.dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
         response = table.scan(
             FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(conversation_id) & 
                              boto3.dynamodb.conditions.Attr('layer_id').eq(0)
