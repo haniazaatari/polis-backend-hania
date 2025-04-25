@@ -95,6 +95,61 @@ if [ "$SERVICE_FROM_FILE" == "server" ]; then
 elif [ "$SERVICE_FROM_FILE" == "math" ]; then
   echo "Starting docker-compose up for 'math' service"
   /usr/local/bin/docker-compose up -d math --build --force-recreate
+elif [ "$SERVICE_FROM_FILE" == "delphi" ]; then
+  echo "Starting docker-compose up for 'delphi' service"
+  
+  # Check if instance size file exists
+  if [ -f "/tmp/instance_size.txt" ]; then
+    INSTANCE_SIZE=$(cat /tmp/instance_size.txt)
+    echo "Instance size detected: $INSTANCE_SIZE"
+    
+    # Set environment variables based on instance size
+    if [ "$INSTANCE_SIZE" == "small" ]; then
+      echo "Configuring delphi for small instance"
+      export DELPHI_INSTANCE_TYPE="small"
+      export DELPHI_MAX_WORKERS=3
+      export DELPHI_WORKER_MEMORY="2g"
+      export DELPHI_CONTAINER_MEMORY="8g"
+      export DELPHI_CONTAINER_CPUS="2"
+    elif [ "$INSTANCE_SIZE" == "large" ]; then
+      echo "Configuring delphi for large instance"
+      export DELPHI_INSTANCE_TYPE="large"
+      export DELPHI_MAX_WORKERS=8
+      export DELPHI_WORKER_MEMORY="8g"
+      export DELPHI_CONTAINER_MEMORY="32g"
+      export DELPHI_CONTAINER_CPUS="8"
+    else
+      echo "Unknown instance size: $INSTANCE_SIZE, using default configuration"
+      export DELPHI_INSTANCE_TYPE="default"
+      export DELPHI_MAX_WORKERS=2
+      export DELPHI_WORKER_MEMORY="1g"
+      export DELPHI_CONTAINER_MEMORY="4g"
+      export DELPHI_CONTAINER_CPUS="1"
+    fi
+    
+    # Add environment variables to .env file
+    echo "DELPHI_INSTANCE_TYPE=$DELPHI_INSTANCE_TYPE" >> .env
+    echo "DELPHI_MAX_WORKERS=$DELPHI_MAX_WORKERS" >> .env
+    echo "DELPHI_WORKER_MEMORY=$DELPHI_WORKER_MEMORY" >> .env
+    echo "DELPHI_CONTAINER_MEMORY=$DELPHI_CONTAINER_MEMORY" >> .env
+    echo "DELPHI_CONTAINER_CPUS=$DELPHI_CONTAINER_CPUS" >> .env
+  else
+    echo "Instance size file not found, using default configuration"
+    export DELPHI_INSTANCE_TYPE="default"
+    export DELPHI_MAX_WORKERS=2
+    export DELPHI_WORKER_MEMORY="1g"
+    export DELPHI_CONTAINER_MEMORY="4g"
+    export DELPHI_CONTAINER_CPUS="1"
+    
+    echo "DELPHI_INSTANCE_TYPE=$DELPHI_INSTANCE_TYPE" >> .env
+    echo "DELPHI_MAX_WORKERS=$DELPHI_MAX_WORKERS" >> .env
+    echo "DELPHI_WORKER_MEMORY=$DELPHI_WORKER_MEMORY" >> .env
+    echo "DELPHI_CONTAINER_MEMORY=$DELPHI_CONTAINER_MEMORY" >> .env
+    echo "DELPHI_CONTAINER_CPUS=$DELPHI_CONTAINER_CPUS" >> .env
+  fi
+  
+  # Start delphi service
+  /usr/local/bin/docker-compose up -d delphi --build --force-recreate
 else
   echo "Error: Unknown service type: [$SERVICE_FROM_FILE]. Starting all services (default docker-compose up -d)"
   /usr/local/bin/docker-compose up -d --build --force-recreate # Fallback

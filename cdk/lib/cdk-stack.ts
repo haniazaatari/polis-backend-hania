@@ -23,6 +23,8 @@ interface PolisStackProps extends cdk.StackProps {
   sshAllowedIpRange?: string; // Add a property for SSH access control
   webKeyPairName?: string;    // Key pair for web instances
   mathWorkerKeyPairName?: string; // Key pair for math worker
+  delphiSmallKeyPairName?: string; // Key pair for small Delphi instances
+  delphiLargeKeyPairName?: string; // Key pair for large Delphi instance
 }
 
 export class CdkStack extends cdk.Stack {
@@ -63,6 +65,19 @@ export class CdkStack extends cdk.Stack {
       generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023,
       cpuType: ec2.AmazonLinuxCpuType.ARM_64,
     });
+    
+    // Delphi small instance (cost efficient)
+    const instanceTypeDelphiSmall = ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE);
+    const machineImageDelphiSmall = new ec2.AmazonLinuxImage({ 
+      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023 
+    });
+    
+    // Delphi large instance (performance optimized)
+    const instanceTypeDelphiLarge = ec2.InstanceType.of(ec2.InstanceClass.C6G, ec2.InstanceSize.XLARGE4);
+    const machineImageDelphiLarge = new ec2.AmazonLinuxImage({
+      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023,
+      cpuType: ec2.AmazonLinuxCpuType.ARM_64
+    });
 
     const webSecurityGroup = new ec2.SecurityGroup(this, 'WebSecurityGroup', {
       vpc,
@@ -76,9 +91,16 @@ export class CdkStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
+    const delphiSecurityGroup = new ec2.SecurityGroup(this, 'DelphiSecurityGroup', {
+      vpc,
+      description: 'Security group for Delphi worker instances',
+      allowAllOutbound: true,
+    });
+
     if (props.enableSSHAccess) {
       webSecurityGroup.addIngressRule(ec2.Peer.ipv4(props.sshAllowedIpRange || defaultSSHRange), ec2.Port.tcp(22), 'Allow SSH access');
       mathWorkerSecurityGroup.addIngressRule(ec2.Peer.ipv4(props.sshAllowedIpRange || defaultSSHRange), ec2.Port.tcp(22), 'Allow SSH access');
+      delphiSecurityGroup.addIngressRule(ec2.Peer.ipv4(props.sshAllowedIpRange || defaultSSHRange), ec2.Port.tcp(22), 'Allow SSH access');
     }
 
     // Key Pair Creation
@@ -94,6 +116,20 @@ export class CdkStack extends cdk.Stack {
         mathWorkerKeyPair = props.mathWorkerKeyPairName
         ? ec2.KeyPair.fromKeyPairName(this, 'MathWorkerKeyPair', props.mathWorkerKeyPairName)
         : new ec2.KeyPair(this, 'MathWorkerKeyPair');
+      }
+
+    let delphiSmallKeyPair: ec2.IKeyPair | undefined;
+      if (props.enableSSHAccess) {
+        delphiSmallKeyPair = props.delphiSmallKeyPairName
+        ? ec2.KeyPair.fromKeyPairName(this, 'DelphiSmallKeyPair', props.delphiSmallKeyPairName)
+        : new ec2.KeyPair(this, 'DelphiSmallKeyPair');
+      }
+
+    let delphiLargeKeyPair: ec2.IKeyPair | undefined;
+      if (props.enableSSHAccess) {
+        delphiLargeKeyPair = props.delphiLargeKeyPairName
+        ? ec2.KeyPair.fromKeyPairName(this, 'DelphiLargeKeyPair', props.delphiLargeKeyPairName)
+        : new ec2.KeyPair(this, 'DelphiLargeKeyPair');
       }
 
     const instanceRole = new iam.Role(this, 'InstanceRole', {
@@ -164,8 +200,26 @@ export class CdkStack extends cdk.Stack {
       ],
     }));
 
+    const ecrDelphiRepository = new ecr.Repository(this, 'PolisRepositoryDelphi', {
+      repositoryName: 'polis/delphi',
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      imageScanOnPush: true,
+    });
+
+    ecrDelphiRepository.addToResourcePolicy(new iam.PolicyStatement({
+      sid: 'AllowPublicPull',
+      effect: iam.Effect.ALLOW,
+      principals: [new iam.AnyPrincipal()],
+      actions: [
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage",
+      ],
+    }));
+
     ecrWebRepository.grantPull(instanceRole);
     ecrMathRepository.grantPull(instanceRole);
+    ecrDelphiRepository.grantPull(instanceRole);
 
     const imageTagParameter = new ssm.StringParameter(this, 'ImageTagParameter', {
       parameterName: '/polis/image-tag',
@@ -222,7 +276,7 @@ export class CdkStack extends cdk.Stack {
       description: 'SSM Parameter storing the Polis Database Port',
     });
 
-    const usrdata = (CLOUDWATCH_LOG_GROUP_NAME: string, service: string) => {
+    const usrdata = (CLOUDWATCH_LOG_GROUP_NAME: string, service: string, instanceSize?: string) => {
       let ld;
       ld = ec2.UserData.forLinux();
       ld.addCommands(
@@ -232,6 +286,10 @@ export class CdkStack extends cdk.Stack {
         `echo "Writing service type '${service}' to /tmp/service_type.txt"`,
         `echo "${service}" > /tmp/service_type.txt`,
         `echo "Contents of /tmp/service_type.txt: $(cat /tmp/service_type.txt)"`,
+        // If instanceSize is provided, write it to a file
+        instanceSize ? `echo "Writing instance size '${instanceSize}' to /tmp/instance_size.txt"` : '',
+        instanceSize ? `echo "${instanceSize}" > /tmp/instance_size.txt` : '',
+        instanceSize ? `echo "Contents of /tmp/instance_size.txt: $(cat /tmp/instance_size.txt)"` : '',
         'sudo yum update -y',
         'sudo yum install -y amazon-cloudwatch-agent -y',
         'sudo dnf install -y wget ruby docker',
@@ -243,6 +301,7 @@ export class CdkStack extends cdk.Stack {
         'docker-compose --version', // Verify installation
         'sudo yum install -y jq',
         `export SERVICE=${service}`,
+        instanceSize ? `export INSTANCE_SIZE=${instanceSize}` : '',
         'exec 1>>/var/log/user-data.log 2>&1',
         'echo "Finished User Data Execution at $(date)"',
         'sudo mkdir -p /etc/docker', // Ensure /etc/docker directory exists
@@ -278,6 +337,24 @@ EOF`,
       instanceType: instanceTypeMathWorker,
       securityGroup: mathWorkerSecurityGroup,
       keyPair: props.enableSSHAccess ? mathWorkerKeyPair : undefined,
+      role: instanceRole,
+    });
+    
+    const delphiSmallLaunchTemplate = new ec2.LaunchTemplate(this, 'DelphiSmallLaunchTemplate', {
+      machineImage: machineImageDelphiSmall,
+      userData: usrdata(logGroup.logGroupName, "delphi", "small"),
+      instanceType: instanceTypeDelphiSmall,
+      securityGroup: delphiSecurityGroup,
+      keyPair: props.enableSSHAccess ? delphiSmallKeyPair : undefined,
+      role: instanceRole,
+    });
+    
+    const delphiLargeLaunchTemplate = new ec2.LaunchTemplate(this, 'DelphiLargeLaunchTemplate', {
+      machineImage: machineImageDelphiLarge,
+      userData: usrdata(logGroup.logGroupName, "delphi", "large"),
+      instanceType: instanceTypeDelphiLarge,
+      securityGroup: delphiSecurityGroup,
+      keyPair: props.enableSSHAccess ? delphiLargeKeyPair : undefined,
       role: instanceRole,
     });
 
@@ -318,6 +395,94 @@ EOF`,
       targetValue: 50,  // Target 50% CPU utilization
       disableScaleIn: true, // unneeded hosts will be disabled manualy
     });
+    
+    // Delphi Small Instance Auto Scaling Group
+    const asgDelphiSmall = new autoscaling.AutoScalingGroup(this, 'AsgDelphiSmall', {
+      vpc,
+      launchTemplate: delphiSmallLaunchTemplate,
+      minCapacity: 1,
+      desiredCapacity: 2,
+      maxCapacity: 5,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
+      healthCheck: autoscaling.HealthCheck.ec2({ grace: cdk.Duration.minutes(2) }),
+    });
+    
+    // Delphi Large Instance Auto Scaling Group
+    const asgDelphiLarge = new autoscaling.AutoScalingGroup(this, 'AsgDelphiLarge', {
+      vpc,
+      launchTemplate: delphiLargeLaunchTemplate,
+      minCapacity: 0,
+      desiredCapacity: 1,
+      maxCapacity: 3,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
+      healthCheck: autoscaling.HealthCheck.ec2({ grace: cdk.Duration.minutes(2) }),
+    });
+    
+    // CPU metrics for Delphi small instances
+    const delphiSmallCpuMetric = new cloudwatch.Metric({
+      namespace: 'AWS/EC2',
+      metricName: 'CPUUtilization',
+      dimensionsMap: {
+        AutoScalingGroupName: asgDelphiSmall.autoScalingGroupName,
+      },
+      statistic: 'Average',
+      period: cdk.Duration.minutes(5),
+    });
+    
+    // CPU metrics for Delphi large instances
+    const delphiLargeCpuMetric = new cloudwatch.Metric({
+      namespace: 'AWS/EC2',
+      metricName: 'CPUUtilization',
+      dimensionsMap: {
+        AutoScalingGroupName: asgDelphiLarge.autoScalingGroupName,
+      },
+      statistic: 'Average',
+      period: cdk.Duration.minutes(5),
+    });
+    
+    // Scale small Delphi instances based on CPU usage
+    asgDelphiSmall.scaleToTrackMetric('DelphiSmallCpuTracking', {
+      metric: delphiSmallCpuMetric,
+      targetValue: 60,  // Target 60% CPU utilization
+      scaleInCooldown: cdk.Duration.minutes(5),
+      scaleOutCooldown: cdk.Duration.minutes(2),
+    });
+    
+    // Scale large Delphi instances based on CPU usage
+    asgDelphiLarge.scaleToTrackMetric('DelphiLargeCpuTracking', {
+      metric: delphiLargeCpuMetric,
+      targetValue: 60,  // Target 60% CPU utilization
+      scaleInCooldown: cdk.Duration.minutes(5),
+      scaleOutCooldown: cdk.Duration.minutes(2),
+    });
+    
+    // CloudWatch alarms for Delphi small instances
+    const delphiSmallHighCpuAlarm = new cloudwatch.Alarm(this, 'DelphiSmallHighCpuAlarm', {
+      metric: delphiSmallCpuMetric,
+      threshold: 80,
+      evaluationPeriods: 2,
+      datapointsToAlarm: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      alarmDescription: 'Alert when Delphi small instances CPU exceeds 80% for 10 minutes',
+    });
+    
+    delphiSmallHighCpuAlarm.addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(alarmTopic));
+    
+    // CloudWatch alarms for Delphi large instances
+    const delphiLargeHighCpuAlarm = new cloudwatch.Alarm(this, 'DelphiLargeHighCpuAlarm', {
+      metric: delphiLargeCpuMetric,
+      threshold: 80,
+      evaluationPeriods: 2,
+      datapointsToAlarm: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      alarmDescription: 'Alert when Delphi large instances CPU exceeds 80% for 10 minutes',
+    });
+    
+    delphiLargeHighCpuAlarm.addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(alarmTopic));
 
     // DEPLOY STUFF
     const application = new codedeploy.ServerApplication(this, 'CodeDeployApplication', {
@@ -338,7 +503,7 @@ EOF`,
     const deploymentGroup = new codedeploy.ServerDeploymentGroup(this, 'DeploymentGroup', {
       application,
       deploymentGroupName: 'PolisDeploymentGroup',
-      autoScalingGroups: [asgWeb, asgMathWorker],
+      autoScalingGroups: [asgWeb, asgMathWorker, asgDelphiSmall, asgDelphiLarge],
       deploymentConfig: codedeploy.ServerDeploymentConfig.ONE_AT_A_TIME,
       role: codeDeployRole,
       installAgent: true,
@@ -347,6 +512,8 @@ EOF`,
     // Allow traffic from the web ASG to the database
     db.connections.allowFrom(asgWeb, ec2.Port.tcp(5432), 'Allow database access from web ASG');
     db.connections.allowFrom(asgMathWorker, ec2.Port.tcp(5432), 'Allow database access from math ASG');
+    db.connections.allowFrom(asgDelphiSmall, ec2.Port.tcp(5432), 'Allow database access from Delphi small ASG');
+    db.connections.allowFrom(asgDelphiLarge, ec2.Port.tcp(5432), 'Allow database access from Delphi large ASG');
 
     // ELB
     const lb = new elbv2.ApplicationLoadBalancer(this, 'Lb', {
@@ -401,7 +568,13 @@ EOF`,
     asgWeb.node.addDependency(webAppEnvVarsSecret);
     asgMathWorker.node.addDependency(logGroup);
     asgMathWorker.node.addDependency(webAppEnvVarsSecret);
+    asgDelphiSmall.node.addDependency(logGroup);
+    asgDelphiSmall.node.addDependency(webAppEnvVarsSecret);
+    asgDelphiLarge.node.addDependency(logGroup);
+    asgDelphiLarge.node.addDependency(webAppEnvVarsSecret);
     asgWeb.node.addDependency(db);
     asgMathWorker.node.addDependency(db);
+    asgDelphiSmall.node.addDependency(db);
+    asgDelphiLarge.node.addDependency(db);
   }
 }

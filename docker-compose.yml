@@ -66,6 +66,7 @@ services:
       - "polis-net"
 
   delphi:
+    image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis/delphi:latest
     build:
       context: ./delphi
     labels:
@@ -74,12 +75,26 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - LOG_LEVEL=${DELPHI_LOG_LEVEL:-warn}
       - MATH_ENV=${DELPHI_ENV:-prod}
-      # DynamoDB connection settings
-      - DYNAMODB_ENDPOINT=http://dynamodb:8000
+      # DynamoDB connection settings for local mode (will be overridden in prod)
+      - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT:-http://dynamodb:8000}
+      # Instance size environment variables for autoscaling
+      - DELPHI_INSTANCE_TYPE=${DELPHI_INSTANCE_TYPE:-default}
+      - DELPHI_MAX_WORKERS=${DELPHI_MAX_WORKERS:-2}
+      - DELPHI_WORKER_MEMORY=${DELPHI_WORKER_MEMORY:-1g}
+      # AWS environment variables (will be provided in prod)
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
     depends_on:
       - dynamodb
     networks:
       - "polis-net"
+    deploy:
+      resources:
+        limits:
+          # These limits will be configured by the after_install.sh script
+          memory: ${DELPHI_CONTAINER_MEMORY:-4g}
+          cpus: ${DELPHI_CONTAINER_CPUS:-2}
 
   postgres:
     restart: always

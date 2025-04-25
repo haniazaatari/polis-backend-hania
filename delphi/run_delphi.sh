@@ -223,6 +223,29 @@ if [ -d /app/polismath/math ]; then
 fi
 "
 
+# Configure instance type and resource allocation
+echo -e "${YELLOW}Configuring instance type and resource allocation...${NC}"
+# Ensure the script is executable
+chmod +x configure_instance.py
+# Run the configuration script to detect instance type and set environment variables
+if docker exec -e PYTHONPATH=/app delphi-app python /app/configure_instance.py > /tmp/delphi_instance_config; then
+  # Source the environment variables
+  source /tmp/delphi_instance_config
+  echo -e "${GREEN}Detected instance type: ${DELPHI_INSTANCE_TYPE}${NC}"
+  echo -e "${GREEN}Max workers: ${DELPHI_MAX_WORKERS}${NC}"
+  echo -e "${GREEN}Worker memory: ${DELPHI_WORKER_MEMORY}${NC}"
+  
+  # Pass environment variables to container
+  docker exec -e DELPHI_INSTANCE_TYPE=${DELPHI_INSTANCE_TYPE} \
+             -e DELPHI_MAX_WORKERS=${DELPHI_MAX_WORKERS} \
+             -e DELPHI_WORKER_MEMORY=${DELPHI_WORKER_MEMORY} \
+             -e DELPHI_CONTAINER_MEMORY=${DELPHI_CONTAINER_MEMORY} \
+             -e DELPHI_CONTAINER_CPUS=${DELPHI_CONTAINER_CPUS} \
+             delphi-app echo "Instance configuration applied to container"
+else
+  echo -e "${YELLOW}Failed to configure instance type, using defaults${NC}"
+fi
+
 # Run the math pipeline (polismath) before UMAP pipeline
 echo -e "${GREEN}Running math pipeline (polismath)...${NC}"
 
@@ -261,8 +284,17 @@ echo -e "${YELLOW}Using Ollama for topic naming${NC}"
 
 # Run the pipeline directly, using the main dynamodb as the endpoint
 # Pass OLLAMA_HOST to make sure it connects to the Ollama container
-# Also pass the model that we pulled
-docker exec -e PYTHONPATH=/app -e DYNAMODB_ENDPOINT=http://host.docker.internal:8000 -e OLLAMA_HOST=http://ollama:11434 -e OLLAMA_MODEL=${MODEL} delphi-app python /app/umap_narrative/run_pipeline.py --zid=${ZID} ${USE_OLLAMA}
+# Also pass the model that we pulled, and the instance configuration
+docker exec -e PYTHONPATH=/app \
+           -e DYNAMODB_ENDPOINT=http://host.docker.internal:8000 \
+           -e OLLAMA_HOST=http://ollama:11434 \
+           -e OLLAMA_MODEL=${MODEL} \
+           -e DELPHI_INSTANCE_TYPE=${DELPHI_INSTANCE_TYPE:-default} \
+           -e DELPHI_MAX_WORKERS=${DELPHI_MAX_WORKERS:-2} \
+           -e DELPHI_WORKER_MEMORY=${DELPHI_WORKER_MEMORY:-1g} \
+           -e DELPHI_CONTAINER_MEMORY=${DELPHI_CONTAINER_MEMORY:-4g} \
+           -e DELPHI_CONTAINER_CPUS=${DELPHI_CONTAINER_CPUS:-1} \
+           delphi-app python /app/umap_narrative/run_pipeline.py --zid=${ZID} ${USE_OLLAMA}
 
 # Save the exit code
 PIPELINE_EXIT_CODE=$?
