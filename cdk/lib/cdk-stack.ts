@@ -397,6 +397,16 @@ EOF`,
       description: 'Environment variables for the Polis web application',
     });
 
+    const clientAdminEnvVarsSecret = new secretsmanager.Secret(this, 'ClientAdminEnvVarsSecret', {
+      secretName: 'polis-client-admin-env-vars',
+      description: 'Environment variables for the Polis client-admin web application',
+    });
+
+    const clientReportEnvVarsSecret = new secretsmanager.Secret(this, 'ClientReportEnvVarsSecret', {
+      secretName: 'polis-client-report-env-vars',
+      description: 'Environment variables for the Polis client-report web application',
+    });
+
     asgWeb.node.addDependency(logGroup);
     asgWeb.node.addDependency(webAppEnvVarsSecret);
     asgMathWorker.node.addDependency(logGroup);

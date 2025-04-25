@@ -3,7 +3,8 @@ set -e
 set -x
 
 cd /opt/polis
-sudo yum install -y git
+sudo yum install -y git jq
+
 GIT_REPO_URL="https://github.com/compdemocracy/polis.git"
 GIT_BRANCH="stable"
 
@@ -34,6 +35,29 @@ echo "Retrieved pre-configured .env from SSM Parameter"
 echo "Creating/Overwriting .env file with pre-configured content from SSM"
 echo "$PRE_CONFIGURED_ENV" > .env
 echo ".env file created/overwritten with pre-configured content."
+
+echo "Fetching pre-configured .env for client-admin..."
+CLIENT_ADMIN_ENV=$(aws secretsmanager get-secret-value --secret-id polis-client-admin-env-vars --query SecretString --output text --region us-east-1)
+
+if [ -z "$CLIENT_ADMIN_ENV" ]; then
+  echo "Error: Could not retrieve pre-configured .env from Secret polis-client-admin-env-vars"
+  exit 1
+fi
+echo "Retrieved pre-configured .env for client-admin."
+echo "Creating/Overwriting client-admin/.env file..."
+echo "$CLIENT_ADMIN_ENV" > client-admin/.env
+echo "client-admin/.env file created/overwritten."
+echo "Fetching pre-configured .env for client-report..."
+CLIENT_REPORT_ENV=$(aws secretsmanager get-secret-value --secret-id polis-client-report-env-vars --query SecretString --output text --region us-east-1)
+
+if [ -z "$CLIENT_REPORT_ENV" ]; then
+  echo "Error: Could not retrieve pre-configured .env from Secret polis-client-report-env-vars"
+  exit 1
+fi
+echo "Retrieved pre-configured .env for client-report."
+echo "Creating/Overwriting client-report/.env file..."
+echo "$CLIENT_REPORT_ENV" > client-report/.env
+echo "client-report/.env file created/overwritten."
 
 # --- Database Configuration and Environment Variables from Secrets Manager ---
 # 1. Get Secret ARN from SSM Parameter
