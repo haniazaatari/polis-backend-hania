@@ -38,6 +38,14 @@ import fail from "./utils/fail";
 import { PcaCacheItem, getPca, fetchAndCacheLatestPcaData } from "./utils/pca";
 import { getZinvite, getZinvites } from "./utils/zinvite";
 import { getPidsForGid } from "./utils/participants";
+import {
+  buildConversationUrl,
+  finishOne,
+  ifDefinedSet,
+  sendEmailByUid,
+  updateConversationModifiedTime,
+  verifyMetadataAnswersExistForEachQuestion,
+} from "./serverHelpers";
 
 import { handle_GET_reportExport } from "./routes/export";
 import { handle_GET_reportNarrative } from "./routes/reportNarrative";
@@ -82,7 +90,7 @@ import {
   handle_POST_auth_password,
   handle_POST_auth_pwresettoken,
 } from "./routes/password";
-
+import handle_PUT_conversations from "./routes/putConversations";
 AWS.config.update({ region: Config.awsRegion });
 const devMode = Config.isDevMode;
 const s3Client = new AWS.S3({ apiVersion: "2006-03-01" });
@@ -109,7 +117,6 @@ import Utils from "./utils/common";
 import SQL from "./db/sql";
 // End of re-import
 import logger from "./utils/logger";
-import { isValidColor } from "./utils/colors";
 
 // # notifications
 import emailSenders from "./email/senders";
@@ -226,16 +233,6 @@ function haltOnTimeout(req: { timedout: any }, res: any, next: () => void) {
     fail(res, 500, "polis_err_timeout_misc");
   } else {
     next();
-  }
-}
-
-function ifDefinedSet(
-  name: string,
-  source: { [x: string]: any },
-  dest: { [x: string]: any }
-) {
-  if (!_.isUndefined(source[name])) {
-    dest[name] = source[name];
   }
 }
 
@@ -1547,22 +1544,6 @@ Feel free to reply to this email if you need help.`;
     );
   }
 
-  function addConversationId(
-    o: { zid?: any; conversation_id?: any },
-    dontUseCache: any
-  ) {
-    if (!o.zid) {
-      // if no zid, resolve without fetching zinvite.
-      return Promise.resolve(o);
-    }
-    return getZinvite(o.zid, dontUseCache).then(function (
-      conversation_id: any
-    ) {
-      o.conversation_id = conversation_id;
-      return o;
-    });
-  }
-
   function addConversationIds(a: any[]) {
     let zids = [];
     for (var i = 0; i < a.length; i++) {
@@ -1584,35 +1565,6 @@ Feel free to reply to this email if you need help.`;
         return o;
       });
     });
-  }
-
-  function finishOne(
-    res: {
-      status: (
-        arg0: any
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
-    },
-    o: { url?: string; zid?: any; currentPid?: any },
-    dontUseCache?: boolean | undefined,
-    altStatusCode?: number | undefined
-  ) {
-    addConversationId(o, dontUseCache)
-      .then(
-        function (item: { zid: any }) {
-          // ensure we don't expose zid
-          if (item.zid) {
-            delete item.zid;
-          }
-          let statusCode = altStatusCode || 200;
-          res.status(statusCode).json(item);
-        },
-        function (err: any) {
-          fail(res, 500, "polis_err_finishing_responseA", err);
-        }
-      )
-      .catch(function (err: any) {
-        fail(res, 500, "polis_err_finishing_response", err);
-      });
   }
 
   function finishArray(
@@ -2442,22 +2394,6 @@ Email verified! You can close this tab or hit the back button.
       });
     });
   };
-
-  function sendEmailByUid(uid?: any, subject?: string, body?: string | number) {
-    return getUserInfoForUid2(uid).then(function (userInfo: {
-      hname: any;
-      email: any;
-    }) {
-      return sendTextEmail(
-        polisFromAddress,
-        userInfo.hname
-          ? `${userInfo.hname} <${userInfo.email}>`
-          : userInfo.email,
-        subject,
-        body
-      );
-    });
-  }
 
   function handle_GET_participants(
     req: { p: { uid?: any; zid: any } },
@@ -5182,19 +5118,6 @@ Email verified! You can close this tab or hit the back button.
       });
   }
 
-  function updateConversationModifiedTime(zid: any, t?: undefined) {
-    let modified = _.isUndefined(t) ? Date.now() : Number(t);
-    let query =
-      "update conversations set modified = ($2) where zid = ($1) and modified < ($2);";
-    let params = [zid, modified];
-    if (_.isUndefined(t)) {
-      query =
-        "update conversations set modified = now_as_millis() where zid = ($1);";
-      params = [zid];
-    }
-    return pgQueryP(query, params);
-  }
-
   const createXidRecordByZid = Conversation.createXidRecordByZid;
   const getXidStuff = User.getXidStuff;
 
@@ -5603,60 +5526,6 @@ Email verified! You can close this tab or hit the back button.
       }
     );
   }
-  function verifyMetadataAnswersExistForEachQuestion(zid: any) {
-    let errorcode = "polis_err_missing_metadata_answers";
-    return new Promise<void>((resolve, reject) => {
-      pgQuery_readOnly(
-        "select pmqid from participant_metadata_questions where zid = ($1);",
-        [zid],
-        function (err: any, results: { rows: any[] }) {
-          if (err) {
-            reject(err);
-            return;
-          }
-          if (!results.rows || !results.rows.length) {
-            resolve();
-            return;
-          }
-          let pmqids = results.rows.map(function (row: { pmqid: any }) {
-            return Number(row.pmqid);
-          });
-          pgQuery_readOnly(
-            "select pmaid, pmqid from participant_metadata_answers where pmqid in (" +
-            pmqids.join(",") +
-            ") and alive = TRUE and zid = ($1);",
-            [zid],
-            function (err: any, results: { rows: any[] }) {
-              if (err) {
-                reject(err);
-                return;
-              }
-              if (!results.rows || !results.rows.length) {
-                reject(new Error(errorcode));
-                return;
-              }
-              let questions = _.reduce(
-                pmqids,
-                function (o: { [x: string]: number }, pmqid: string | number) {
-                  o[pmqid] = 1;
-                  return o;
-                },
-                {}
-              );
-              results.rows.forEach(function (row: { pmqid: string | number }) {
-                delete questions[row.pmqid];
-              });
-              if (Object.keys(questions).length) {
-                reject(new Error(errorcode));
-              } else {
-                resolve();
-              }
-            }
-          );
-        }
-      );
-    });
-  }
 
   function handle_PUT_comments(
     req: {
@@ -5737,36 +5606,6 @@ Email verified! You can close this tab or hit the back button.
       .catch((err: any) => {
         fail(res, 500, "polis_err_POST_reportCommentSelections_misc", err);
       });
-  }
-  // kind of crappy that we're replacing the zinvite.
-  // This is needed because we initially create a conversation with the POST, then actually set the properties with the subsequent PUT.
-  // if we stop doing that, we can remove this function.
-  function generateAndReplaceZinvite(zid: any, generateShortZinvite: any) {
-    let len = 12;
-    if (generateShortZinvite) {
-      len = 6;
-    }
-    return new Promise(function (
-      resolve: (arg0: any) => void,
-      reject: (arg0: string) => void
-    ) {
-      generateToken(len, false, function (err: any, zinvite: any) {
-        if (err) {
-          return reject("polis_err_creating_zinvite");
-        }
-        pgQuery(
-          "update zinvites set zinvite = ($1) where zid = ($2);",
-          [zinvite, zid],
-          function (err: any, results: any) {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(zinvite);
-            }
-          }
-        );
-      });
-    });
   }
 
   function handle_POST_conversation_close(
@@ -5872,220 +5711,6 @@ Email verified! You can close this tab or hit the back button.
       })
       .catch((err: any) => {
         fail(res, 500, "polis_err_put_user", err);
-      });
-  }
-
-  function handle_PUT_conversations(
-    req: {
-      p: {
-        short_url: any;
-        zid: any;
-        uid?: any;
-        verifyMeta: any;
-        is_active: any;
-        is_anon: any;
-        is_draft: any;
-        is_data_open: any;
-        profanity_filter: any;
-        spam_filter: any;
-        strict_moderation: any;
-        topic: string;
-        description: string;
-        vis_type: any;
-        help_type: any;
-        bgcolor: string;
-        style_btn: any;
-        write_type: any;
-        importance_enabled: any;
-        owner_sees_participation_stats: any;
-        launch_presentation_return_url_hex: any;
-        link_url: any;
-        send_created_email: any;
-        conversation_id: string;
-        context: any;
-        font_color: any;
-        font_title: any;
-        font_serif: any;
-        font_sans: any;
-      };
-    },
-    res: any
-  ) {
-    let generateShortUrl = req.p.short_url;
-    isModerator(req.p.zid, req.p.uid)
-      .then(function (ok: any) {
-        if (!ok) {
-          fail(res, 403, "polis_err_update_conversation_permission");
-          return;
-        }
-
-        let verifyMetaPromise;
-        if (req.p.verifyMeta) {
-          verifyMetaPromise = verifyMetadataAnswersExistForEachQuestion(
-            req.p.zid
-          );
-        } else {
-          verifyMetaPromise = Promise.resolve();
-        }
-
-        let fields: ConversationType = {};
-        if (!_.isUndefined(req.p.is_active)) {
-          fields.is_active = req.p.is_active;
-        }
-        if (!_.isUndefined(req.p.is_anon)) {
-          fields.is_anon = req.p.is_anon;
-        }
-        if (!_.isUndefined(req.p.is_draft)) {
-          fields.is_draft = req.p.is_draft;
-        }
-        if (!_.isUndefined(req.p.is_data_open)) {
-          fields.is_data_open = req.p.is_data_open;
-        }
-        if (!_.isUndefined(req.p.profanity_filter)) {
-          fields.profanity_filter = req.p.profanity_filter;
-        }
-        if (!_.isUndefined(req.p.spam_filter)) {
-          fields.spam_filter = req.p.spam_filter;
-        }
-        if (!_.isUndefined(req.p.strict_moderation)) {
-          fields.strict_moderation = req.p.strict_moderation;
-        }
-        if (!_.isUndefined(req.p.topic)) {
-          fields.topic = req.p.topic;
-        }
-        if (!_.isUndefined(req.p.description)) {
-          fields.description = req.p.description;
-        }
-        if (!_.isUndefined(req.p.vis_type)) {
-          fields.vis_type = req.p.vis_type;
-        }
-        if (!_.isUndefined(req.p.help_type)) {
-          fields.help_type = req.p.help_type;
-        }
-        if (!_.isUndefined(req.p.bgcolor)) {
-          if (req.p.bgcolor === "default") {
-            fields.bgcolor = null;
-          } else if (isValidColor(req.p.bgcolor)) {
-            fields.bgcolor = req.p.bgcolor;
-          } else {
-            throw new Error("polis_err_invalid_color_bgcolor");
-          }
-        }
-        if (!_.isUndefined(req.p.style_btn)) {
-          if (isValidColor(req.p.style_btn)) {
-            fields.style_btn = req.p.style_btn;
-          } else {
-            throw new Error("polis_err_invalid_color_style_btn");
-          }
-        }
-        if (!_.isUndefined(req.p.write_type)) {
-          fields.write_type = req.p.write_type;
-        }
-        if (!_.isUndefined(req.p.importance_enabled)) {
-          fields.importance_enabled = req.p.importance_enabled;
-        }
-        ifDefinedSet("auth_opt_allow_3rdparty", req.p, fields);
-
-        if (!_.isUndefined(req.p.owner_sees_participation_stats)) {
-          fields.owner_sees_participation_stats = !!req.p
-            .owner_sees_participation_stats;
-        }
-        if (!_.isUndefined(req.p.link_url)) {
-          fields.link_url = req.p.link_url;
-        }
-
-        if (!_.isUndefined(req.p.font_color)) {
-          if (isValidColor(req.p.font_color)) {
-            fields.font_color = req.p.font_color;
-          } else {
-            throw new Error("polis_err_invalid_color_font_color");
-          }
-        }
-
-        ifDefinedSet("subscribe_type", req.p, fields);
-
-        let q = sql_conversations
-          .update(fields)
-          .where(sql_conversations.zid.equals(req.p.zid))
-          // .and( sql_conversations.owner.equals(req.p.uid) )
-          .returning("*");
-        verifyMetaPromise.then(
-          function () {
-            pgQuery(q.toString(), function (err: any, result: { rows: any[] }) {
-              if (err) {
-                fail(res, 500, "polis_err_update_conversation", err);
-                return;
-              }
-              let conv = result && result.rows && result.rows[0];
-              // The first check with isModerator implictly tells us this can be returned in HTTP response.
-              conv.is_mod = true;
-
-              let promise = generateShortUrl
-                ? generateAndReplaceZinvite(req.p.zid, generateShortUrl)
-                : Promise.resolve();
-              let successCode = generateShortUrl ? 201 : 200;
-
-              promise
-                .then(function () {
-                  // send notification email
-                  if (req.p.send_created_email) {
-                    Promise.all([
-                      getUserInfoForUid2(req.p.uid),
-                      getConversationUrl(req, req.p.zid, true),
-                    ])
-                      .then(function (results: any[]) {
-                        let hname = results[0].hname;
-                        let url = results[1];
-                        sendEmailByUid(
-                          req.p.uid,
-                          "Conversation created",
-                          "Hi " +
-                          hname +
-                          ",\n" +
-                          "\n" +
-                          "Here's a link to the conversation you just created. Use it to invite participants to the conversation. Share it by whatever network you prefer - Gmail, Facebook, Twitter, etc., or just post it to your website or blog. Try it now! Click this link to go to your conversation:" +
-                          "\n" +
-                          url +
-                          "\n" +
-                          "\n" +
-                          "With gratitude,\n" +
-                          "\n" +
-                          "The team at pol.is\n"
-                        ).catch(function (err: any) {
-                          logger.error(
-                            "polis_err_sending_conversation_created_email",
-                            err
-                          );
-                        });
-                      })
-                      .catch(function (err: any) {
-                        logger.error(
-                          "polis_err_sending_conversation_created_email",
-                          err
-                        );
-                      });
-                  }
-
-                  finishOne(res, conv, true, successCode);
-
-                  updateConversationModifiedTime(req.p.zid);
-                })
-                .catch(function (err: any) {
-                  fail(res, 500, "polis_err_update_conversation", err);
-                });
-            });
-          },
-          function (err: { message: any }) {
-            fail(res, 500, err.message, err);
-          }
-        );
-      })
-      .catch(function (err: any) {
-        if (err instanceof Error && err.message.startsWith("polis_err_invalid_color")) {
-          fail(res, 422, err.message, err);
-        } else {
-          fail(res, 500, "polis_err_update_conversation", err);
-        }
       });
   }
 
@@ -8353,9 +7978,6 @@ Thanks for using Polis!
       suzinvite
     );
   }
-  function buildConversationUrl(req: any, zinvite: string | null) {
-    return getServerNameWithProtocol(req) + "/" + zinvite;
-  }
 
   function buildConversationDemoUrl(req: any, zinvite: string) {
     return getServerNameWithProtocol(req) + "/demo/" + zinvite;
@@ -8369,11 +7991,6 @@ Thanks for using Polis!
     return buildModerationUrl(req, zinvite) + "/comments/seed";
   }
 
-  function getConversationUrl(req: any, zid: any, dontUseCache: boolean) {
-    return getZinvite(zid, dontUseCache).then(function (zinvite: any) {
-      return buildConversationUrl(req, zinvite);
-    });
-  }
   function createOneSuzinvite(
     xid: any,
     zid: any,
@@ -9497,6 +9114,7 @@ Thanks for using Polis!
     middleware_log_middleware_errors,
     middleware_log_request_body,
     middleware_responseTime_start,
+    verifyMetadataAnswersExistForEachQuestion,
     // handlers
     handle_DELETE_metadata_answers,
     handle_DELETE_metadata_questions,
@@ -9601,6 +9219,8 @@ Thanks for using Polis!
 } // End of initializePolisHelpers
 // debugging
 
-export { initializePolisHelpers };
+export {
+  verifyMetadataAnswersExistForEachQuestion,
+};
 
 export default { initializePolisHelpers };
