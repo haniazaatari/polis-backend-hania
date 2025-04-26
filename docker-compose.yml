@@ -73,26 +73,26 @@ services:
       polis_tag: ${TAG:-dev}
     environment:
       - DATABASE_URL=${DATABASE_URL}
-      - LOG_LEVEL=${DELPHI_LOG_LEVEL:-warn}
-      - MATH_ENV=${DELPHI_ENV:-prod}
+      - LOG_LEVEL=${DELPHI_LOG_LEVEL:-INFO}
+      - DELPHI_DEV_OR_PROD=${DELPHI_DEV_OR_PROD:-prod}
       # DynamoDB connection settings for local mode (will be overridden in prod)
       - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT:-http://dynamodb:8000}
-      # Instance size environment variables for autoscaling
-      - DELPHI_INSTANCE_TYPE=${DELPHI_INSTANCE_TYPE:-default}
-      - DELPHI_MAX_WORKERS=${DELPHI_MAX_WORKERS:-2}
-      - DELPHI_WORKER_MEMORY=${DELPHI_WORKER_MEMORY:-1g}
+      - POLL_INTERVAL=${POLL_INTERVAL:-2}
+      # Ollama connection
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=llama3.1:8b
       # AWS environment variables (will be provided in prod)
       - AWS_REGION=${AWS_REGION:-us-east-1}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
     depends_on:
       - dynamodb
+      - ollama
     networks:
       - "polis-net"
     deploy:
       resources:
         limits:
-          # These limits will be configured by the after_install.sh script
           memory: ${DELPHI_CONTAINER_MEMORY:-4g}
           cpus: ${DELPHI_CONTAINER_CPUS:-2}
 
@@ -164,6 +164,20 @@ services:
     labels:
       polis_tag: ${TAG:-dev}
 
+  # Ollama for LLM processing
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - "polis-net"
+    # Run ollama server
+    command: serve
+    restart: unless-stopped
+
 networks:
   polis-net:
 
@@ -178,5 +192,8 @@ volumes:
     labels:
       polis_tag: ${TAG:-dev}
   dynamodb-data:
+    labels:
+      polis_tag: ${TAG:-dev}
+  ollama-models:
     labels:
       polis_tag: ${TAG:-dev}
