@@ -34,9 +34,9 @@ RUN git clone https://github.com/TutteInstitute/evoc && \
     pip install .
 
 # Copy all the necessary files for the application
-COPY setup.py .
 COPY polismath/ ./polismath/
 COPY scripts/ ./scripts/
+COPY umap_narrative/ ./umap_narrative/
 
 # Create data directory
 RUN mkdir -p data
