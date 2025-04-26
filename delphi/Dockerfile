@@ -36,6 +36,7 @@ RUN git clone https://github.com/TutteInstitute/evoc && \
 # Copy all the necessary files for the application
 COPY setup.py .
 COPY polismath/ ./polismath/
+COPY scripts/ ./scripts/
 
 # Create data directory
 RUN mkdir -p data
@@ -48,5 +49,13 @@ EXPOSE 8080
 # Set PYTHONPATH to include current directory
 ENV PYTHONPATH "${PYTHONPATH}:/app"
 
-# Print Python path and installed packages for debugging
-CMD ["bash", "-c", "echo 'PYTHONPATH:' $PYTHONPATH && echo 'Installed packages:' && pip list && echo 'Starting polismath...' && polismath"]
+# Copy the required scripts and make them executable
+COPY start_poller.sh .
+COPY run_delphi.sh .
+COPY create_dynamodb_tables.py .
+RUN chmod +x start_poller.sh run_delphi.sh
+
+# Command to:
+# 1. Initialize DynamoDB tables
+# 2. Start the job poller with a 2-second polling interval
+CMD ["bash", "-c", "echo 'Setting up DynamoDB tables...' && python create_dynamodb_tables.py --endpoint-url=${DYNAMODB_ENDPOINT:-http://dynamodb:8000} && echo 'Starting job poller...' && POLL_INTERVAL=2 ./start_poller.sh"]
