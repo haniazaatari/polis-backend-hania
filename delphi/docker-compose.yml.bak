@@ -16,19 +16,21 @@ services:
   #     - delphi-network
   #   user: root
 
-  # Ollama for LLM processing
-  ollama:
-    image: ollama/ollama:latest
-    container_name: delphi-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-models:/root/.ollama
-    networks:
-      - delphi-network
-    # Run ollama server
-    command: serve
-    restart: unless-stopped
+  # NOTE: We're using the Ollama service from the main docker-compose.yml
+  # This section is commented out to avoid duplicate Ollama instances
+  # If running this compose file standalone, uncomment this section:
+  #
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: delphi-ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-models:/root/.ollama
+  #   networks:
+  #     - delphi-network
+  #   command: serve
+  #   restart: unless-stopped
 
   # Delphi Application
   delphi-app:
@@ -36,9 +38,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: delphi-app
-    depends_on:
-      # DynamoDB reference is now in the main docker-compose
-      - ollama
+    # Note: When running with main docker-compose, the dependencies are handled there
+    # depends_on is commented out since we're not managing the Ollama service here
+    # depends_on:
+    #   - ollama
     env_file:
       - ${DELPHI_ENV_FILE:-.env}
     environment:
@@ -54,6 +57,10 @@ services:
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
       - AWS_REGION=us-west-2
+      # Ollama settings - configurable via environment variables
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - OLLAMA_HOST=http://host.docker.internal:11434  # Connect to Ollama on host network
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
     ports:
       - "8080:8080"
     extra_hosts:
@@ -70,7 +77,7 @@ services:
       - ./polismath/pca_kmeans_rep:/app/polismath/pca_kmeans_rep
       # Mount umap_narrative directory
       - ./umap_narrative:/app/umap_narrative
-    # Keep container running but install dependencies first
+    # Command that runs the setup_ollama script first
     command: >
       bash -c "
       echo 'Ensuring dependencies are installed...' &&
@@ -78,6 +85,8 @@ services:
       echo 'PYTHONPATH=$PYTHONPATH' &&
       echo 'Installed packages:' &&
       pip list | grep fastapi &&
+      echo 'Setting up Ollama model...' &&
+      cd /app && chmod +x ./setup_ollama.sh && ./setup_ollama.sh &&
       echo 'Keeping container alive...' &&
       tail -f /dev/null
       "
