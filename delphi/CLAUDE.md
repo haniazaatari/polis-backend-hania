@@ -75,6 +75,40 @@ Always use the commands above to determine the most substantial conversation whe
   - LLM API keys (Anthropic, OpenAI, etc.) are available in the parent `.env` file
   - Default Ollama model: `llama3.1:8b` (configurable via `OLLAMA_MODEL`)
 
+## IMPORTANT: Finding All Logs
+
+**CRITICAL NOTE**: The FULL system logs are stored in the DynamoDB JobQueue table's job results! When debugging issues:
+
+1. Check job results in DynamoDB to see detailed logs that don't appear in container stdout:
+
+   ```bash
+   docker exec polis-dev-delphi-1 python -c "
+   import boto3, json
+   dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb:8000', region_name='us-west-2')
+   table = dynamodb.Table('Delphi_JobQueue')
+   job_id = '<YOUR_JOB_ID>'  # Replace with your job ID
+   job = table.get_item(Key={'job_id': job_id})['Item']
+   results = json.loads(job.get('job_results', '{}'))
+   print('Complete Job Output:')
+   print(results.get('output_summary', 'No output'))
+   "
+   ```
+
+2. For even more detailed logs, check the job's log entries:
+   ```bash
+   docker exec polis-dev-delphi-1 python -c "
+   import boto3, json
+   dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb:8000', region_name='us-west-2')
+   table = dynamodb.Table('Delphi_JobQueue')
+   job_id = '<YOUR_JOB_ID>'  # Replace with your job ID
+   job = table.get_item(Key={'job_id': job_id})['Item']
+   logs = json.loads(job.get('logs', '{}'))
+   print('Job Log Entries:')
+   for entry in logs.get('entries', []):
+      print(f\"- {entry.get('message')}\")
+   "
+   ```
+
 ## Docker Services
 
 The system uses Docker Compose with three main services:
@@ -151,7 +185,7 @@ Delphi now includes a distributed job queue system built on DynamoDB:
 
 ### Key Tables
 
-#### Polis Math Tables (Now with Delphi_ prefix):
+#### Polis Math Tables (Now with Delphi\_ prefix):
 
 - `Delphi_PCAConversationConfig` - Conversation metadata (formerly `PolisMathConversations`)
 - `Delphi_PCAResults` - PCA and cluster data (formerly `PolisMathAnalysis`)
@@ -160,7 +194,7 @@ Delphi now includes a distributed job queue system built on DynamoDB:
 - `Delphi_RepresentativeComments` - Representativeness data (formerly `PolisMathRepness`)
 - `Delphi_PCAParticipantProjections` - Participant projection data (formerly `PolisMathProjections`)
 
-#### EVōC/UMAP Tables (Now with Delphi_ prefix):
+#### EVōC/UMAP Tables (Now with Delphi\_ prefix):
 
 - `Delphi_UMAPConversationConfig` - Metadata for conversations (formerly `ConversationMeta`)
 - `Delphi_CommentEmbeddings` - Embedding vectors for comments (formerly `CommentEmbeddings`)
@@ -172,7 +206,7 @@ Delphi now includes a distributed job queue system built on DynamoDB:
 - `Delphi_NarrativeReports` - Generated reports (formerly `report_narrative_store`)
 - `Delphi_JobQueue` - Job queue (formerly `DelphiJobQueue`)
 
-> **Note:** All table names now use the `Delphi_` prefix for consistency. 
+> **Note:** All table names now use the `Delphi_` prefix for consistency.
 > For complete documentation on the table renaming, see `/Users/colinmegill/polis/delphi/docs/DATABASE_NAMING_PROPOSAL.md`
 
 ## Running Delphi Pipeline
@@ -222,9 +256,9 @@ For production environments, use the job queue system:
    aws dynamodb delete-table --table-name Delphi_JobQueue --endpoint-url http://localhost:8000
    docker exec -e PYTHONPATH=/app delphi-app python /app/create_dynamodb_tables.py --endpoint-url http://host.docker.internal:8000
    ```
-   
+
    Or use the reset_database.sh script to recreate all tables:
-   
+
    ```bash
    # Reset all tables (both Polis math and EVōC tables)
    ./reset_database.sh
@@ -256,10 +290,10 @@ When running Delphi in an autoscaling environment, the system automatically conf
 
 ### Instance Types and Resource Allocation
 
-| Instance Type | Description | Worker Threads | Worker Memory | Container Memory | Container CPUs |
-|---------------|-------------|---------------|---------------|------------------|---------------|
-| small (t3.large) | Cost-efficient processing | 3 | 2g | 8g | 2 |
-| large (c6g.4xlarge) | High-performance ARM | 8 | 8g | 32g | 8 |
+| Instance Type       | Description               | Worker Threads | Worker Memory | Container Memory | Container CPUs |
+| ------------------- | ------------------------- | -------------- | ------------- | ---------------- | -------------- |
+| small (t3.large)    | Cost-efficient processing | 3              | 2g            | 8g               | 2              |
+| large (c6g.4xlarge) | High-performance ARM      | 8              | 8g            | 32g              | 8              |
 
 These settings are automatically applied based on the `/tmp/instance_size.txt` file created during instance initialization.
 
