@@ -9,6 +9,8 @@ build/
 *.egg-info/
 *.egg
 
+node_modules/
+
 # Virtual environments
 polis_env/
 delphi_env/
