@@ -166,8 +166,15 @@ class JobProcessor:
             logger.error(f"Unexpected error claiming job {job_id}: {e}")
             return None
     
-    def update_job_logs(self, job, log_entry):
-        """Add a log entry to the job logs with optimistic locking."""
+    def update_job_logs(self, job, log_entry, mirror_to_console=True):
+        """
+        Add a log entry to the job logs with optimistic locking.
+        
+        Args:
+            job: The job dictionary
+            log_entry: Dictionary with level and message
+            mirror_to_console: Whether to also print the log to console (default: True)
+        """
         try:
             # Get current logs and version
             current_logs = json.loads(job.get('logs', '{}'))
@@ -181,11 +188,36 @@ class JobProcessor:
                 current_logs['entries'] = []
             
             # Add new entry
+            level = log_entry.get('level', 'INFO')
+            message = log_entry.get('message', '')
+            timestamp = datetime.now().isoformat()
+            
             current_logs['entries'].append({
-                'timestamp': datetime.now().isoformat(),
-                'level': log_entry.get('level', 'INFO'),
-                'message': log_entry.get('message', '')
+                'timestamp': timestamp,
+                'level': level,
+                'message': message
             })
+            
+            # Mirror to console if requested
+            if mirror_to_console:
+                # ANSI color codes for different log levels
+                colors = {
+                    'DEBUG': '\033[36m',    # Cyan
+                    'INFO': '\033[32m',     # Green
+                    'WARNING': '\033[33m',  # Yellow
+                    'ERROR': '\033[31m',    # Red
+                    'CRITICAL': '\033[31;1m'  # Bright Red
+                }
+                reset = '\033[0m'  # Reset color
+                
+                # Use color for the level if available
+                color = colors.get(level, '')
+                
+                # Create a short job ID for easier reading (first 8 chars)
+                short_job_id = job['job_id'][:8] if len(job['job_id']) > 8 else job['job_id']
+                
+                # Print to console with color and short job ID
+                print(f"{color}[DELPHI JOB {short_job_id}] {level}{reset}: {message}")
             
             # Keep only last 50 entries
             if len(current_logs['entries']) > 50:
@@ -283,7 +315,10 @@ class JobProcessor:
         job_id = job['job_id']
         conversation_id = job['conversation_id']
         
-        logger.info(f"Processing job {job_id} for conversation {conversation_id}")
+        # Set a default timeout if not specified in the job
+        timeout_seconds = job.get('timeout_seconds', 3600)  # Default 1 hour timeout
+        
+        logger.info(f"Processing job {job_id} for conversation {conversation_id} with timeout {timeout_seconds}s")
         
         # Update log with processing start
         self.update_job_logs(job, {
@@ -337,6 +372,15 @@ class JobProcessor:
             # Add environment variables for Docker to work
             env = os.environ.copy()
             
+            # Add any environment variables from the job
+            if 'environment' in job and isinstance(job['environment'], dict):
+                for key, value in job['environment'].items():
+                    env[key] = value
+                    self.update_job_logs(job, {
+                        'level': 'INFO',
+                        'message': f'Setting environment variable: {key}={value}'
+                    })
+            
             # Execute run_delphi.sh
             process = subprocess.Popen(
                 cmd,
@@ -350,27 +394,87 @@ class JobProcessor:
             stdout_lines = []
             stderr_lines = []
             
-            # Process stdout
-            for line in process.stdout:
-                stdout_lines.append(line.strip())
-                # Log significant lines
-                if 'ERROR' in line or 'WARNING' in line or 'pipeline completed' in line:
-                    level = 'ERROR' if 'ERROR' in line else 'WARNING' if 'WARNING' in line else 'INFO'
-                    self.update_job_logs(job, {
-                        'level': level,
-                        'message': line.strip()
-                    })
+            # Set up timeout mechanism using a thread-safe approach
+            start_time = time.time()
             
-            # Process stderr
-            for line in process.stderr:
-                stderr_lines.append(line.strip())
+            try:
+                # Use a simple polling approach for reading output and checking timeout
+                import select
+                import io
+                
+                # Set process stdout and stderr to non-blocking mode
+                process.stdout.fileno()
+                process.stderr.fileno()
+                
+                # Keep reading until process completes or timeout occurs
+                while process.poll() is None:
+                    # Check for timeout
+                    elapsed_time = time.time() - start_time
+                    if elapsed_time > timeout_seconds:
+                        raise TimeoutError(f"Job processing timed out after {timeout_seconds} seconds")
+                    
+                    # Try to read from stdout and stderr without blocking
+                    readable, _, _ = select.select([process.stdout, process.stderr], [], [], 1.0)
+                    
+                    if process.stdout in readable:
+                        line = process.stdout.readline().strip()
+                        if line:
+                            stdout_lines.append(line)
+                            # Log significant lines
+                            if 'ERROR' in line or 'WARNING' in line or 'pipeline completed' in line:
+                                level = 'ERROR' if 'ERROR' in line else 'WARNING' if 'WARNING' in line else 'INFO'
+                                self.update_job_logs(job, {
+                                    'level': level,
+                                    'message': line
+                                })
+                    
+                    if process.stderr in readable:
+                        line = process.stderr.readline().strip()
+                        if line:
+                            stderr_lines.append(line)
+                            self.update_job_logs(job, {
+                                'level': 'ERROR',
+                                'message': line
+                            })
+                
+                # Process completed before timeout
+                return_code = process.poll()
+                
+            except TimeoutError as e:
+                logger.error(f"Job {job_id} timed out after {timeout_seconds} seconds. Terminating.")
                 self.update_job_logs(job, {
                     'level': 'ERROR',
-                    'message': line.strip()
+                    'message': f"Job timed out after {timeout_seconds} seconds. Terminating."
                 })
-            
-            # Wait for process to complete
-            return_code = process.wait()
+                
+                # Kill the process
+                process.terminate()
+                try:
+                    process.wait(timeout=10)  # Wait for up to 10 seconds for process to terminate
+                except subprocess.TimeoutExpired:
+                    process.kill()  # Force kill if it doesn't terminate
+                
+                return_code = -1  # Special code for timeout
+                
+            finally:
+                # Ensure we read any remaining output if process exited normally
+                if return_code is not None and return_code != -1:
+                    # Read any remaining output
+                    remaining_stdout, remaining_stderr = process.communicate()
+                    
+                    # Process remaining stdout
+                    if remaining_stdout:
+                        for line in remaining_stdout.splitlines():
+                            line = line.strip()
+                            if line:
+                                stdout_lines.append(line)
+                    
+                    # Process remaining stderr
+                    if remaining_stderr:
+                        for line in remaining_stderr.splitlines():
+                            line = line.strip()
+                            if line:
+                                stderr_lines.append(line)
             
             # Determine success/failure based on return code
             success = return_code == 0
@@ -381,6 +485,10 @@ class JobProcessor:
                 'output_summary': '\n'.join(stdout_lines[-10:]) if stdout_lines else 'No output',
                 'visualization_folder': f'visualizations/{conversation_id}'
             }
+            
+            # Add timeout message if applicable
+            if return_code == -1:
+                result['error'] = f"Job timed out after {timeout_seconds} seconds"
             
             # Complete job
             self.complete_job(job, success, result=result)
