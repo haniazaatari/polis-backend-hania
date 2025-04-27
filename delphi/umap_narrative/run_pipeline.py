@@ -284,6 +284,15 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
     """
     cluster_labels = {}
     
+    # Check for Anthropic API key
+    anthropic_api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not anthropic_api_key:
+        warning_message = "⚠️ ANTHROPIC_API_KEY not set. LLM-based narrative reports will be skipped."
+        logger.warning(warning_message)
+        # Print to stdout directly for better visibility in Docker logs
+        print(f"\033[0;33m{warning_message}\033[0m")
+        print("To generate narrative reports, set the ANTHROPIC_API_KEY environment variable.")
+    
     # Check if we should use Ollama
     if use_ollama and comment_texts is not None and layer is not None:
         try:
