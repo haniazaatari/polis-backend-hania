@@ -53,9 +53,11 @@ ENV PYTHONPATH "${PYTHONPATH}:/app"
 COPY start_poller.sh .
 COPY run_delphi.sh .
 COPY create_dynamodb_tables.py .
-RUN chmod +x start_poller.sh run_delphi.sh
+COPY scripts/setup_ollama.sh ./setup_ollama.sh
+RUN chmod +x start_poller.sh run_delphi.sh setup_ollama.sh
 
 # Command to:
 # 1. Initialize DynamoDB tables
-# 2. Start the job poller with a 2-second polling interval
-CMD ["bash", "-c", "echo 'Setting up DynamoDB tables...' && python create_dynamodb_tables.py --endpoint-url=${DYNAMODB_ENDPOINT:-http://dynamodb:8000} && echo 'Starting job poller...' && POLL_INTERVAL=2 ./start_poller.sh"]
+# 2. Set up the Ollama model based on environment variables
+# 3. Start the job poller with a 2-second polling interval
+CMD ["bash", "-c", "echo 'Setting up DynamoDB tables...' && python create_dynamodb_tables.py --endpoint-url=${DYNAMODB_ENDPOINT:-http://dynamodb:8000} && echo 'Setting up Ollama model...' && ./setup_ollama.sh && echo 'Starting job poller...' && POLL_INTERVAL=2 ./start_poller.sh"]
