@@ -282,9 +282,13 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
                         logger.debug(f"Found position for comment {comment_id} in CommentClusters: {pos}")
             
             # Extract cluster assignment for this layer
-            if cluster_column in item:
+            if cluster_column in item and item[cluster_column] is not None:
                 data["cluster_assignments"][comment_id] = int(item[cluster_column])
                 clusters_found += 1
+            else:
+                # Assign -1 for unclustered points when no assignment exists
+                data["cluster_assignments"][comment_id] = -1
+                logger.debug(f"Comment {comment_id} has no cluster assignment for layer {layer_id}, marking as unclustered.")
         
         logger.info(f"Extracted {positions_found} positions and {clusters_found} cluster assignments")
         
