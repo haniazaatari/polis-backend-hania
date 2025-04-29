@@ -307,7 +307,7 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
                 
                 try:
                     # Get model name from environment variable or use default
-                    model_name = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
+                    model_name = os.environ.get("OLLAMA_MODEL")
                     logger.info(f"Using Ollama model from environment: {model_name}")
                     response = ollama.chat(
                         model=model_name,
@@ -947,7 +947,7 @@ def process_layers_and_create_visualizations(
             if dynamo_storage:
                 logger.info(f"Storing LLM topic names for layer {layer_idx} in DynamoDB...")
                 # Get model name from environment variable or use default
-                model_name = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
+                model_name = os.environ.get("OLLAMA_MODEL")
                 llm_topic_models = DataConverter.batch_convert_llm_topic_names(
                     conversation_id,
                     cluster_labels,

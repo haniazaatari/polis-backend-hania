@@ -92,7 +92,7 @@ def check_ollama_availability():
         # Don't try to list models which might be causing issues
         logger.info("Checking Ollama connection...")
         # Get the model name from environment or default to llama3.1:8b
-        model_name = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
+        model_name = os.environ.get("OLLAMA_MODEL")
         logger.info(f"Checking Ollama connection with model: {model_name}")
         # Simple ping to verify Ollama is running
         ollama.embeddings(model=model_name, prompt="test")
@@ -629,7 +629,7 @@ def update_conversation_with_ollama(conversation_id, layer_id=None, model_name=N
     
     # Get model name from environment variable or use default
     if model_name is None:
-        model_name = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
+        model_name = os.environ.get("OLLAMA_MODEL")
         logger.info(f"Using model from environment: {model_name}")
     
     # Check Ollama availability
