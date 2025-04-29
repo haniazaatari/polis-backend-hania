@@ -82,6 +82,7 @@ export default (env, argv) => {
       new webpack.DefinePlugin({
         'process.env.SUBSCRIPTION_LINK': JSON.stringify(process.env.SUBSCRIPTION_LINK),
         'process.env.SUBSCRIPTION_ID': JSON.stringify(process.env.SUBSCRIPTION_ID),
+        'process.env.SUBSCRIPTION_ID_PLUS': JSON.stringify(process.env.SUBSCRIPTION_ID_PLUS),
         'process.env.SUBSCRIPTION_KEY': JSON.stringify(process.env.SUBSCRIPTION_KEY),
       }),
 

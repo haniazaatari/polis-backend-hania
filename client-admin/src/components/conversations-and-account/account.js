@@ -26,16 +26,26 @@ class Account extends React.Component {
           <Box>
             <p>{this.props.user.hname}</p>
             <p>{this.props.user.email}</p>
-            {this.props.user.isPaidAccount ? (
+            {!this.props.user.isPaidAccount ? (
               <p><a href={process.env.SUBSCRIPTION_LINK}>Manage Subscription</a></p>
             ) : (
-              <stripe-buy-button
-                buy-button-id={process.env.SUBSCRIPTION_ID}
-                publishable-key={process.env.SUBSCRIPTION_KEY}
-                customer-email={this.props.user.email}
-                client-reference-id={this.props.user.uid}
-              >
-              </stripe-buy-button>
+              <>
+                <stripe-buy-button
+                  buy-button-id={process.env.SUBSCRIPTION_ID}
+                  publishable-key={process.env.SUBSCRIPTION_KEY}
+                  customer-email={this.props.user.email}
+                  client-reference-id={this.props.user.uid}
+                >
+                </stripe-buy-button>
+                or
+                <stripe-buy-button
+                  buy-button-id={process.env.SUBSCRIPTION_ID_PLUS}
+                  publishable-key={process.env.SUBSCRIPTION_KEY}
+                  customer-email={this.props.user.email}
+                  client-reference-id={this.props.user.uid}
+                >
+                </stripe-buy-button>
+              </>
             )}
           </Box>
         </Box>
