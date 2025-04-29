@@ -166,8 +166,18 @@ def list_jobs(dynamodb, status=None, limit=10):
             ScanIndexForward=False  # Sort in descending order by created_at
         )
     else:
-        # Scan for all jobs (up to limit)
-        response = table.scan(Limit=limit)
+        # Scan for all jobs and sort manually by created_at
+        response = table.scan(
+            ConsistentRead=True,  # Use consistent reads to immediately see new jobs
+            Limit=limit * 2       # Get more items since we'll sort and trim
+        )
+        
+        # Sort items by created_at in descending order
+        items = response.get('Items', [])
+        items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        # Trim to requested limit
+        return items[:limit]
     
     return response.get('Items', [])
 
@@ -362,7 +372,8 @@ def interactive_mode():
                 progress.add_task(description="Fetching jobs...", total=None)
                 jobs = list_jobs(
                     dynamodb=dynamodb,
-                    status=None if status == "ALL" else status
+                    status=None if status == "ALL" else status,
+                    limit=25 if status == "ALL" else 10
                 )
             
             display_jobs(jobs)
@@ -752,7 +763,7 @@ def main():
     list_parser.add_argument("--status", 
                              choices=["PENDING", "PROCESSING", "COMPLETED", "FAILED"],
                              help="Filter by status")
-    list_parser.add_argument("--limit", type=int, default=10,
+    list_parser.add_argument("--limit", type=int, default=25,
                              help="Maximum number of jobs to list")
     
     # Details command
