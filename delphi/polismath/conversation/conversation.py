@@ -2241,5 +2241,14 @@ class Conversation:
         # Export the conversation data to DynamoDB
         logger.info(f"Exporting conversation {self.conversation_id} to DynamoDB")
         
-        # Write everything in a single call, letting the DynamoDB client handle the details
-        return dynamodb_client.write_conversation(self)
+        try:
+            # Write everything in a single call, letting the DynamoDB client handle the details
+            success = dynamodb_client.write_conversation(self)
+            if not success:
+                logger.error(f"Failed to write conversation {self.conversation_id} to DynamoDB")
+            return success
+        except Exception as e:
+            logger.error(f"Exception during export to DynamoDB: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
