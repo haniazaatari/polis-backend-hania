@@ -529,6 +529,55 @@ const App = (props) => {
   useEffect(() => {
     const init = async () => {
       await getData();
+      
+      // Call to the Delphi endpoint to get LLM-generated topic names
+      net.polisGet("/api/v3/delphi", {
+        report_id: report_id
+      })
+        .then(response => {
+          console.log("Delphi topics response:", response);
+          
+          // Store the topics data for later use
+          if (response && response.status === "success") {
+            // Handle different response scenarios
+            if (response.runs && Object.keys(response.runs).length > 0) {
+              // We have LLM topic data!
+              console.log("LLM topic runs found:", Object.keys(response.runs).length);
+              
+              // Get the most recent run (should be first in the sorted object)
+              const runKeys = Object.keys(response.runs);
+              const latestRun = response.runs[runKeys[0]];
+              console.log("Latest LLM topics run:", latestRun);
+              
+              // In future, we'll integrate these topics with the visualization
+              // For example, replacing group labels with LLM-generated topic names
+            } else if (response.available_tables) {
+              // This means the DynamoDB connection worked but our table doesn't exist
+              console.log("DynamoDB connected but table not found. Available tables:", response.available_tables);
+              console.log("Hint:", response.hint);
+              
+              // Log that this is expected initially
+              console.log("NOTE: This is normal until the Delphi pipeline has been run for this conversation.");
+            } else if (response.error) {
+              // Something went wrong with the DynamoDB query
+              console.log("DynamoDB query error:", response.error);
+              console.log("Error type:", response.error_type);
+              if (response.help) {
+                console.log("Help:", response.help);
+              }
+            } else {
+              // Generic case - no topic data yet
+              console.log("No LLM topic data available yet");
+              if (response.message) {
+                console.log("Server message:", response.message);
+              }
+            }
+          }
+        })
+        .catch(error => {
+          console.error("Error calling Delphi endpoint:", error);
+        });
+      
       setInterval(() => {
         if (shouldPoll) {
           getData();

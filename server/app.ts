@@ -20,6 +20,7 @@ import server from "./src/server";
 import logger from "./src/utils/logger";
 import { handle_GET_conversationUuid } from "./src/routes/conversationUuid";
 import { handle_GET_xidReport } from "./src/routes/export";
+import { handle_GET_delphi } from "./src/routes/delphi";
 
 const app = express();
 
@@ -778,6 +779,8 @@ helpersInitialized.then(
     app.get("/api/v3/testConnection", moveToBody, handle_GET_testConnection);
 
     app.get("/api/v3/testDatabase", moveToBody, handle_GET_testDatabase);
+    
+    app.get("/api/v3/delphi", moveToBody, handle_GET_delphi);
 
     app.get("/robots.txt", function (req, res) {
       res.send("User-agent: *\n" + "Disallow: /api/");
