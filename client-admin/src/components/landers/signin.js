@@ -41,7 +41,7 @@ class SignIn extends React.Component {
     // if (!dest.length) {
     //   dest = "/";
     // }
-    this.props.dispatch(doSignin(attrs))
+    this.props.dispatch(doSignin(attrs, this.props.history.location?.state?.from?.pathname && `${this.props.history.location.state.from.pathname}${this.props.history.location.state.from.search}`))
   }
 
   maybeErrorMessage() {
@@ -113,8 +113,10 @@ class SignIn extends React.Component {
   render() {
     const { signInSuccessful, authed } = this.props
 
+    console.log(this.props)
+
     if (signInSuccessful || authed) {
-      return <Redirect to={'/'} />
+      return <Redirect to={this.props.history.location?.state?.from?.pathname ? `${this.props.history.location.state.from.pathname}${this.props.history.location.state.from.search}` : '/'} />
     }
 
     return (

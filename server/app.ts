@@ -1476,6 +1476,7 @@ helpersInitialized.then(
     // admin dash routes
     app.get(/^\/m\/[0-9][0-9A-Za-z]+(\/.*)?/, fetchIndexForAdminPage);
     app.get(/^\/integrate(\/.*)?/, fetchIndexForAdminPage);
+    app.get(/^\/upgrade(\/.*)?/, fetchIndexForAdminPage);
     app.get(/^\/other-conversations(\/.*)?/, fetchIndexForAdminPage);
     app.get(/^\/account(\/.*)?/, fetchIndexForAdminPage);
     app.get(/^\/bot(\/.*)?/, fetchIndexForAdminPage);

@@ -27,6 +27,7 @@ import ConversationAdminContainer from './components/conversation-admin/index'
 
 import Conversations from './components/conversations-and-account/conversations'
 import Account from './components/conversations-and-account/account'
+import Upgrade from './components/conversations-and-account/upgrade'
 import Integrate from './components/conversations-and-account/integrate'
 
 import InteriorHeader from './components/interior-header'
@@ -218,6 +219,13 @@ class App extends React.Component {
                         exact
                         path="/account"
                         component={Account}
+                      />
+                      <PrivateRoute
+                        isLoading={this.isLoading()}
+                        authed={this.isAuthed()}
+                        exact
+                        path="/upgrade"
+                        component={Upgrade}
                       />
                       <PrivateRoute
                         isLoading={this.isLoading()}

@@ -10,6 +10,22 @@ import Spinner from '../framework/spinner'
 @connect((state) => state.user)
 class Account extends React.Component {
   buildAccountMarkup() {
+    const btns = {
+      11967: <stripe-buy-button
+        buy-button-id={process.env.SUBSCRIPTION_ID}
+        publishable-key={process.env.SUBSCRIPTION_KEY}
+        customer-email={this.props.user.email}
+        client-reference-id={this.props.user.uid}
+      ></stripe-buy-button>,
+      11968: <stripe-buy-button
+        buy-button-id={process.env.SUBSCRIPTION_ID_PLUS}
+        publishable-key={process.env.SUBSCRIPTION_KEY}
+        customer-email={this.props.user.email}
+        client-reference-id={this.props.user.uid}
+      >
+      </stripe-buy-button>
+    };
+
     return (
       <>
         <Box>
@@ -20,12 +36,14 @@ class Account extends React.Component {
               lineHeight: 'body',
               mb: [3, null, 4]
             }}>
-            Account
+            Upgrade
           </Heading>
-          <p>Hi {this.props.user.hname.split(' ')[0]}!</p>
           <Box>
-            <p>{this.props.user.hname}</p>
-            <p>{this.props.user.email}</p>
+            {!this.props.user.isPaidAccount ? (
+              <p><a href={process.env.SUBSCRIPTION_LINK}>Manage Subscription</a></p>
+            ) : (
+              btns[this.props.location.search?.split('?gate=')[1]] || <div />
+            )}
           </Box>
         </Box>
       </>
