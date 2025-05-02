@@ -22,9 +22,14 @@ import net from "../util/net.js";
 import ConsensusNarrative from "./lists/consensusNarrative.jsx";
 import RawDataExport from "./RawDataExport.jsx";
 import TopicNarrative from "./lists/topicNarrative.jsx";
+import CommentsReport from "./commentsReport/CommentsReport.jsx";
 
-const pathname = window.location.pathname; // "/report/2arcefpshi"
+const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi"
+const route_type = pathname.split("/")[1]; // "report", "narrativeReport", or "commentsReport"
 const report_id = pathname.split("/")[2];
+
+// Debug the route
+console.log("ROUTE CHECK:", { pathname, route_type, report_id });
 
 function assertExists(obj, key) {
   if (typeof obj[key] === "undefined") {
@@ -56,6 +61,10 @@ const App = (props) => {
   );
   const [isStatsOnly, setIsStatsOnly] = useState(
     window.location.pathname.split("/")[1] === "stats"
+  );
+  
+  const [isCommentsReport, setIsCommentsReport] = useState(
+    window.location.pathname.split("/")[1] === "commentsReport"
   );
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth,
@@ -113,6 +122,27 @@ const App = (props) => {
       setIsNarrativeReport(true);
     } else if (isNarrativeReport && window.location.pathname.split("/")[1] !== "narrativeReport") {
       setIsNarrativeReport(false);
+    }
+    
+    // Handle comments report route
+    // Add debug logs
+    const pathParts = window.location.pathname.split("/");
+    console.log("PATH DEBUG:", {
+      fullPath: window.location.pathname,
+      firstPart: pathParts[1],
+      isCommentsReportRoute: pathParts[1] === "commentsReport",
+      currentState: isCommentsReport
+    });
+    
+    if (
+      pathParts[1] === "commentsReport" &&
+      isCommentsReport !== true
+    ) {
+      console.log("SETTING isCommentsReport to TRUE");
+      setIsCommentsReport(true);
+    } else if (isCommentsReport && pathParts[1] !== "commentsReport") {
+      console.log("SETTING isCommentsReport to FALSE");
+      setIsCommentsReport(false);
     }
     const queryString = window.location.search;
     const urlParams = new URLSearchParams(queryString);
@@ -648,26 +678,58 @@ const App = (props) => {
     );
   }
 
-  return isStatsOnly ? (
-    <section style={{ maxWidth: 1200, display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-      <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-        <h3>Participants</h3>
-        <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{ptptCountTotal}</p>
-      </div>
-      <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-        <h3>Comments</h3>
-        <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["n-cmts"]}</p>
-      </div>
-      <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-        <h3>Votes</h3>
-        <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{computeVoteTotal(math["user-vote-counts"])}</p>
-      </div>
-      <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-        <h3>Opinion Groups</h3>
-        <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["group-clusters"].length}</p>
-      </div>
-    </section>
-  ) : (
+  if (isStatsOnly) {
+    return (
+      <section style={{ maxWidth: 1200, display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+          <h3>Participants</h3>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{ptptCountTotal}</p>
+        </div>
+        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+          <h3>Comments</h3>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["n-cmts"]}</p>
+        </div>
+        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+          <h3>Votes</h3>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{computeVoteTotal(math["user-vote-counts"])}</p>
+        </div>
+        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+          <h3>Opinion Groups</h3>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["group-clusters"].length}</p>
+        </div>
+      </section>
+    );
+  }
+  // Debug what's going to be rendered
+  console.log("RENDER DECISION:", { 
+    route_type,
+    shouldShowCommentsReport: route_type === "commentsReport",
+    shouldShowNarrativeReport: route_type === "narrativeReport" 
+  });
+  
+  // Directly render CommentsReport if the URL starts with /commentsReport
+  if (route_type === "commentsReport") {
+    console.log("RENDERING: CommentsReport");
+    return <CommentsReport />;
+  }
+  
+  // Directly render NarrativeReport if the URL starts with /narrativeReport
+  if (route_type === "narrativeReport") {
+    console.log("RENDERING: NarrativeReport");
+    return (
+      <NarrativeOverview
+        conversation={conversation}
+        ptptCount={ptptCount}
+        ptptCountTotal={ptptCountTotal}
+        math={math}
+        computedStats={computedStats}
+      />
+    );
+  }
+  
+  // Otherwise render the standard report
+  console.log("RENDERING: Standard report");
+  return (
     <div style={{ margin: "0px 10px" }} data-testid="reports-overview">
       <Heading conversation={conversation} />
       <div
@@ -687,30 +749,20 @@ const App = (props) => {
 
         {/* This may eventually need to go back in below */}
         {/* stats={conversationStats} */}
+        <Overview
+          computedStats={computedStats}
+          math={math}
+          comments={comments}
+          ptptCount={ptptCount}
+          ptptCountTotal={ptptCountTotal}
+          conversation={conversation}
+          voteColors={voteColors}
+        />
 
-        {isNarrativeReport && (
-          <NarrativeOverview
-            conversation={conversation}
-            ptptCount={ptptCount}
-            ptptCountTotal={ptptCountTotal}
-            math={math}
-            computedStats={computedStats}
-          />
-        )}
-
-        {!isNarrativeReport && (
-          <Overview
-            computedStats={computedStats}
-            math={math}
-            comments={comments}
-            ptptCount={ptptCount}
-            ptptCountTotal={ptptCountTotal}
-            conversation={conversation}
-            voteColors={voteColors}
-          />
-        )}
-
-        {!isNarrativeReport && <RawDataExport conversation={conversation} report_id={report_id} />}
+        <RawDataExport 
+          conversation={conversation} 
+          report_id={report_id} 
+        />
 
         {isNarrativeReport ? (
           <>

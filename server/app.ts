@@ -1524,6 +1524,13 @@ helpersInitialized.then(
       /^\/stats\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       fetchIndexForReportPage
     );
+    // Report route for LLM-generated group topics
+    app.get(
+      /^\/commentsReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      function(req, res, next) {
+        return fetchIndexForReportPage(req, res, next);
+      }
+    );
 
     app.get(/^\/thirdPartyCookieTestPt1\.html$/, fetchThirdPartyCookieTestPt1);
     app.get(/^\/thirdPartyCookieTestPt2\.html$/, fetchThirdPartyCookieTestPt2);
