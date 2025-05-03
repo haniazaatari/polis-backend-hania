@@ -10,6 +10,7 @@ from typing import Dict, List, Any, Optional, Union
 from boto3.dynamodb.conditions import Key, Attr
 from botocore.exceptions import ClientError
 import numpy as np
+from decimal import Decimal
 from .converter import DataConverter
 from ..schemas.dynamo_models import (
     ConversationMeta,
@@ -725,7 +726,36 @@ class DynamoDBStorage:
                                 # Fall back to older Pydantic v1 method
                                 item = json.loads(cluster.json())
                             
-                            # Convert floats to Decimal for DynamoDB
+                            # Make sure comment_id is a proper Decimal for DynamoDB
+                            if 'comment_id' in item:
+                                try:
+                                    item['comment_id'] = Decimal(str(item['comment_id']))
+                                except Exception as e:
+                                    logger.error(f"Error converting comment_id to Decimal: {e}")
+                                    item['comment_id'] = Decimal('0')
+                            
+                            # Make sure all cluster_id values are proper Decimals
+                            for key in item:
+                                if key.startswith('layer') and key.endswith('_cluster_id'):
+                                    try:
+                                        # Ensure proper Decimal conversion by going through string
+                                        item[key] = Decimal(str(item[key])) if item[key] is not None else None
+                                    except Exception as e:
+                                        logger.error(f"Error converting {key} to Decimal: {e}")
+                                        item[key] = Decimal('0')
+                            
+                            # Convert all values in nested dictionaries
+                            for key in item:
+                                if isinstance(item[key], dict):
+                                    for inner_key, inner_value in item[key].items():
+                                        if isinstance(inner_value, (int, float)):
+                                            try:
+                                                item[key][inner_key] = Decimal(str(inner_value))
+                                            except Exception as e:
+                                                logger.error(f"Error converting {key}.{inner_key} to Decimal: {e}")
+                                                item[key][inner_key] = Decimal('0')
+                            
+                            # Convert all other floats to Decimal for DynamoDB
                             item = DataConverter.prepare_for_dynamodb(item)
                             
                             # Write to batch

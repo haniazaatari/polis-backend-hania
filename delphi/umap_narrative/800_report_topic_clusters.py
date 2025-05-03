@@ -257,7 +257,7 @@ class PolisConverter:
 class ReportGenerator:
     """Generate reports for Polis conversations."""
     
-    def __init__(self, conversation_id, model="gemma", no_cache=False, cluster_id=None):
+    def __init__(self, conversation_id, model="gemma", no_cache=False, cluster_id=None, extremity_threshold=0.3):
         """Initialize the report generator.
         
         Args:
@@ -265,11 +265,13 @@ class ReportGenerator:
             model: Name of the LLM model to use
             no_cache: Whether to ignore cached report data
             cluster_id: Optional specific cluster ID to process
+            extremity_threshold: Threshold for comment extremity (0-1) to use in filtering (default: 0.3)
         """
         self.conversation_id = str(conversation_id)
         self.model = model
         self.no_cache = no_cache
         self.cluster_id = cluster_id
+        self.extremity_threshold = extremity_threshold
         
         # Initialize PostgreSQL client
         self.postgres_client = PostgresClient()
@@ -329,31 +331,56 @@ class ReportGenerator:
         return (passes / votes) >= 0.2
     
     def filter_groups(self, comment):
-        """Filter for comments that show group differences."""
+        """
+        Filter for comments that show group differences.
+        
+        The comment_extremity value ranges from 0 to 1, where:
+        - 0 indicates complete consensus between groups
+        - 0.3 indicates notable differences (30% difference in agreement)
+        - 0.6 indicates extreme differences (60% difference in agreement)
+        - 1 indicates maximum disagreement
+        """
         comment_extremity = comment.get('comment_extremity', 0)
-        return comment_extremity > 1
+        comment_id = comment.get('comment_id', 'unknown')
+        logger.debug(f"Comment {comment_id}: extremity={comment_extremity}, threshold={self.extremity_threshold}")
+        return comment_extremity > self.extremity_threshold
     
-    def filter_topics(self, comment, topic_citations=None, sample_comments=None):
+    def filter_topics(self, comment, topic_cluster_id=None, topic_citations=None, sample_comments=None):
         """Filter for comments that are part of a specific topic."""
+        # Get comment ID
+        comment_id = comment.get('comment_id')
+        if not comment_id:
+            return False
+        
+        # Check if we have a specific cluster ID to filter by
+        if topic_cluster_id is not None:
+            layer0_cluster_id = comment.get('layer0_cluster_id')
+            if layer0_cluster_id is not None:
+                # Simple string comparison is more reliable across different numeric types
+                if str(layer0_cluster_id) == str(topic_cluster_id):
+                    logger.info(f"Including comment {comment_id} based on cluster match: {layer0_cluster_id}")
+                    return True
+                
         # Check if this comment ID is in our topic citations
-        if topic_citations and comment.get('comment_id') in topic_citations:
+        if topic_citations and str(comment_id) in [str(c) for c in topic_citations]:
             return True
             
         # If we have sample comments and not enough filtered comments,
         # try to match based on text similarity
         if sample_comments and len(sample_comments) > 0:
             comment_text = comment.get('comment', '')
-            if comment_text:
-                # Check if this comment text matches any sample comment
-                for sample in sample_comments:
-                    # Simple text matching - if the comment contains significant words from the sample
-                    sample_words = set(w.lower() for w in sample.split() if len(w) > 3)
-                    comment_words = set(w.lower() for w in comment_text.split() if len(w) > 3)
-                    common_words = sample_words.intersection(comment_words)
+            if not comment_text:
+                return False
+                
+            # Check if this comment text matches any sample comment
+            for sample in sample_comments:
+                # Skip non-string samples
+                if not isinstance(sample, str) or not sample:
+                    continue
                     
-                    # If there's significant overlap, consider it a match
-                    if len(common_words) >= min(2, len(sample_words)):
-                        return True
+                # Simple substring match rather than complex word comparison
+                if sample.lower() in comment_text.lower() or comment_text.lower() in sample.lower():
+                    return True
         
         return False
         
@@ -573,8 +600,65 @@ class ReportGenerator:
                 }
             }
     
+    def load_comment_clusters_from_dynamodb(self, conversation_id):
+        """
+        Load cluster assignments for comments from DynamoDB.
+        
+        Args:
+            conversation_id: Conversation ID to retrieve clusters for
+            
+        Returns:
+            Dictionary mapping comment IDs to their cluster assignments
+        """
+        try:
+            # Initialize DynamoDB connection
+            dynamodb = boto3.resource(
+                'dynamodb',
+                endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000'),
+                region_name=os.environ.get('AWS_REGION', 'us-west-2'),
+                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
+                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+            )
+            
+            # Connect to comment clusters table
+            clusters_table = dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
+            
+            # Use scan with filter instead of query for compatibility with all DynamoDB setups
+            # This is less efficient but more compatible
+            response = clusters_table.scan(
+                FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(str(conversation_id)),
+                Limit=1000  # Process in batches
+            )
+            
+            # Create mapping of comment IDs to cluster IDs
+            cluster_map = {}
+            for item in response.get('Items', []):
+                comment_id = item.get('comment_id')
+                layer0_cluster_id = item.get('layer0_cluster_id')
+                if comment_id is not None and layer0_cluster_id is not None:
+                    cluster_map[str(comment_id)] = layer0_cluster_id
+                    
+            # Handle pagination if needed
+            while 'LastEvaluatedKey' in response:
+                response = clusters_table.scan(
+                    FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(str(conversation_id)),
+                    ExclusiveStartKey=response['LastEvaluatedKey'],
+                    Limit=1000
+                )
+                for item in response.get('Items', []):
+                    comment_id = item.get('comment_id')
+                    layer0_cluster_id = item.get('layer0_cluster_id')
+                    if comment_id is not None and layer0_cluster_id is not None:
+                        cluster_map[str(comment_id)] = layer0_cluster_id
+            
+            logger.info(f"Loaded {len(cluster_map)} cluster assignments from DynamoDB")
+            return cluster_map
+        except Exception as e:
+            logger.error(f"Error loading cluster assignments from DynamoDB: {e}")
+            return {}
+    
     async def get_conversation_data(self):
-        """Get conversation data from PostgreSQL."""
+        """Get conversation data from PostgreSQL and DynamoDB."""
         try:
             # Initialize connection
             self.postgres_client.initialize()
@@ -602,6 +686,23 @@ class ReportGenerator:
             
             # Use the processed comments from the export data
             processed_comments = export_data.get('comments', [])
+            
+            # Load cluster assignments from DynamoDB
+            cluster_map = self.load_comment_clusters_from_dynamodb(self.conversation_id)
+            
+            # Enrich comments with cluster assignments
+            enriched_count = 0
+            for comment in processed_comments:
+                comment_id = str(comment.get('comment_id', ''))
+                if comment_id in cluster_map:
+                    comment['layer0_cluster_id'] = cluster_map[comment_id]
+                    enriched_count += 1
+            
+            # Log cluster assignment results
+            if enriched_count > 0:
+                logger.info(f"Enriched {enriched_count} comments with cluster assignments from DynamoDB")
+            else:
+                logger.warning("No comments could be enriched with cluster assignments")
             
             return {
                 "conversation": conversation,
@@ -649,6 +750,14 @@ class ReportGenerator:
             if len(filtered_comments) > 0:
                 logger.info(f"First filtered comment: {filtered_comments[0]}")
             
+            # Limit the number of comments for topic reports to avoid "Too many comments" error
+            if filter_func == self.filter_topics and len(filtered_comments) > 100:
+                logger.info(f"Limiting topic comments from {len(filtered_comments)} to 100")
+                # Sort by votes to include the most significant comments - use safer access for votes
+                filtered_comments.sort(key=lambda c: int(c.get('votes', 0)) if isinstance(c.get('votes'), (int, float)) else 0, reverse=True)
+                filtered_comments = filtered_comments[:100]
+                logger.info(f"Limited filtered comment count: {len(filtered_comments)}")
+            
             # Convert to XML
             xml = PolisConverter.convert_to_xml(filtered_comments)
             
@@ -668,29 +777,37 @@ class ReportGenerator:
     
     def get_model_response(self, system_lore, prompt_xml, model_version=None, is_topic=False):
         """Get response from the LLM model."""
+        # Helper method to create standard error JSON
+        def create_error_json(title, message):
+            return json.dumps({
+                "id": "polis_narrative_error_message",
+                "title": title,
+                "paragraphs": [
+                    {
+                        "id": "polis_narrative_error_message",
+                        "title": title,
+                        "sentences": [
+                            {
+                                "clauses": [
+                                    {
+                                        "text": message,
+                                        "citations": []
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            })
+            
+        # Store the method on self for use throughout the class
+        self.create_error_json = create_error_json
+            
         try:
             # Check if prompt is too large for topics
             if is_topic and len(prompt_xml) > 40000:  # Conservative estimate
-                return json.dumps({
-                    "id": "polis_narrative_error_message",
-                    "title": "Too many comments",
-                    "paragraphs": [
-                        {
-                            "id": "polis_narrative_error_message",
-                            "title": "Too many comments",
-                            "sentences": [
-                                {
-                                    "clauses": [
-                                        {
-                                            "text": "There are currently too many comments in this conversation for our AI to generate a topic response",
-                                            "citations": []
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                })
+                return create_error_json("Too many comments", 
+                    "There are currently too many comments in this conversation for our AI to generate a topic response")
             
             # Prepare the model prompt
             model_prompt = f"""
@@ -831,86 +948,25 @@ class ReportGenerator:
                 logger.error(f"Attempting to fix JSON...")
                 logger.error(f"Original JSON: {result}")
                 
-                # More advanced JSON fixing
-                # Remove trailing commas in objects
-                result = result.replace(',\n}', '\n}').replace(',\n]', '\n]')
-                result = result.replace(',}', '}').replace(',]', ']')
-                
-                # Add missing closing braces/brackets
-                open_braces = result.count('{')
-                close_braces = result.count('}')
-                open_brackets = result.count('[')
-                close_brackets = result.count(']')
-                
-                # Add missing closing braces
-                if open_braces > close_braces:
-                    for _ in range(open_braces - close_braces):
-                        result += '}'
-                        
-                # Add missing closing brackets
-                if open_brackets > close_brackets:
-                    for _ in range(open_brackets - close_brackets):
-                        result += ']'
-                
-                # Ensure property names are quoted
-                import re
-                # Find unquoted keys (word before colon)
-                unquoted_props = re.findall(r'(\s*)(\w+)(\s*):(\s*)', result)
-                for match in unquoted_props:
-                    spacing, key, pre_colon, post_colon = match
-                    quoted_form = f'{spacing}"{key}"{pre_colon}:{post_colon}'
-                    result = result.replace(f'{spacing}{key}{pre_colon}:{post_colon}', quoted_form)
-                
-                # Check for trailing text after JSON
+                # Extract just the JSON object from the text if present
                 if '{' in result and '}' in result:
                     start_idx = result.find('{')
                     end_idx = result.rfind('}') + 1
-                    if end_idx < len(result):
-                        logger.info(f"Trimming trailing content after JSON: {result[end_idx:]}")
-                        result = result[start_idx:end_idx]
+                    result = result[start_idx:end_idx]
+                    logger.info("Extracted JSON object from response")
                 
-                # Fix issues with missing commas between properties
-                # Look for pattern of } followed by " (missing comma)
-                result = re.sub(r'}\s*"', '}, "', result)
-                # Look for pattern of ] followed by " (missing comma)
-                result = re.sub(r']\s*"', '], "', result)
+                # Instead of complex attempts to fix JSON, return a simpler error JSON
+                # This is cleaner than trying to patch potentially invalid JSON
                 
-                # Special case for groups section which often has just 'paragraphs' without a top-level object
-                if result.strip().startswith('"paragraphs"') or result.strip().startswith('{\n"paragraphs"'):
-                    result = '{' + result + '}'
-                elif result.strip().startswith('paragraphs') or result.strip().startswith('{\nparagraphs'):
-                    result = '{"paragraphs"' + result[9:] + '}'
-                elif result.strip().startswith('"id"') or result.strip().startswith('{\n"id"'):
-                    # For topic responses without a top-level object
-                    result = '{' + result + '}'
-                
-                # Try parsing again
+                # Try parsing again with the extracted JSON
                 try:
                     json.loads(result)
                     logger.info("Successfully fixed JSON")
                 except json.JSONDecodeError as e:
+                    # If still can't parse, return a standard error JSON
                     logger.error(f"Could not fix JSON: {e}")
-                    # Provide a simpler, valid JSON as the fallback
-                    return json.dumps({
-                        "id": "polis_narrative_error_message",
-                        "title": "Response Format Error",
-                        "paragraphs": [
-                            {
-                                "id": "polis_narrative_error_message",
-                                "title": "Response Format Error",
-                                "sentences": [
-                                    {
-                                        "clauses": [
-                                            {
-                                                "text": "There was an error generating the narrative due to response format issues.",
-                                                "citations": []
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    })
+                    return self.create_error_json("Response Format Error", 
+                                                "The model returned a response in an invalid format.")
             
             return result
         
@@ -919,26 +975,10 @@ class ReportGenerator:
             import traceback
             logger.error(traceback.format_exc())
             
-            return json.dumps({
-                "id": "polis_narrative_error_message",
-                "title": "Narrative Error Message",
-                "paragraphs": [
-                    {
-                        "id": "polis_narrative_error_message",
-                        "title": "Narrative Error Message",
-                        "sentences": [
-                            {
-                                "clauses": [
-                                    {
-                                        "text": "There was an error generating the narrative. Please refresh the page once all sections have been generated. It may also be a problem with this model, especially if your content discussed sensitive topics.",
-                                        "citations": []
-                                    }
-                                ]
-                            }
-                        ]
-                    }
-                ]
-            })
+            return self.create_error_json(
+                "Narrative Error Message",
+                "There was an error generating the narrative. Please refresh the page once all sections have been generated. It may also be a problem with this model, especially if your content discussed sensitive topics."
+            )
     
     async def get_topics(self):
         """Get topics for the conversation from DynamoDB."""
@@ -1401,6 +1441,30 @@ class ReportGenerator:
         
         self.storage.put_item(topics_item)
         
+        # Create a DynamoDB storage instance to get cluster data
+        dynamo_storage = DynamoDBStorage(
+            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT')
+        )
+        
+        # Get cluster assignments for comments to extract cluster IDs
+        clusters_table = dynamo_storage.dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
+        response = clusters_table.scan(
+            FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(str(self.conversation_id)),
+            Limit=1000  # Process in batches
+        )
+        clusters = response.get('Items', [])
+        
+        # Handle pagination if needed
+        while 'LastEvaluatedKey' in response:
+            response = clusters_table.scan(
+                FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(str(self.conversation_id)),
+                ExclusiveStartKey=response['LastEvaluatedKey'],
+                Limit=1000
+            )
+            clusters.extend(response.get('Items', []))
+        
+        logger.info(f"Retrieved {len(clusters)} cluster assignments")
+        
         # Process each topic
         template_path = self.prompt_base_path / "subtaskPrompts/topics.xml"
         if not template_path.exists():
@@ -1430,12 +1494,27 @@ class ReportGenerator:
             rid_section_model = f"{self.conversation_id}#{section_name}#{self.model}"
             cached_response = self.storage.query_by_rid_section_model(rid_section_model)
             
+            # Extract cluster ID from the citations - the first part of any topic is usually the cluster ID
+            cluster_id = None
+            for item in clusters:
+                if str(item.get('comment_id')) in [str(c) for c in topic.get('citations', [])[:5]]:
+                    cluster_id = item.get('layer0_cluster_id')
+                    if cluster_id is not None:
+                        break
+            
             # Create filter for this topic
-            # Include both citations and sample comments to increase our chances of finding related content
+            # Include cluster ID, citations, and sample comments to filter relevant comments
             filter_args = {
+                'topic_cluster_id': cluster_id,  # Add cluster ID to filter 
                 'topic_citations': topic.get('citations', []),
                 'sample_comments': topic.get('sample_comments', [])
             }
+            
+            # Log what we're filtering by
+            logger.info(f"Filtering topic '{topic_name}' with cluster_id={cluster_id}, " +
+                       f"{len(topic.get('citations', []))} citations, " +
+                       f"{len(topic.get('sample_comments', []))} sample comments")
+                       
             structured_comments = await self.get_comments_as_xml(self.filter_topics, filter_args)
             
             # If we have a cached response, use it
@@ -1637,7 +1716,7 @@ async def check_report_status(conversation_id, model, report_storage=None):
     
     return topic_reports
 
-async def process_all_layer0_clusters(conversation_id, model, no_cache=False, only_errors=True):
+async def process_all_layer0_clusters(conversation_id, model, no_cache=False, only_errors=True, extremity_threshold=0.3):
     """Process all clusters in layer 0 for a specific conversation.
     
     Args:
@@ -1645,6 +1724,7 @@ async def process_all_layer0_clusters(conversation_id, model, no_cache=False, on
         model: Model to use for generation
         no_cache: Whether to ignore cached results
         only_errors: Only regenerate reports that have errors or are missing
+        extremity_threshold: Threshold for comment extremity in the groups section (default: 0.3)
     """
     # Get all cluster IDs for layer 0
     dynamo_storage = DynamoDBStorage(
@@ -1704,7 +1784,8 @@ async def process_all_layer0_clusters(conversation_id, model, no_cache=False, on
                         conversation_id=conversation_id,
                         model=model,
                         no_cache=no_cache,
-                        cluster_id=cluster_id
+                        cluster_id=cluster_id,
+                        extremity_threshold=extremity_threshold
                     )
                     
                     # Generate the topic report
@@ -1750,6 +1831,8 @@ async def main():
                         help='Check status of existing reports without generating new ones')
     parser.add_argument('--regenerate-all', action='store_true',
                         help='Regenerate reports for all clusters (not just error ones)')
+    parser.add_argument('--extremity-threshold', type=float, default=0.3,
+                        help='Threshold for comment extremity in the groups section (0.0-1.0, default: 0.3)')
     args = parser.parse_args()
     
     # Set up environment variables for database connections
@@ -1771,6 +1854,7 @@ async def main():
     logger.info(f"- Conversation ID: {args.conversation_id}")
     logger.info(f"- Model: {args.model}")
     logger.info(f"- Cache: {'disabled' if args.no_cache else 'enabled'}")
+    logger.info(f"- Extremity threshold: {args.extremity_threshold} (groups section)")
     
     # Special case for just checking report status
     if args.check_reports:
@@ -1807,7 +1891,8 @@ async def main():
             args.conversation_id, 
             args.model, 
             args.no_cache, 
-            only_errors=not args.regenerate_all
+            only_errors=not args.regenerate_all,
+            extremity_threshold=args.extremity_threshold
         )
         return
     
@@ -1820,7 +1905,8 @@ async def main():
         conversation_id=args.conversation_id,
         model=args.model,
         no_cache=args.no_cache,
-        cluster_id=args.cluster_id
+        cluster_id=args.cluster_id,
+        extremity_threshold=args.extremity_threshold
     )
     
     # Generate report
