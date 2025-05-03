@@ -85,6 +85,11 @@ services:
       - AWS_REGION=${AWS_REGION:-us-east-1}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      # S3 storage for visualization files
+      - AWS_S3_ENDPOINT=${AWS_S3_ENDPOINT:-http://minio:9000}
+      - AWS_S3_ACCESS_KEY_ID=${AWS_S3_ACCESS_KEY_ID:-minioadmin}
+      - AWS_S3_SECRET_ACCESS_KEY=${AWS_S3_SECRET_ACCESS_KEY:-minioadmin}
+      - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME:-delphi}
       # API keys for LLM services
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       # PostgreSQL connection details for scripts that use them directly
@@ -188,6 +193,26 @@ services:
     # Run ollama server
     command: serve
     restart: unless-stopped
+    
+  # MinIO S3-compatible storage
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      # Setup for auto-bucket creation with public read access
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:9001
+      MINIO_DOMAIN: localhost
+      # Allow public policy to be set
+      MINIO_BROWSER: "on"
+    command: server /data --console-address ":9001"
+    networks:
+      - "polis-net"
 
 networks:
   polis-net:
@@ -206,5 +231,8 @@ volumes:
     labels:
       polis_tag: ${TAG:-dev}
   ollama-models:
+    labels:
+      polis_tag: ${TAG:-dev}
+  minio_data:
     labels:
       polis_tag: ${TAG:-dev}

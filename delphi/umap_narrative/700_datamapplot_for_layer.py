@@ -17,10 +17,143 @@ import numpy as np
 import pandas as pd
 import datamapplot
 from pathlib import Path
+import boto3
 from boto3.dynamodb.conditions import Key
 
 # Import from local modules
 from polismath_commentgraph.utils.storage import PostgresClient, DynamoDBStorage
+
+# Function to interact with S3
+def s3_upload_file(local_file_path, s3_key):
+    """
+    Upload a file to S3
+    
+    Args:
+        local_file_path: Path to the local file to upload
+        s3_key: S3 key (path) where the file should be stored
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    # Get S3 settings from environment
+    endpoint_url = os.environ.get('AWS_S3_ENDPOINT')
+    access_key = os.environ.get('AWS_S3_ACCESS_KEY_ID')
+    secret_key = os.environ.get('AWS_S3_SECRET_ACCESS_KEY')
+    bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
+    region = os.environ.get('AWS_REGION')
+    
+    if not all([endpoint_url, access_key, secret_key, bucket_name]):
+        logger.error("Missing S3 configuration. Cannot upload file.")
+        return False
+    
+    try:
+        # Create S3 client
+        s3_client = boto3.client(
+            's3',
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region,
+            # For MinIO/local development, these settings help
+            config=boto3.session.Config(signature_version='s3v4'),
+            verify=False
+        )
+        
+        # Check if bucket exists, create if it doesn't
+        try:
+            s3_client.head_bucket(Bucket=bucket_name)
+            logger.info(f"Bucket {bucket_name} exists")
+        except Exception as e:
+            logger.info(f"Bucket {bucket_name} doesn't exist or not accessible, creating... Error: {e}")
+            
+            try:
+                # Create the bucket - for MinIO local we don't need LocationConstraint
+                if region == 'us-east-1' or 'localhost' in endpoint_url or 'minio' in endpoint_url:
+                    s3_client.create_bucket(Bucket=bucket_name)
+                else:
+                    s3_client.create_bucket(
+                        Bucket=bucket_name,
+                        CreateBucketConfiguration={'LocationConstraint': region}
+                    )
+                
+                # Apply bucket policy to make objects public-read
+                bucket_policy = {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "PublicReadGetObject",
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": ["s3:GetObject"],
+                            "Resource": [f"arn:aws:s3:::{bucket_name}/*"]
+                        }
+                    ]
+                }
+                
+                # Set the bucket policy
+                try:
+                    s3_client.put_bucket_policy(
+                        Bucket=bucket_name,
+                        Policy=json.dumps(bucket_policy)
+                    )
+                    logger.info(f"Set public-read bucket policy for {bucket_name}")
+                except Exception as policy_error:
+                    logger.warning(f"Could not set bucket policy: {policy_error}")
+                    # Continue anyway
+            except Exception as create_error:
+                logger.error(f"Failed to create bucket: {create_error}")
+                raise
+        
+        # Upload file
+        logger.info(f"Uploading {local_file_path} to s3://{bucket_name}/{s3_key}")
+        
+        # For HTML files, set content type correctly
+        extra_args = {
+            'ACL': 'public-read'  # Make object publicly readable
+        }
+        
+        # Set the correct content type based on file extension
+        if local_file_path.endswith('.html'):
+            extra_args['ContentType'] = 'text/html'
+        elif local_file_path.endswith('.png'):
+            extra_args['ContentType'] = 'image/png'
+        elif local_file_path.endswith('.svg'):
+            extra_args['ContentType'] = 'image/svg+xml'
+            
+        s3_client.upload_file(
+            local_file_path,
+            bucket_name, 
+            s3_key,
+            ExtraArgs=extra_args
+        )
+        
+        # Generate a URL for the uploaded file
+        if endpoint_url.startswith('http://localhost') or endpoint_url.startswith('http://127.0.0.1'):
+            # For local development with MinIO
+            url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+            # Clean up URL if needed
+            url = url.replace('///', '//')
+        elif 'minio' in endpoint_url:
+            # For Docker container access to MinIO
+            url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+            url = url.replace('///', '//')
+        else:
+            # For AWS S3
+            if endpoint_url.startswith('https://s3.'):
+                # Standard AWS S3 endpoint
+                url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
+            else:
+                # Custom S3 endpoint
+                url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+        
+        logger.info(f"File uploaded successfully to {url}")
+        return url
+        
+    except Exception as e:
+        logger.error(f"Error uploading file to S3: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
 
 # Configure logging with less verbosity
 logging.basicConfig(
@@ -120,6 +253,21 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
         os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
     if not os.environ.get('AWS_DEFAULT_REGION'):
         os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
+        
+    # S3 settings
+    if not os.environ.get('AWS_S3_ENDPOINT'):
+        os.environ['AWS_S3_ENDPOINT'] = 'http://localhost:9000'
+    if not os.environ.get('AWS_S3_ACCESS_KEY_ID'):
+        os.environ['AWS_S3_ACCESS_KEY_ID'] = 'minioadmin'
+    if not os.environ.get('AWS_S3_SECRET_ACCESS_KEY'):
+        os.environ['AWS_S3_SECRET_ACCESS_KEY'] = 'minioadmin'
+    if not os.environ.get('AWS_S3_BUCKET_NAME'):
+        os.environ['AWS_S3_BUCKET_NAME'] = 'delphi'
+        
+    logger.info(f"S3 Storage settings:")
+    logger.info(f"- Endpoint: {os.environ.get('AWS_S3_ENDPOINT')}")
+    logger.info(f"- Bucket: {os.environ.get('AWS_S3_BUCKET_NAME')}")
+    logger.info(f"- Region: {os.environ.get('AWS_REGION')}")
 
 def load_comment_texts(zid):
     """
@@ -625,10 +773,34 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
                 cvd_safer=True if num_unique_labels > 50 else False  # Use CVD-safer coloring for layers with many clusters
             )
             
-            # Save the visualization
+            # Save the visualization locally
             logger.debug(f"Saving visualization to {viz_file}")
             interactive_figure.save(viz_file)
             logger.info(f"Saved visualization to {viz_file}")
+            
+            # Upload to S3
+            try:
+                # Get job ID and report ID from environment variables
+                job_id = os.environ.get('DELPHI_JOB_ID', 'unknown')
+                report_id = os.environ.get('DELPHI_REPORT_ID', 'unknown')
+                
+                # Create S3 key using report ID and job ID
+                s3_key = f"visualizations/{report_id}/{job_id}/layer_{layer_id}_datamapplot.html"
+                s3_url = s3_upload_file(viz_file, s3_key)
+                
+                if s3_url:
+                    logger.info(f"Visualization uploaded to S3: {s3_url}")
+                    # Save S3 URL to file for reference
+                    url_file = os.path.join(os.path.dirname(viz_file), f"{zid}_layer_{layer_id}_s3_url.txt")
+                    with open(url_file, 'w') as f:
+                        f.write(s3_url)
+                    logger.info(f"S3 URL saved to {url_file}")
+                else:
+                    logger.warning("Failed to upload visualization to S3")
+            except Exception as s3_error:
+                logger.error(f"Error uploading to S3: {s3_error}")
+                import traceback
+                logger.error(f"S3 upload traceback: {traceback.format_exc()}")
             
             # Try to open in browser
             try:

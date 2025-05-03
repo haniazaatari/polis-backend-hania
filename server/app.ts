@@ -21,6 +21,8 @@ import logger from "./src/utils/logger";
 import { handle_GET_conversationUuid } from "./src/routes/conversationUuid";
 import { handle_GET_xidReport } from "./src/routes/export";
 import { handle_GET_delphi } from "./src/routes/delphi";
+import { handle_GET_delphi_visualizations } from "./src/routes/delphi/visualizations";
+import { handle_POST_delphi_jobs } from "./src/routes/delphi/jobs";
 
 const app = express();
 
@@ -781,6 +783,36 @@ helpersInitialized.then(
     app.get("/api/v3/testDatabase", moveToBody, handle_GET_testDatabase);
     
     app.get("/api/v3/delphi", moveToBody, handle_GET_delphi);
+    
+    // Add POST endpoint for creating Delphi jobs
+    app.post("/api/v3/delphi/jobs", moveToBody, function(req, res) {
+      try {
+        handle_POST_delphi_jobs(req, res);
+      } catch (err) {
+        console.error("Error in delphi jobs creation route:", err);
+        res.json({
+          status: "error",
+          message: "Internal server error in job creation endpoint",
+          error: err.message || "Unknown error"
+        });
+      }
+    });
+    
+    // Use the directly imported handler from the top of the file
+    
+    // Add error handling wrapper for async route handler
+    app.get("/api/v3/delphi/visualizations", moveToBody, function(req, res) {
+      try {
+        handle_GET_delphi_visualizations(req, res);
+      } catch (err) {
+        console.error("Error in delphi visualizations route:", err);
+        res.json({
+          status: "error",
+          message: "Internal server error in visualizations endpoint",
+          error: err.message || "Unknown error"
+        });
+      }
+    });
 
     app.get("/robots.txt", function (req, res) {
       res.send("User-agent: *\n" + "Disallow: /api/");

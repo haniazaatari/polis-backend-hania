@@ -372,6 +372,18 @@ class JobProcessor:
             # Add environment variables for Docker to work
             env = os.environ.copy()
             
+            # Add job ID to environment
+            env['DELPHI_JOB_ID'] = job_id
+            
+            # Add report ID to environment if available, otherwise use conversation ID
+            report_id = job.get('report_id', conversation_id)
+            env['DELPHI_REPORT_ID'] = str(report_id)
+            
+            self.update_job_logs(job, {
+                'level': 'INFO',
+                'message': f'Setting DELPHI_JOB_ID={job_id}, DELPHI_REPORT_ID={report_id}'
+            })
+            
             # Add any environment variables from the job
             if 'environment' in job and isinstance(job['environment'], dict):
                 for key, value in job['environment'].items():
@@ -479,11 +491,18 @@ class JobProcessor:
             # Determine success/failure based on return code
             success = return_code == 0
             
-            # Prepare result
+            # Get the report ID that was used
+            report_id = env.get('DELPHI_REPORT_ID', conversation_id)
+            
+            # Prepare result with visualization URLs
             result = {
                 'return_code': return_code,
                 'output_summary': '\n'.join(stdout_lines[-10:]) if stdout_lines else 'No output',
-                'visualization_folder': f'visualizations/{conversation_id}'
+                'visualization_path': f'visualizations/{report_id}/{job_id}',
+                'report_id': report_id,
+                'visualization_urls': {
+                    'interactive': f"{os.environ.get('AWS_S3_ENDPOINT', '')}/{os.environ.get('AWS_S3_BUCKET_NAME', 'delphi')}/visualizations/{report_id}/{job_id}/layer_0_datamapplot.html"
+                }
             }
             
             # Add timeout message if applicable

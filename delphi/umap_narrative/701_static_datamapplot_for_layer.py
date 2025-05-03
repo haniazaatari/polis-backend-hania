@@ -257,6 +257,138 @@ def load_comment_texts(zid):
         except:
             pass
 
+# Add S3 upload function
+def s3_upload_file(local_file_path, s3_key):
+    """
+    Upload a file to S3
+    
+    Args:
+        local_file_path: Path to the local file to upload
+        s3_key: S3 key (path) where the file should be stored
+        
+    Returns:
+        str: URL of the uploaded file if successful, False otherwise
+    """
+    # Get S3 settings from environment
+    endpoint_url = os.environ.get('AWS_S3_ENDPOINT')
+    access_key = os.environ.get('AWS_S3_ACCESS_KEY_ID')
+    secret_key = os.environ.get('AWS_S3_SECRET_ACCESS_KEY')
+    bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
+    region = os.environ.get('AWS_REGION')
+    
+    if not all([endpoint_url, access_key, secret_key, bucket_name]):
+        logger.error("Missing S3 configuration. Cannot upload file.")
+        return False
+    
+    try:
+        # Create S3 client
+        s3_client = boto3.client(
+            's3',
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region,
+            # For MinIO/local development, these settings help
+            config=boto3.session.Config(signature_version='s3v4'),
+            verify=False
+        )
+        
+        # Check if bucket exists, create if it doesn't
+        try:
+            s3_client.head_bucket(Bucket=bucket_name)
+            logger.info(f"Bucket {bucket_name} exists")
+        except Exception as e:
+            logger.info(f"Bucket {bucket_name} doesn't exist or not accessible, creating... Error: {e}")
+            
+            try:
+                # Create the bucket - for MinIO local we don't need LocationConstraint
+                if region == 'us-east-1' or 'localhost' in endpoint_url or 'minio' in endpoint_url:
+                    s3_client.create_bucket(Bucket=bucket_name)
+                else:
+                    s3_client.create_bucket(
+                        Bucket=bucket_name,
+                        CreateBucketConfiguration={'LocationConstraint': region}
+                    )
+                
+                # Apply bucket policy to make objects public-read
+                bucket_policy = {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "PublicReadGetObject",
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": ["s3:GetObject"],
+                            "Resource": [f"arn:aws:s3:::{bucket_name}/*"]
+                        }
+                    ]
+                }
+                
+                # Set the bucket policy
+                try:
+                    s3_client.put_bucket_policy(
+                        Bucket=bucket_name,
+                        Policy=json.dumps(bucket_policy)
+                    )
+                    logger.info(f"Set public-read bucket policy for {bucket_name}")
+                except Exception as policy_error:
+                    logger.warning(f"Could not set bucket policy: {policy_error}")
+                    # Continue anyway
+            except Exception as create_error:
+                logger.error(f"Failed to create bucket: {create_error}")
+                raise
+        
+        # Upload file
+        logger.info(f"Uploading {local_file_path} to s3://{bucket_name}/{s3_key}")
+        
+        # For HTML files, set content type correctly
+        extra_args = {
+            'ACL': 'public-read'  # Make object publicly readable
+        }
+        
+        # Set the correct content type based on file extension
+        if local_file_path.endswith('.html'):
+            extra_args['ContentType'] = 'text/html'
+        elif local_file_path.endswith('.png'):
+            extra_args['ContentType'] = 'image/png'
+        elif local_file_path.endswith('.svg'):
+            extra_args['ContentType'] = 'image/svg+xml'
+            
+        s3_client.upload_file(
+            local_file_path,
+            bucket_name, 
+            s3_key,
+            ExtraArgs=extra_args
+        )
+        
+        # Generate a URL for the uploaded file
+        if endpoint_url.startswith('http://localhost') or endpoint_url.startswith('http://127.0.0.1'):
+            # For local development with MinIO
+            url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+            # Clean up URL if needed
+            url = url.replace('///', '//')
+        elif 'minio' in endpoint_url:
+            # For Docker container access to MinIO
+            url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+            url = url.replace('///', '//')
+        else:
+            # For AWS S3
+            if endpoint_url.startswith('https://s3.'):
+                # Standard AWS S3 endpoint
+                url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
+            else:
+                # Custom S3 endpoint
+                url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+        
+        logger.info(f"File uploaded successfully to {url}")
+        return url
+        
+    except Exception as e:
+        logger.error(f"Error uploading file to S3: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return False
+
 def generate_static_datamapplot(zid, layer_num=0, output_dir=None):
     """Generate static datamapplot visualizations using datamapplot library"""
     logger.info(f"Generating static datamapplot for conversation {zid}, layer {layer_num}")
@@ -278,9 +410,22 @@ def generate_static_datamapplot(zid, layer_num=0, output_dir=None):
         host_dir = f"/visualizations/{zid}"
         local_dir = f"/Users/colinmegill/polis/delphi/visualizations/{zid}"
         
+        # Ensure directories exist
         os.makedirs(container_dir, exist_ok=True)
         if os.path.exists("/visualizations"):
             os.makedirs(host_dir, exist_ok=True)
+            
+        # Make sure S3 environment variables are set
+        if not os.environ.get('AWS_S3_ENDPOINT'):
+            os.environ['AWS_S3_ENDPOINT'] = 'http://localhost:9000'
+        if not os.environ.get('AWS_S3_ACCESS_KEY_ID'):
+            os.environ['AWS_S3_ACCESS_KEY_ID'] = 'minioadmin'
+        if not os.environ.get('AWS_S3_SECRET_ACCESS_KEY'):
+            os.environ['AWS_S3_SECRET_ACCESS_KEY'] = 'minioadmin'
+        if not os.environ.get('AWS_S3_BUCKET_NAME'):
+            os.environ['AWS_S3_BUCKET_NAME'] = 'delphi'
+        if not os.environ.get('AWS_REGION'):
+            os.environ['AWS_REGION'] = 'us-east-1'
         
         # Prepare data for datamapplot
         positions = data["comment_positions"]
@@ -382,6 +527,47 @@ def generate_static_datamapplot(zid, layer_num=0, output_dir=None):
             os.system(f"cp {presentation_png} {host_dir}/")
             os.system(f"cp {svg_file} {host_dir}/")
             logger.info(f"Copied files to {host_dir}")
+            
+        # Upload files to S3
+        try:
+            # Create S3 keys for these files
+            s3_urls = {}
+            
+            # Get job ID and report ID from environment variables
+            job_id = os.environ.get('DELPHI_JOB_ID', 'unknown')
+            report_id = os.environ.get('DELPHI_REPORT_ID', 'unknown')
+            
+            # Upload static PNG
+            s3_key_png = f"visualizations/{report_id}/{job_id}/layer_{layer_num}_datamapplot_static.png"
+            s3_url_png = s3_upload_file(static_png, s3_key_png)
+            if s3_url_png:
+                s3_urls["png"] = s3_url_png
+                logger.info(f"Static PNG uploaded to S3: {s3_url_png}")
+            
+            # Upload presentation PNG
+            s3_key_presentation = f"visualizations/{report_id}/{job_id}/layer_{layer_num}_datamapplot_presentation.png"
+            s3_url_presentation = s3_upload_file(presentation_png, s3_key_presentation)
+            if s3_url_presentation:
+                s3_urls["presentation_png"] = s3_url_presentation
+                logger.info(f"Presentation PNG uploaded to S3: {s3_url_presentation}")
+            
+            # Upload SVG
+            s3_key_svg = f"visualizations/{report_id}/{job_id}/layer_{layer_num}_datamapplot_static.svg"
+            s3_url_svg = s3_upload_file(svg_file, s3_key_svg)
+            if s3_url_svg:
+                s3_urls["svg"] = s3_url_svg
+                logger.info(f"SVG uploaded to S3: {s3_url_svg}")
+            
+            # Save S3 URLs to a JSON file for reference
+            if s3_urls:
+                url_file = os.path.join(container_dir, f"{zid}_layer_{layer_num}_s3_urls.json")
+                with open(url_file, 'w') as f:
+                    json.dump(s3_urls, f, indent=2)
+                logger.info(f"S3 URLs saved to {url_file}")
+        except Exception as s3_error:
+            logger.error(f"Error uploading to S3: {s3_error}")
+            import traceback
+            logger.error(f"S3 upload traceback: {traceback.format_exc()}")
         
         return True
         
