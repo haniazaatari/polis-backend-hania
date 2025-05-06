@@ -9,7 +9,7 @@ GIT_BRANCH="stable"
 
 if [ ! -d "polis" ]; then
   echo "Cloning public repository from $GIT_REPO_URL, branch: $GIT_BRANCH (HTTPS - Public Repo)"
-  git clone -b "$GIT_BRANCH" "$GIT_REPO_URL" polis
+  git clone --depth 1 -b "$GIT_BRANCH" "$GIT_REPO_URL" polis
 else
   echo "Polis directory already exists, skipping cloning, pulling instead"
 fi
@@ -73,9 +73,6 @@ echo "Constructed DATABASE_URL: $DATABASE_URL"
 echo "Appending DATABASE_URL to .env"
 echo "DATABASE_URL=$DATABASE_URL" >> .env
 
-echo "--- Final .env file content (Appended DATABASE_URL) ---"
-cat .env
-
 SERVICE_FROM_FILE=$(cat /tmp/service_type.txt)
 echo "DEBUG: Service type read from /tmp/service_type.txt: [$SERVICE_FROM_FILE]"
 
@@ -97,6 +94,20 @@ elif [ "$SERVICE_FROM_FILE" == "math" ]; then
   /usr/local/bin/docker-compose up -d math --build --force-recreate
 elif [ "$SERVICE_FROM_FILE" == "delphi" ]; then
   echo "Starting docker-compose up for 'delphi' service"
+  echo "Fetching Ollama Service URL for Delphi..."
+  OLLAMA_URL=$(aws secretsmanager get-secret-value --secret-id /polis/ollama-service-url --query SecretString --output text --region us-east-1) 
+
+  if [ -z "$OLLAMA_URL" ]; then
+    echo "Error: Could not retrieve Ollama Service URL from Secrets Manager: /polis/ollama-service-url"
+    exit 1
+  fi
+  echo "Retrieved Ollama Service URL."
+
+  # Append OLLAMA_HOST to .env
+  echo "Appending OLLAMA_HOST to .env for Delphi"
+  # Using printf for slightly safer appending in case of special characters in URL
+  printf "\nOLLAMA_HOST=%s\n" "$OLLAMA_URL" >> .env
+  echo "OLLAMA_HOST appended."
   
   # Check if instance size file exists
   if [ -f "/tmp/instance_size.txt" ]; then

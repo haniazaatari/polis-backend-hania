@@ -49,6 +49,7 @@ services:
     volumes:
       # Persist logs to a volume, so they can be accessed after the container is stopped.
       - server-logs:/app/logs
+    restart: unless-stopped
 
   math:
     image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis/math:latest
@@ -64,6 +65,7 @@ services:
       - WEBSERVER_PASS=${WEBSERVER_PASS}
     networks:
       - "polis-net"
+    restart: unless-stopped
 
   delphi:
     image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis/delphi:latest
@@ -79,7 +81,7 @@ services:
       - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT:-http://dynamodb:8000}
       - POLL_INTERVAL=${POLL_INTERVAL:-2}
       # Ollama connection
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
       # AWS environment variables (will be provided in prod)
       - AWS_REGION=${AWS_REGION:-us-east-1}
@@ -111,6 +113,7 @@ services:
         limits:
           memory: ${DELPHI_CONTAINER_MEMORY:-4g}
           cpus: ${DELPHI_CONTAINER_CPUS:-2}
+    restart: unless-stopped
 
   postgres:
     restart: always
@@ -179,6 +182,8 @@ services:
     user: root
     labels:
       polis_tag: ${TAG:-dev}
+    profiles:
+      - local-services
 
   # Ollama for LLM processing
   ollama:
@@ -213,6 +218,8 @@ services:
     command: server /data --console-address ":9001"
     networks:
       - "polis-net"
+    profiles:
+      - local-services
 
 networks:
   polis-net:
