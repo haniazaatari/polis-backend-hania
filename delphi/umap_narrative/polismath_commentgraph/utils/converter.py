@@ -8,6 +8,9 @@ from typing import Dict, List, Any, Optional, Tuple, Union
 import logging
 from datetime import datetime
 from decimal import Decimal
+
+# Configure logging
+logger = logging.getLogger(__name__)
 from ..schemas.dynamo_models import (
     ConversationMeta,
     CommentEmbedding,
@@ -206,15 +209,26 @@ class DataConverter:
         # Create base data dictionary
         data = {
             'conversation_id': conversation_id,
-            'comment_id': int(comment_id),
+            'comment_id': comment_id,  # Will be converted to Decimal by Pydantic model
             'is_outlier': False
         }
         
         # Add layer cluster IDs
         for i, layer in enumerate(cluster_layers):
             if comment_id < len(layer):
-                cluster_id = int(layer[comment_id])
-                data[f'layer{i}_cluster_id'] = cluster_id
+                # Ensure proper conversion path for numpy values
+                # First convert to a Python float via string to avoid precision issues
+                # Then convert to int for cluster IDs (or keep as -1 for outliers)
+                try:
+                    if layer[comment_id] >= 0:
+                        cluster_id = int(float(str(layer[comment_id])))
+                    else:
+                        cluster_id = -1
+                    data[f'layer{i}_cluster_id'] = cluster_id
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Conversion error for cluster ID at layer {i}, comment {comment_id}: {e}")
+                    # Use a safe default
+                    data[f'layer{i}_cluster_id'] = 0
                 
                 # Mark as outlier if any layer has -1
                 if cluster_id == -1:
@@ -222,13 +236,17 @@ class DataConverter:
         
         # Add distances and confidences if available
         if distances:
-            data['distance_to_centroid'] = distances
+            # Convert all float values to Decimal for DynamoDB compatibility
+            data['distance_to_centroid'] = {k: float(v) for k, v in distances.items()}
         
         if confidences:
-            data['cluster_confidence'] = confidences
+            # Convert all float values to Decimal for DynamoDB compatibility
+            data['cluster_confidence'] = {k: float(v) for k, v in confidences.items()}
         
-        # Create the model
-        model = CommentCluster(**data)
+        # Create the model directly from the data dict
+        # The model creation will use pydantic to validate the types
+        # DataConverter.prepare_for_dynamodb will handle the proper conversion to Decimal
+        model = CommentCluster(**DataConverter.prepare_for_dynamodb(data))
         
         return model
     

@@ -232,13 +232,17 @@ def load_comment_texts_and_extremity(zid, layer_num=0):
     """
     logger.info(f'Loading comment texts and extremity data for conversation {zid}')
     
+    # Import required modules in function scope to ensure availability
+    import psycopg2
+    import json
+    from decimal import Decimal
+    
     # Initialize return values
     comment_texts = {}
     extremity_values = {}
     
     # Connect to PostgreSQL
     try:
-        import psycopg2
         conn = get_postgres_connection()
         
         cursor = conn.cursor()
@@ -343,8 +347,17 @@ def load_comment_texts_and_extremity(zid, layer_num=0):
                 if math_main and math_main[0]:
                     data = math_main[0]
                     
+                    # Check if data is a string and parse it if necessary
+                    if isinstance(data, str):
+                        try:
+                            logger.info("Math data is a string, attempting to parse as JSON")
+                            data = json.loads(data)
+                        except json.JSONDecodeError:
+                            logger.error("Failed to parse data as JSON")
+                            data = {}
+                    
                     # Try different possible paths to extremity data
-                    if 'repness' in data:
+                    if isinstance(data, dict) and 'repness' in data:
                         # Get repness data - this can be used as a proxy for extremity
                         # Higher repness values mean the comment is more representative of one group vs another
                         repness = data['repness']
@@ -370,7 +383,7 @@ def load_comment_texts_and_extremity(zid, layer_num=0):
                             logger.info(f'Extracted extremity values from math_main/repness: {len(extremity_values)}')
                     
                     # Also check 'extremity' field directly
-                    elif 'extremity' in data:
+                    elif isinstance(data, dict) and 'extremity' in data:
                         for tid, value in data['extremity'].items():
                             try:
                                 extremity_values[int(tid)] = float(value)
@@ -390,6 +403,9 @@ def load_comment_texts_and_extremity(zid, layer_num=0):
     # Try extracting from math_main table - this is the primary source of extremity data
     logger.info('Extracting comment extremity values from math_main PCA data')
     try:
+        # Import again to be safe
+        import json
+        
         # Create a new database connection for this query
         math_conn = get_postgres_connection()
         math_cursor = math_conn.cursor()
@@ -402,8 +418,17 @@ def load_comment_texts_and_extremity(zid, layer_num=0):
             # Extract the data dictionary
             math_data = math_main[0]
             
+            # Check if math_data is a string and parse it if necessary
+            if isinstance(math_data, str):
+                try:
+                    logger.info("Math data is a string, attempting to parse as JSON")
+                    math_data = json.loads(math_data)
+                except json.JSONDecodeError:
+                    logger.error("Failed to parse math_data as JSON")
+                    math_data = {}
+            
             # Check for PCA comment-extremity data
-            if 'pca' in math_data and 'comment-extremity' in math_data['pca'] and 'tids' in math_data:
+            if isinstance(math_data, dict) and 'pca' in math_data and 'comment-extremity' in math_data['pca'] and 'tids' in math_data:
                 comment_extremity = math_data['pca']['comment-extremity']
                 tids = math_data['tids']
                 
