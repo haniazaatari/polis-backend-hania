@@ -66,7 +66,9 @@ services:
     networks:
       - "polis-net"
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+ 
   delphi:
     image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis/delphi:latest
     build:

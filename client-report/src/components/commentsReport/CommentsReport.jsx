@@ -378,7 +378,10 @@ const CommentsReport = () => {
                     ))}
                   </div>
                 ) : (
-                  <p>No visualizations available for this job.</p>
+                  <div className="no-visualizations-message">
+                    <p>No visualizations available for this job yet.</p>
+                    <p className="help-text">Visualizations may take a few minutes to generate. You can refresh the page to check for updates.</p>
+                  </div>
                 )}
               </div>
             ))}
@@ -621,12 +624,18 @@ const CommentsReport = () => {
           background: white;
         }
         
-        .info-message {
+        .info-message, .no-visualizations-message {
           background: #f8f9fa;
           padding: 15px;
           border-radius: 8px;
           color: #666;
           font-style: italic;
+        }
+        
+        .no-visualizations-message .help-text {
+          font-size: 0.85rem;
+          margin-top: 8px;
+          color: #888;
         }
         
         .section-header-actions {
