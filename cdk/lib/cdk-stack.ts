@@ -17,6 +17,21 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as efs from 'aws-cdk-lib/aws-efs'; // Import EFS module
 import { Construct } from 'constructs';
+// custom constructs for code organization
+import createPolisVPC from '../vpc';
+import {
+  instanceTypeWeb,
+  machineImageWeb,
+  instanceTypeMathWorker,
+  machineImageMathWorker,
+  instanceTypeDelphiSmall,
+  machineImageDelphiSmall,
+  instanceTypeDelphiLarge,
+  machineImageDelphiLarge,
+  instanceTypeOllama,
+  machineImageOllama
+} from '../ec2';
+import createSecurityGroups from '../securityGroups';
 
 interface PolisStackProps extends cdk.StackProps {
   enableSSHAccess?: boolean; // Make optional, default to false
@@ -38,29 +53,7 @@ export class CdkStack extends cdk.Stack {
     const ollamaPort = 11434;
     const ollamaModelDirectory = '/efs/ollama-models';
     const ollamaNamespace = 'OllamaMetrics'; // Custom namespace for GPU metrics
-
-    // --- VPC Configuration
-    const vpc = new ec2.Vpc(this, 'Vpc', {
-      maxAzs: 2,
-      natGateways: 1, // Use 1 for non-prod/cost saving, 2+ for prod HA
-      subnetConfiguration: [
-        {
-          cidrMask: 24,
-          name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
-        },
-        {
-          cidrMask: 24,
-          name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-        {
-          cidrMask: 24,
-          name: 'PrivateWithEgress',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-        },
-      ]
-    });
+    const vpc = createPolisVPC(this);
 
     const alarmTopic = new sns.Topic(this, 'AlarmTopic', {
       displayName: 'Polis Application Alarms',
@@ -71,60 +64,13 @@ export class CdkStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // --- Instance Types & AMIs
-    const instanceTypeWeb = ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM);
-    const machineImageWeb = new ec2.AmazonLinuxImage({ generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023 });
-    const instanceTypeMathWorker = ec2.InstanceType.of(ec2.InstanceClass.R8G, ec2.InstanceSize.XLARGE4);
-    const machineImageMathWorker = new ec2.AmazonLinuxImage({
-      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023,
-      cpuType: ec2.AmazonLinuxCpuType.ARM_64,
-    });
-    // Delphi small instance
-    const instanceTypeDelphiSmall = ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE);
-    const machineImageDelphiSmall = new ec2.AmazonLinuxImage({
-      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023
-    });
-    // Delphi large instance
-    const instanceTypeDelphiLarge = ec2.InstanceType.of(ec2.InstanceClass.C6G, ec2.InstanceSize.XLARGE4);
-    const machineImageDelphiLarge = new ec2.AmazonLinuxImage({
-      generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023,
-      cpuType: ec2.AmazonLinuxCpuType.ARM_64
-    });
-    // Ollama Instance
-    const instanceTypeOllama = ec2.InstanceType.of(ec2.InstanceClass.G4DN, ec2.InstanceSize.XLARGE); // x86_64 GPU instance
-    const machineImageOllama = ec2.MachineImage.genericLinux({
-      'us-east-1': 'ami-08e0cf6df13ae3ddb',
-    });
-
-    // --- Security Groups
-    const webSecurityGroup = new ec2.SecurityGroup(this, 'WebSecurityGroup', {
-      vpc,
-      description: 'Allow HTTP and SSH access to web instances',
-      allowAllOutbound: true
-    });
-    const mathWorkerSecurityGroup = new ec2.SecurityGroup(this, 'MathWorkerSG', {
-      vpc,
-      description: 'Security group for Polis math worker',
-      allowAllOutbound: true
-    });
-    // Delphi Security Group
-    const delphiSecurityGroup = new ec2.SecurityGroup(this, 'DelphiSecurityGroup', {
-      vpc,
-      description: 'SG for Delphi instances',
-      allowAllOutbound: true
-    });
-    // Ollama Security Group 
-    const ollamaSecurityGroup = new ec2.SecurityGroup(this, 'OllamaSecurityGroup', {
-      vpc,
-      description: 'SG for Ollama instance',
-      allowAllOutbound: true
-    });
-    // EFS Security Group
-    const efsSecurityGroup = new ec2.SecurityGroup(this, 'EfsSecurityGroup', {
-      vpc,
-      description: 'SG for EFS mount targets',
-      allowAllOutbound: false
-    });
+    const {
+      webSecurityGroup,
+      mathWorkerSecurityGroup,
+      delphiSecurityGroup,
+      ollamaSecurityGroup,
+      efsSecurityGroup,
+    } = createSecurityGroups(vpc, this);
 
     // Allow Delphi -> Ollama
     ollamaSecurityGroup.addIngressRule(
