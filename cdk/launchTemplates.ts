@@ -181,6 +181,15 @@ ollamaUsrData.addCommands(
     securityGroup: delphiSecurityGroup,
     keyPair: delphiSmallKeyPair,
     role: instanceRole,
+    blockDevices: [
+      {
+        deviceName: '/dev/xvda',
+        volume: ec2.BlockDeviceVolume.ebs(50, {
+          volumeType: ec2.EbsDeviceVolumeType.GP3,
+          deleteOnTermination: true,
+        }),
+      },
+    ],
   });
   // Delphi Large Launch Template
   const delphiLargeLaunchTemplate = new ec2.LaunchTemplate(self, 'DelphiLargeLaunchTemplate', {
@@ -190,6 +199,15 @@ ollamaUsrData.addCommands(
     securityGroup: delphiSecurityGroup,
     keyPair: delphiLargeKeyPair,
     role: instanceRole,
+    blockDevices: [
+      {
+        deviceName: '/dev/xvda',
+        volume: ec2.BlockDeviceVolume.ebs(100, {
+          volumeType: ec2.EbsDeviceVolumeType.GP3,
+          deleteOnTermination: true,
+        }),
+      },
+    ],
   });
   // Ollama Launch Template
   const ollamaLaunchTemplate = new ec2.LaunchTemplate(self, 'OllamaLaunchTemplate', {
