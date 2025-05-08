@@ -1,7 +1,7 @@
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-
+import * as s3_assets from 'aws-cdk-lib/aws-s3-assets';
 
 export default (
   self: Construct,
@@ -60,69 +60,100 @@ export default (
       'exec 1>>/var/log/user-data.log 2>&1',
       'echo "Finished User Data Execution at $(date)"',
       'sudo mkdir -p /etc/docker', // Ensure /etc/docker directory exists
-      `sudo tee /etc/docker/daemon.json << EOF
-  {
+`cat << EOF | sudo tee /etc/docker/daemon.json
+{
   "log-driver": "awslogs",
   "log-opts": {
-  "awslogs-group": "${CLOUDWATCH_LOG_GROUP_NAME}",
-  "awslogs-region": "${cdk.Stack.of(self).region}",
-  "awslogs-stream": "${service}"
+    "awslogs-group": "${CLOUDWATCH_LOG_GROUP_NAME}",
+    "awslogs-region": "${cdk.Stack.of(self).region}",
+    "awslogs-stream": "${service}"
   }
-  }
-  EOF`,
-      'sudo systemctl restart docker',
+}
+EOF`, // Ensure EOF is on a new line with no leading/trailing spaces
+    `sudo chmod 644 /etc/docker/daemon.json`, // Good practice to set permissions
+    'sudo systemctl restart docker',
       'sudo systemctl status docker'
     );
     return ld;
   };
   
   const ollamaUsrData = ec2.UserData.forLinux();
-  const cwAgentConfigPath = '/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json';
-  ollamaUsrData.addCommands(
-    ...usrdata(logGroup.logGroupName, "ollama").render().split('\n').filter(line => line.trim() !== ''),
-    'echo "Installing EFS utilities for Ollama..."',
-    'sudo dnf install -y amazon-efs-utils nfs-utils',
-    'echo "Starting Ollama specific setup..."',
-    'echo "Configuring CloudWatch Agent for GPU metrics..."',
-    `sudo tee ${cwAgentConfigPath} << EOF
-  {
-  "agent": { "metrics_collection_interval": 60, "run_as_user": "root" },
-  "metrics": {
-  "append_dimensions": { "AutoScalingGroupName": "\${aws:AutoScalingGroupName}", "ImageId": "\${aws:ImageId}", "InstanceId": "\${aws:InstanceId}", "InstanceType": "\${aws:InstanceType}" },
-  "metrics_collected": {
-    "nvidia_gpu": { "measurement": [ {"name": "utilization_gpu", "unit": "Percent"}, {"name": "utilization_memory", "unit": "Percent"}, {"name": "memory_total", "unit": "Megabytes"}, {"name": "memory_used", "unit": "Megabytes"}, {"name": "memory_free", "unit": "Megabytes"}, {"name": "power_draw", "unit": "Watts"}, {"name": "temperature_gpu", "unit": "Count"} ], "metrics_collection_interval": 60, "nvidia_smi_path": "/usr/bin/nvidia-smi", "metrics_aggregation_interval": 60, "namespace": "${ollamaNamespace}" },
-    "disk": { "measurement": [ "used_percent" ], "metrics_collection_interval": 60, "resources": [ "/" ] },
-    "mem": { "measurement": [ "mem_used_percent" ], "metrics_collection_interval": 60 }
-  }
-  }
-  }
-  EOF`,
-      'sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -c file:${cwAgentConfigPath} -s',
-      'sudo systemctl enable amazon-cloudwatch-agent',
-      'echo "CloudWatch Agent configured and started."',
-      'echo "Mounting EFS filesystem ${fileSystem.fileSystemId}..."',
-      `sudo mkdir -p ${ollamaModelDirectory}`,
-      `sudo mount -t efs -o tls ${fileSystem.fileSystemId}:/ ${ollamaModelDirectory}`,
-      `echo "${fileSystem.fileSystemId}:/ ${ollamaModelDirectory} efs _netdev,tls 0 0" | sudo tee -a /etc/fstab`,
-      `sudo chown ec2-user:ec2-user ${ollamaModelDirectory}`,
-      'echo "EFS mounted successfully."',
-      'echo "Starting Ollama container..."',
-      'sudo docker run -d --name ollama \\',
-      '  --gpus all \\',
-      '  -p 0.0.0.0:11434:11434 \\',
-      `  -v ${ollamaModelDirectory}:/root/.ollama \\`,
-      '  --restart unless-stopped \\',
-      '  ollama/ollama serve',
-      '(',
-      '  echo "Waiting for Ollama service (background task)..."',
-      '  sleep 60',
-      '  echo "Pulling default Ollama model (llama3.1:8b) in background..."',
-      '  sudo docker exec ollama ollama pull llama3.1:8b || echo "Failed to pull default model initially, may need manual pull later."',
-      '  echo "Background model pull task finished."',
-      ') &',
-      'disown',
-      'echo "Ollama setup script finished."'
-  );
+// Define path for CloudWatch Agent config
+// --- CloudWatch Agent Config Asset ---
+const cwAgentConfigAsset = new s3_assets.Asset(self, 'CwAgentConfigAsset', {
+  path: 'config/amazon-cloudwatch-agent.json' // Adjust path relative to cdk project root
+});
+
+// Grant the instance role read access to the asset bucket
+cwAgentConfigAsset.grantRead(instanceRole);
+const cwAgentConfigPath = '/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json';
+const cwAgentTempPath = '/tmp/amazon-cloudwatch-agent.json'; // Temporary download location
+const efsDnsName = `${fileSystem.fileSystemId}.efs.${cdk.Stack.of(self).region}.${cdk.Stack.of(self).urlSuffix}`;
+
+// Add commands to the Ollama UserData
+ollamaUsrData.addCommands(
+  // Spread the base user data commands
+  ...usrdata(logGroup.logGroupName, "ollama").render().split('\n').filter(line => line.trim() !== ''),
+
+  // Install EFS utilities
+  'echo "Installing EFS utilities for Ollama..."',
+  'sudo dnf install -y amazon-efs-utils nfs-utils',
+
+  // Start Ollama-specific setup
+  'echo "Starting Ollama specific setup..."',
+  'echo "Configuring CloudWatch Agent for GPU metrics..."',
+
+  // --- Download CW Agent config from S3 Asset ---
+  `echo "Downloading CW Agent config from S3..."`,
+  // Use aws cli to copy from the S3 location provided by the asset object
+  // The instance needs NAT access (which it has) and S3 permissions (granted above)
+  `aws s3 cp ${cwAgentConfigAsset.s3ObjectUrl} ${cwAgentTempPath}`,
+  // Ensure target directory exists and move the file into place
+  `sudo mkdir -p $(dirname ${cwAgentConfigPath})`,
+  `sudo mv ${cwAgentTempPath} ${cwAgentConfigPath}`,
+  `sudo chmod 644 ${cwAgentConfigPath}`,
+  `sudo chown root:root ${cwAgentConfigPath}`, // Ensure root ownership
+  'echo "CW Agent config downloaded and placed."',
+
+  // --- Enable and Start the CloudWatch Agent Service ---
+  'echo "Enabling CloudWatch Agent service..."',
+  'sudo systemctl enable amazon-cloudwatch-agent',
+  'echo "Starting CloudWatch Agent service..."',
+  'sudo systemctl start amazon-cloudwatch-agent',
+  'echo "CloudWatch Agent service started."',
+
+  // --- Mount EFS using standard NFSv4.1 ---
+  // Use the manually constructed EFS DNS name
+  `echo "Mounting EFS filesystem using NFSv4.1 and DNS Name: ${efsDnsName}"...`, // Use variable here
+  `sudo mkdir -p ${ollamaModelDirectory}`, // Ensure mount point exists
+  // Standard NFS mount command with recommended options for EFS
+  `sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${efsDnsName}:/ ${ollamaModelDirectory}`, // Use variable here
+  // Update fstab to use NFS4 and the DNS name for persistence
+  `echo "${efsDnsName}:/ ${ollamaModelDirectory} nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport,_netdev 0 0" | sudo tee -a /etc/fstab`, // Use variable here
+  // Set ownership for the application user
+  `sudo chown ec2-user:ec2-user ${ollamaModelDirectory}`,
+  'echo "EFS mounted successfully."',
+
+  // --- Start Ollama container ---
+  'echo "Starting Ollama container..."',
+  'sudo docker run -d --name ollama \\',
+  '  --gpus all \\',
+  '  -p 0.0.0.0:11434:11434 \\',
+  `  -v ${ollamaModelDirectory}:/root/.ollama \\`,
+  '  --restart unless-stopped \\',
+  '  ollama/ollama serve',
+
+  // --- Pull initial model in background ---
+  '(',
+  '  echo "Waiting for Ollama service (background task)..."',
+  '  sleep 60',
+  '  echo "Pulling default Ollama model (llama3.1:8b) in background..."',
+  '  sudo docker exec ollama ollama pull llama3.1:8b || echo "Failed to pull default model initially, may need manual pull later."',
+  '  echo "Background model pull task finished."',
+  ') &',
+  'disown',
+  'echo "Ollama setup script finished."'
+); // End of ollamaUsrData.addCommands
   
   
   // --- Launch Templates

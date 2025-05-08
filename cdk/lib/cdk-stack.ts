@@ -3,6 +3,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import * as efs from 'aws-cdk-lib/aws-efs';
@@ -76,9 +77,9 @@ export class CdkStack extends cdk.Stack {
 
     // Allow Delphi -> Ollama
     ollamaSecurityGroup.addIngressRule(
-      delphiSecurityGroup,
+      ec2.Peer.ipv4(vpc.vpcCidrBlock), // Allows traffic from any private IP within the VPC
       ec2.Port.tcp(ollamaPort),
-      `Allow Delphi access on ${ollamaPort}`
+      `Allow NLB traffic on ${ollamaPort} from VPC`
     );
     // Allow Ollama -> EFS
     efsSecurityGroup.addIngressRule(
@@ -132,6 +133,23 @@ export class CdkStack extends cdk.Stack {
     const { dbSubnetGroup, db, dbSecretArnParam, dbHostParam, dbPortParam } = createDBResources(this, vpc);
 
     // --- EFS for Ollama Models
+    const fileSystemPolicyDocument = new iam.PolicyDocument({
+      statements: [
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            "elasticfilesystem:ClientMount",
+            "elasticfilesystem:ClientWrite",
+            "elasticfilesystem:ClientRootAccess",
+          ],
+          principals: [new iam.AnyPrincipal()],
+          resources: ["*"], // Applies to the filesystem this policy is attached to
+          conditions: {
+            Bool: { "elasticfilesystem:AccessedViaMountTarget": "true" }
+          }
+        })
+      ]
+    });
     const fileSystem = new efs.FileSystem(this, 'OllamaModelFileSystem', {
       vpc,
       encrypted: true,
@@ -141,6 +159,7 @@ export class CdkStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       securityGroup: efsSecurityGroup,
       vpcSubnets: { subnetGroupName: 'PrivateWithEgress' },
+      fileSystemPolicy: fileSystemPolicyDocument,
     });
 
     // launch templates
