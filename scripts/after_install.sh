@@ -71,7 +71,7 @@ DB_PORT=$(aws ssm get-parameter --name "/polis/db-port" --query 'Parameter.Value
 
 
 # --- Construct DATABASE_URL using values from Secrets Manager AND SSM Parameters ---
-DATABASE_URL="postgres://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+DATABASE_URL="postgres://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=require"
 
 echo "Constructed DATABASE_URL: $DATABASE_URL" # Original logging
 
