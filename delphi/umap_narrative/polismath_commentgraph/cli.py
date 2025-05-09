@@ -305,9 +305,6 @@ def lambda_local(args):
         os.environ['DATABASE_PASSWORD'] = args.pg_password
         
     # Set up DynamoDB environment variables for local testing
-    # Only set if not already in environment
-    if not os.environ.get('DYNAMODB_ENDPOINT'):
-        os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
     
     # Log the endpoint being used
     logger.info(f"Using DynamoDB endpoint: {os.environ.get('DYNAMODB_ENDPOINT')}")

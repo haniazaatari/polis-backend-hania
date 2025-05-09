@@ -73,11 +73,6 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
     # DynamoDB settings (for local DynamoDB)
     # Don't override if already set in environment
     dynamo_endpoint = os.environ.get('DYNAMODB_ENDPOINT')
-    if not dynamo_endpoint:
-        os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
-        logger.info("Setting default DynamoDB endpoint: http://localhost:8000")
-    else:
-        logger.info(f"Using existing DynamoDB endpoint: {dynamo_endpoint}")
     
     # Always set these credentials for local development if not already set
     if not os.environ.get('AWS_ACCESS_KEY_ID'):

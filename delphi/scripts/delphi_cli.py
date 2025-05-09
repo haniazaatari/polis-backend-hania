@@ -54,7 +54,7 @@ def setup_dynamodb(endpoint_url=None, region='us-west-2'):
     """Set up DynamoDB connection."""
     # Use environment variable if endpoint not provided
     if endpoint_url is None:
-        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000')
+        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
     
     # For local development
     if 'localhost' in endpoint_url or 'host.docker.internal' in endpoint_url:

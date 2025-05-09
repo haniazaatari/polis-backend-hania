@@ -31,7 +31,7 @@ DB_CONFIG = {
 }
 
 DYNAMODB_CONFIG = {
-    'endpoint_url': os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000'),
+    'endpoint_url': os.environ.get('DYNAMODB_ENDPOINT'),
     'region': os.environ.get('AWS_REGION', 'us-west-2'),
     'access_key': os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
     'secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')

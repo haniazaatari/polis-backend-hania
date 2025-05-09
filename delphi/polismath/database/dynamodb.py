@@ -22,7 +22,7 @@ class DynamoDBClient:
     """Client for interacting with DynamoDB for Polis math data."""
     
     def __init__(self, 
-                endpoint_url: Optional[str] = 'http://localhost:8000',
+                endpoint_url: Optional[str] = None,
                 region_name: str = 'us-west-2',
                 aws_access_key_id: Optional[str] = None,
                 aws_secret_access_key: Optional[str] = None):

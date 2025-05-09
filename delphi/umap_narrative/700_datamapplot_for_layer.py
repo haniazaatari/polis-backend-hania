@@ -240,9 +240,6 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
     
     # DynamoDB settings (for local DynamoDB)
     if not os.environ.get('DYNAMODB_ENDPOINT'):
-        # Only set if not already in environment
-        if not os.environ.get('DYNAMODB_ENDPOINT'):
-            os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
             
         # Log the endpoint being used
         endpoint = os.environ.get('DYNAMODB_ENDPOINT')
@@ -939,7 +936,7 @@ def main():
     parser.add_argument('--output_dir', type=str, default=None,
                       help='Directory to save the visualization')
     parser.add_argument('--dynamo_endpoint', type=str, default=None,
-                      help='DynamoDB endpoint URL (default: http://localhost:8000)')
+                      help='DynamoDB endpoint URL')
     
     args = parser.parse_args()
     

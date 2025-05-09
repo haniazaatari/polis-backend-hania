@@ -9,7 +9,7 @@ Usage:
     python job_poller.py [options]
 
 Options:
-    --endpoint-url=URL  DynamoDB endpoint URL (default: http://localhost:8000)
+    --endpoint-url=URL  DynamoDB endpoint URL
     --region=REGION     AWS region (default: us-west-2)
     --interval=SECONDS  Polling interval in seconds (default: 10)
     --max-workers=N     Maximum number of concurrent workers (default: 1)
@@ -43,7 +43,7 @@ class JobProcessor:
     
     def __init__(self, endpoint_url=None, region='us-west-2'):
         """Initialize the job processor."""
-        self.endpoint_url = endpoint_url or os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000')
+        self.endpoint_url = endpoint_url or os.environ.get('DYNAMODB_ENDPOINT')
         self.region = region
         self.worker_id = str(uuid.uuid4())
         
@@ -587,7 +587,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     
     logger.info("Starting Delphi Job Poller Service")
-    logger.info(f"Endpoint URL: {args.endpoint_url or os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000')}")
+    logger.info(f"Endpoint URL: {args.endpoint_url or os.environ.get('DYNAMODB_ENDPOINT')}")
     logger.info(f"Region: {args.region}")
     logger.info(f"Polling interval: {args.interval} seconds")
     logger.info(f"Maximum workers: {args.max_workers}")
