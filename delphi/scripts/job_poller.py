@@ -52,6 +52,10 @@ class JobProcessor:
             # For local development
             os.environ.setdefault('AWS_ACCESS_KEY_ID', 'fakeMyKeyId')
             os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+
+        if self.endpoint_url == "":
+            logger.info("DynamoDB: DYNAMODB_ENDPOINT was an empty string, treating as None for AWS default endpoint.")
+            self.endpoint_url = None
         
         logger.info(f"Connecting to DynamoDB at {self.endpoint_url}")
         self.dynamodb = boto3.resource('dynamodb', 
