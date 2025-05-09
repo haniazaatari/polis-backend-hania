@@ -64,16 +64,18 @@ RUN chmod +x start_poller.sh run_delphi.sh setup_ollama.sh
 # 3. Start the job poller with a 2-second polling interval
 
 CMD ["bash", "-c", "\
-    if [ -n \"${DYNAMODB_ENDPOINT}\" ]; then \
-      echo 'Local/Dev environment detected (DELPHI_DEV_OR_PROD=${DELPHI_DEV_OR_PROD}), running setup scripts...'; \
-      echo 'Setting up DynamoDB tables...' && python create_dynamodb_tables.py && \
-      echo 'Setting up MinIO bucket...' && python setup_minio.py && \
-      echo 'Setting up Ollama model...' && ./setup_ollama.sh; \
-    else \
-      echo 'Production environment detected (DELPHI_DEV_OR_PROD=${DELPHI_DEV_OR_PROD}), skipping local setup scripts.'; \
-    fi && \
-    echo 'Setting up DynamoDB tables... && \
+    echo 'Ensuring DynamoDB tables are set up (runs in all environments)...'; \
     python create_dynamodb_tables.py && \
+    echo 'DynamoDB table setup script finished.'; \
+    \
+    if [ -n \"${DYNAMODB_ENDPOINT}\" ]; then \
+      echo 'DYNAMODB_ENDPOINT is set (value: \"${DYNAMODB_ENDPOINT}\"), assuming local/dev environment. Running additional local setup scripts...'; \
+      echo 'Setting up MinIO bucket...' && python setup_minio.py && \
+      echo 'Setting up Ollama model (local script)...' && ./setup_ollama.sh; \
+    else \
+      echo 'DYNAMODB_ENDPOINT is not set, assuming production-like environment. Skipping MinIO and local Ollama setup scripts.'; \
+    fi && \
+    \
     echo 'Starting job poller...' && \
     POLL_INTERVAL=${POLL_INTERVAL:-2} ./start_poller.sh \
 "]
