@@ -23,6 +23,7 @@ import { handle_GET_xidReport } from "./src/routes/export";
 import { handle_GET_delphi } from "./src/routes/delphi";
 import { handle_GET_delphi_visualizations } from "./src/routes/delphi/visualizations";
 import { handle_POST_delphi_jobs } from "./src/routes/delphi/jobs";
+import { handle_GET_delphi_reports } from "./src/routes/delphi/reports";
 
 const app = express();
 
@@ -793,6 +794,20 @@ helpersInitialized.then(
         res.json({
           status: "error",
           message: "Internal server error in job creation endpoint",
+          error: err.message || "Unknown error"
+        });
+      }
+    });
+    
+    // Add GET endpoint for Delphi reports
+    app.get("/api/v3/delphi/reports", moveToBody, function(req, res) {
+      try {
+        handle_GET_delphi_reports(req, res);
+      } catch (err) {
+        console.error("Error in delphi reports route:", err);
+        res.json({
+          status: "error",
+          message: "Internal server error in reports endpoint",
           error: err.message || "Unknown error"
         });
       }

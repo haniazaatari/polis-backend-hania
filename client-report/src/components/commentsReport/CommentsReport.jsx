@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import net from '../../util/net';
 import { useReportId } from '../framework/useReportId';
+import getNarrativeJSON from '../../util/getNarrativeJSON';
 
 const CommentsReport = () => {
   const { report_id } = useReportId();
@@ -11,6 +12,8 @@ const CommentsReport = () => {
   const [selectedRunKey, setSelectedRunKey] = useState(null);
   const [visualizationJobs, setVisualizationJobs] = useState([]);
   const [visualizationsLoading, setVisualizationsLoading] = useState(true);
+  const [narrativeReports, setNarrativeReports] = useState({});
+  const [narrativeLoading, setNarrativeLoading] = useState(true);
   const [jobFormOpen, setJobFormOpen] = useState(false);
   const [jobFormData, setJobFormData] = useState({
     job_type: 'FULL_PIPELINE',
@@ -78,6 +81,25 @@ const CommentsReport = () => {
       .catch(err => {
         console.error("Error fetching visualizations:", err);
         setVisualizationsLoading(false);
+      });
+
+    // Fetch narrative reports from Delphi
+    setNarrativeLoading(true);
+    net.polisGet("/api/v3/delphi/reports", {
+      report_id: report_id
+    })
+      .then(response => {
+        console.log("Narrative reports response:", response);
+        
+        if (response && response.status === "success" && response.reports) {
+          setNarrativeReports(response.reports);
+        }
+        
+        setNarrativeLoading(false);
+      })
+      .catch(err => {
+        console.error("Error fetching narrative reports:", err);
+        setNarrativeLoading(false);
       });
   }, [report_id]);
 
@@ -333,23 +355,24 @@ const CommentsReport = () => {
           </div>
         ) : (
           <div className="visualizations-container">
-            {Array.isArray(visualizationJobs) && visualizationJobs.map((job, index) => (
-              <div key={job.jobId} className="visualization-job">
+            {Array.isArray(visualizationJobs) && visualizationJobs.length > 0 && (
+              <div className="visualization-job">
                 <div className="job-header">
-                  <h3>Visualization Job {index + 1}</h3>
+                  <h3>Latest Visualization</h3>
                   <div className="job-meta">
-                    <span className={`job-status status-${job.status}`}>{job.status}</span>
-                    <span className="job-date">Created: {new Date(job.createdAt).toLocaleString()}</span>
+                    <span className={`job-status status-${visualizationJobs[0].status}`}>{visualizationJobs[0].status}</span>
+                    <span className="job-date">Created: {new Date(visualizationJobs[0].createdAt).toLocaleString()}</span>
                   </div>
                 </div>
                 
-                {job.visualizations && Array.isArray(job.visualizations) && job.visualizations.length > 0 ? (
+                {visualizationJobs[0].visualizations && Array.isArray(visualizationJobs[0].visualizations) && visualizationJobs[0].visualizations.length > 0 ? (
                   <div className="visualizations-grid">
-                    {job.visualizations
-                      .filter(vis => vis && vis.type === 'interactive')
+                    {/* Only show Layer 0 visualizations */}
+                    {visualizationJobs[0].visualizations
+                      .filter(vis => vis && vis.type === 'interactive' && vis.layerId === 0)
                       .map(vis => (
                         <div key={vis.key} className="visualization-card">
-                          <h4>Layer {vis.layerId} Interactive Visualization</h4>
+                          <h4>Interactive Visualization</h4>
                           <div className="iframe-container">
                             <iframe 
                               src={vis.url} 
@@ -362,11 +385,11 @@ const CommentsReport = () => {
                         </div>
                     ))}
                     
-                    {job.visualizations
-                      .filter(vis => vis && (vis.type === 'static_png' || vis.type === 'presentation_png'))
+                    {visualizationJobs[0].visualizations
+                      .filter(vis => vis && (vis.type === 'static_png' || vis.type === 'presentation_png') && vis.layerId === 0)
                       .map(vis => (
                         <div key={vis.key} className="visualization-card">
-                          <h4>Layer {vis.layerId} Static Visualization</h4>
+                          <h4>Static Visualization</h4>
                           <div className="img-container">
                             <img 
                               src={vis.url} 
@@ -384,10 +407,117 @@ const CommentsReport = () => {
                   </div>
                 )}
               </div>
-            ))}
+            )}
           </div>
         )}
       </>
+    );
+  };
+
+  // Render narrative reports section
+  const renderNarrativeReports = () => {
+    if (narrativeLoading) {
+      return <div className="loading">Loading narrative reports...</div>;
+    }
+
+    const hasReports = Object.keys(narrativeReports).length > 0;
+    
+    if (!hasReports) {
+      return (
+        <div className="info-message">
+          <p>No narrative reports available yet. These are generated automatically when you run a Delphi analysis.</p>
+        </div>
+      );
+    }
+
+    // Order of sections to display
+    const sectionOrder = [
+      'group_informed_consensus',
+      'groups',
+      'uncertainty'
+    ];
+
+    // Topic sections will have names starting with 'topic_'
+    const topicSections = Object.keys(narrativeReports)
+      .filter(key => key.startsWith('topic_'))
+      .sort();
+
+    // Combine ordered sections with topic sections
+    const orderedSections = [...sectionOrder, ...topicSections];
+
+    return (
+      <div className="narrative-reports-container">
+        {orderedSections.map(sectionKey => {
+          const report = narrativeReports[sectionKey];
+          if (!report) return null;
+
+          // Create a human-readable section title
+          let sectionTitle = sectionKey
+            .replace('group_informed_consensus', 'Group Consensus')
+            .replace('groups', 'Group Differences')
+            .replace('uncertainty', 'Areas of Uncertainty')
+            .replace(/^topic_/, 'Topic: ')
+            .replace(/_/g, ' ')
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          
+          return (
+            <div key={sectionKey} className="report-section">
+              <h3>{sectionTitle}</h3>
+              <div className="report-metadata">
+                <span>Generated: {new Date(report.timestamp).toLocaleString()}</span>
+                <span>Model: {report.model}</span>
+              </div>
+              <div className="report-content">
+                {(() => {
+                  if (!report.report_data) return null;
+                  if (report.errors) return (
+                    <p>Not enough data has been provided for analysis, please check back later</p>
+                  );
+                  
+                  try {
+                    // The report_data is directly the JSON string, not using modelResponse property
+                    const respData = JSON.parse(report.report_data);
+                    return (
+                      <article style={{ maxWidth: "600px" }}>
+                        {respData?.paragraphs?.map((section) => (
+                          <div key={section.id}>
+                            <h5>{section.title}</h5>
+                            {section.sentences.map((sentence, idx) => (
+                              <p key={idx}>
+                                {sentence.clauses.map((clause, cIdx) => (
+                                  <span key={cIdx}>
+                                    {clause.text}
+                                    {clause.citations?.map((citation, citIdx) => (
+                                      <sup key={citIdx}>
+                                        {typeof citation === 'object' ? Object.entries(citation)[1] : citation}
+                                        {citIdx < clause.citations.length - 1 ? ", " : ""}
+                                      </sup>
+                                    ))}
+                                    {cIdx < sentence.clauses.length - 1 ? " " : ""}
+                                  </span>
+                                ))}
+                              </p>
+                            ))}
+                          </div>
+                        ))}
+                      </article>
+                    );
+                  } catch (error) {
+                    console.error(error);
+                    return (
+                      <article style={{ maxWidth: "600px" }}>
+                        <h5>An error occurred</h5>
+                      </article>
+                    );
+                  }
+                })()}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     );
   };
 
@@ -447,6 +577,14 @@ const CommentsReport = () => {
               Similar comments are positioned closer together on the map.
             </p>
             {renderVisualizations()}
+          </div>
+
+          <div className="section">
+            <h2>Narrative Report</h2>
+            <p className="info-text">
+              This narrative report provides insights about group consensus, differences, and key topics in the conversation.
+            </p>
+            {renderNarrativeReports()}
           </div>
         </div>
       )}
@@ -622,6 +760,39 @@ const CommentsReport = () => {
           border-radius: 6px;
           border: 1px solid #ddd;
           background: white;
+        }
+
+        .narrative-reports-container {
+          margin-top: 20px;
+        }
+        
+        .report-section {
+          background: white;
+          border: 1px solid #e0e0e0;
+          border-radius: 8px;
+          padding: 20px;
+          margin-bottom: 30px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        .report-section h3 {
+          margin-top: 0;
+          color: #03a9f4;
+          border-bottom: 1px solid #eee;
+          padding-bottom: 10px;
+          margin-bottom: 15px;
+        }
+        
+        .report-metadata {
+          display: flex;
+          justify-content: space-between;
+          font-size: 0.85rem;
+          color: #666;
+          margin-bottom: 20px;
+        }
+        
+        .report-content {
+          line-height: 1.6;
         }
         
         .info-message, .no-visualizations-message {
