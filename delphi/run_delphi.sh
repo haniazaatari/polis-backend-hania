@@ -71,9 +71,9 @@ echo -e "${YELLOW}Using Ollama model: $MODEL${NC}"
 
 # Set up environment for the pipeline
 export PYTHONPATH="/app:$PYTHONPATH"
-export OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
+export OLLAMA_HOST=${OLLAMA_HOST}
 export OLLAMA_MODEL=$MODEL
-export DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT:-http://dynamodb:8000}
+export DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
 
 # For testing with limited votes
 if [ -n "$MAX_VOTES" ]; then

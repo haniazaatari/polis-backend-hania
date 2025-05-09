@@ -8,7 +8,7 @@ import { getZidFromReport } from "../../utils/parameter";
 // Initialize DynamoDB client
 const dynamoDbClient = new DynamoDB({
   // Use environment variables for endpoint and region, or the docker service name
-  endpoint: process.env.DYNAMODB_ENDPOINT || "http://dynamodb:8000",
+  endpoint: process.env.DYNAMODB_ENDPOINT,
   region: process.env.AWS_REGION || "us-east-1",
   // For local development or Docker container
   credentials: {

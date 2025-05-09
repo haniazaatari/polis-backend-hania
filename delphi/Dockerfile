@@ -62,4 +62,18 @@ RUN chmod +x start_poller.sh run_delphi.sh setup_ollama.sh
 # 1. Initialize DynamoDB tables
 # 2. Set up the Ollama model based on environment variables
 # 3. Start the job poller with a 2-second polling interval
-CMD ["bash", "-c", "echo 'Setting up DynamoDB tables...' && python create_dynamodb_tables.py --endpoint-url=${DYNAMODB_ENDPOINT:-http://dynamodb:8000} && echo 'Setting up MinIO bucket...' && python setup_minio.py && echo 'Setting up Ollama model...' && ./setup_ollama.sh && echo 'Starting job poller...' && POLL_INTERVAL=2 ./start_poller.sh"]
+
+CMD ["bash", "-c", "\
+    if [ -n \"${DYNAMODB_ENDPOINT}\" ]; then \
+      echo 'Local/Dev environment detected (DELPHI_DEV_OR_PROD=${DELPHI_DEV_OR_PROD}), running setup scripts...'; \
+      echo 'Setting up DynamoDB tables...' && python create_dynamodb_tables.py && \
+      echo 'Setting up MinIO bucket...' && python setup_minio.py && \
+      echo 'Setting up Ollama model...' && ./setup_ollama.sh; \
+    else \
+      echo 'Production environment detected (DELPHI_DEV_OR_PROD=${DELPHI_DEV_OR_PROD}), skipping local setup scripts.'; \
+    fi && \
+    echo 'Setting up DynamoDB tables... && \
+    python create_dynamodb_tables.py && \
+    echo 'Starting job poller...' && \
+    POLL_INTERVAL=${POLL_INTERVAL:-2} ./start_poller.sh \
+"]
