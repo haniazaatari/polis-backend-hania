@@ -57,9 +57,10 @@ def setup_dynamodb(endpoint_url=None, region='us-west-2'):
         endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
     
     # For local development
-    if 'localhost' in endpoint_url or 'host.docker.internal' in endpoint_url:
-        os.environ.setdefault('AWS_ACCESS_KEY_ID', 'fakeMyKeyId')
-        os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+    if endpoint_url:
+        if 'localhost' in endpoint_url or 'host.docker.internal' in endpoint_url:
+            os.environ.setdefault('AWS_ACCESS_KEY_ID', 'fakeMyKeyId')
+            os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
     
     return boto3.resource('dynamodb', endpoint_url=endpoint_url, region_name=region)
 
