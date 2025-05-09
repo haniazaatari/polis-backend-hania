@@ -51,14 +51,15 @@ def create_elegant_header():
     console.print()
 
 def setup_dynamodb(endpoint_url=None, region='us-east-1'):
-    """Set up DynamoDB connection."""
-    # Use environment variable if endpoint not provided
     if endpoint_url is None:
         endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
     
-    # For local development
+    if endpoint_url == "":
+        endpoint_url = None
+            
     if endpoint_url:
-        if 'localhost' in endpoint_url or 'host.docker.internal' in endpoint_url:
+        local_patterns = ['localhost', 'host.docker.internal', 'dynamodb:']
+        if any(pattern in endpoint_url for pattern in local_patterns):
             os.environ.setdefault('AWS_ACCESS_KEY_ID', 'fakeMyKeyId')
             os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
     
