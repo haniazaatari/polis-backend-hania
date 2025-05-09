@@ -23,7 +23,7 @@ class DynamoDBClient:
     
     def __init__(self, 
                 endpoint_url: Optional[str] = None,
-                region_name: str = 'us-west-2',
+                region_name: str = 'us-east-1',
                 aws_access_key_id: Optional[str] = None,
                 aws_secret_access_key: Optional[str] = None):
         """

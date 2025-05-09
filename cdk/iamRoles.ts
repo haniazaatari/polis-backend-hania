@@ -1,5 +1,6 @@
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
+import * as cdk from 'aws-cdk-lib';
 
 export default (self: Construct) => {
   const instanceRole = new iam.Role(self, 'InstanceRole', {
@@ -25,5 +26,30 @@ export default (self: Construct) => {
       iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSCodeDeployRole'),
     ],
   });
+  const delphiJobQueueTableArn = cdk.Arn.format({
+    service: 'dynamodb',
+    region: 'us-east-1',
+    account: cdk.Stack.of(self).account,
+    resource: 'table',
+    resourceName: 'Delphi_JobQueue',
+  }, cdk.Stack.of(self));
+
+  const delphiJobQueueTableIndexesArn = `${delphiJobQueueTableArn}/index/*`;
+
+  instanceRole.addToPolicy(new iam.PolicyStatement({
+    effect: iam.Effect.ALLOW,
+    actions: [
+      "dynamodb:PutItem",
+      "dynamodb:GetItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
+      "dynamodb:Query",
+      "dynamodb:Scan"
+    ],
+    resources: [
+      delphiJobQueueTableArn,
+      delphiJobQueueTableIndexesArn
+    ],
+  }));
   return { instanceRole, codeDeployRole }
 }

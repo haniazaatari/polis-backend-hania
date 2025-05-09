@@ -331,7 +331,7 @@ def main():
             from polismath.database.dynamodb import DynamoDBClient
             # Use environment variables or sensible defaults for local/test
             endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
-            region_name = os.environ.get('AWS_REGION', 'us-west-2')
+            region_name = os.environ.get('AWS_REGION', 'us-east-1')
             aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID', 'dummy')
             aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY', 'dummy')
             dynamodb_client = DynamoDBClient(

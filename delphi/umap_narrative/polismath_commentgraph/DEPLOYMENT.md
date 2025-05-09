@@ -101,13 +101,13 @@ docker build -t polis-comment-graph-lambda .
 
 ```bash
 # Get the ECR login
-aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-west-2.amazonaws.com
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
 
 # Tag the image
-docker tag polis-comment-graph-lambda:latest 123456789012.dkr.ecr.us-west-2.amazonaws.com/polis-comment-graph-lambda:latest
+docker tag polis-comment-graph-lambda:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/polis-comment-graph-lambda:latest
 
 # Push the image
-docker push 123456789012.dkr.ecr.us-west-2.amazonaws.com/polis-comment-graph-lambda:latest
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/polis-comment-graph-lambda:latest
 ```
 
 ## Creating the Lambda Function
@@ -118,9 +118,9 @@ docker push 123456789012.dkr.ecr.us-west-2.amazonaws.com/polis-comment-graph-lam
 aws lambda create-function \
     --function-name polis-comment-graph-lambda \
     --package-type Image \
-    --code ImageUri=123456789012.dkr.ecr.us-west-2.amazonaws.com/polis-comment-graph-lambda:latest \
+    --code ImageUri=123456789012.dkr.ecr.us-east-1.amazonaws.com/polis-comment-graph-lambda:latest \
     --role arn:aws:iam::123456789012:role/lambda-execution-role \
-    --environment "Variables={DATABASE_HOST=polis-db.cluster-xyz.us-west-2.rds.amazonaws.com,DATABASE_NAME=polis,DATABASE_USER=polis}" \
+    --environment "Variables={DATABASE_HOST=polis-db.cluster-xyz.us-east-1.rds.amazonaws.com,DATABASE_NAME=polis,DATABASE_USER=polis}" \
     --timeout 300 \
     --memory-size 1024
 ```
@@ -141,9 +141,9 @@ aws sns create-topic --name polis-new-comment-topic
 
 # Create a subscription for the Lambda function
 aws sns subscribe \
-    --topic-arn arn:aws:sns:us-west-2:123456789012:polis-new-comment-topic \
+    --topic-arn arn:aws:sns:us-east-1:123456789012:polis-new-comment-topic \
     --protocol lambda \
-    --notification-endpoint arn:aws:lambda:us-west-2:123456789012:function:polis-comment-graph-lambda
+    --notification-endpoint arn:aws:lambda:us-east-1:123456789012:function:polis-comment-graph-lambda
 
 # Grant permission for SNS to invoke the Lambda
 aws lambda add-permission \
@@ -151,7 +151,7 @@ aws lambda add-permission \
     --statement-id sns-new-comment \
     --action lambda:InvokeFunction \
     --principal sns.amazonaws.com \
-    --source-arn arn:aws:sns:us-west-2:123456789012:polis-new-comment-topic
+    --source-arn arn:aws:sns:us-east-1:123456789012:polis-new-comment-topic
 ```
 
 ### 2. CloudWatch Scheduled Event for Batch Processing
@@ -165,7 +165,7 @@ aws events put-rule \
 # Add the Lambda function as a target
 aws events put-targets \
     --rule polis-daily-processing \
-    --targets "Id"="1","Arn"="arn:aws:lambda:us-west-2:123456789012:function:polis-comment-graph-lambda","Input"="{\"event_type\":\"process_conversation\",\"conversation_id\":\"all\"}"
+    --targets "Id"="1","Arn"="arn:aws:lambda:us-east-1:123456789012:function:polis-comment-graph-lambda","Input"="{\"event_type\":\"process_conversation\",\"conversation_id\":\"all\"}"
 
 # Grant permission for CloudWatch Events to invoke the Lambda
 aws lambda add-permission \
@@ -173,7 +173,7 @@ aws lambda add-permission \
     --statement-id cloudwatch-daily \
     --action lambda:InvokeFunction \
     --principal events.amazonaws.com \
-    --source-arn arn:aws:events:us-west-2:123456789012:rule/polis-daily-processing
+    --source-arn arn:aws:events:us-east-1:123456789012:rule/polis-daily-processing
 ```
 
 ## Testing the Deployment
@@ -207,7 +207,7 @@ When you need to update the Lambda function:
 ```bash
 aws lambda update-function-code \
     --function-name polis-comment-graph-lambda \
-    --image-uri 123456789012.dkr.ecr.us-west-2.amazonaws.com/polis-comment-graph-lambda:latest
+    --image-uri 123456789012.dkr.ecr.us-east-1.amazonaws.com/polis-comment-graph-lambda:latest
 ```
 
 ## Technical Notes

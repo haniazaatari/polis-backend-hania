@@ -32,7 +32,7 @@ DB_CONFIG = {
 
 DYNAMODB_CONFIG = {
     'endpoint_url': os.environ.get('DYNAMODB_ENDPOINT'),
-    'region': os.environ.get('AWS_REGION', 'us-west-2'),
+    'region': os.environ.get('AWS_REGION', 'us-east-1'),
     'access_key': os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
     'secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
 }
@@ -103,7 +103,7 @@ def load_data_from_dynamodb(zid, layer_num=0):
     endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://dynamodb-local:8000')
     dynamodb = boto3.resource('dynamodb', 
                              endpoint_url=endpoint_url,
-                             region_name=os.environ.get('AWS_REGION', 'us-west-2'),
+                             region_name=os.environ.get('AWS_REGION', 'us-east-1'),
                              aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
                              aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey'))
     

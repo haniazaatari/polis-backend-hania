@@ -379,7 +379,7 @@ class DynamoDBStorage:
             endpoint_url: Optional endpoint URL for local DynamoDB
         """
         # Get settings from environment variables with fallbacks
-        self.region_name = region_name or os.environ.get('AWS_REGION', 'us-west-2')
+        self.region_name = region_name or os.environ.get('AWS_REGION', 'us-east-1')
         self.endpoint_url = endpoint_url or os.environ.get('DYNAMODB_ENDPOINT')
         
         # Get AWS credentials from environment variables

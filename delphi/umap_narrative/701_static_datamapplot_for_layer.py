@@ -35,7 +35,7 @@ except ImportError:
     class DynamoDBStorage:
         def __init__(self, endpoint_url=None):
             self.endpoint_url = endpoint_url or os.environ.get("DYNAMODB_ENDPOINT", "http://dynamodb-local:8000")
-            self.region = os.environ.get("AWS_REGION", "us-west-2")
+            self.region = os.environ.get("AWS_REGION", "us-east-1")
             self.dynamodb = boto3.resource('dynamodb', endpoint_url=self.endpoint_url, region_name=self.region)
             
             # Define table names using the new Delphi_ naming scheme

@@ -10,7 +10,7 @@ Usage:
 
 Options:
     --endpoint-url=URL  DynamoDB endpoint URL
-    --region=REGION     AWS region (default: us-west-2)
+    --region=REGION     AWS region (default: us-east-1)
     --interval=SECONDS  Polling interval in seconds (default: 10)
     --max-workers=N     Maximum number of concurrent workers (default: 1)
     --log-level=LEVEL   Logging level (default: INFO)
@@ -41,7 +41,7 @@ running = True
 class JobProcessor:
     """Process jobs from the Delphi_JobQueue."""
     
-    def __init__(self, endpoint_url=None, region='us-west-2'):
+    def __init__(self, endpoint_url=None, region='us-east-1'):
         """Initialize the job processor."""
         self.endpoint_url = endpoint_url or os.environ.get('DYNAMODB_ENDPOINT')
         self.region = region
@@ -567,7 +567,7 @@ def main():
     parser = argparse.ArgumentParser(description='Delphi Job Poller Service')
     parser.add_argument('--endpoint-url', type=str, default=None,
                        help='DynamoDB endpoint URL')
-    parser.add_argument('--region', type=str, default='us-west-2',
+    parser.add_argument('--region', type=str, default='us-east-1',
                        help='AWS region')
     parser.add_argument('--interval', type=int, default=10,
                        help='Polling interval in seconds')

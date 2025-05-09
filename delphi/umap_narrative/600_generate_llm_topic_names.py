@@ -59,7 +59,7 @@ def setup_environment(dynamo_endpoint=None):
         os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
     
     if not os.environ.get('AWS_DEFAULT_REGION'):
-        os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
+        os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
     
     logger.info(f"DynamoDB endpoint: {os.environ.get('DYNAMODB_ENDPOINT')}")
     logger.info(f"AWS region: {os.environ.get('AWS_DEFAULT_REGION')}")

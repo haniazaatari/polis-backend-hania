@@ -249,7 +249,7 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
     if not os.environ.get('AWS_SECRET_ACCESS_KEY'):
         os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
     if not os.environ.get('AWS_DEFAULT_REGION'):
-        os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
+        os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
         
     # S3 settings
     if not os.environ.get('AWS_S3_ENDPOINT'):
