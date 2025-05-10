@@ -135,8 +135,6 @@ class PostgresConfig:
         uri = f"postgresql://{self.user}{password_str}@{self.host}:{self.port}/{self.database}?sslmode=require"
 
         # todo - remove ssl mode if local or dev
-        if self.ssl_mode and self.ssl_mode != "prefer":
-            uri += f"?sslmode={self.ssl_mode}"
 
         return uri
 
