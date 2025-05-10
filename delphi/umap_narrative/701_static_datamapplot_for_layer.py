@@ -276,10 +276,6 @@ def s3_upload_file(local_file_path, s3_key):
     bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
     region = os.environ.get('AWS_REGION')
     
-    if not all([endpoint_url, access_key, secret_key, bucket_name]):
-        logger.error("Missing S3 configuration. Cannot upload file.")
-        return False
-    
     try:
         # Create S3 client
         s3_client = boto3.client(
