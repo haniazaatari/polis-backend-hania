@@ -252,12 +252,6 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
         os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
         
     # S3 settings
-    if not os.environ.get('AWS_S3_ENDPOINT'):
-        os.environ['AWS_S3_ENDPOINT'] = 'http://localhost:9000'
-    if not os.environ.get('AWS_S3_ACCESS_KEY_ID'):
-        os.environ['AWS_S3_ACCESS_KEY_ID'] = 'minioadmin'
-    if not os.environ.get('AWS_S3_SECRET_ACCESS_KEY'):
-        os.environ['AWS_S3_SECRET_ACCESS_KEY'] = 'minioadmin'
     if not os.environ.get('AWS_S3_BUCKET_NAME'):
         os.environ['AWS_S3_BUCKET_NAME'] = 'delphi'
         

@@ -414,14 +414,6 @@ def generate_static_datamapplot(zid, layer_num=0, output_dir=None):
         os.makedirs(container_dir, exist_ok=True)
         if os.path.exists("/visualizations"):
             os.makedirs(host_dir, exist_ok=True)
-            
-        # Make sure S3 environment variables are set
-        if not os.environ.get('AWS_S3_ENDPOINT'):
-            os.environ['AWS_S3_ENDPOINT'] = 'http://localhost:9000'
-        if not os.environ.get('AWS_S3_ACCESS_KEY_ID'):
-            os.environ['AWS_S3_ACCESS_KEY_ID'] = 'minioadmin'
-        if not os.environ.get('AWS_S3_SECRET_ACCESS_KEY'):
-            os.environ['AWS_S3_SECRET_ACCESS_KEY'] = 'minioadmin'
         if not os.environ.get('AWS_S3_BUCKET_NAME'):
             os.environ['AWS_S3_BUCKET_NAME'] = 'delphi'
         if not os.environ.get('AWS_REGION'):
