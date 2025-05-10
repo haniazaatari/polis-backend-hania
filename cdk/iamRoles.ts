@@ -31,7 +31,7 @@ export default (self: Construct) => {
     region: 'us-east-1',
     account: cdk.Stack.of(self).account,
     resource: 'table',
-    resourceName: 'Delphi_JobQueue',
+    resourceName: 'Delphi_*',
   }, cdk.Stack.of(self));
 
   const delphiJobQueueTableIndexesArn = `${delphiJobQueueTableArn}/index/*`;
@@ -51,5 +51,6 @@ export default (self: Construct) => {
       delphiJobQueueTableIndexesArn
     ],
   }));
+
   return { instanceRole, codeDeployRole }
 }
