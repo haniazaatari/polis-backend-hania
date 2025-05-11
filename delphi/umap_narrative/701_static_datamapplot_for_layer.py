@@ -275,6 +275,9 @@ def s3_upload_file(local_file_path, s3_key):
     secret_key = os.environ.get('AWS_S3_SECRET_ACCESS_KEY')
     bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
     region = os.environ.get('AWS_REGION')
+
+    if endpoint_url == "":
+        endpoint_url = None
     
     try:
         # Create S3 client
@@ -285,8 +288,8 @@ def s3_upload_file(local_file_path, s3_key):
             aws_secret_access_key=secret_key,
             region_name=region,
             # For MinIO/local development, these settings help
-            config=boto3.session.Config(signature_version='s3v4'),
-            verify=False
+            # config=boto3.session.Config(signature_version='s3v4'),
+            # verify=False
         )
         
         # Check if bucket exists, create if it doesn't
