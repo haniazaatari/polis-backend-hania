@@ -42,6 +42,7 @@
     "@google/generative-ai": "^0.21.0",
     "@sinclair/typebox": "^0.34.3",
     "@tevko/sensemaking-tools": "^1.0.15",
+    "@types/uuid": "^10.0.0",
     "akismet": "~0.0.11",
     "async": "~0.1.22",
     "aws-sdk": "~2.230.1",
@@ -87,6 +88,7 @@
     "sql": "~0.34.0",
     "ts-node": "^10.9.2",
     "underscore": "~1.12.1",
+    "uuid": "^11.1.0",
     "valid-url": "~1.0.9",
     "winston": "~3.8.2",
     "xmlbuilder2": "^3.1.1"
