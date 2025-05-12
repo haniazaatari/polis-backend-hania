@@ -307,7 +307,7 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
                 
                 try:
                     # Get model name from environment variable or use default
-                    model_name = os.environ.get("OLLAMA_MODEL")
+                    model_name = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
                     logger.info(f"Using Ollama model from environment: {model_name}")
                     response = ollama.chat(
                         model=model_name,
@@ -866,11 +866,11 @@ def create_visualizations(
     logger.info(f"Index file available at: {index_file}")
     
     # Try to open in browser
-    try:
-        import webbrowser
-        webbrowser.open(f"file://{index_file}")
-    except:
-        pass
+    # try:
+    #     import webbrowser
+    #     webbrowser.open(f"file://{index_file}")
+    # except:
+    #     pass
         
     return index_file
 
@@ -947,7 +947,7 @@ def process_layers_and_create_visualizations(
             if dynamo_storage:
                 logger.info(f"Storing LLM topic names for layer {layer_idx} in DynamoDB...")
                 # Get model name from environment variable or use default
-                model_name = os.environ.get("OLLAMA_MODEL")
+                model_name = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
                 llm_topic_models = DataConverter.batch_convert_llm_topic_names(
                     conversation_id,
                     cluster_labels,
@@ -958,15 +958,16 @@ def process_layers_and_create_visualizations(
                 logger.info(f"Stored {result['success']} LLM topic names with {result['failure']} failures")
                 
             # Create a new static datamapplot with the LLM labels
-            logger.info(f"Generating static datamapplot with LLM labels for layer {layer_idx}...")
-            create_static_datamapplot(
-                conversation_id,
-                document_map,
-                cluster_layer,
-                cluster_labels,
-                output_dir,
-                layer_idx
-            )
+            # logger.info(f"Generating static datamapplot with LLM labels for layer {layer_idx}...")
+            # create_static_datamapplot(
+            #     conversation_id,
+            #     document_map,
+            #     cluster_layer,
+            #     cluster_labels,
+            #     output_dir,
+            #     layer_idx
+            # )
+            logger.info(f"Skipped static datamapplot with LLM labels for layer {layer_idx}...")
     
     return index_file
 
