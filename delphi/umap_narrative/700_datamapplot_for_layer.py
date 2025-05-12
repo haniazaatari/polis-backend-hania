@@ -803,13 +803,13 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
                 logger.error(f"S3 upload traceback: {traceback.format_exc()}")
             
             # Try to open in browser
-            try:
-                import webbrowser
-                webbrowser.open(f"file://{viz_file}")
-                logger.info(f"Opened visualization in browser")
-            except Exception as browse_error:
-                logger.debug(f"Could not open browser: {browse_error}")
-                logger.info(f"Visualization available at: file://{viz_file}")
+            # try:
+            #     import webbrowser
+            #     webbrowser.open(f"file://{viz_file}")
+            #     logger.info(f"Opened visualization in browser")
+            # except Exception as browse_error:
+            #     logger.debug(f"Could not open browser: {browse_error}")
+            #     logger.info(f"Visualization available at: file://{viz_file}")
             
             return viz_file
         except Exception as e:
