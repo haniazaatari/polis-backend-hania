@@ -116,9 +116,6 @@ if [ $PIPELINE_EXIT_CODE -eq 0 ]; then
   # Generate layer 0 visualization
   python /app/umap_narrative/700_datamapplot_for_layer.py --conversation_id=${ZID} --layer=0 --output_dir=$OUTPUT_DIR ${VERBOSE}
   
-  # Generate layer 1 visualization (if available)
-  python /app/umap_narrative/700_datamapplot_for_layer.py --conversation_id=${ZID} --layer=1 --output_dir=$OUTPUT_DIR ${VERBOSE}
-  
   echo -e "${GREEN}UMAP Narrative pipeline completed successfully!${NC}"
   echo "Results stored in DynamoDB and visualizations for conversation ${ZID}"
 else 
