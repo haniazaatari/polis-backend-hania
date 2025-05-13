@@ -29,6 +29,8 @@ import boto3
 import asyncio
 import numpy as np
 import pandas as pd
+import re  # Added re import for regex operations
+import requests  # Added for HTTP error handling
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union, Tuple
@@ -38,6 +40,7 @@ import csv
 import io
 import xmltodict
 from collections import defaultdict
+import traceback  # Added for detailed error tracing
 
 # Import the model provider
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -718,12 +721,22 @@ class BatchReportGenerator:
             return None
 
     async def submit_batch(self):
-        """Prepare and process a batch of topic report requests."""
-        # Prepare batch requests
-        batch_requests = await self.prepare_batch_requests()
+        """Prepare and process a batch of topic report requests using Anthropic's Batch API."""
+        logger.info("=== Starting batch submission process ===")
 
-        if not batch_requests:
-            logger.error("No batch requests to submit")
+        # Prepare batch requests
+        try:
+            logger.info("Preparing batch requests for topics...")
+            batch_requests = await self.prepare_batch_requests()
+
+            if not batch_requests:
+                logger.error("No batch requests to submit - prepare_batch_requests returned empty list")
+                return None
+
+            logger.info(f"Successfully prepared {len(batch_requests)} batch requests")
+        except Exception as e:
+            logger.error(f"Critical error during batch request preparation: {str(e)}")
+            logger.error(traceback.format_exc())
             return None
 
         # Log job information
@@ -738,19 +751,320 @@ class BatchReportGenerator:
             logger.info(f"Limiting batch size from {len(batch_requests)} to {self.max_batch_size}")
             batch_requests = batch_requests[:self.max_batch_size]
 
-        # Process requests sequentially
-        results = []
-        for i, request in enumerate(batch_requests):
-            logger.info(f"Processing request {i+1}/{len(batch_requests)}")
-            result = await self.process_request(request)
-            if result:
-                results.append(result)
-            # Add a small delay between requests to avoid rate limiting
-            await asyncio.sleep(1)
+        # Validate API key presence
+        anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not anthropic_api_key:
+            logger.error("ERROR: ANTHROPIC_API_KEY environment variable is not set. Cannot submit batch.")
+            if self.job_id:
+                try:
+                    # Update job status to reflect missing API key
+                    dynamodb = boto3.resource(
+                        'dynamodb',
+                        endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000'),
+                        region_name=os.environ.get('AWS_REGION', 'us-west-2'),
+                        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
+                        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+                    )
+                    job_table = dynamodb.Table('Delphi_JobQueue')
+                    job_table.update_item(
+                        Key={'job_id': self.job_id},
+                        UpdateExpression="SET job_status = :status, error_message = :error",
+                        ExpressionAttributeValues={
+                            ':status': 'FAILED',
+                            ':error': 'Missing ANTHROPIC_API_KEY environment variable'
+                        }
+                    )
+                    logger.info(f"Updated job {self.job_id} status to FAILED due to missing API key")
+                except Exception as e:
+                    logger.error(f"Failed to update job status: {str(e)}")
+            return None
 
-        logger.info(f"Processed {len(results)}/{len(batch_requests)} requests successfully")
+        # Main try block for API interaction
+        try:
+            # Import Anthropic SDK
+            logger.info("Importing Anthropic SDK...")
+            try:
+                from anthropic import Anthropic, APIError, APIConnectionError, APIResponseValidationError, APIStatusError
+                logger.info("Successfully imported Anthropic SDK")
+            except ImportError as e:
+                logger.error(f"Failed to import Anthropic SDK: {str(e)}")
+                logger.error(f"System paths: {sys.path}")
+                logger.error("Attempting to install Anthropic SDK...")
+                try:
+                    import subprocess
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", "anthropic"])
+                    from anthropic import Anthropic, APIError, APIConnectionError, APIResponseValidationError, APIStatusError
+                    logger.info("Successfully installed and imported Anthropic SDK")
+                except Exception as e:
+                    logger.error(f"Failed to install Anthropic SDK: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    return None
 
-        return self.job_id
+            # Initialize Anthropic client
+            logger.info("Initializing Anthropic client...")
+            try:
+                anthropic = Anthropic(api_key=anthropic_api_key)
+                logger.info("Successfully initialized Anthropic client")
+            except Exception as e:
+                logger.error(f"Failed to initialize Anthropic client: {str(e)}")
+                logger.error(traceback.format_exc())
+                return None
+
+            # Format requests for Anthropic Batch API
+            logger.info("Formatting batch requests for Anthropic API...")
+            formatted_batch_requests = []
+
+            try:
+                for i, request in enumerate(batch_requests):
+                    # Extract metadata for custom_id
+                    metadata = request.get('metadata', {})
+                    topic_name = metadata.get('topic_name', 'Unknown Topic')
+                    cluster_id = metadata.get('cluster_id', i)
+                    section_name = metadata.get('section_name', f"topic_{topic_name.lower().replace(' ', '_')}")
+
+                    # Create a valid custom_id (only allow a-zA-Z0-9_-)
+                    custom_id = f"{self.conversation_id}_{cluster_id}_{section_name}"
+                    safe_custom_id = re.sub(r'[^a-zA-Z0-9_-]', '_', custom_id)
+
+                    # Validate custom_id length (max 64 chars for Anthropic API)
+                    if len(safe_custom_id) > 64:
+                        safe_custom_id = safe_custom_id[:64]
+                        logger.warning(f"Truncated custom_id to 64 chars: {safe_custom_id}")
+
+                    # Make sure we have system and user messages
+                    system_content = request.get('system', '')
+                    if not system_content:
+                        logger.warning(f"Empty system prompt for request {i}, using default")
+                        system_content = "You are a helpful AI assistant analyzing survey data."
+
+                    user_content = ''
+                    if 'messages' in request and len(request.get('messages', [])) > 0:
+                        user_content = request.get('messages', [])[0].get('content', '')
+
+                    if not user_content:
+                        logger.warning(f"Empty user prompt for request {i}, skipping")
+                        continue
+
+                    # Create a proper user message format following working example
+                    user_message = {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": user_content
+                            }
+                        ]
+                    }
+
+                    # Format request for Anthropic Batch API following working example
+                    formatted_request = {
+                        "custom_id": safe_custom_id,
+                        "params": {
+                            "model": self.model,
+                            "max_tokens": request.get('max_tokens', 4000),
+                            "system": system_content,
+                            "messages": [user_message]
+                        }
+                    }
+
+                    formatted_batch_requests.append(formatted_request)
+
+                logger.info(f"Successfully formatted {len(formatted_batch_requests)} batch requests")
+
+                # Debug: log the first request structure (without full content)
+                if formatted_batch_requests:
+                    debug_request = formatted_batch_requests[0].copy()
+                    if 'params' in debug_request:
+                        # Truncate system content
+                        if 'system' in debug_request['params'] and isinstance(debug_request['params']['system'], str) and len(debug_request['params']['system']) > 100:
+                            debug_request['params']['system'] = debug_request['params']['system'][:100] + "... [content truncated for log]"
+
+                        # Truncate message content
+                        if 'messages' in debug_request['params']:
+                            for msg in debug_request['params']['messages']:
+                                if 'content' in msg and isinstance(msg['content'], list):
+                                    for content_item in msg['content']:
+                                        if 'text' in content_item and isinstance(content_item['text'], str) and len(content_item['text']) > 100:
+                                            content_item['text'] = content_item['text'][:100] + "... [content truncated for log]"
+
+                    logger.info(f"Sample batch request structure: {json.dumps(debug_request, indent=2)}")
+                    logger.info(f"Using format that matches working example from other project")
+
+            except Exception as e:
+                logger.error(f"Error formatting batch requests: {str(e)}")
+                logger.error(traceback.format_exc())
+                return None
+
+            if not formatted_batch_requests:
+                logger.error("No valid formatted batch requests to submit")
+                return None
+
+            logger.info(f"Submitting {len(formatted_batch_requests)} requests to Anthropic Batch API")
+
+            # Submit the batch to Anthropic with detailed error handling
+            try:
+                batch = anthropic.beta.messages.batches.create(requests=formatted_batch_requests)
+                logger.info("Successfully submitted batch to Anthropic API")
+                logger.info(f"Batch ID: {batch.id}")
+                logger.info(f"Batch status: {batch.processing_status}")
+                logger.info(f"FULL BATCH OBJECT: {batch}")
+            except APIStatusError as e:
+                logger.error(f"Anthropic API Status Error: {str(e)}")
+                logger.error(f"Status: {e.status_code}")
+                logger.error(f"Response: {e.response}")
+                return None
+            except APIConnectionError as e:
+                logger.error(f"Anthropic API Connection Error: {str(e)}")
+                return None
+            except APIResponseValidationError as e:
+                logger.error(f"Anthropic API Response Validation Error: {str(e)}")
+                logger.error(f"Response: {e.response}")
+                return None
+            except APIError as e:
+                logger.error(f"Anthropic API Error: {str(e)}")
+                return None
+            except Exception as e:
+                logger.error(f"Unexpected error submitting batch to Anthropic API: {str(e)}")
+                logger.error(traceback.format_exc())
+                return None
+
+            # Store batch information in DynamoDB if we have a job ID
+            if self.job_id:
+                logger.info(f"Updating job {self.job_id} with batch information in DynamoDB...")
+                try:
+                    # Use the existing DynamoDB client for the job queue
+                    dynamodb = boto3.resource(
+                        'dynamodb',
+                        endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000'),
+                        region_name=os.environ.get('AWS_REGION', 'us-west-2'),
+                        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
+                        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+                    )
+
+                    # Connect to the job queue table
+                    job_table = dynamodb.Table('Delphi_JobQueue')
+
+                    # Check if the table exists
+                    try:
+                        job_table.table_status
+                        logger.info("Successfully connected to Delphi_JobQueue table")
+                    except Exception as e:
+                        logger.error(f"Failed to connect to Delphi_JobQueue table: {str(e)}")
+                        logger.error("Available tables:")
+                        try:
+                            tables = list(dynamodb.tables.all())
+                            for table in tables:
+                                logger.info(f"- {table.name}")
+                        except Exception as e:
+                            logger.error(f"Failed to list tables: {str(e)}")
+                        return batch.id  # Still return batch ID even if we can't update DynamoDB
+
+                    # Simplify the update - just focus on getting batch_id stored
+                    batch_id_str = str(batch.id)  # Convert to string to ensure compatibility
+                    logger.info(f"Attempting to store batch_id as string: {batch_id_str}")
+
+                    # Update the job with batch information - fixed version with ExpressionAttributeNames
+                    update_response = job_table.update_item(
+                        Key={'job_id': self.job_id},
+                        UpdateExpression="SET batch_id = :batch_id, #s = :job_status",
+                        ExpressionAttributeNames={
+                            '#s': 'status'  # Use ExpressionAttributeNames to avoid 'status' reserved keyword
+                        },
+                        ExpressionAttributeValues={
+                            ':batch_id': batch_id_str,
+                            ':job_status': 'PROCESSING'  # Set job status to PROCESSING so poller knows to check batch status
+                        },
+                        ReturnValues="UPDATED_NEW"
+                    )
+
+                    # Verify update took effect
+                    verify_job = job_table.get_item(Key={'job_id': self.job_id})
+                    if 'Item' in verify_job:
+                        job_item = verify_job['Item']
+                        if 'batch_id' in job_item:
+                            logger.info(f"VERIFICATION SUCCESS: batch_id found in job record: {job_item['batch_id']}")
+                        else:
+                            logger.error(f"VERIFICATION FAILED: batch_id not found in job record!")
+                            logger.error(f"Job fields: {list(job_item.keys())}")
+                    else:
+                        logger.error(f"Could not verify update - job not found!")
+
+                    logger.info(f"Successfully updated job {self.job_id} with batch information")
+                    logger.info(f"Batch ID: {batch.id} stored in job record")
+                    logger.info(f"DynamoDB update response: {update_response}")
+                    logger.info(f"Job is now in PROCESSING state - poller will run batch status checks")
+
+                    # Schedule a batch status check job to run in 60 seconds
+                    try:
+                        # Create a new job for checking batch status
+                        status_check_job_id = f"batch_check_{self.job_id}_{int(time.time())}"
+
+                        # Current timestamp
+                        now = datetime.now().isoformat()
+
+                        # Create the status check job with the new job type
+                        status_job = {
+                            'job_id': status_check_job_id,
+                            'status': 'PENDING',
+                            'job_type': 'AWAITING_NARRATIVE_BATCH',  # New job type for clearer state machine
+                            'batch_job_id': self.job_id,
+                            'batch_id': batch.id,
+                            'conversation_id': self.conversation_id,
+                            'report_id': self.report_id,
+                            'created_at': now,
+                            'updated_at': now,
+                            'priority': 50,  # Medium priority
+                            'version': 1,
+                            'logs': json.dumps({'entries': []})
+                        }
+
+                        # Put the job in the queue
+                        job_table.put_item(Item=status_job)
+
+                        logger.info(f"Scheduled batch status check job {status_check_job_id} to run in 60 seconds")
+                    except Exception as e:
+                        logger.error(f"Failed to schedule batch status check job: {str(e)}")
+                        logger.error(traceback.format_exc())
+                        # Continue despite failure
+                        logger.info("Continuing despite failure to schedule status check job")
+
+                except Exception as e:
+                    logger.error(f"Failed to update job with batch information: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    # Continue despite DynamoDB update failure
+                    logger.info("Continuing despite DynamoDB update failure")
+
+            logger.info("=== Batch submission completed successfully ===")
+            return batch.id
+
+        except Exception as e:
+            logger.error(f"Unhandled error in submit_batch: {str(e)}")
+            logger.error(traceback.format_exc())
+
+            # Try to update job status in DynamoDB
+            if self.job_id:
+                try:
+                    dynamodb = boto3.resource(
+                        'dynamodb',
+                        endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000'),
+                        region_name=os.environ.get('AWS_REGION', 'us-west-2'),
+                        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
+                        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+                    )
+                    job_table = dynamodb.Table('Delphi_JobQueue')
+                    job_table.update_item(
+                        Key={'job_id': self.job_id},
+                        UpdateExpression="SET job_status = :status, error_message = :error",
+                        ExpressionAttributeValues={
+                            ':status': 'FAILED',
+                            ':error': f"Error in batch submission: {str(e)}"
+                        }
+                    )
+                    logger.info(f"Updated job {self.job_id} status to FAILED due to error")
+                except Exception as update_error:
+                    logger.error(f"Failed to update job status after error: {str(update_error)}")
+
+            return None
 
 async def main():
     """Main entry point."""
@@ -761,8 +1075,8 @@ async def main():
                         help='LLM model to use (default: claude-3-5-sonnet-20241022)')
     parser.add_argument('--no-cache', action='store_true',
                         help='Ignore cached report data')
-    parser.add_argument('--max-batch-size', type=int, default=20,
-                        help='Maximum number of topics to include in a single batch (default: 20)')
+    parser.add_argument('--max-batch-size', type=int, default=5,
+                        help='Maximum number of topics to include in a single batch (default: 5)')
     args = parser.parse_args()
 
     # Get environment variables for job

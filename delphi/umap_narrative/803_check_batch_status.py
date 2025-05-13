@@ -1,406 +1,653 @@
 #!/usr/bin/env python3
 """
-Check the status of batch narrative report jobs.
+Check and process Anthropic Batch API results for Polis narrative reports.
 
 This script:
-1. Retrieves batch job metadata from DynamoDB
-2. Checks the status of Anthropic batch jobs
-3. Displays progress information
+1. Checks the status of submitted batches in the job queue
+2. Retrieves results for completed batches
+3. Processes the results and stores them in the report database
+4. Updates job status when processing is complete
 
 Usage:
-    python 803_check_batch_status.py --batch_id BATCH_ID [--watch]
-    python 803_check_batch_status.py --conversation_id CONVERSATION_ID [--watch]
+    python 803_check_batch_status.py [--job-id JOB_ID] [--polling-interval SECONDS] [--log-level LEVEL]
 
 Args:
-    --batch_id: ID of a specific batch job to check
-    --conversation_id: ID of a conversation to show all batch jobs for
-    --watch: Continuously monitor the batch job (poll every 30 seconds)
+    --job-id: Optional specific job ID to check
+    --polling-interval: Seconds to wait between checks (default: 60)
+    --log-level: Logging level (default: INFO)
 """
 
 import os
 import sys
 import json
 import time
+import boto3
 import logging
 import argparse
-import boto3
-import requests
-from datetime import datetime
-from typing import Dict, List, Any, Optional
-
-# Import from local modules (set the path first)
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from umap_narrative.llm_factory_constructor import get_model_provider
+import asyncio
+import traceback  # For detailed error tracking
+import requests  # For HTTP error handling
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Union, Any
+from pathlib import Path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class BatchReportStorageService:
-    """Storage service for batch job metadata in DynamoDB."""
-    
-    def __init__(self, table_name="Delphi_BatchJobs"):
-        """Initialize the batch job storage service.
-        
-        Args:
-            table_name: Name of the DynamoDB table to use
-        """
+class BatchStatusChecker:
+    """Check and process Anthropic Batch API results."""
+
+    def __init__(self, log_level=logging.INFO):
+        """Initialize the batch status checker."""
+        # Set log level
+        logger.setLevel(log_level)
+
         # Set up DynamoDB connection
-        self.table_name = table_name
-        
-        # Set up DynamoDB client
         self.dynamodb = boto3.resource(
             'dynamodb',
-            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
-            region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-west-2'),
+            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000'),
+            region_name=os.environ.get('AWS_REGION', 'us-west-2'),
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
         )
-        
-        # Get the table
-        self.table = self.dynamodb.Table(self.table_name)
-    
-    def get_item(self, batch_id):
-        """Get a batch job by ID.
-        
+
+        # Get job queue table
+        self.job_table = self.dynamodb.Table('Delphi_JobQueue')
+
+        # Get report storage table
+        self.report_table = self.dynamodb.Table('Delphi_NarrativeReports')
+
+        # Try to import Anthropic client with comprehensive error handling
+        try:
+            logger.info("Attempting to import Anthropic SDK...")
+            try:
+                from anthropic import Anthropic, APIError, APIConnectionError, APIResponseValidationError, APIStatusError
+                logger.info("Successfully imported Anthropic SDK")
+            except ImportError as e:
+                logger.error(f"Failed to import Anthropic SDK: {str(e)}")
+                logger.error(f"System paths: {sys.path}")
+                logger.error("Attempting to install Anthropic SDK...")
+                try:
+                    import subprocess
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", "anthropic"])
+                    from anthropic import Anthropic, APIError, APIConnectionError, APIResponseValidationError, APIStatusError
+                    logger.info("Successfully installed and imported Anthropic SDK")
+                except Exception as e:
+                    logger.error(f"Failed to install Anthropic SDK: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    self.anthropic = None
+                    return
+
+            # Initialize Anthropic client
+            logger.info("Initializing Anthropic client...")
+            anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not anthropic_api_key:
+                logger.error("ANTHROPIC_API_KEY environment variable is not set - cannot check batch status")
+                # Print all available environment variables (without values) to help debug
+                logger.info("Available environment variables:")
+                for key in sorted(os.environ.keys()):
+                    if not key.startswith(('AWS_', 'PATH', 'PYTHONPATH', 'HOME', 'USER')):
+                        logger.info(f"- {key}")
+                self.anthropic = None
+            else:
+                logger.info("API key found, initializing Anthropic client")
+                try:
+                    self.anthropic = Anthropic(api_key=anthropic_api_key)
+                    logger.info("Anthropic client initialized successfully")
+                except Exception as e:
+                    logger.error(f"Failed to initialize Anthropic client: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    self.anthropic = None
+        except Exception as e:
+            logger.error(f"Unexpected error initializing Anthropic client: {str(e)}")
+            logger.error(traceback.format_exc())
+            self.anthropic = None
+
+    def find_pending_jobs(self, specific_job_id=None) -> List[Dict]:
+        """Find jobs with pending batch requests.
+
         Args:
-            batch_id: ID of the batch job
-        
+            specific_job_id: Optional specific job ID to check
+
         Returns:
-            Dictionary with the batch job metadata
+            List of job items with batch information
         """
         try:
-            response = self.table.get_item(Key={'batch_id': batch_id})
-            return response.get('Item')
+            if specific_job_id:
+                # Get specific job
+                response = self.job_table.get_item(Key={'job_id': specific_job_id})
+                items = [response.get('Item')] if 'Item' in response else []
+            else:
+                # Scan for jobs with batch_id and status not completed
+                # Using ExpressionAttributeNames to avoid the 'status' reserved keyword
+                response = self.job_table.scan(
+                    FilterExpression='attribute_exists(batch_id) AND (attribute_not_exists(#s) OR #s <> :completed_status)',
+                    ExpressionAttributeNames={'#s': 'status'},
+                    ExpressionAttributeValues={':completed_status': 'COMPLETED'}
+                )
+                items = response.get('Items', [])
+
+                # Continue scan if there are more results
+                while 'LastEvaluatedKey' in response:
+                    response = self.job_table.scan(
+                        FilterExpression='attribute_exists(batch_id) AND (attribute_not_exists(#s) OR #s <> :completed_status)',
+                        ExpressionAttributeNames={'#s': 'status'},
+                        ExpressionAttributeValues={':completed_status': 'COMPLETED'},
+                        ExclusiveStartKey=response['LastEvaluatedKey']
+                    )
+                    items.extend(response.get('Items', []))
+
+            # Filter for jobs with batch information
+            result = []
+            for item in items:
+                if 'batch_id' in item:
+                    result.append(item)
+
+            logger.info(f"Found {len(result)} pending batch jobs")
+            return result
         except Exception as e:
-            logger.error(f"Error getting batch job: {str(e)}")
-            return None
-    
-    def update_item(self, batch_id, updates):
-        """Update a batch job.
-        
-        Args:
-            batch_id: ID of the batch job
-            updates: Dictionary with updates to apply
-        """
-        try:
-            # Build update expression
-            update_expression = "SET "
-            expression_attribute_values = {}
-            
-            for key, value in updates.items():
-                update_expression += f"{key} = :{key.replace('.', '_')}, "
-                expression_attribute_values[f":{key.replace('.', '_')}"] = value
-            
-            # Remove trailing comma and space
-            update_expression = update_expression[:-2]
-            
-            response = self.table.update_item(
-                Key={'batch_id': batch_id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_attribute_values
-            )
-            logger.info(f"Batch job updated successfully: {response}")
-            return response
-        except Exception as e:
-            logger.error(f"Error updating batch job: {str(e)}")
-            return None
-    
-    def get_jobs_for_conversation(self, conversation_id):
-        """Get all batch jobs for a conversation.
-        
-        Args:
-            conversation_id: ID of the conversation
-        
-        Returns:
-            List of batch jobs for the conversation
-        """
-        try:
-            response = self.table.query(
-                IndexName='conversation_id-created_at-index',
-                KeyConditionExpression='conversation_id = :cid',
-                ExpressionAttributeValues={':cid': conversation_id},
-                ScanIndexForward=False  # Sort by created_at in descending order
-            )
-            return response.get('Items', [])
-        except Exception as e:
-            logger.error(f"Error getting batch jobs for conversation: {str(e)}")
+            logger.error(f"Error finding pending jobs: {str(e)}")
             return []
 
-class AnthropicBatchChecker:
-    """Check the status of Anthropic batch jobs."""
-    
-    def __init__(self, api_key=None):
-        """Initialize the Anthropic batch checker.
-        
+    async def check_batch_status(self, job_item: Dict) -> Optional[str]:
+        """Check status of a batch job.
+
         Args:
-            api_key: Anthropic API key
-        """
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        
-        if not self.api_key:
-            logger.warning("No Anthropic API key provided. Set ANTHROPIC_API_KEY env var or pass api_key parameter.")
-    
-    def check_batch_status(self, batch_id):
-        """Check the status of an Anthropic batch job.
-        
-        Args:
-            batch_id: ID of the Anthropic batch job
-            
+            job_item: Job item with batch information
+
         Returns:
-            Dictionary with batch job status
+            Batch status or None if checking failed
         """
-        if not self.api_key:
-            logger.error("No Anthropic API key provided for checking batch status")
-            return {"error": "API key missing"}
-        
+        job_id = job_item.get('job_id', 'unknown')
+
         try:
-            logger.info(f"Checking status of Anthropic batch job: {batch_id}")
-            
-            # Use Anthropic API to check batch status
-            headers = {
-                "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
-            }
-            
-            response = requests.get(
-                f"https://api.anthropic.com/v1/messages/batch/{batch_id}",
-                headers=headers
-            )
-            
-            # Check if the batch endpoint is available
-            if response.status_code == 404:
-                logger.warning("Anthropic Batch API endpoint not found (404)")
-                return {"error": "Batch API not available"}
-            
-            # Raise for other errors
-            response.raise_for_status()
-            
-            # Get response data
-            response_data = response.json()
-            logger.info(f"Batch status: {response_data.get('status', 'unknown')}")
-            
-            return response_data
-            
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                logger.warning("Anthropic Batch API endpoint not found (404)")
-                return {"error": "Batch API not available"}
-            else:
-                logger.error(f"HTTP error checking Anthropic batch status: {str(e)}")
-                return {"error": f"HTTP error: {str(e)}"}
-                
+            # First verify the Anthropic client is initialized
+            if not self.anthropic:
+                logger.error(f"Job {job_id}: Anthropic client not initialized. Cannot check batch status.")
+
+                # Update job with error
+                try:
+                    self.job_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression="SET error_message = :error, last_checked = :time",
+                        ExpressionAttributeValues={
+                            ':error': "Anthropic client not initialized - missing API key or SDK",
+                            ':time': datetime.now().isoformat()
+                        }
+                    )
+                except Exception as update_error:
+                    logger.error(f"Job {job_id}: Failed to update job with error: {str(update_error)}")
+
+                return None
+
+            # Get batch ID
+            batch_id = job_item.get('batch_id')
+            if not batch_id:
+                error_msg = f"No batch_id found for job {job_id}"
+                logger.error(error_msg)
+                logger.error(f"Job fields available: {list(job_item.keys())}")
+
+                # Update job with error since we can't proceed without a batch_id
+                try:
+                    self.job_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression="SET error_message = :error, last_checked = :time, #s = :status",
+                        ExpressionAttributeNames={
+                            '#s': 'status'  # Use ExpressionAttributeNames for reserved keyword
+                        },
+                        ExpressionAttributeValues={
+                            ':error': error_msg,
+                            ':time': datetime.now().isoformat(),
+                            ':status': 'FAILED'
+                        }
+                    )
+                    logger.error(f"Job {job_id}: Marked as FAILED - no batch_id found")
+                except Exception as update_error:
+                    logger.error(f"Job {job_id}: Failed to update job with error: {str(update_error)}")
+
+                return None
+
+            # Get batch details from Anthropic with detailed error handling
+            logger.info(f"Job {job_id}: Retrieving batch {batch_id} status from Anthropic API")
+            try:
+                batch = self.anthropic.beta.messages.batches.retrieve(batch_id)
+
+                # Log batch status
+                logger.info(f"Job {job_id}: Batch {batch_id} status: {batch.processing_status}")
+                logger.info(f"Job {job_id}: Batch {batch_id} details: {batch}")
+
+                # Update job with current batch status
+                try:
+                    self.job_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression="SET batch_status = :status, last_checked = :time",
+                        ExpressionAttributeValues={
+                            ':status': batch.processing_status,
+                            ':time': datetime.now().isoformat()
+                        }
+                    )
+                    logger.info(f"Job {job_id}: Successfully updated job with batch status: {batch.processing_status}")
+                except Exception as update_error:
+                    logger.error(f"Job {job_id}: Failed to update job with batch status: {str(update_error)}")
+                    logger.error(traceback.format_exc())
+
+                return batch.processing_status
+
+            except Exception as api_error:
+                error_msg = f"Error retrieving batch status from Anthropic API: {str(api_error)}"
+                logger.error(f"Job {job_id}: {error_msg}")
+                logger.error(traceback.format_exc())
+
+                # Check for specific error types
+                if "404" in str(api_error) or "not found" in str(api_error).lower():
+                    logger.error(f"Job {job_id}: Batch {batch_id} not found in Anthropic API")
+                    # This could be a serious error - the batch ID is invalid or doesn't exist
+                    error_detail = "Batch ID not found in Anthropic API - may have been deleted or never created properly"
+                elif "401" in str(api_error) or "unauthorized" in str(api_error).lower():
+                    logger.error(f"Job {job_id}: Authentication failed with Anthropic API")
+                    error_detail = "Anthropic API authentication failed - check API key"
+                else:
+                    error_detail = f"API error: {str(api_error)}"
+
+                # Update job with error
+                try:
+                    self.job_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression="SET error_message = :error, last_checked = :time",
+                        ExpressionAttributeValues={
+                            ':error': error_detail,
+                            ':time': datetime.now().isoformat()
+                        }
+                    )
+                except Exception as update_error:
+                    logger.error(f"Job {job_id}: Failed to update job with error: {str(update_error)}")
+
+                return None
+
         except Exception as e:
-            logger.error(f"Error checking Anthropic batch status: {str(e)}")
-            return {"error": str(e)}
+            error_msg = f"Unhandled error checking batch status: {str(e)}"
+            logger.error(f"Job {job_id}: {error_msg}")
+            logger.error(traceback.format_exc())
 
-def display_batch_status(batch_job, anthropic_status=None):
-    """Display the status of a batch job.
-    
-    Args:
-        batch_job: Dictionary with batch job metadata
-        anthropic_status: Dictionary with Anthropic batch status
-    """
-    # Print batch job metadata
-    print("\n===== Batch Job Information =====")
-    print(f"Batch ID: {batch_job.get('batch_id')}")
-    print(f"Conversation ID: {batch_job.get('conversation_id')}")
-    print(f"Model: {batch_job.get('model')}")
-    print(f"Status: {batch_job.get('status')}")
-    print(f"Created at: {batch_job.get('created_at')}")
-    print(f"Updated at: {batch_job.get('updated_at')}")
-    print(f"Total requests: {batch_job.get('total_requests', 0)}")
-    print(f"Completed requests: {batch_job.get('completed_requests', 0)}")
-    print(f"Progress: {batch_job.get('completed_requests', 0)}/{batch_job.get('total_requests', 0)} " +
-          f"({(batch_job.get('completed_requests', 0) / max(1, batch_job.get('total_requests', 1)) * 100):.1f}%)")
-    
-    # Print Anthropic batch status if available
-    if anthropic_status and not isinstance(anthropic_status.get('error'), str):
-        print("\n----- Anthropic Batch Status -----")
-        print(f"Anthropic Batch ID: {anthropic_status.get('batch_id')}")
-        print(f"Status: {anthropic_status.get('status')}")
-        
-        # Print request statuses
-        if 'requests' in anthropic_status:
-            print("\nRequest Status Summary:")
-            status_counts = {}
-            for req in anthropic_status.get('requests', []):
-                status = req.get('status')
-                status_counts[status] = status_counts.get(status, 0) + 1
-            
-            for status, count in status_counts.items():
-                print(f"  {status}: {count}")
-            
-            print("\nDetailed Request Statuses:")
-            for req in anthropic_status.get('requests', []):
-                req_id = req.get('request_id')
-                status = req.get('status')
-                
-                # Get topic info if available
-                topic_info = ""
-                if batch_job.get('request_map') and req_id in batch_job.get('request_map', {}):
-                    metadata = batch_job['request_map'][req_id]
-                    if isinstance(metadata, dict):
-                        topic_name = metadata.get('topic_name', 'Unknown')
-                        topic_info = f" - Topic: {topic_name}"
-                
-                print(f"  {req_id}: {status}{topic_info}")
-    
-    # If there was an error checking Anthropic status
-    elif anthropic_status and 'error' in anthropic_status:
-        print("\n----- Anthropic Batch Status -----")
-        print(f"Error: {anthropic_status.get('error')}")
-    
-    # Print sequential fallback info if relevant
-    if batch_job.get('status') == 'sequential_fallback':
-        print("\n----- Sequential Processing -----")
-        print("Batch API not available, falling back to sequential processing.")
-        print("Use 802_process_batch_results.py to process this batch job.")
+            # Update job with error
+            try:
+                self.job_table.update_item(
+                    Key={'job_id': job_id},
+                    UpdateExpression="SET error_message = :error, last_checked = :time",
+                    ExpressionAttributeValues={
+                        ':error': error_msg,
+                        ':time': datetime.now().isoformat()
+                    }
+                )
+            except Exception as update_error:
+                logger.error(f"Job {job_id}: Failed to update job with error: {str(update_error)}")
 
-def check_batch_job(batch_id, batch_storage, anthropic_checker):
-    """Check the status of a specific batch job.
-    
-    Args:
-        batch_id: ID of the batch job
-        batch_storage: BatchReportStorageService instance
-        anthropic_checker: AnthropicBatchChecker instance
-        
-    Returns:
-        True if the batch job is complete, False otherwise
-    """
-    # Get batch job from DynamoDB
-    batch_job = batch_storage.get_item(batch_id)
-    
-    if not batch_job:
-        logger.error(f"Batch job {batch_id} not found")
-        print(f"Batch job {batch_id} not found")
-        return False
-    
-    # Check Anthropic batch status if available
-    anthropic_status = None
-    if batch_job.get('status') == 'submitted' and batch_job.get('anthropic_batch_id'):
-        anthropic_batch_id = batch_job.get('anthropic_batch_id')
-        anthropic_status = anthropic_checker.check_batch_status(anthropic_batch_id)
-        
-        # Update batch job status if Anthropic status is available
-        if anthropic_status and not isinstance(anthropic_status.get('error'), str):
-            # Update DynamoDB with latest status
-            updates = {
-                "updated_at": datetime.now().isoformat(),
-                "anthropic_status": anthropic_status.get('status')
-            }
-            
-            # Count completed requests
-            if 'requests' in anthropic_status:
-                completed = sum(1 for req in anthropic_status.get('requests', []) 
-                               if req.get('status') in ['completed', 'failed'])
-                updates["completed_requests"] = completed
-                
-                # Check if all requests are complete
-                if completed == batch_job.get('total_requests'):
-                    updates["status"] = "completed"
-            
-            # Update batch job
-            batch_storage.update_item(batch_id, updates)
-            
-            # Refresh batch job data
-            batch_job = batch_storage.get_item(batch_id)
-    
-    # Display status
-    display_batch_status(batch_job, anthropic_status)
-    
-    # Return whether the batch job is complete
-    return batch_job.get('status') in ['completed', 'error']
+            return None
 
-def list_conversation_jobs(conversation_id, batch_storage):
-    """List all batch jobs for a conversation.
-    
-    Args:
-        conversation_id: ID of the conversation
-        batch_storage: BatchReportStorageService instance
-    """
-    # Get all batch jobs for the conversation
-    batch_jobs = batch_storage.get_jobs_for_conversation(conversation_id)
-    
-    if not batch_jobs:
-        logger.info(f"No batch jobs found for conversation {conversation_id}")
-        print(f"No batch jobs found for conversation {conversation_id}")
-        return
-    
-    # Print batch jobs
-    print(f"\n===== Batch Jobs for Conversation {conversation_id} =====")
-    print(f"Found {len(batch_jobs)} batch jobs\n")
-    
-    for i, job in enumerate(batch_jobs):
-        print(f"{i+1}. Batch ID: {job.get('batch_id')}")
-        print(f"   Status: {job.get('status')}")
-        print(f"   Created: {job.get('created_at')}")
-        print(f"   Model: {job.get('model')}")
-        print(f"   Progress: {job.get('completed_requests', 0)}/{job.get('total_requests', 0)} " +
-              f"({(job.get('completed_requests', 0) / max(1, job.get('total_requests', 1)) * 100):.1f}%)")
-        print("")
+    async def process_batch_results(self, job_item: Dict) -> bool:
+        """Process results from a completed batch.
+
+        Args:
+            job_item: Job item with batch information
+
+        Returns:
+            True if processing was successful, False otherwise
+        """
+        job_id = job_item.get('job_id', 'unknown')
+
+        try:
+            # Verify Anthropic client is initialized
+            if not self.anthropic:
+                error_msg = "Anthropic client not initialized. Cannot process batch results."
+                logger.error(f"Job {job_id}: {error_msg}")
+
+                # Update job with error
+                try:
+                    self.job_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression="SET error_message = :error, last_checked = :time",
+                        ExpressionAttributeValues={
+                            ':error': error_msg,
+                            ':time': datetime.now().isoformat()
+                        }
+                    )
+                except Exception as update_error:
+                    logger.error(f"Job {job_id}: Failed to update job with error: {str(update_error)}")
+
+                return False
+
+            # Get required fields
+            batch_id = job_item.get('batch_id')
+            report_id = job_item.get('report_id')
+
+            if not all([job_id, batch_id, report_id]):
+                missing_fields = []
+                if not job_id: missing_fields.append("job_id")
+                if not batch_id: missing_fields.append("batch_id")
+                if not report_id: missing_fields.append("report_id")
+
+                error_msg = f"Missing required information for job: {', '.join(missing_fields)}"
+                logger.error(f"Job {job_id}: {error_msg}")
+
+                # Update job with error
+                try:
+                    self.job_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression="SET error_message = :error, last_checked = :time",
+                        ExpressionAttributeValues={
+                            ':error': error_msg,
+                            ':time': datetime.now().isoformat()
+                        }
+                    )
+                except Exception as update_error:
+                    logger.error(f"Job {job_id}: Failed to update job with error: {str(update_error)}")
+
+                return False
+
+            logger.info(f"Job {job_id}: Processing results for batch {batch_id}, report {report_id}")
+
+            # Get batch results from Anthropic with detailed error handling
+            try:
+                logger.info(f"Job {job_id}: Retrieving batch results from Anthropic API")
+                results_stream = self.anthropic.beta.messages.batches.results(batch_id)
+                results = []
+                processed_count = 0
+                failed_count = 0
+
+                # Process results
+                logger.info(f"Job {job_id}: Starting to process results stream")
+                try:
+                    async for entry in results_stream:
+                        try:
+                            # Log each entry for debugging
+                            logger.info(f"Job {job_id}: Processing result entry: {entry}")
+
+                            # Each entry contains result info for one request in the batch
+                            if entry.result.type == "succeeded":
+                                processed_count += 1
+
+                                # Extract metadata from custom_id
+                                custom_id = entry.request.custom_id
+                                logger.info(f"Job {job_id}: Processing successful result for custom_id: {custom_id}")
+
+                                parts = custom_id.split('_')
+
+                                # Try to determine section name from custom_id
+                                section_name = None
+                                if len(parts) > 2:
+                                    # Skip conversation_id and cluster_id
+                                    section_name = '_'.join(parts[2:])
+
+                                # If section_name couldn't be determined, use a default
+                                if not section_name:
+                                    section_name = f"topic_{len(results)}"
+
+                                logger.info(f"Job {job_id}: Extracted section name: {section_name}")
+
+                                # Get the model name
+                                model = entry.request.params.model
+                                logger.info(f"Job {job_id}: Using model: {model}")
+
+                                # Get the response content
+                                content = entry.result.message.content[0].text
+                                content_preview = content[:100] + "..." if len(content) > 100 else content
+                                logger.info(f"Job {job_id}: Received content (preview): {content_preview}")
+
+                                # Store in report table
+                                try:
+                                    rid_section_model = f"{report_id}_{section_name}_{model}"
+                                    timestamp = datetime.now().isoformat()
+
+                                    item = {
+                                        'rid_section_model': rid_section_model,
+                                        'timestamp': timestamp,
+                                        'report_id': report_id,
+                                        'section': section_name,
+                                        'model': model,
+                                        'report_data': content,
+                                        'job_id': job_id,
+                                        'batch_id': batch_id,
+                                        'custom_id': custom_id
+                                    }
+
+                                    logger.info(f"Job {job_id}: Storing report for {rid_section_model}")
+                                    self.report_table.put_item(Item=item)
+                                    logger.info(f"Job {job_id}: Successfully stored report for {rid_section_model}")
+
+                                    results.append({
+                                        'custom_id': custom_id,
+                                        'section': section_name,
+                                        'status': 'succeeded',
+                                        'timestamp': timestamp
+                                    })
+                                except Exception as store_error:
+                                    logger.error(f"Job {job_id}: Error storing report for {custom_id}: {str(store_error)}")
+                                    logger.error(traceback.format_exc())
+                                    results.append({
+                                        'custom_id': custom_id,
+                                        'section': section_name,
+                                        'status': 'failed',
+                                        'error': f"Error storing report: {str(store_error)}",
+                                        'timestamp': datetime.now().isoformat()
+                                    })
+
+                            elif entry.result.type == "failed":
+                                # Log failed requests
+                                failed_count += 1
+                                custom_id = entry.request.custom_id
+                                error_message = entry.result.error.message
+                                logger.error(f"Job {job_id}: Request failed for {custom_id}: {error_message}")
+
+                                results.append({
+                                    'custom_id': custom_id,
+                                    'status': 'failed',
+                                    'error': error_message,
+                                    'timestamp': datetime.now().isoformat()
+                                })
+                            else:
+                                # Unknown result type
+                                logger.warning(f"Job {job_id}: Unknown result type: {entry.result.type} for {entry.request.custom_id}")
+                                results.append({
+                                    'custom_id': entry.request.custom_id,
+                                    'status': 'unknown',
+                                    'detail': f"Unknown result type: {entry.result.type}",
+                                    'timestamp': datetime.now().isoformat()
+                                })
+                        except Exception as entry_error:
+                            logger.error(f"Job {job_id}: Error processing result entry: {str(entry_error)}")
+                            logger.error(traceback.format_exc())
+                            # Continue processing other entries despite this error
+                            continue
+                except Exception as stream_error:
+                    logger.error(f"Job {job_id}: Error processing results stream: {str(stream_error)}")
+                    logger.error(traceback.format_exc())
+                    # We'll still update the job with any results we processed so far
+
+                logger.info(f"Job {job_id}: Processed {processed_count} successful results and {failed_count} failed results")
+
+                # Update job with results summary
+                try:
+                    update_expression = "SET batch_results = :results, completed_at = :time, #s = :status"
+                    expression_values = {
+                        ':results': json.dumps(results),
+                        ':time': datetime.now().isoformat()
+                    }
+
+                    # Always mark job as COMPLETED or FAILED after batch processing, consistent with the
+                    # architecture where scripts manage their own lifecycle
+                    if processed_count > 0:
+                        expression_values[':status'] = 'COMPLETED'
+
+                        # If we had some failures, add a warning
+                        if failed_count > 0:
+                            update_expression += ", warnings = :warning"
+                            expression_values[':warning'] = f"Completed with {failed_count} failed requests out of {processed_count + failed_count} total"
+                    else:
+                        # All results failed
+                        expression_values[':status'] = 'FAILED'
+                        update_expression += ", error_message = :error"
+                        expression_values[':error'] = f"All {failed_count} batch requests failed"
+
+                    logger.info(f"Job {job_id}: Updating job with results summary and setting status to {expression_values[':status']}")
+                    self.job_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression=update_expression,
+                        ExpressionAttributeNames={
+                            '#s': 'status'  # Use ExpressionAttributeNames to avoid 'status' reserved keyword
+                        },
+                        ExpressionAttributeValues=expression_values
+                    )
+
+                    logger.info(f"Job {job_id}: Successfully updated job with results summary")
+                except Exception as update_error:
+                    logger.error(f"Job {job_id}: Failed to update job with results: {str(update_error)}")
+                    logger.error(traceback.format_exc())
+                    # Continue despite update failure - we've already stored the reports
+
+                if processed_count > 0:
+                    logger.info(f"Job {job_id}: Successfully processed {processed_count} results for batch {batch_id}")
+                    return True
+                else:
+                    logger.error(f"Job {job_id}: No successful results processed for batch {batch_id}")
+                    return False
+
+            except Exception as api_error:
+                error_msg = f"Error retrieving batch results from Anthropic API: {str(api_error)}"
+                logger.error(f"Job {job_id}: {error_msg}")
+                logger.error(traceback.format_exc())
+
+                # Update job with error and always mark as FAILED when there's an API error
+                try:
+                    self.job_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression="SET #s = :status, error_message = :error, last_checked = :time, completed_at = :time",
+                        ExpressionAttributeNames={
+                            '#s': 'status'  # Use ExpressionAttributeNames to avoid 'status' reserved keyword
+                        },
+                        ExpressionAttributeValues={
+                            ':status': 'FAILED',
+                            ':error': error_msg,
+                            ':time': datetime.now().isoformat()
+                        }
+                    )
+                except Exception as update_error:
+                    logger.error(f"Job {job_id}: Failed to update job with error: {str(update_error)}")
+
+                return False
+
+        except Exception as e:
+            error_msg = f"Unhandled error processing batch results: {str(e)}"
+            logger.error(f"Job {job_id}: {error_msg}")
+            logger.error(traceback.format_exc())
+
+            # Update job with error and mark as FAILED
+            try:
+                self.job_table.update_item(
+                    Key={'job_id': job_id},
+                    UpdateExpression="SET #s = :status, error_message = :error, last_checked = :time, completed_at = :time",
+                    ExpressionAttributeNames={
+                        '#s': 'status'  # Use ExpressionAttributeNames to avoid 'status' reserved keyword
+                    },
+                    ExpressionAttributeValues={
+                        ':status': 'FAILED',
+                        ':error': error_msg,
+                        ':time': datetime.now().isoformat()
+                    }
+                )
+            except Exception as update_error:
+                logger.error(f"Job {job_id}: Failed to update job with error: {str(update_error)}")
+
+            return False
+
+    async def check_and_process_jobs(self, specific_job_id=None):
+        """Check and process batch jobs.
+
+        Args:
+            specific_job_id: Optional specific job ID to check
+        """
+        # Find pending jobs
+        jobs = self.find_pending_jobs(specific_job_id)
+
+        if not jobs:
+            logger.info("No pending batch jobs found")
+            return
+
+        # Process each job
+        for job in jobs:
+            job_id = job.get('job_id')
+            batch_id = job.get('batch_id')
+
+            logger.info(f"Checking job {job_id} with batch {batch_id}")
+
+            # Check batch status
+            status = await self.check_batch_status(job)
+
+            if status == 'ended':
+                # Batch has completed, process results
+                logger.info(f"Batch {batch_id} has completed, processing results")
+                success = await self.process_batch_results(job)
+
+                if success:
+                    logger.info(f"Successfully processed results for job {job_id}")
+                else:
+                    logger.error(f"Failed to process results for job {job_id}")
+            elif status == 'processing':
+                # Batch is still processing
+                logger.info(f"Batch {batch_id} is still processing")
+            elif status == 'failed':
+                # Batch failed
+                logger.error(f"Batch {batch_id} failed")
+
+                # Mark job as failed with detailed error
+                try:
+                    error_msg = f"Anthropic Batch API reported failure for batch {batch_id}"
+                    self.job_table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression="SET status = :status, completed_at = :time, error_message = :error",
+                        ExpressionAttributeValues={
+                            ':status': 'FAILED',
+                            ':time': datetime.now().isoformat(),
+                            ':error': error_msg
+                        }
+                    )
+                    logger.info(f"Job {job_id} marked as FAILED due to batch failure")
+                except Exception as e:
+                    logger.error(f"Error updating job status for failed batch: {str(e)}")
+            else:
+                # Unknown or null status
+                logger.warning(f"Unknown batch status {status} for job {job_id}")
 
 async def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description='Check the status of batch narrative report jobs')
-    
-    # Specify either batch_id or conversation_id
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('--batch_id', type=str, 
-                      help='ID of a specific batch job to check')
-    group.add_argument('--conversation_id', '--zid', type=str,
-                      help='ID of a conversation to show all batch jobs for')
-    
-    # Optional arguments
-    parser.add_argument('--watch', action='store_true',
-                      help='Continuously monitor the batch job (poll every 30 seconds)')
-    
+    parser = argparse.ArgumentParser(description='Check and process Anthropic Batch API results')
+    parser.add_argument('--job-id', type=str, help='Specific job ID to check')
+    parser.add_argument('--polling-interval', type=int, default=60, help='Seconds to wait between checks')
+    parser.add_argument('--log-level', type=str, default='INFO', help='Logging level')
     args = parser.parse_args()
-    
-    # Initialize services
-    batch_storage = BatchReportStorageService()
-    anthropic_checker = AnthropicBatchChecker()
-    
-    # If conversation_id is provided, list all batch jobs for that conversation
-    if args.conversation_id:
-        list_conversation_jobs(args.conversation_id, batch_storage)
-        
-        if args.watch:
-            print("Watch mode not supported when listing jobs for a conversation.")
-            print("Please specify a specific batch ID to watch.")
-        
-        return
-    
-    # If batch_id is provided, check that specific batch job
-    if args.batch_id:
-        # Check once
-        is_complete = check_batch_job(args.batch_id, batch_storage, anthropic_checker)
-        
-        # If watch mode is enabled and not complete, continue checking
-        if args.watch and not is_complete:
-            print("\nWatch mode enabled. Press Ctrl+C to exit.")
-            try:
-                while not is_complete:
-                    # Wait 30 seconds
-                    time.sleep(30)
-                    
-                    # Clear screen
-                    os.system('cls' if os.name == 'nt' else 'clear')
-                    
-                    # Check again
-                    is_complete = check_batch_job(args.batch_id, batch_storage, anthropic_checker)
-                    
-                    # If complete, break
-                    if is_complete:
-                        print("\nBatch job completed!")
-                        break
-                        
-                    print("\nUpdating in 30 seconds... Press Ctrl+C to exit.")
-            except KeyboardInterrupt:
-                print("\nExiting watch mode.")
-        
-        return
+
+    # Set log level
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    logger.setLevel(log_level)
+
+    # Create batch status checker
+    checker = BatchStatusChecker(log_level=log_level)
+
+    if args.job_id:
+        # Check specific job once
+        await checker.check_and_process_jobs(args.job_id)
+    else:
+        # Polling loop
+        try:
+            while True:
+                logger.info(f"Checking for pending batch jobs...")
+                await checker.check_and_process_jobs()
+                logger.info(f"Waiting {args.polling_interval} seconds before next check...")
+                await asyncio.sleep(args.polling_interval)
+        except KeyboardInterrupt:
+            logger.info("Batch status checker stopped by user")
+        except Exception as e:
+            logger.error(f"Error in polling loop: {str(e)}")
 
 if __name__ == "__main__":
     import asyncio
