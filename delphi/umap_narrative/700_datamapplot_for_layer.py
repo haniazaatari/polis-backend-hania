@@ -55,9 +55,9 @@ def s3_upload_file(local_file_path, s3_key):
         # Create S3 client
         s3_client = boto3.client(
             's3',
-            endpoint_url=endpoint_url,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
+            # endpoint_url=endpoint_url,
+            # aws_access_key_id=access_key,
+            # aws_secret_access_key=secret_key,
             region_name=region,
             # For MinIO/local development, these settings help
             # config=boto3.session.Config(signature_version='s3v4'),
