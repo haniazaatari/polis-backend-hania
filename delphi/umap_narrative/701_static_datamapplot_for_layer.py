@@ -279,11 +279,11 @@ def s3_upload_file(local_file_path, s3_key):
     if endpoint_url == "":
         endpoint_url = None
 
-    if aws_access_key_id == "":
-        aws_access_key_id = None
+     if access_key == "":
+        access_key = None
 
-    if aws_secret_access_key == "":
-        aws_secret_access_key = None
+    if secret_key == "":
+        secret_key = None
     
     try:
         # Create S3 client
@@ -307,8 +307,9 @@ def s3_upload_file(local_file_path, s3_key):
             
             try:
                 # Create the bucket - for MinIO local we don't need LocationConstraint
-                if region == 'us-east-1' or 'localhost' in endpoint_url or 'minio' in endpoint_url:
-                    s3_client.create_bucket(Bucket=bucket_name)
+                if endpoint_url:
+                    if region == 'us-east-1' or 'localhost' in endpoint_url or 'minio' in endpoint_url:
+                        s3_client.create_bucket(Bucket=bucket_name)
                 else:
                     s3_client.create_bucket(
                         Bucket=bucket_name,
