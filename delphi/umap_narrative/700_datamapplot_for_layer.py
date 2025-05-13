@@ -250,10 +250,6 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
         # Log the endpoint being used
         endpoint = os.environ.get('DYNAMODB_ENDPOINT')
         logger.info(f"Using DynamoDB endpoint: {endpoint}")
-    if not os.environ.get('AWS_ACCESS_KEY_ID'):
-        os.environ['AWS_ACCESS_KEY_ID'] = 'fakeMyKeyId'
-    if not os.environ.get('AWS_SECRET_ACCESS_KEY'):
-        os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
     if not os.environ.get('AWS_DEFAULT_REGION'):
         os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
         
