@@ -25,6 +25,9 @@ const CommentsReport = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jobCreationResult, setJobCreationResult] = useState(null);
+  const [batchReportLoading, setBatchReportLoading] = useState(false);
+  const [batchReportResult, setBatchReportResult] = useState(null);
+
 
   useEffect(() => {
     if (!report_id) return;
@@ -171,6 +174,42 @@ const CommentsReport = () => {
     if (jobFormOpen) {
       setJobCreationResult(null);
     }
+  };
+  
+  // Handle generate narrative report button click
+  const handleGenerateNarrativeReport = () => {
+    setBatchReportLoading(true);
+    setBatchReportResult(null);
+    
+    // Send request to generate batch report
+    net.polisPost('/api/v3/delphi/batchReports', {
+      report_id: report_id,
+      model: 'claude-3-5-sonnet-20241022',
+      no_cache: false
+    })
+      .then(response => {
+        console.log('Batch report response:', response);
+        
+        if (response && response.status === 'success') {
+          setBatchReportResult({ 
+            success: true, 
+            message: `Batch report generation started. Batch ID: ${response.batch_id || 'N/A'}`,
+            batch_id: response.batch_id
+          });
+        } else {
+          throw new Error(response?.error || 'Unknown error generating batch report');
+        }
+      })
+      .catch(err => {
+        console.error('Error generating batch report:', err);
+        setBatchReportResult({ 
+          success: false, 
+          message: `Error generating batch report: ${err.message || 'Unknown error'}`
+        });
+      })
+      .finally(() => {
+        setBatchReportLoading(false);
+      });
   };
 
   // Get the current selected run data
