@@ -100,7 +100,7 @@ def load_data_from_dynamodb(zid, layer_num=0):
     logger.info(f'Loading UMAP positions and cluster data for conversation {zid}, layer {layer_num}')
     
     # Set up DynamoDB client
-    endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://dynamodb-local:8000')
+    endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
     dynamodb = boto3.resource('dynamodb', 
                              endpoint_url=endpoint_url,
                              region_name=os.environ.get('AWS_REGION', 'us-east-1'),
