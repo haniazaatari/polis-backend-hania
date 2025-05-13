@@ -68,10 +68,10 @@ class JobProcessor:
             raise
     
     def find_pending_job(self):
-        """Find a pending job to process."""
+        """Find a pending or processing job to process."""
         try:
-            # Query the secondary index for PENDING jobs
-            response = self.table.query(
+            # First, query the secondary index for PENDING jobs
+            pending_response = self.table.query(
                 IndexName='StatusCreatedIndex',
                 KeyConditionExpression='#s = :status',
                 ExpressionAttributeNames={
@@ -83,21 +83,87 @@ class JobProcessor:
                 Limit=1,
                 ScanIndexForward=True  # Get oldest jobs first
             )
-            
-            items = response.get('Items', [])
-            if items:
-                # Now do a consistent read to get the full item
-                job_id = items[0]['job_id']
-                full_item = self.table.get_item(
+
+            pending_items = pending_response.get('Items', [])
+            if pending_items:
+                # Found a pending job - get full item with consistent read
+                job_id = pending_items[0]['job_id']
+                pending_full_item = self.table.get_item(
                     Key={
                         'job_id': job_id
                     },
                     ConsistentRead=True  # Important for distributed systems
                 )
-                
-                if 'Item' in full_item:
-                    return full_item['Item']
-                    
+
+                if 'Item' in pending_full_item:
+                    return pending_full_item['Item']
+
+            # If no PENDING jobs, look for PROCESSING jobs with batch_id for batch status checking
+            processing_response = self.table.query(
+                IndexName='StatusCreatedIndex',
+                KeyConditionExpression='#s = :status',
+                ExpressionAttributeNames={
+                    '#s': 'status'
+                },
+                ExpressionAttributeValues={
+                    ':status': 'PROCESSING'
+                },
+                Limit=10,  # Check more processing jobs since they might not all have batch_id
+                ScanIndexForward=True  # Get oldest jobs first
+            )
+
+            processing_items = processing_response.get('Items', [])
+
+            # Filter for jobs with batch_id field
+            batch_jobs = []
+            if processing_items:  # Only log if we found jobs
+                logger.info(f"Found {len(processing_items)} PROCESSING jobs to check for batch_id")
+            for item in processing_items:
+                job_id = item['job_id']
+                logger.info(f"Checking PROCESSING job {job_id} for batch_id field")
+                # Get full item with consistent read
+                processing_full_item = self.table.get_item(
+                    Key={
+                        'job_id': job_id
+                    },
+                    ConsistentRead=True
+                )
+
+                if 'Item' in processing_full_item:
+                    full_item = processing_full_item['Item']
+                    # Debug log
+                    has_batch_id = 'batch_id' in full_item
+                    job_type = full_item.get('job_type')
+                    status = full_item.get('status')
+
+                    # Log detailed information for NARRATIVE_BATCH jobs
+                    if job_type == 'NARRATIVE_BATCH':
+                        logger.info(f"Job {job_id}: has_batch_id={has_batch_id}, job_type={job_type}, status={status}")
+                        # Log all fields for NARRATIVE_BATCH jobs to help debug
+                        logger.info(f"Job {job_id} fields: {list(full_item.keys())}")
+                        # Log specific value of batch_id if present
+                        if has_batch_id:
+                            logger.info(f"Job {job_id} batch_id value: {full_item.get('batch_id')}")
+                        else:
+                            logger.info(f"Job {job_id} is missing batch_id field")
+                    else:
+                        logger.info(f"Job {job_id}: has_batch_id={has_batch_id}, job_type={job_type}, status={status}")
+
+                    # Consider ANY job with job_type=NARRATIVE_BATCH and status=PROCESSING
+                    # This allows 803 to handle jobs even if batch_id field is missing
+                    if full_item.get('job_type') == 'NARRATIVE_BATCH' and full_item.get('status') == 'PROCESSING':
+                        if 'batch_id' in full_item:
+                            logger.info(f"Found job {job_id} with batch_id={full_item.get('batch_id')} for status checking")
+                        else:
+                            logger.info(f"Found NARRATIVE_BATCH job {job_id} without batch_id, will still check status")
+                        batch_jobs.append(full_item)
+
+            # Return the oldest batch job if any found
+            if batch_jobs:
+                # Sort by created_at timestamp (oldest first)
+                batch_jobs.sort(key=lambda x: x.get('created_at', ''))
+                return batch_jobs[0]
+
             return None
         except Exception as e:
             logger.error(f"Error finding pending job: {e}")
@@ -107,61 +173,111 @@ class JobProcessor:
         """Attempt to claim a job for processing using optimistic locking."""
         job_id = job['job_id']
         current_version = job.get('version', 1)
-        
+        current_status = job.get('status')
+
+        # If job already has a PROCESSING status and is a NARRATIVE_BATCH job, treat it as a batch check
+        is_batch_check = (current_status == 'PROCESSING' and
+                          job.get('job_type') == 'NARRATIVE_BATCH')
+
+        logger.info(f"Claiming job {job_id} with status={current_status}, is_batch_check={is_batch_check}")
+
         try:
-            # Update the job status using optimistic locking with conditional update
+            # Update the job using optimistic locking with conditional update
             now = datetime.now().isoformat()
-            
-            # Try to atomically update the job status
+
+            # Try to atomically update the job
             try:
-                response = self.table.update_item(
-                    Key={
-                        'job_id': job_id
-                    },
-                    UpdateExpression='''
-                        SET #status = :new_status, 
-                            #updated_at = :now, 
-                            #started_at = :now,
-                            #worker_id = :worker_id,
-                            #version = :new_version,
-                            completed_at = :empty_str
-                    ''',
-                    ConditionExpression='#status = :old_status AND #version = :current_version',
-                    ExpressionAttributeNames={
-                        '#status': 'status',
-                        '#updated_at': 'updated_at',
-                        '#started_at': 'started_at',
-                        '#worker_id': 'worker_id',
-                        '#version': 'version'
-                    },
-                    ExpressionAttributeValues={
-                        ':old_status': 'PENDING',
-                        ':new_status': 'PROCESSING',
-                        ':now': now,
-                        ':worker_id': self.worker_id,
-                        ':current_version': current_version,
-                        ':new_version': current_version + 1,
-                        ':empty_str': ""
-                    },
-                    ReturnValues='ALL_NEW'  # Get the updated item
-                )
+                # For batch status checking (NARRATIVE_BATCH jobs with PROCESSING status)
+                if is_batch_check:
+                    logger.info(f"Claiming NARRATIVE_BATCH job {job_id} for batch status check - keeping PROCESSING status")
+                    response = self.table.update_item(
+                        Key={
+                            'job_id': job_id
+                        },
+                        UpdateExpression='''
+                            SET #updated_at = :now,
+                                #worker_id = :worker_id,
+                                #version = :new_version,
+                                batch_check_time = :now
+                        ''',
+                        ConditionExpression='#version = :current_version',
+                        ExpressionAttributeNames={
+                            '#updated_at': 'updated_at',
+                            '#worker_id': 'worker_id',
+                            '#version': 'version'
+                        },
+                        ExpressionAttributeValues={
+                            ':now': now,
+                            ':worker_id': self.worker_id,
+                            ':current_version': current_version,
+                            ':new_version': current_version + 1
+                        },
+                        ReturnValues='ALL_NEW'  # Get the updated item
+                    )
+                # For normal PENDING jobs
+                else:
+                    logger.info(f"Claiming pending job {job_id} - changing status to PROCESSING")
+                    response = self.table.update_item(
+                        Key={
+                            'job_id': job_id
+                        },
+                        UpdateExpression='''
+                            SET #status = :new_status,
+                                #updated_at = :now,
+                                #started_at = :now,
+                                #worker_id = :worker_id,
+                                #version = :new_version,
+                                completed_at = :empty_str
+                        ''',
+                        ConditionExpression='#status = :old_status AND #version = :current_version',
+                        ExpressionAttributeNames={
+                            '#status': 'status',
+                            '#updated_at': 'updated_at',
+                            '#started_at': 'started_at',
+                            '#worker_id': 'worker_id',
+                            '#version': 'version'
+                        },
+                        ExpressionAttributeValues={
+                            ':old_status': 'PENDING',
+                            ':new_status': 'PROCESSING',
+                            ':now': now,
+                            ':worker_id': self.worker_id,
+                            ':current_version': current_version,
+                            ':new_version': current_version + 1,
+                            ':empty_str': ""
+                        },
+                        ReturnValues='ALL_NEW'  # Get the updated item
+                    )
                 
                 if 'Attributes' not in response:
                     logger.warning(f"Failed to claim job {job_id}")
                     return None
-                
+
                 # Get the updated job with the new status
                 updated_job = response['Attributes']
-                logger.info(f"Successfully claimed job {job_id}")
+                if is_batch_check:
+                    logger.info(f"Successfully claimed batch status check job {job_id}")
+                else:
+                    logger.info(f"Successfully claimed job {job_id}")
                 return updated_job
-                
+
             except ClientError as e:
                 if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-                    logger.warning(f"Job {job_id} was already claimed or modified by another worker")
+                    if is_batch_check:
+                        logger.warning(f"Batch status check job {job_id} was already claimed or modified by another worker")
+                        # Try to get more info about the job's current state
+                        try:
+                            current_job = self.table.get_item(Key={'job_id': job_id}, ConsistentRead=True)
+                            if 'Item' in current_job:
+                                logger.info(f"Current job state: version={current_job['Item'].get('version')}, worker={current_job['Item'].get('worker_id')}")
+                        except Exception as info_error:
+                            logger.error(f"Error getting job info: {info_error}")
+                    else:
+                        logger.warning(f"Job {job_id} was already claimed or modified by another worker")
                 else:
                     logger.error(f"Error claiming job {job_id}: {e}")
                 return None
-                
+
         except Exception as e:
             logger.error(f"Unexpected error claiming job {job_id}: {e}")
             return None
@@ -333,11 +449,11 @@ class JobProcessor:
             # Determine which script to run based on job type
             job_type = job.get('job_type', 'FULL_PIPELINE')
 
-            if job_type == 'NARRATIVE_BATCH':
-                # Handle narrative batch job
+            if job_type == 'CREATE_NARRATIVE_BATCH':
+                # This is a new batch submission
                 self.update_job_logs(job, {
                     'level': 'INFO',
-                    'message': f'Processing NARRATIVE_BATCH job for conversation {conversation_id}'
+                    'message': f'Creating narrative batch for conversation {conversation_id}'
                 })
 
                 # Extract batch configuration
@@ -362,6 +478,35 @@ class JobProcessor:
 
                 if no_cache:
                     cmd.append('--no-cache')
+
+                logger.info(f"Executing batch creation command: {' '.join(cmd)}")
+
+            elif job_type == 'AWAITING_NARRATIVE_BATCH':
+                # This is a job that needs to check batch status
+                batch_id = job.get('batch_id')
+                batch_job_id = job.get('batch_job_id')
+
+                if batch_id:
+                    self.update_job_logs(job, {
+                        'level': 'INFO',
+                        'message': f'Checking status of batch {batch_id} for job {batch_job_id or job_id}'
+                    })
+                else:
+                    self.update_job_logs(job, {
+                        'level': 'INFO',
+                        'message': f'Running batch status checker for job {batch_job_id or job_id}'
+                    })
+
+                # Build command for the batch status checker script
+                cmd = ['python', '/app/umap_narrative/803_check_batch_status.py']
+
+                # Use batch_job_id if available, otherwise use current job_id
+                cmd_job_id = batch_job_id if batch_job_id else job_id
+                cmd.append(f'--job-id={cmd_job_id}')
+
+                # For batch status check jobs, we don't need any additional configuration
+                logger.info(f"Executing batch status check command: {' '.join(cmd)}")
+
             else:
                 # Default: run the standard pipeline
                 cmd = ['./run_delphi.sh', f'--zid={conversation_id}']
@@ -523,11 +668,11 @@ class JobProcessor:
             
             # Determine success/failure based on return code
             success = return_code == 0
-            
+
             # Get the report ID that was used
             report_id = env.get('DELPHI_REPORT_ID', conversation_id)
-            
-            # Prepare result with visualization URLs
+
+            # Prepare result with visualization URLs and execution info
             result = {
                 'return_code': return_code,
                 'output_summary': '\n'.join(stdout_lines[-10:]) if stdout_lines else 'No output',
@@ -535,15 +680,68 @@ class JobProcessor:
                 'report_id': report_id,
                 'visualization_urls': {
                     'interactive': f"{os.environ.get('AWS_S3_ENDPOINT', '')}/{os.environ.get('AWS_S3_BUCKET_NAME', 'delphi')}/visualizations/{report_id}/{job_id}/layer_0_datamapplot.html"
-                }
+                },
+                'execution_finished_at': datetime.now().isoformat()
             }
-            
+
             # Add timeout message if applicable
             if return_code == -1:
                 result['error'] = f"Job timed out after {timeout_seconds} seconds"
+                # Only mark job as failed for timeouts
+                self.complete_job(job, False, result=result, error=f"Job timed out after {timeout_seconds} seconds")
+            elif not success:
+                # Only mark job as failed for non-zero exit codes
+                self.complete_job(job, False, result=result, error=f"Process exited with code {return_code}")
+            else:
+                # For successful completion, check if the job status was changed by the script
+                logger.info(f"Job {job_id} process completed successfully with exit code 0")
+
+                # First, get the current job state to see if status changed
+                try:
+                    current_job = self.table.get_item(Key={'job_id': job_id})
+                    if 'Item' in current_job:
+                        current_status = current_job['Item'].get('status')
+                        original_status = job.get('status')
+
+                        if current_status != original_status:
+                            logger.info(f"Job {job_id} status changed by script from {original_status} to {current_status}, preserving status change")
+
+                            # Update job with execution results but preserve the status change
+                            current_version = current_job['Item'].get('version', 1)
+                            self.table.update_item(
+                                Key={'job_id': job_id},
+                                UpdateExpression='SET job_results = :results, updated_at = :now, version = :new_version',
+                                ConditionExpression='version = :current_version',
+                                ExpressionAttributeValues={
+                                    ':results': json.dumps(result),
+                                    ':now': datetime.now().isoformat(),
+                                    ':current_version': current_version,
+                                    ':new_version': current_version + 1
+                                }
+                            )
+                            logger.info(f"Updated job {job_id} with execution results while preserving status {current_status}")
+                        else:
+                            # Status not changed, update normally
+                            current_version = current_job['Item'].get('version', 1)
+                            self.table.update_item(
+                                Key={'job_id': job_id},
+                                UpdateExpression='SET job_results = :results, updated_at = :now, version = :new_version',
+                                ConditionExpression='version = :current_version',
+                                ExpressionAttributeValues={
+                                    ':results': json.dumps(result),
+                                    ':now': datetime.now().isoformat(),
+                                    ':current_version': current_version,
+                                    ':new_version': current_version + 1
+                                }
+                            )
+                            logger.info(f"Updated job {job_id} with execution results")
+                    else:
+                        logger.error(f"Job {job_id} not found after script execution")
+                except Exception as e:
+                    logger.error(f"Failed to update job {job_id} with execution results: {e}")
+                except Exception as e:
+                    logger.error(f"Failed to update job {job_id} with execution results: {e}")
             
-            # Complete job
-            self.complete_job(job, success, result=result)
             
             return success
         except Exception as e:
@@ -552,7 +750,8 @@ class JobProcessor:
                 'level': 'ERROR',
                 'message': str(e)
             })
-            self.complete_job(job, False, error=str(e))
+            # Mark job as failed if there was an error starting/running the process
+            self.complete_job(job, False, error=f"Error running job process: {str(e)}")
             return False
 
 def signal_handler(sig, frame):
