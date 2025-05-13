@@ -279,7 +279,7 @@ def s3_upload_file(local_file_path, s3_key):
     if endpoint_url == "":
         endpoint_url = None
 
-     if aws_access_key_id == "":
+    if aws_access_key_id == "":
         aws_access_key_id = None
 
     if aws_secret_access_key == "":
