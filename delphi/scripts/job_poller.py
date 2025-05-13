@@ -505,7 +505,7 @@ class JobProcessor:
                 'visualization_path': f'visualizations/{report_id}/{job_id}',
                 'report_id': report_id,
                 'visualization_urls': {
-                    'interactive': f"{os.environ.get('AWS_S3_ENDPOINT', '')}/{os.environ.get('AWS_S3_BUCKET_NAME', 'delphi')}/visualizations/{report_id}/{job_id}/layer_0_datamapplot.html"
+                    'interactive': f"{os.environ.get('AWS_S3_ENDPOINT', '')}/{os.environ.get('AWS_S3_BUCKET_NAME', 'polis-delphi')}/visualizations/{report_id}/{job_id}/layer_0_datamapplot.html"
                 }
             }
             

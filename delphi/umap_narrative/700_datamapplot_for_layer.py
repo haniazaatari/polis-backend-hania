@@ -114,9 +114,9 @@ def s3_upload_file(local_file_path, s3_key):
         logger.info(f"Uploading {local_file_path} to s3://{bucket_name}/{s3_key}")
         
         # For HTML files, set content type correctly
-        extra_args = {
-            'ACL': 'public-read'  # Make object publicly readable
-        }
+        # extra_args = {
+        #     'ACL': 'public-read'  # Make object publicly readable - we don't want this, hence why we have signed urls
+        # }
         
         # Set the correct content type based on file extension
         if local_file_path.endswith('.html'):
