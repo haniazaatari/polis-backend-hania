@@ -313,7 +313,7 @@ def s3_upload_file(local_file_path, s3_key):
                 else:
                     s3_client.create_bucket(
                         Bucket=bucket_name,
-                        CreateBucketConfiguration={'LocationConstraint': region}
+                        # CreateBucketConfiguration={'LocationConstraint': region} - not in us-east-1 - but in other regions
                     )
                 
                 # Apply bucket policy to make objects public-read
