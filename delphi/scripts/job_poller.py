@@ -330,26 +330,59 @@ class JobProcessor:
             # Get job configuration
             job_config = json.loads(job.get('job_config', '{}'))
             
-            # Build command for run_delphi.sh
-            cmd = ['./run_delphi.sh', f'--zid={conversation_id}']
-            
-            # Add any additional arguments from job_config
-            if job_config:
-                # Full pipeline configuration
+            # Determine which script to run based on job type
+            job_type = job.get('job_type', 'FULL_PIPELINE')
+
+            if job_type == 'NARRATIVE_BATCH':
+                # Handle narrative batch job
+                self.update_job_logs(job, {
+                    'level': 'INFO',
+                    'message': f'Processing NARRATIVE_BATCH job for conversation {conversation_id}'
+                })
+
+                # Extract batch configuration
+                model = "claude-3-5-sonnet-20241022"  # Default model
+                max_batch_size = 20  # Default batch size
+                no_cache = False  # Default cache behavior
+
+                # Look for stage configuration
                 if 'stages' in job_config:
                     for stage in job_config['stages']:
-                        if stage['stage'] == 'PCA' and 'config' in stage:
-                            pca_config = stage['config']
-                            if 'max_votes' in pca_config:
-                                cmd.append(f"--max-votes={pca_config['max_votes']}")
-                            if 'batch_size' in pca_config:
-                                cmd.append(f"--batch-size={pca_config['batch_size']}")
-                
-                # Direct configuration
-                if 'max_votes' in job_config:
-                    cmd.append(f"--max-votes={job_config['max_votes']}")
-                if 'batch_size' in job_config:
-                    cmd.append(f"--batch-size={job_config['batch_size']}")
+                        if stage['stage'] == 'NARRATIVE_BATCH' and 'config' in stage:
+                            config = stage['config']
+                            model = config.get('model', model)
+                            max_batch_size = config.get('max_batch_size', max_batch_size)
+                            no_cache = config.get('no_cache', no_cache)
+
+                # Build command for the batch report script
+                cmd = ['python', '/app/umap_narrative/801_narrative_report_batch.py',
+                        f'--conversation_id={conversation_id}',
+                        f'--model={model}',
+                        f'--max-batch-size={max_batch_size}']
+
+                if no_cache:
+                    cmd.append('--no-cache')
+            else:
+                # Default: run the standard pipeline
+                cmd = ['./run_delphi.sh', f'--zid={conversation_id}']
+
+                # Add any additional arguments from job_config
+                if job_config:
+                    # Full pipeline configuration
+                    if 'stages' in job_config:
+                        for stage in job_config['stages']:
+                            if stage['stage'] == 'PCA' and 'config' in stage:
+                                pca_config = stage['config']
+                                if 'max_votes' in pca_config:
+                                    cmd.append(f"--max-votes={pca_config['max_votes']}")
+                                if 'batch_size' in pca_config:
+                                    cmd.append(f"--batch-size={pca_config['batch_size']}")
+
+                    # Direct configuration
+                    if 'max_votes' in job_config:
+                        cmd.append(f"--max-votes={job_config['max_votes']}")
+                    if 'batch_size' in job_config:
+                        cmd.append(f"--batch-size={job_config['batch_size']}")
             
             # Log the command
             self.update_job_logs(job, {
