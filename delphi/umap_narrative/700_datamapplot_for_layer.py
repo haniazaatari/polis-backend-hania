@@ -45,7 +45,7 @@ def s3_upload_file(local_file_path, s3_key):
     if endpoint_url == "":
         endpoint_url = None
 
-     if access_key == "":
+    if access_key == "":
         access_key = None
 
     if secret_key == "":
