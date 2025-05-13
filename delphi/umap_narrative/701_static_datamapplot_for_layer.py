@@ -421,7 +421,7 @@ def generate_static_datamapplot(zid, layer_num=0, output_dir=None):
         if os.path.exists("/visualizations"):
             os.makedirs(host_dir, exist_ok=True)
         if not os.environ.get('AWS_S3_BUCKET_NAME'):
-            os.environ['AWS_S3_BUCKET_NAME'] = 'delphi'
+            os.environ['AWS_S3_BUCKET_NAME'] = 'polis-delphi'
         if not os.environ.get('AWS_REGION'):
             os.environ['AWS_REGION'] = 'us-east-1'
         

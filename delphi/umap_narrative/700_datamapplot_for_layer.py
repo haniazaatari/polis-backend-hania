@@ -255,7 +255,7 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
         
     # S3 settings
     if not os.environ.get('AWS_S3_BUCKET_NAME'):
-        os.environ['AWS_S3_BUCKET_NAME'] = 'delphi'
+        os.environ['AWS_S3_BUCKET_NAME'] = 'polis-delphi'
         
     logger.info(f"S3 Storage settings:")
     logger.info(f"- Endpoint: {os.environ.get('AWS_S3_ENDPOINT')}")
