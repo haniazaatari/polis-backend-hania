@@ -620,6 +620,20 @@ const CommentsReport = () => {
 
           <div className="section">
             <h2>Narrative Report</h2>
+            <div className="section-header-actions">
+              <button
+                className="batch-report-button"
+                onClick={handleGenerateNarrativeReport}
+                disabled={batchReportLoading}
+              >
+                {batchReportLoading ? 'Generating...' : 'Generate Batch Topics'}
+              </button>
+            </div>
+            {batchReportResult && (
+              <div className={`result-message ${batchReportResult.success ? 'success' : 'error'}`}>
+                {batchReportResult.message}
+              </div>
+            )}
             <p className="info-text">
               This narrative report provides insights about group consensus, differences, and key topics in the conversation.
             </p>
@@ -868,7 +882,27 @@ const CommentsReport = () => {
         .create-job-button:hover {
           background-color: #0288d1;
         }
-        
+
+        .batch-report-button {
+          background-color: #4caf50;
+          color: white;
+          border: none;
+          padding: 8px 16px;
+          border-radius: 4px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        }
+
+        .batch-report-button:hover {
+          background-color: #388e3c;
+        }
+
+        .batch-report-button:disabled {
+          background-color: #a5d6a7;
+          cursor: not-allowed;
+        }
+
         .job-creation-form-container {
           background: white;
           border: 1px solid #e0e0e0;

@@ -356,28 +356,70 @@ class BatchStatusChecker:
                 failed_count = 0
 
                 # Process results
-                logger.info(f"Job {job_id}: Starting to process results stream")
+                logger.info(f"Job {job_id}: Starting to process results")
                 try:
-                    async for entry in results_stream:
+                    # Get batch details to get the requests data
+                    batch_details = self.anthropic.beta.messages.batches.retrieve(batch_id)
+                    logger.info(f"Job {job_id}: Retrieved batch details, getting results")
+
+                    # Get results data directly using requests
+                    import requests
+
+                    headers = {
+                        'x-api-key': self.anthropic.api_key,
+                        'anthropic-version': '2023-06-01',
+                        'content-type': 'application/json'
+                    }
+
+                    response = requests.get(
+                        f'https://api.anthropic.com/v1/messages/batches/{batch_id}/results?beta=true',
+                        headers=headers
+                    )
+                    response.raise_for_status()
+
+                    # Process response text as a series of JSON objects
+                    # Each line of the response is a JSON object
+                    import json
+
+                    entries = []
+                    for line in response.text.strip().split('\n'):
+                        if line.strip():
+                            try:
+                                entry = json.loads(line)
+                                entries.append(entry)
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Job {job_id}: Error parsing JSON line: {str(e)}")
+                                logger.error(f"Job {job_id}: Line content: {line}")
+
+                    logger.info(f"Job {job_id}: Found {len(entries)} result entries")
+
+                    # Process each entry
+                    for entry in entries:
                         try:
                             # Log each entry for debugging
                             logger.info(f"Job {job_id}: Processing result entry: {entry}")
 
-                            # Each entry contains result info for one request in the batch
-                            if entry.result.type == "succeeded":
+                            # Check if this is a successful result
+                            if entry.get('result', {}).get('type') == 'succeeded':
                                 processed_count += 1
 
                                 # Extract metadata from custom_id
-                                custom_id = entry.request.custom_id
+                                custom_id = entry.get('request', {}).get('custom_id')
                                 logger.info(f"Job {job_id}: Processing successful result for custom_id: {custom_id}")
 
-                                parts = custom_id.split('_')
+                                # Handle missing custom_id by using a fallback based on entry index
+                                if custom_id:
+                                    parts = custom_id.split('_')
 
-                                # Try to determine section name from custom_id
-                                section_name = None
-                                if len(parts) > 2:
-                                    # Skip conversation_id and cluster_id
-                                    section_name = '_'.join(parts[2:])
+                                    # Try to determine section name from custom_id
+                                    section_name = None
+                                    if len(parts) > 2:
+                                        # Skip conversation_id and cluster_id
+                                        section_name = '_'.join(parts[2:])
+                                else:
+                                    # If custom_id is None, we need to create a fallback
+                                    parts = []
+                                    section_name = None
 
                                 # If section_name couldn't be determined, use a default
                                 if not section_name:
@@ -386,17 +428,25 @@ class BatchStatusChecker:
                                 logger.info(f"Job {job_id}: Extracted section name: {section_name}")
 
                                 # Get the model name
-                                model = entry.request.params.model
+                                model = entry.get('request', {}).get('params', {}).get('model')
                                 logger.info(f"Job {job_id}: Using model: {model}")
 
                                 # Get the response content
-                                content = entry.result.message.content[0].text
-                                content_preview = content[:100] + "..." if len(content) > 100 else content
-                                logger.info(f"Job {job_id}: Received content (preview): {content_preview}")
+                                message = entry.get('result', {}).get('message', {})
+                                content_items = message.get('content', [])
+
+                                if content_items and len(content_items) > 0:
+                                    content = content_items[0].get('text', '')
+                                    content_preview = content[:100] + "..." if len(content) > 100 else content
+                                    logger.info(f"Job {job_id}: Received content (preview): {content_preview}")
+                                else:
+                                    logger.error(f"Job {job_id}: No content found in message")
+                                    content = "{}"
 
                                 # Store in report table
                                 try:
-                                    rid_section_model = f"{report_id}_{section_name}_{model}"
+                                    # Format the key with # delimiters to match server query expectations
+                                    rid_section_model = f"{report_id}#{section_name}#{model}"
                                     timestamp = datetime.now().isoformat()
 
                                     item = {
@@ -432,11 +482,11 @@ class BatchStatusChecker:
                                         'timestamp': datetime.now().isoformat()
                                     })
 
-                            elif entry.result.type == "failed":
+                            elif entry.get('result', {}).get('type') == "failed":
                                 # Log failed requests
                                 failed_count += 1
-                                custom_id = entry.request.custom_id
-                                error_message = entry.result.error.message
+                                custom_id = entry.get('request', {}).get('custom_id')
+                                error_message = entry.get('result', {}).get('error', {}).get('message', 'Unknown error')
                                 logger.error(f"Job {job_id}: Request failed for {custom_id}: {error_message}")
 
                                 results.append({
@@ -447,11 +497,13 @@ class BatchStatusChecker:
                                 })
                             else:
                                 # Unknown result type
-                                logger.warning(f"Job {job_id}: Unknown result type: {entry.result.type} for {entry.request.custom_id}")
+                                result_type = entry.get('result', {}).get('type', 'unknown')
+                                custom_id = entry.get('request', {}).get('custom_id', 'unknown')
+                                logger.warning(f"Job {job_id}: Unknown result type: {result_type} for {custom_id}")
                                 results.append({
-                                    'custom_id': entry.request.custom_id,
+                                    'custom_id': custom_id,
                                     'status': 'unknown',
-                                    'detail': f"Unknown result type: {entry.result.type}",
+                                    'detail': f"Unknown result type: {result_type}",
                                     'timestamp': datetime.now().isoformat()
                                 })
                         except Exception as entry_error:
