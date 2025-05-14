@@ -33,8 +33,8 @@ DB_CONFIG = {
 DYNAMODB_CONFIG = {
     'endpoint_url': os.environ.get('DYNAMODB_ENDPOINT'),
     'region': os.environ.get('AWS_REGION', 'us-east-1'),
-    'access_key': os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-    'secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+    'access_key': os.environ.get('AWS_ACCESS_KEY_ID', None),
+    'secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY', None)
 }
 
 # Visualization settings - controls the extremity scale and color mapping
@@ -59,7 +59,10 @@ except ImportError:
     # Define minimal versions of the required classes if imports fail
     class DynamoDBStorage:
         def __init__(self, endpoint_url=None):
-            self.endpoint_url = endpoint_url or DYNAMODB_CONFIG['endpoint_url']
+            if endpoint_url: # Checks if endpoint_url is a truthy value (not None, not empty string)
+                self.endpoint_url = endpoint_url
+            else:
+                self.endpoint_url = None
             self.region = DYNAMODB_CONFIG['region']
             self.dynamodb = boto3.resource('dynamodb', 
                                           endpoint_url=self.endpoint_url, 
