@@ -449,64 +449,59 @@ class JobProcessor:
             # Determine which script to run based on job type
             job_type = job.get('job_type', 'FULL_PIPELINE')
 
-            if job_type == 'CREATE_NARRATIVE_BATCH':
-                # This is a new batch submission
-                self.update_job_logs(job, {
-                    'level': 'INFO',
-                    'message': f'Creating narrative batch for conversation {conversation_id}'
-                })
+            if job_type == 'NARRATIVE_BATCH':
+                # Check if this job is in a PROCESSING state (with or without batch_id)
+                if job.get('status') == 'PROCESSING':
+                    # This is a batch job that needs status checking
+                    if 'batch_id' in job:
+                        self.update_job_logs(job, {
+                            'level': 'INFO',
+                            'message': f'Checking status of batch {job.get("batch_id")} for job {job_id}'
+                        })
+                    else:
+                        self.update_job_logs(job, {
+                            'level': 'INFO',
+                            'message': f'Running batch status checker for job {job_id} (no batch_id found)'
+                        })
 
-                # Extract batch configuration
-                model = "claude-3-5-sonnet-20241022"  # Default model
-                max_batch_size = 20  # Default batch size
-                no_cache = False  # Default cache behavior
+                    # Build command for the batch status checker script
+                    cmd = ['python', '/app/umap_narrative/803_check_batch_status.py',
+                            f'--job-id={job_id}']
 
-                # Look for stage configuration
-                if 'stages' in job_config:
-                    for stage in job_config['stages']:
-                        if stage['stage'] == 'NARRATIVE_BATCH' and 'config' in stage:
-                            config = stage['config']
-                            model = config.get('model', model)
-                            max_batch_size = config.get('max_batch_size', max_batch_size)
-                            no_cache = config.get('no_cache', no_cache)
+                    # For batch status check jobs, we don't need any additional configuration
+                    logger.info(f"Executing batch status check command: {' '.join(cmd)}")
 
-                # Build command for the batch report script
-                cmd = ['python', '/app/umap_narrative/801_narrative_report_batch.py',
-                        f'--conversation_id={conversation_id}',
-                        f'--model={model}',
-                        f'--max-batch-size={max_batch_size}']
-
-                if no_cache:
-                    cmd.append('--no-cache')
-
-                logger.info(f"Executing batch creation command: {' '.join(cmd)}")
-
-            elif job_type == 'AWAITING_NARRATIVE_BATCH':
-                # This is a job that needs to check batch status
-                batch_id = job.get('batch_id')
-                batch_job_id = job.get('batch_job_id')
-
-                if batch_id:
-                    self.update_job_logs(job, {
-                        'level': 'INFO',
-                        'message': f'Checking status of batch {batch_id} for job {batch_job_id or job_id}'
-                    })
                 else:
+                    # This is a new batch submission
                     self.update_job_logs(job, {
                         'level': 'INFO',
-                        'message': f'Running batch status checker for job {batch_job_id or job_id}'
+                        'message': f'Processing NARRATIVE_BATCH job for conversation {conversation_id}'
                     })
 
-                # Build command for the batch status checker script
-                cmd = ['python', '/app/umap_narrative/803_check_batch_status.py']
+                    # Extract batch configuration
+                    model = "claude-3-5-sonnet-20241022"  # Default model
+                    max_batch_size = 20  # Default batch size
+                    no_cache = False  # Default cache behavior
 
-                # Use batch_job_id if available, otherwise use current job_id
-                cmd_job_id = batch_job_id if batch_job_id else job_id
-                cmd.append(f'--job-id={cmd_job_id}')
+                    # Look for stage configuration
+                    if 'stages' in job_config:
+                        for stage in job_config['stages']:
+                            if stage['stage'] == 'NARRATIVE_BATCH' and 'config' in stage:
+                                config = stage['config']
+                                model = config.get('model', model)
+                                max_batch_size = config.get('max_batch_size', max_batch_size)
+                                no_cache = config.get('no_cache', no_cache)
 
-                # For batch status check jobs, we don't need any additional configuration
-                logger.info(f"Executing batch status check command: {' '.join(cmd)}")
+                    # Build command for the batch report script
+                    cmd = ['python', '/app/umap_narrative/801_narrative_report_batch.py',
+                            f'--conversation_id={conversation_id}',
+                            f'--model={model}',
+                            f'--max-batch-size={max_batch_size}']
 
+                    if no_cache:
+                        cmd.append('--no-cache')
+
+                    logger.info(f"Executing batch submission command: {' '.join(cmd)}")
             else:
                 # Default: run the standard pipeline
                 cmd = ['./run_delphi.sh', f'--zid={conversation_id}']
@@ -737,6 +732,8 @@ class JobProcessor:
                             logger.info(f"Updated job {job_id} with execution results")
                     else:
                         logger.error(f"Job {job_id} not found after script execution")
+                except Exception as e:
+                    logger.error(f"Failed to update job {job_id} with execution results: {e}")
                 except Exception as e:
                     logger.error(f"Failed to update job {job_id} with execution results: {e}")
             

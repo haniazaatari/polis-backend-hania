@@ -1,0 +1,48 @@
+diff --git a/umap_narrative/803_check_batch_status.py b/umap_narrative/803_check_batch_status.py
+index dade8e8..df6e4b2 100644
+--- a/umap_narrative/803_check_batch_status.py
++++ b/umap_narrative/803_check_batch_status.py
+@@ -468,7 +468,7 @@ class BatchStatusChecker:
+ 
+                 # Update job with results summary
+                 try:
+-                    update_expression = "SET batch_results = :results, completed_at = :time, status = :status"
++                    update_expression = "SET batch_results = :results, completed_at = :time, #s = :status"
+                     expression_values = {
+                         ':results': json.dumps(results),
+                         ':time': datetime.now().isoformat()
+@@ -492,7 +492,10 @@ class BatchStatusChecker:
+                     logger.info(f"Job {job_id}: Updating job with results summary and setting status to {expression_values[':status']}")
+                     self.job_table.update_item(
+                         Key={'job_id': job_id},
+                         UpdateExpression=update_expression,
++                        ExpressionAttributeNames={
++                            '#s': 'status'  # Use ExpressionAttributeNames to avoid 'status' reserved keyword
++                        },
+                         ExpressionAttributeValues=expression_values
+                     )
+ 
+@@ -519,7 +522,10 @@ class BatchStatusChecker:
+                 try:
+                     self.job_table.update_item(
+                         Key={'job_id': job_id},
+-                        UpdateExpression="SET status = :status, error_message = :error, last_checked = :time, completed_at = :time",
++                        UpdateExpression="SET #s = :status, error_message = :error, last_checked = :time, completed_at = :time",
++                        ExpressionAttributeNames={
++                            '#s': 'status'  # Use ExpressionAttributeNames to avoid 'status' reserved keyword
++                        },
+                         ExpressionAttributeValues={
+                             ':status': 'FAILED',
+                             ':error': error_msg,
+@@ -537,7 +543,10 @@ class BatchStatusChecker:
+             try:
+                 self.job_table.update_item(
+                     Key={'job_id': job_id},
+-                    UpdateExpression="SET status = :status, error_message = :error, last_checked = :time, completed_at = :time",
++                    UpdateExpression="SET #s = :status, error_message = :error, last_checked = :time, completed_at = :time",
++                    ExpressionAttributeNames={
++                        '#s': 'status'  # Use ExpressionAttributeNames to avoid 'status' reserved keyword
++                    },
+                     ExpressionAttributeValues={
+                         ':status': 'FAILED',
+                         ':error': error_msg,
