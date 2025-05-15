@@ -6,8 +6,12 @@ from PostgreSQL for report generation.
 
 import json
 import logging
+import boto3
+import os
 from typing import Dict, List, Any, Optional
 from collections import defaultdict
+from datetime import datetime
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +28,35 @@ class GroupDataProcessor:
             postgres_client: PostgreSQL client for database access
         """
         self.postgres_client = postgres_client
+        
+        # Initialize DynamoDB connection
+        self.dynamodb = None
+        self.extremity_table = None
+        self.init_dynamodb()
+        
+    def init_dynamodb(self):
+        """Initialize DynamoDB connection for storing extremity values."""
+        try:
+            # Get DynamoDB endpoint from environment or use default
+            endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000')
+            region = os.environ.get('AWS_REGION', 'us-west-2')
+            
+            # Set up DynamoDB client
+            self.dynamodb = boto3.resource(
+                'dynamodb',
+                endpoint_url=endpoint_url,
+                region_name=region,
+                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
+                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+            )
+            
+            # Get reference to the extremity table
+            self.extremity_table = self.dynamodb.Table('Delphi_CommentExtremity')
+            logger.info("Successfully initialized DynamoDB connection for extremity storage")
+        except Exception as e:
+            logger.error(f"Failed to initialize DynamoDB connection: {str(e)}")
+            self.dynamodb = None
+            self.extremity_table = None
     
     def get_math_main_by_conversation(self, zid: int) -> Dict[str, Any]:
         """
@@ -349,20 +382,28 @@ class GroupDataProcessor:
             for tid, data in vote_data.items():
                 groups_data = data['groups']
                 
-                # Calculate agreement percentage for each group
-                group_agree_pcts = {}
+                # Calculate percentages for each type of vote in each group
+                group_vote_pcts = {}
                 for group_id, group_data in groups_data.items():
-                    total_non_pass = group_data['agrees'] + group_data['disagrees']
-                    if total_non_pass > 0:
-                        agree_pct = group_data['agrees'] / total_non_pass
+                    total_votes = group_data['votes']
+                    if total_votes > 0:
+                        agree_pct = group_data['agrees'] / total_votes
+                        disagree_pct = group_data['disagrees'] / total_votes
+                        pass_pct = group_data['passes'] / total_votes
                     else:
-                        agree_pct = 0
-                    group_agree_pcts[group_id] = agree_pct
+                        agree_pct = disagree_pct = pass_pct = 0
+                    
+                    group_vote_pcts[group_id] = {
+                        'agree': agree_pct,
+                        'disagree': disagree_pct,
+                        'pass': pass_pct
+                    }
                 
                 # Calculate disagreement between groups (group extremity)
-                if len(group_agree_pcts) > 1:
+                if len(group_vote_pcts) > 1:
                     diffs = []
-                    group_ids = list(group_agree_pcts.keys())
+                    component_diffs = {'agree_diff': 0, 'disagree_diff': 0, 'pass_diff': 0}
+                    group_ids = list(group_vote_pcts.keys())
                     for i in range(len(group_ids)):
                         for j in range(i+1, len(group_ids)):
                             group_i = group_ids[i]
@@ -370,13 +411,37 @@ class GroupDataProcessor:
                             
                             # Only include groups with valid data
                             if group_i != -1 and group_j != -1:
-                                diff = abs(group_agree_pcts[group_i] - group_agree_pcts[group_j])
+                                # Calculate differences for all vote types
+                                agree_diff = abs(group_vote_pcts[group_i]['agree'] - group_vote_pcts[group_j]['agree'])
+                                disagree_diff = abs(group_vote_pcts[group_i]['disagree'] - group_vote_pcts[group_j]['disagree'])
+                                pass_diff = abs(group_vote_pcts[group_i]['pass'] - group_vote_pcts[group_j]['pass'])
+                                
+                                # Capture the maximum component differences
+                                component_diffs['agree_diff'] = max(component_diffs['agree_diff'], agree_diff)
+                                component_diffs['disagree_diff'] = max(component_diffs['disagree_diff'], disagree_diff)
+                                component_diffs['pass_diff'] = max(component_diffs['pass_diff'], pass_diff)
+                                
+                                # Use the maximum difference across all voting types
+                                diff = max(agree_diff, disagree_diff, pass_diff)
                                 diffs.append(diff)
                     
                     if diffs:
                         avg_diff = sum(diffs) / len(diffs)
                         data['group_aware_consensus'] = 1 - avg_diff
                         data['comment_extremity'] = avg_diff
+                        
+                        # Store extremity values in DynamoDB
+                        try:
+                            self.store_comment_extremity(
+                                zid, 
+                                tid, 
+                                avg_diff, 
+                                "max_vote_diff", 
+                                component_diffs
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to store extremity value for comment {tid}: {str(e)}")
+                            # Continue processing - failure to store shouldn't stop the overall process
                     else:
                         data['group_aware_consensus'] = 0
                         data['comment_extremity'] = 0
@@ -407,6 +472,149 @@ class GroupDataProcessor:
                 'n_groups': 0
             }
 
+    def store_comment_extremity(self, conversation_id: int, comment_id: int, 
+                              extremity_value: float, calculation_method: str,
+                              component_values: Dict[str, float]) -> bool:
+        """
+        Store comment extremity values in DynamoDB.
+        
+        Args:
+            conversation_id: Conversation ID
+            comment_id: Comment ID
+            extremity_value: The calculated extremity value
+            calculation_method: Method used to calculate extremity
+            component_values: Component values used in calculation
+            
+        Returns:
+            Boolean indicating success
+        """
+        if not self.extremity_table:
+            logger.warning("DynamoDB not initialized, skipping extremity storage")
+            return False
+            
+        try:
+            # Convert float values to Decimal for DynamoDB compatibility
+            decimal_extremity = Decimal(str(extremity_value))
+            
+            # Convert component values to Decimal
+            decimal_components = {}
+            for key, value in component_values.items():
+                decimal_components[key] = Decimal(str(value))
+            
+            # Prepare item for DynamoDB
+            item = {
+                'conversation_id': str(conversation_id),
+                'comment_id': str(comment_id),
+                'extremity_value': decimal_extremity,
+                'calculation_method': calculation_method,
+                'calculation_timestamp': datetime.now().isoformat(),
+                'component_values': decimal_components
+            }
+            
+            # Put item in DynamoDB
+            self.extremity_table.put_item(Item=item)
+            logger.debug(f"Stored extremity value {extremity_value} for comment {comment_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error storing comment extremity in DynamoDB: {str(e)}")
+            return False
+            
+    def get_comment_extremity(self, conversation_id: int, comment_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve comment extremity values from DynamoDB.
+        
+        Args:
+            conversation_id: Conversation ID
+            comment_id: Comment ID
+            
+        Returns:
+            Dictionary with extremity data or None if not found
+        """
+        if not self.extremity_table:
+            logger.warning("DynamoDB not initialized, skipping extremity retrieval")
+            return None
+            
+        try:
+            response = self.extremity_table.get_item(
+                Key={
+                    'conversation_id': str(conversation_id),
+                    'comment_id': str(comment_id)
+                }
+            )
+            
+            if 'Item' in response:
+                item = response['Item']
+                # Convert Decimal objects back to floats for internal use
+                if 'extremity_value' in item and isinstance(item['extremity_value'], Decimal):
+                    item['extremity_value'] = float(item['extremity_value'])
+                
+                # Convert component values back to floats
+                if 'component_values' in item and isinstance(item['component_values'], dict):
+                    for key, value in item['component_values'].items():
+                        if isinstance(value, Decimal):
+                            item['component_values'][key] = float(value)
+                
+                return item
+            else:
+                logger.debug(f"No extremity data found for comment {comment_id}")
+                return None
+        except Exception as e:
+            logger.error(f"Error retrieving comment extremity from DynamoDB: {str(e)}")
+            return None
+            
+    def get_all_comment_extremity_values(self, conversation_id: int) -> Dict[int, float]:
+        """
+        Get all extremity values for comments in a conversation.
+        
+        Args:
+            conversation_id: Conversation ID
+            
+        Returns:
+            Dictionary mapping comment IDs to extremity values
+        """
+        if not self.extremity_table:
+            logger.warning("DynamoDB not initialized, skipping extremity retrieval")
+            return {}
+            
+        try:
+            # Query for all extremity values for this conversation
+            response = self.extremity_table.query(
+                KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(str(conversation_id))
+            )
+            
+            # Process results
+            extremity_values = {}
+            for item in response.get('Items', []):
+                try:
+                    comment_id = int(item.get('comment_id'))
+                    # Convert Decimal back to float for internal use
+                    extremity_value = float(item.get('extremity_value', 0))
+                    extremity_values[comment_id] = extremity_value
+                except (TypeError, ValueError) as e:
+                    logger.warning(f"Error converting extremity value for comment {item.get('comment_id')}: {e}")
+                
+            # Handle pagination if there are many results
+            while 'LastEvaluatedKey' in response:
+                response = self.extremity_table.query(
+                    KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(str(conversation_id)),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
+                
+                for item in response.get('Items', []):
+                    try:
+                        comment_id = int(item.get('comment_id'))
+                        # Convert Decimal back to float for internal use
+                        extremity_value = float(item.get('extremity_value', 0))
+                        extremity_values[comment_id] = extremity_value
+                    except (TypeError, ValueError) as e:
+                        logger.warning(f"Error converting extremity value for comment {item.get('comment_id')}: {e}")
+            
+            logger.info(f"Retrieved {len(extremity_values)} extremity values for conversation {conversation_id}")
+            return extremity_values
+        except Exception as e:
+            logger.error(f"Error retrieving extremity values: {str(e)}")
+            return {}
+            
     def get_export_data(self, zid: int) -> Dict[str, Any]:
         """
         Get vote and comment data in the export format expected by the report generator.
