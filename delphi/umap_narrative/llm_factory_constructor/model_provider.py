@@ -164,27 +164,27 @@ class OllamaProvider(ModelProvider):
 
 class AnthropicProvider(ModelProvider):
     """Provider for Anthropic Claude models."""
-    
+
     def __init__(self, model_name: str = None, api_key: Optional[str] = None):
         """
         Initialize the Anthropic provider.
-        
+
         Args:
             model_name: Name of the Claude model to use
             api_key: Anthropic API key (defaults to ANTHROPIC_API_KEY env var)
         """
         self.model_name = model_name
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        
+
         if not self.api_key:
             logger.warning("No Anthropic API key provided. Set ANTHROPIC_API_KEY env var or pass api_key parameter.")
-        
+
         # Force using direct HTTP requests instead of the anthropic package
         # since we're having issues with the package in the container
         logger.warning("Forcing use of direct HTTP requests for Anthropic API")
         self.anthropic = None
         self.client = None
-        
+
         # Log API key presence (without revealing it)
         if self.api_key:
             logger.info(f"Anthropic API key is set (starts with: {self.api_key[:8]}...)")
@@ -293,22 +293,205 @@ class AnthropicProvider(ModelProvider):
                 ]
             })
     
+    def get_batch_responses(self, batch_requests: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Submit a batch of requests to the Anthropic Batch API.
+        
+        Args:
+            batch_requests: List of request objects, each containing:
+                - system: System message
+                - messages: List of message objects
+                - max_tokens: Maximum tokens for response
+                - metadata: Dictionary with request metadata
+                
+        Returns:
+            Dictionary with batch job metadata
+        """
+        if not self.api_key:
+            logger.error("No Anthropic API key provided for batch requests")
+            return {"error": "API key missing"}
+        
+        try:
+            logger.info(f"Submitting batch of {len(batch_requests)} requests to Anthropic API")
+            
+            # Use Anthropic Batch API endpoint
+            headers = {
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            }
+            
+            # Format requests for Batch API
+            formatted_requests = []
+            for i, request in enumerate(batch_requests):
+                req = {
+                    "model": self.model_name,
+                    "system": request.get("system", ""),
+                    "messages": request.get("messages", []),
+                    "max_tokens": request.get("max_tokens", 4000)
+                }
+                
+                # Add request ID (for correlation on response)
+                req["request_id"] = f"req_{i}"
+                
+                formatted_requests.append(req)
+            
+            # Check if Batch API is available
+            try:
+                # Make a request to the Batch API endpoint
+                batch_request_data = {
+                    "requests": formatted_requests
+                }
+                
+                response = requests.post(
+                    "https://api.anthropic.com/v1/messages/batch",
+                    headers=headers,
+                    json=batch_request_data
+                )
+                
+                # Check if the response indicates Batch API is not available
+                if response.status_code == 404:
+                    logger.warning("Anthropic Batch API endpoint not found (404). Falling back to sequential processing.")
+                    return {"error": "Batch API not available", "fallback": "sequential"}
+                
+                # Raise for other errors
+                response.raise_for_status()
+                
+                # Get response data
+                response_data = response.json()
+                logger.info(f"Batch submitted successfully. Batch ID: {response_data.get('batch_id')}")
+                
+                # Add metadata mapping
+                response_data["request_metadata"] = {f"req_{i}": request.get("metadata", {}) for i, request in enumerate(batch_requests)}
+                
+                return response_data
+                
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 404:
+                    logger.warning("Anthropic Batch API endpoint not found (404). Falling back to sequential processing.")
+                    return {"error": "Batch API not available", "fallback": "sequential"}
+                else:
+                    logger.error(f"HTTP error using Anthropic Batch API: {str(e)}")
+                    return {"error": f"HTTP error: {str(e)}"}
+                    
+            except Exception as e:
+                logger.error(f"Error using Anthropic Batch API: {str(e)}")
+                return {"error": str(e)}
+                
+        except Exception as e:
+            logger.error(f"Error preparing batch request: {str(e)}")
+            return {"error": str(e)}
+    
     def list_available_models(self) -> List[str]:
         """
         List available Claude models.
-        
+
         Returns:
             List of hardcoded available model identifiers
         """
         # Anthropic doesn't have a list models endpoint, so we hardcode the known models
         available_models = [
-            "claude-3-opus-20240229", 
+            "claude-3-opus-20240229",
             "claude-3-sonnet-20240229",
             "claude-3-haiku-20240307",
-            "claude-3-5-haiku-20241022" 
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022"
         ]
         logger.info(f"Available Anthropic models: {available_models}")
         return available_models
+
+    async def get_completion(self, system: str, prompt: str, max_tokens: int = 4000) -> Dict[str, Any]:
+        """
+        Get a completion from the Anthropic API with the new completion format.
+        This method is specifically for the batch report generator.
+
+        Args:
+            system: System message/instructions
+            prompt: User message/prompt
+            max_tokens: Maximum tokens for response
+
+        Returns:
+            Dictionary with model response
+        """
+        logger.info(f"Getting completion from Anthropic API using model: {self.model_name}")
+
+        if not self.api_key:
+            logger.error("No Anthropic API key provided for completion")
+            return {"content": json.dumps({
+                "id": "polis_narrative_error_message",
+                "title": "API Key Missing",
+                "paragraphs": [
+                    {
+                        "id": "polis_narrative_error_message",
+                        "title": "API Key Missing",
+                        "sentences": [
+                            {
+                                "clauses": [
+                                    {
+                                        "text": "No Anthropic API key provided. Set ANTHROPIC_API_KEY env var or pass api_key parameter.",
+                                        "citations": []
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            })}
+
+        try:
+            # Use direct HTTP request for completions
+            headers = {
+                "x-api-key": self.api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            }
+
+            data = {
+                "model": self.model_name,
+                "system": system,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": max_tokens
+            }
+
+            response = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers=headers,
+                json=data
+            )
+
+            # Raise for HTTP errors
+            response.raise_for_status()
+
+            # Parse response
+            response_data = response.json()
+            result = response_data["content"][0]["text"]
+
+            return {"content": result}
+
+        except Exception as e:
+            logger.error(f"Error in get_completion: {str(e)}")
+            return {"content": json.dumps({
+                "id": "polis_narrative_error_message",
+                "title": "Model Error",
+                "paragraphs": [
+                    {
+                        "id": "polis_narrative_error_message",
+                        "title": "Error Processing With Model",
+                        "sentences": [
+                            {
+                                "clauses": [
+                                    {
+                                        "text": f"There was an error using the Anthropic API: {str(e)}",
+                                        "citations": []
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            })}
 
 def get_model_provider(provider_type: str = None, model_name: str = None) -> ModelProvider:
     """

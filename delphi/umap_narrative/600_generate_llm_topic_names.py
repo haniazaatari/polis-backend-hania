@@ -348,7 +348,7 @@ def generate_topic_names(layer_data, conversation_name=None, model_name=None, pr
         if top_words:
             prompt_prefix += f"Keywords for this cluster: {', '.join(top_words[:5])}. "
         
-        prompt = f"{prompt_prefix}Please provide a concise topic label (3-5 words max) for the following group of comments:\n\n"
+        prompt = f"{prompt_prefix}Please provide a concise topic label (3-5 words max) for the following group of comments. Return ONLY the label without any intro text like 'Here are the topic labels:' or quotation marks:\n\n"
         
         # Include up to 5 example comments (prefer shorter ones)
         comment_lengths = [(i, len(comment)) for i, comment in enumerate(cluster_comments)]
@@ -385,8 +385,30 @@ def generate_topic_names(layer_data, conversation_name=None, model_name=None, pr
             # Further clean up to ensure it's just a label
             topic = topic.replace("Topic label:", "").strip()
             
+            # Remove common LLM prefixes
+            prefixes_to_remove = [
+                "Here are the topic labels:",
+                "Here are the topic labels",
+                "Here is the topic label:",
+                "Here is the topic label",
+                "The topic label is:",
+                "The topic label is",
+                "Topic name:",
+                "Topic name",
+                "Label:",
+                "Label"
+            ]
+            
+            for prefix in prefixes_to_remove:
+                if topic.startswith(prefix):
+                    topic = topic[len(prefix):].strip()
+            
             # Remove quotes if they're present (handle any quote combination)
             topic = topic.strip('"\'')  # Strip both double and single quotes
+            
+            # Remove common formats like "1. Topic Name" or "- Topic Name"
+            if topic.startswith("1. ") or topic.startswith("- "):
+                topic = topic[3:].strip()
                 
             if len(topic) > 50:  # If it's too long, truncate
                 topic = topic[:50] + "..."
@@ -427,7 +449,7 @@ def generate_topic_names(layer_data, conversation_name=None, model_name=None, pr
             if cluster_comments:
                 # Try a simpler prompt
                 try:
-                    prompt = f"Based on these comments, give a very short topic label (3-5 words max):\n\n"
+                    prompt = f"Based on these comments, give a very short topic label (3-5 words max). IMPORTANT: Return ONLY the label itself with no introduction or quotation marks:\n\n"
                     for i, comment in enumerate(cluster_comments[:3]):
                         prompt += f"{i+1}. {comment}\n"
                     prompt += "\nTopic label:"
@@ -440,9 +462,30 @@ def generate_topic_names(layer_data, conversation_name=None, model_name=None, pr
                         topic_text = response['message']['content'].strip()
                         topic_name = topic_text.split('\n')[0].strip().replace("Topic label:", "").strip()
                         
-                        # Remove quotes if present
-                        if topic_name.startswith('"') and topic_name.endswith('"'):
-                            topic_name = topic_name[1:-1].strip()
+                        # Remove common LLM prefixes (same as above)
+                        prefixes_to_remove = [
+                            "Here are the topic labels:",
+                            "Here are the topic labels",
+                            "Here is the topic label:",
+                            "Here is the topic label",
+                            "The topic label is:",
+                            "The topic label is",
+                            "Topic name:",
+                            "Topic name",
+                            "Label:",
+                            "Label"
+                        ]
+                        
+                        for prefix in prefixes_to_remove:
+                            if topic_name.startswith(prefix):
+                                topic_name = topic_name[len(prefix):].strip()
+                        
+                        # Remove quotes if present - handle any quote combination
+                        topic_name = topic_name.strip('"\'')
+                        
+                        # Remove common formats like "1. Topic Name" or "- Topic Name"
+                        if topic_name.startswith("1. ") or topic_name.startswith("- "):
+                            topic_name = topic_name[3:].strip()
                         
                         logger.info(f"Got better topic name for cluster {cluster_id}: '{topic_name}'")
                 except Exception as e:
@@ -591,13 +634,13 @@ def update_visualization_with_llm_names(conversation_id, layer_id, topic_names, 
         layer_figure.save(layer_file)
         logger.info(f"Saved visualization with LLM topic names to {layer_file}")
         
-        # Try to open in browser
-        try:
-            import webbrowser
-            webbrowser.open(f"file://{layer_file}")
-            logger.info(f"Opened visualization in browser")
-        except:
-            logger.info(f"Visualization available at: file://{layer_file}")
+        # # Try to open in browser
+        # try:
+        #     import webbrowser
+        #     webbrowser.open(f"file://{layer_file}")
+        #     logger.info(f"Opened visualization in browser")
+        # except:
+        #     logger.info(f"Visualization available at: file://{layer_file}")
         
         return layer_file
     except Exception as e:

@@ -2,6 +2,11 @@
 
 This document provides comprehensive guidance for working with the Delphi system, including database interactions, environment configuration, Docker services, and the distributed job queue system. It serves as both documentation and a practical reference for day-to-day operations.
 
+## Documentation Directory
+
+For a comprehensive list of all documentation files with descriptions, see:
+[delphi/docs/DOCUMENTATION_DIRECTORY.md](docs/DOCUMENTATION_DIRECTORY.md)
+
 ## Current work todos are located in:
 
 delphi/docs/JOB_QUEUE_SCHEMA.md

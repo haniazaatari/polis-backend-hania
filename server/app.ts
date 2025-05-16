@@ -23,6 +23,8 @@ import { handle_GET_xidReport } from "./src/routes/export";
 import { handle_GET_delphi } from "./src/routes/delphi";
 import { handle_GET_delphi_visualizations } from "./src/routes/delphi/visualizations";
 import { handle_POST_delphi_jobs } from "./src/routes/delphi/jobs";
+import { handle_GET_delphi_reports } from "./src/routes/delphi/reports";
+import { handle_POST_delphi_batch_reports } from "./src/routes/delphi/batchReports";
 
 const app = express();
 
@@ -798,6 +800,20 @@ helpersInitialized.then(
       }
     });
     
+    // Add GET endpoint for Delphi reports
+    app.get("/api/v3/delphi/reports", moveToBody, function(req, res) {
+      try {
+        handle_GET_delphi_reports(req, res);
+      } catch (err) {
+        console.error("Error in delphi reports route:", err);
+        res.json({
+          status: "error",
+          message: "Internal server error in reports endpoint",
+          error: err.message || "Unknown error"
+        });
+      }
+    });
+    
     // Use the directly imported handler from the top of the file
     
     // Add error handling wrapper for async route handler
@@ -809,6 +825,20 @@ helpersInitialized.then(
         res.json({
           status: "error",
           message: "Internal server error in visualizations endpoint",
+          error: err.message || "Unknown error"
+        });
+      }
+    });
+    
+    // Add POST endpoint for batch report generation
+    app.post("/api/v3/delphi/batchReports", moveToBody, function(req, res) {
+      try {
+        handle_POST_delphi_batch_reports(req, res);
+      } catch (err) {
+        console.error("Error in delphi batch reports route:", err);
+        res.json({
+          status: "error",
+          message: "Internal server error in batch reports endpoint",
           error: err.message || "Unknown error"
         });
       }
