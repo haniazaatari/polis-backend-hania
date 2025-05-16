@@ -4,16 +4,17 @@ import { DynamoDB } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocument } from "@aws-sdk/lib-dynamodb";
 import logger from "../../utils/logger";
 import { getZidFromReport } from "../../utils/parameter";
+import Config from "../../config";
 
 // Initialize DynamoDB client
 const dynamoDbClient = new DynamoDB({
   // Use environment variables for endpoint and region, or the docker service name
-  endpoint: process.env.DYNAMODB_ENDPOINT,
-  region: process.env.AWS_REGION || "us-east-1",
+  endpoint: Config.DYNAMODB_ENDPOINT,
+  region: Config.AWS_REGION || "us-east-1",
   // For local development or Docker container
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "DUMMYIDEXAMPLE",
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "DUMMYEXAMPLEKEY",
+    accessKeyId: Config.AWS_ACCESS_KEY_ID || "DUMMYIDEXAMPLE",
+    secretAccessKey: Config.AWS_SECRET_ACCESS_KEY || "DUMMYEXAMPLEKEY",
   },
 });
 
@@ -195,7 +196,7 @@ export async function handle_POST_delphi_jobs(
           ? (error as any).code
           : undefined,
       details:
-        process.env.NODE_ENV === "development" ? String(error) : undefined,
+        Config.NODE_ENV === "development" ? String(error) : undefined,
     });
   }
 }

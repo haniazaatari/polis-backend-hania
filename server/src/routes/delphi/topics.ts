@@ -3,6 +3,7 @@ import logger from "../../utils/logger";
 import { DynamoDBClient, ListTablesCommand } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { getZidFromReport } from "../../utils/parameter";
+import Config from "../../config";
 
 /**
  * Handler for Delphi API route that retrieves LLM topic names from DynamoDB
@@ -38,7 +39,7 @@ export function handle_GET_delphi(req: Request, res: Response) {
 
       // Force using local DynamoDB by hardcoding the endpoint
       const dynamoDBConfig: any = {
-        region: process.env.AWS_REGION || "us-east-1",
+        region: Config.AWS_REGION || "us-east-1",
       };
 
       // Log what we're using
@@ -56,9 +57,9 @@ export function handle_GET_delphi(req: Request, res: Response) {
       logger.info(`DynamoDB Config: 
         Region: ${dynamoDBConfig.region}
         Endpoint: ${dynamoDBConfig.endpoint || "Default AWS endpoint"}
-        AWS_ACCESS_KEY_ID: ${process.env.AWS_ACCESS_KEY_ID ? "Set" : "Not set"}
+        AWS_ACCESS_KEY_ID: ${Config.AWS_ACCESS_KEY_ID ? "Set" : "Not set"}
         AWS_SECRET_ACCESS_KEY: ${
-          process.env.AWS_SECRET_ACCESS_KEY ? "Set" : "Not set"
+          Config.AWS_SECRET_ACCESS_KEY ? "Set" : "Not set"
         }
       `);
 

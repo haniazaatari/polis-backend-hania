@@ -13,6 +13,7 @@ import {
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import Config from "../../config";
 
 /**
  * Handler for Delphi API route that retrieves visualization information
@@ -63,11 +64,11 @@ export async function handle_GET_delphi_visualizations(
 
     // Configure S3 client
     const s3Config: any = {
-      region: process.env.AWS_REGION || "us-east-1",
-      endpoint: process.env.AWS_S3_ENDPOINT || "http://minio:9000",
+      region: Config.AWS_REGION || "us-east-1",
+      endpoint: Config.AWS_S3_ENDPOINT || "http://minio:9000",
       credentials: {
-        accessKeyId: process.env.AWS_S3_ACCESS_KEY_ID || "minioadmin",
-        secretAccessKey: process.env.AWS_S3_SECRET_ACCESS_KEY || "minioadmin",
+        accessKeyId: Config.AWS_S3_ACCESS_KEY_ID || "minioadmin",
+        secretAccessKey: Config.AWS_S3_SECRET_ACCESS_KEY || "minioadmin",
       },
       forcePathStyle: true, // Required for MinIO
     };
@@ -76,7 +77,7 @@ export async function handle_GET_delphi_visualizations(
     logger.info(`S3 Config: 
       Endpoint: ${s3Config.endpoint}
       Region: ${s3Config.region}
-      Bucket: ${process.env.AWS_S3_BUCKET_NAME || "delphi"}
+      Bucket: ${Config.AWS_S3_BUCKET_NAME || "polis-delphi"}
     `);
 
     // Create S3 client
@@ -93,7 +94,7 @@ export async function handle_GET_delphi_visualizations(
       });
     }
 
-    const bucketName = process.env.AWS_S3_BUCKET_NAME || "delphi";
+    const bucketName = Config.AWS_S3_BUCKET_NAME || "polis-delphi";
 
     // Define S3 path prefix to search
     // Use conversation_id instead of report_id since files are stored by conversation_id
@@ -137,7 +138,7 @@ export async function handle_GET_delphi_visualizations(
         );
         if (s3Response.Contents && s3Response.Contents.length > 0) {
           // Log first few keys for debugging
-          const keys = s3Response.Contents.slice(0, 3).map((obj) => obj.Key);
+          const keys = s3Response.Contents.slice(0, 3).map((obj: { Key: string}) => obj.Key);
           logger.info(`Sample object keys: ${JSON.stringify(keys)}`);
         }
       } catch (s3Error: any) {
@@ -304,7 +305,7 @@ async function fetchJobMetadata(
   try {
     // Configure DynamoDB client
     const dynamoDBConfig: any = {
-      region: process.env.AWS_REGION || "us-east-1",
+      region: Config.AWS_REGION || "us-east-1",
       credentials: {
         accessKeyId: "DUMMYIDEXAMPLE",
         secretAccessKey: "DUMMYEXAMPLEKEY",
