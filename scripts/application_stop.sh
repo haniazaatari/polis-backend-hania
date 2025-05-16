@@ -56,17 +56,6 @@ if [ -d "$DEPLOY_DIR" ]; then
     echo "Stopping delphi service..."
     /usr/local/bin/docker-compose stop delphi || echo "Warning: Failed to stop delphi service, might already be stopped."
 
-  elif [ "$SERVICE_TYPE" == "ollama" ]; then
-    echo "Stopping standalone ollama container..."
-    # Ollama runs via `docker run`, not compose on this instance type
-    # Check if the container exists before trying to stop it
-    if docker ps -q --filter name=^/ollama$ | grep -q .; then
-        docker stop ollama || echo "Warning: Failed to stop ollama container, might already be stopped."
-    else
-        echo "Ollama container 'ollama' not found or not running."
-    fi
-    # No docker-compose actions needed for the ollama instance type
-
   else
     echo "Warning: Unknown service type '$SERVICE_TYPE' found in $SERVICE_TYPE_FILE. No specific services stopped."
     # Avoid running a generic 'down' as it might affect unrelated containers if any exist

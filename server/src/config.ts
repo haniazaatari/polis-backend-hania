@@ -115,6 +115,10 @@ export default {
   useNetworkHost: isTrue(process.env.USE_NETWORK_HOST),
   webserverPass: process.env.WEBSERVER_PASS as string,
   webserverUsername: process.env.WEBSERVER_USERNAME as string,
+  DYNAMODB_ENDPOINT: process.env.DYNAMODB_ENDPOINT,
+  AWS_REGION: process.env.AWS_REGION,
+  AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
+  AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
 
   whitelistItems: [
     process.env.DOMAIN_WHITELIST_ITEM_01 || null,
