@@ -39,7 +39,7 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
     const dynamoDBConfig: any = {
       region: Config.AWS_REGION || "us-east-1",
       // Force to use the local DynamoDB endpoint
-      endpoint: "http://dynamodb:8000"
+      endpoint: Config.DYNAMODB_ENDPOINT,
     };
     
     // Log what we're using
@@ -49,8 +49,8 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
     
     // For local DynamoDB, use dummy credentials
     dynamoDBConfig.credentials = {
-      accessKeyId: 'DUMMYIDEXAMPLE',
-      secretAccessKey: 'DUMMYEXAMPLEKEY'
+      accessKeyId: Config.AWS_ACCESS_KEY_ID,
+      secretAccessKey: Config.AWS_S3_SECRET_ACCESS_KEY
     };
 
     // Create DynamoDB clients

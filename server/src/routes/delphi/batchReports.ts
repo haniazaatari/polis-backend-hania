@@ -8,11 +8,11 @@ import Config from "../../config";
 
 // Initialize DynamoDB client
 const dynamoDbClient = new DynamoDB({
-  endpoint: Config.DYNAMODB_ENDPOINT || 'http://dynamodb:8000',
-  region: Config.AWS_REGION || 'us-west-2',
+  endpoint: Config.DYNAMODB_ENDPOINT as string,
+  region: Config.AWS_REGION as string,
   credentials: {
-    accessKeyId: Config.AWS_ACCESS_KEY_ID || 'DUMMYIDEXAMPLE',
-    secretAccessKey: Config.AWS_SECRET_ACCESS_KEY || 'DUMMYEXAMPLEKEY',
+    accessKeyId: Config.AWS_ACCESS_KEY_ID as string,
+    secretAccessKey: Config.AWS_SECRET_ACCESS_KEY as string,
   },
 });
 

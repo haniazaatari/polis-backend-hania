@@ -196,7 +196,7 @@ export async function handle_POST_delphi_jobs(
           ? (error as any).code
           : undefined,
       details:
-        Config.NODE_ENV === "development" ? String(error) : undefined,
+        Config.nodeEnv === "development" ? String(error) : undefined,
     });
   }
 }

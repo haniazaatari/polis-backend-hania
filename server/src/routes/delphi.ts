@@ -49,8 +49,8 @@ export function handle_GET_delphi(req: Request, res: Response) {
 
       // For local DynamoDB, use dummy credentials
       dynamoDBConfig.credentials = {
-        accessKeyId: "DUMMYIDEXAMPLE",
-        secretAccessKey: "DUMMYEXAMPLEKEY",
+        accessKeyId: Config.AWS_ACCESS_KEY_ID,
+        secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
       };
 
       // Log connection config for debugging
