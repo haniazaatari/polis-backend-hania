@@ -1,0 +1,25 @@
+version: '3.8'
+
+# This is an update to integrate the new job poller into the main docker-compose.yml
+# Copy relevant sections into the main docker-compose.yml file
+
+services:
+  delphi:
+    # Add these environment variables to the existing delphi service
+    environment:
+      # Existing variables remain unchanged
+      # Add this new variable to enable the new poller
+      - USE_NEW_POLLER=true
+      - MAX_WORKERS=${DELPHI_MAX_WORKERS:-2}
+      - POLL_INTERVAL=${POLL_INTERVAL:-10}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    # Update the command to use the new poller startup script
+    command: >
+      bash -c "
+        # Create DynamoDB tables if they don't exist
+        python create_dynamodb_tables.py --endpoint-url=${DYNAMODB_ENDPOINT:-http://dynamodb:8000} && 
+        # Setup MinIO bucket
+        python setup_minio.py && 
+        # Start the new job poller system
+        ./start_poller.sh.new
+      "

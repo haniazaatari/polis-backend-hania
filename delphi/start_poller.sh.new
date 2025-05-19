@@ -1,0 +1,60 @@
+#!/bin/bash
+# Delphi Job Poller Service Starter
+
+# Get the directory of this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# Set which poller to use (old or new)
+USE_NEW_POLLER="${USE_NEW_POLLER:-false}"
+
+# Path to the Python poller script
+if [ "$USE_NEW_POLLER" = "true" ]; then
+  POLLER_SCRIPT="$SCRIPT_DIR/scripts/job_poller_new.py"
+  echo -e "${GREEN}********************************${NC}"
+  echo -e "${GREEN}*                              *${NC}"
+  echo -e "${GREEN}*  USING NEW JOB POLLER SYSTEM *${NC}"
+  echo -e "${GREEN}*                              *${NC}"
+  echo -e "${GREEN}********************************${NC}"
+else
+  POLLER_SCRIPT="$SCRIPT_DIR/scripts/job_poller.py"
+  echo "Using original job poller"
+fi
+
+# Default options
+ENDPOINT_URL="${DYNAMODB_ENDPOINT:-http://localhost:8000}"
+POLL_INTERVAL="${POLL_INTERVAL:-10}"
+LOG_LEVEL="${LOG_LEVEL:-INFO}"
+MAX_WORKERS="${MAX_WORKERS:-1}"
+LOG_FILE="${LOG_FILE:-}"
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}Starting Delphi Job Poller Service${NC}"
+echo -e "${YELLOW}DynamoDB Endpoint:${NC} $ENDPOINT_URL"
+echo -e "${YELLOW}Poll Interval:${NC} $POLL_INTERVAL seconds"
+echo -e "${YELLOW}Log Level:${NC} $LOG_LEVEL"
+echo -e "${YELLOW}Max Workers:${NC} $MAX_WORKERS"
+if [ -n "$LOG_FILE" ]; then
+  echo -e "${YELLOW}Log File:${NC} $LOG_FILE"
+fi
+echo ""
+
+# Build the command
+CMD="python3 \"$POLLER_SCRIPT\" --endpoint-url=\"$ENDPOINT_URL\" --interval=\"$POLL_INTERVAL\" --log-level=\"$LOG_LEVEL\" --max-workers=\"$MAX_WORKERS\""
+
+# Add log file if specified
+if [ -n "$LOG_FILE" ]; then
+  CMD="$CMD --log-file=\"$LOG_FILE\""
+fi
+
+# Add any additional arguments
+if [ $# -gt 0 ]; then
+  CMD="$CMD $@"
+fi
+
+# Execute the command
+echo "Executing: $CMD"
+eval $CMD

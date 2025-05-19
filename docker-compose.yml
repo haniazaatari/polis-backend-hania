@@ -80,6 +80,9 @@ services:
       # DynamoDB connection settings for local mode (will be overridden in prod)
       - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT:-http://dynamodb:8000}
       - POLL_INTERVAL=${POLL_INTERVAL:-2}
+      # New poller configuration
+      - USE_NEW_POLLER=true
+      - MAX_WORKERS=${DELPHI_MAX_WORKERS:-2}
       # Ollama connection
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}

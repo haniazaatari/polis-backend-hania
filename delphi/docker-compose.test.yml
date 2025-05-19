@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # Only include the services needed for testing
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: dynamodb-local-test
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+    volumes:
+      - dynamodb-data-test:/home/dynamodblocal/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-test
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data-test:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  minio:
+    image: minio/minio
+    container_name: minio-test
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data-test:/data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # Delphi app with new poller for testing
+  delphi-new-poller:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delphi-new-poller-test
+    depends_on:
+      - dynamodb-local
+      - ollama
+      - minio
+    environment:
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - OLLAMA_HOST=http://ollama:11434
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-west-2
+      - MINIO_HOST=minio:9000
+      - AWS_S3_ENDPOINT=http://minio:9000
+      - AWS_S3_BUCKET_NAME=delphi-test
+      - PYTHONPATH=/app
+      - USE_NEW_POLLER=true
+      - LOG_LEVEL=INFO
+      - POLL_INTERVAL=5
+      - MAX_WORKERS=2
+    volumes:
+      - .:/app
+    command: >
+      bash -c "
+        echo 'Setting up DynamoDB tables...' &&
+        python create_dynamodb_tables.py --endpoint-url=${DYNAMODB_ENDPOINT:-http://dynamodb-local:8000} &&
+        echo 'Setting up MinIO bucket...' &&
+        python setup_minio.py &&
+        echo 'Setting up Ollama model...' &&
+        ./setup_ollama.sh &&
+        echo 'Starting new job poller...' &&
+        ./start_poller.sh.new
+      "
+
+volumes:
+  dynamodb-data-test:
+  ollama-data-test:
+  minio-data-test:
