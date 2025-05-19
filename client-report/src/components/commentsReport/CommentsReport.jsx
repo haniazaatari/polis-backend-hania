@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import net from '../../util/net';
 import { useReportId } from '../framework/useReportId';
 import getNarrativeJSON from '../../util/getNarrativeJSON';
+import CommentList from '../lists/commentList.jsx';
 
 const CommentsReport = () => {
   const { report_id } = useReportId();
@@ -518,6 +519,35 @@ const CommentsReport = () => {
                   try {
                     // The report_data is directly the JSON string, not using modelResponse property
                     const respData = JSON.parse(report.report_data);
+                    
+                    // Extract all citation IDs from the narrative structure
+                    const extractCitations = (data) => {
+                      const citations = [];
+                      
+                      if (data?.paragraphs) {
+                        data.paragraphs.forEach(paragraph => {
+                          if (paragraph?.sentences) {
+                            paragraph.sentences.forEach(sentence => {
+                              if (sentence?.clauses) {
+                                sentence.clauses.forEach(clause => {
+                                  if (clause?.citations && Array.isArray(clause.citations)) {
+                                    clause.citations.forEach(citation => {
+                                      citations.push(citation);
+                                    });
+                                  }
+                                });
+                              }
+                            });
+                          }
+                        });
+                      }
+                      
+                      return [...new Set(citations)]; // Deduplicate
+                    };
+                    
+                    const citationIds = extractCitations(respData);
+                    console.log("Extracted citation IDs:", citationIds);
+                    
                     return (
                       <article style={{ maxWidth: "600px" }}>
                         {respData?.paragraphs?.map((section) => (
@@ -541,6 +571,22 @@ const CommentsReport = () => {
                             ))}
                           </div>
                         ))}
+                        
+                        {/* Add comment list for referenced comments */}
+                        {citationIds.length > 0 && (
+                          <div style={{ marginTop: 50 }}>
+                            <h5>Referenced Comments</h5>
+                            <CommentList
+                              conversation={null}
+                              ptptCount={0}
+                              math={math || {}}
+                              formatTid={(tid) => tid}
+                              tidsToRender={citationIds}
+                              comments={comments || []}
+                              voteColors={{agree: '#7FD47F', disagree: '#E95454', pass: '#999999'}}
+                            />
+                          </div>
+                        )}
                       </article>
                     );
                   } catch (error) {
@@ -585,6 +631,16 @@ const CommentsReport = () => {
             The Delphi system needs to process this conversation with LLM topic generation 
             before this report will be available.
           </p>
+          <div className="section-header-actions" style={{ marginTop: "20px" }}>
+            <button 
+              className="create-job-button"
+              onClick={toggleJobForm}
+            >
+              {jobFormOpen ? 'Cancel' : 'Run New Delphi Analysis'}
+            </button>
+          </div>
+          
+          {jobFormOpen && renderJobCreationForm()}
         </div>
       ) : (
         <div className="report-content">

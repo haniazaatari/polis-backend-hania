@@ -106,6 +106,15 @@ echo -e "${GREEN}Running UMAP narrative pipeline...${NC}"
 python /app/umap_narrative/run_pipeline.py --zid=${ZID} --use-ollama ${VERBOSE}
 PIPELINE_EXIT_CODE=$?
 
+# Calculate and store comment extremity values
+echo -e "${GREEN}Calculating comment extremity values...${NC}"
+python /app/umap_narrative/501_calculate_comment_extremity.py --zid=${ZID} ${VERBOSE} ${FORCE}
+EXTREMITY_EXIT_CODE=$?
+if [ $EXTREMITY_EXIT_CODE -ne 0 ]; then
+  echo -e "${RED}Warning: Extremity calculation failed with exit code ${EXTREMITY_EXIT_CODE}${NC}"
+  echo "Continuing with visualization..."
+fi
+
 if [ $PIPELINE_EXIT_CODE -eq 0 ]; then
   echo -e "${YELLOW}Creating visualizations with datamapplot...${NC}"
   

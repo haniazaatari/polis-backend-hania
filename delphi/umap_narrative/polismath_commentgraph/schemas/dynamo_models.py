@@ -235,3 +235,13 @@ class VisualizationDataResponse(BaseModel):
     layer_id: int
     comments: List[Dict[str, Any]]
     clusters: List[Dict[str, Any]]
+    
+    
+class CommentExtremity(BaseModel):
+    """Extremity values for a comment."""
+    conversation_id: str
+    comment_id: str
+    extremity_value: float  # Raw max difference
+    calculation_method: str  # e.g. "max_vote_diff"
+    calculation_timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+    component_values: Dict[str, float]  # {"agree_diff": 0.5, "disagree_diff": 0.3, "pass_diff": 0.1}

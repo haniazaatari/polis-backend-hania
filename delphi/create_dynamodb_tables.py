@@ -233,6 +233,33 @@ def create_evoc_tables(dynamodb, delete_existing=False):
     
     # Define table schemas for EVōC
     tables = {
+        # Comment extremity table
+        'Delphi_CommentExtremity': {
+            'KeySchema': [
+                {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
+                {'AttributeName': 'comment_id', 'AttributeType': 'S'},
+                {'AttributeName': 'calculation_method', 'AttributeType': 'S'}
+            ],
+            'GlobalSecondaryIndexes': [
+                {
+                    'IndexName': 'ByMethod',
+                    'KeySchema': [
+                        {'AttributeName': 'calculation_method', 'KeyType': 'HASH'},
+                        {'AttributeName': 'conversation_id', 'KeyType': 'RANGE'}
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                }
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
+        },
         # Report table
         'Delphi_NarrativeReports': {
             'KeySchema': [

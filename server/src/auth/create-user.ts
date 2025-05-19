@@ -210,7 +210,7 @@ function generateAndRegisterZinvite(zid: any, generateShort: any) {
   return Password.generateTokenP(len, false).then(function (zinvite: any) {
     return pg
       .queryP(
-        "INSERT INTO zinvites (zid, zinvite, created) VALUES ($1, $2, default);",
+        "INSERT INTO zinvites (zid, zinvite, created, uuid) VALUES ($1, $2, default, gen_random_uuid());",
         [zid, zinvite]
       )
       .then(function (rows: any) {

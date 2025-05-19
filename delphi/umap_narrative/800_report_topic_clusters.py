@@ -283,6 +283,35 @@ class ReportGenerator:
         # Initialize group data processor
         self.group_processor = GroupDataProcessor(self.postgres_client)
         
+        # Ensure group_processor has DynamoDB initialized
+        if not self.group_processor.dynamodb or not self.group_processor.extremity_table:
+            self.group_processor.init_dynamodb()
+            if not self.group_processor.dynamodb:
+                logger.warning("Failed to initialize DynamoDB in group processor")
+                
+        # Load all extremity values from DynamoDB for this conversation
+        try:
+            self.extremity_values_cache = self.group_processor.get_all_comment_extremity_values(int(self.conversation_id))
+            logger.info(f"Loaded {len(self.extremity_values_cache)} extremity values from DynamoDB for conversation {self.conversation_id}")
+            
+            # Log some statistics if we have values
+            if self.extremity_values_cache:
+                values = list(self.extremity_values_cache.values())
+                min_val = min(values)
+                max_val = max(values)
+                mean_val = sum(values) / len(values)
+                
+                # Count distribution
+                low_count = sum(1 for v in values if v < 0.3)
+                mid_count = sum(1 for v in values if 0.3 <= v < 0.7)
+                high_count = sum(1 for v in values if v >= 0.7)
+                
+                logger.info(f"Extremity statistics: range={min_val:.4f}-{max_val:.4f}, mean={mean_val:.4f}")
+                logger.info(f"Distribution: {low_count} low (<0.3), {mid_count} medium, {high_count} high (>=0.7)")
+        except Exception as e:
+            logger.error(f"Error loading extremity values from DynamoDB: {e}")
+            self.extremity_values_cache = {}
+        
         # Set up base path for prompt templates
         # Get the current script's directory and use it as base for prompt templates
         current_dir = Path(__file__).parent
@@ -340,10 +369,20 @@ class ReportGenerator:
         - 0.6 indicates extreme differences (60% difference in agreement)
         - 1 indicates maximum disagreement
         """
-        comment_extremity = comment.get('comment_extremity', 0)
-        comment_id = comment.get('comment_id', 'unknown')
-        logger.debug(f"Comment {comment_id}: extremity={comment_extremity}, threshold={self.extremity_threshold}")
-        return comment_extremity > self.extremity_threshold
+        comment_id = comment.get('comment_id', -1)
+        
+        # First check if we have cached extremity values from DynamoDB
+        if hasattr(self, 'extremity_values_cache') and comment_id in self.extremity_values_cache:
+            extremity_value = self.extremity_values_cache[comment_id]
+            # Update the comment object for consistency
+            comment['comment_extremity'] = extremity_value
+            logger.debug(f"Using cached extremity for comment {comment_id}: {extremity_value}")
+        else:
+            # Use the value from the comment object
+            extremity_value = comment.get('comment_extremity', 0)
+        
+        logger.debug(f"Comment {comment_id}: extremity={extremity_value}, threshold={self.extremity_threshold}")
+        return extremity_value > self.extremity_threshold
     
     def filter_topics(self, comment, topic_cluster_id=None, topic_citations=None, sample_comments=None):
         """Filter for comments that are part of a specific topic."""
