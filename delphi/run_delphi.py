@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import subprocess
+import sys
+
+# Define colors for output
+GREEN = '\033[0;32m'
+YELLOW = '\033[0;33m'
+RED = '\033[0;31m'
+NC = '\033[0m' # No Color
+
+def show_usage():
+    print("Process a Polis conversation with the Delphi analytics pipeline.")
+    print()
+    print("Usage: ./run_delphi.py --zid=CONVERSATION_ID [options]")
+    print()
+    print("Required arguments:")
+    print("  --zid=CONVERSATION_ID     The Polis conversation ID to process")
+    print()
+    print("Optional arguments:")
+    print("  --verbose                 Show detailed logs")
+    print("  --force                   Force reprocessing even if data exists")
+    print("  --validate                Run extra validation checks")
+    print("  --help                    Show this help message")
+
+def main():
+    parser = argparse.ArgumentParser(description="Process a Polis conversation with the Delphi analytics pipeline.", add_help=False)
+    parser.add_argument("--zid", required=True, help="The Polis conversation ID to process")
+    parser.add_argument("--verbose", action="store_true", help="Show detailed logs")
+    parser.add_argument("--force", action="store_true", help="Force reprocessing even if data exists")
+    parser.add_argument("--validate", action="store_true", help="Run extra validation checks")
+    parser.add_argument("--help", action="store_true", help="Show this help message")
+
+    args = parser.parse_args()
+
+    if args.help:
+        show_usage()
+        sys.exit(0)
+
+    zid = args.zid
+    verbose_arg = "--verbose" if args.verbose else ""
+    force_arg = "--force" if args.force else ""
+    # validate_arg is not used in the python script execution steps, but kept for parity with bash
+    # validate_arg = "--validate" if args.validate else ""
+
+
+    print(f"{GREEN}Processing conversation {zid}...{NC}")
+
+    # Set model
+    model = os.environ.get("OLLAMA_MODEL")
+    if not model:
+        print(f"{RED}Error: OLLAMA_MODEL environment variable not set.{NC}")
+        sys.exit(1)
+    print(f"{YELLOW}Using Ollama model: {model}{NC}")
+
+    # Set up environment for the pipeline
+    os.environ["PYTHONPATH"] = f"/app:{os.environ.get('PYTHONPATH', '')}"
+    os.environ["OLLAMA_HOST"] = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
+    # OLLAMA_MODEL is already set and checked
+    os.environ["DYNAMODB_ENDPOINT"] = os.environ.get("DYNAMODB_ENDPOINT", "http://dynamodb:8000")
+
+    max_votes = os.environ.get("MAX_VOTES")
+    max_votes_arg = f"--max-votes={max_votes}" if max_votes else ""
+    if max_votes:
+        print(f"{YELLOW}Limiting to {max_votes} votes for testing{NC}")
+
+    batch_size = os.environ.get("BATCH_SIZE")
+    batch_size_arg = f"--batch-size={batch_size}" if batch_size else "--batch-size=50000" # Default batch size
+    if batch_size:
+        print(f"{YELLOW}Using batch size of {batch_size}{NC}")
+    else:
+        print(f"{YELLOW}Using batch size of 50000 (default){NC}")
+
+
+    # Run the math pipeline
+    print(f"{GREEN}Running math pipeline...{NC}")
+    math_command = [
+        "python", "/app/polismath/run_math_pipeline.py",
+        f"--zid={zid}",
+    ]
+    if max_votes_arg:
+        math_command.append(max_votes_arg)
+    if batch_size_arg:
+        math_command.append(batch_size_arg)
+
+    math_process = subprocess.run(math_command)
+    math_exit_code = math_process.returncode
+
+    if math_exit_code != 0:
+        print(f"{RED}Math pipeline failed with exit code {math_exit_code}{NC}")
+        sys.exit(math_exit_code)
+
+    # Run the UMAP narrative pipeline
+    print(f"{GREEN}Running UMAP narrative pipeline...{NC}")
+    umap_command = [
+        "python", "/app/umap_narrative/run_pipeline.py",
+        f"--zid={zid}",
+        "--use-ollama"
+    ]
+    if verbose_arg:
+        umap_command.append(verbose_arg)
+
+    pipeline_process = subprocess.run(umap_command)
+    pipeline_exit_code = pipeline_process.returncode
+
+    # Calculate and store comment extremity values
+    print(f"{GREEN}Calculating comment extremity values...{NC}")
+    extremity_command = [
+        "python", "/app/umap_narrative/501_calculate_comment_extremity.py",
+        f"--zid={zid}",
+    ]
+    if verbose_arg:
+        extremity_command.append(verbose_arg)
+    if force_arg:
+        extremity_command.append(force_arg)
+    
+    extremity_process = subprocess.run(extremity_command)
+    extremity_exit_code = extremity_process.returncode
+
+    if extremity_exit_code != 0:
+        print(f"{RED}Warning: Extremity calculation failed with exit code {extremity_exit_code}{NC}")
+        print("Continuing with visualization...")
+
+    if pipeline_exit_code == 0:
+        print(f"{YELLOW}Creating visualizations with datamapplot...{NC}")
+
+        # Create output directory
+        output_dir = f"/app/polis_data/{zid}/python_output/comments_enhanced_multilayer"
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Generate layer 0 visualization
+        datamap_command = [
+            "python", "/app/umap_narrative/700_datamapplot_for_layer.py",
+            f"--conversation_id={zid}",
+            "--layer=0",
+            f"--output_dir={output_dir}"
+        ]
+        if verbose_arg:
+            datamap_command.append(verbose_arg)
+        
+        subprocess.run(datamap_command) # Not checking exit code here, same as bash
+
+        print(f"{GREEN}UMAP Narrative pipeline completed successfully!{NC}")
+        print(f"Results stored in DynamoDB and visualizations for conversation {zid}")
+    else:
+        print(f"{RED}Warning: UMAP Narrative pipeline returned non-zero exit code: {pipeline_exit_code}{NC}")
+        print("The pipeline may have encountered errors but might still have produced partial results.")
+        # Don't fail the overall script, just warn
+        pipeline_exit_code = 0
+
+
+    exit_code = pipeline_exit_code # Based on the logic, this will be 0 unless math pipeline failed earlier
+
+    if exit_code == 0: # This condition relies on math_exit_code check above.
+        print(f"{GREEN}Pipeline completed successfully!{NC}")
+        print(f"Results stored in DynamoDB for conversation {zid}")
+    else:
+        # This part of the logic seems unreachable given the sys.exit() after math_pipeline failure
+        # and resetting pipeline_exit_code to 0 in the warning case.
+        # However, keeping it for structural parity.
+        print(f"{RED}Pipeline failed with exit code {exit_code}{NC}")
+        print("Please check logs for more details")
+
+    sys.exit(exit_code)
+
+if __name__ == "__main__":
+    main() 
