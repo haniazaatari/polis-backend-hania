@@ -138,7 +138,7 @@ export async function handle_GET_delphi_visualizations(
         );
         if (s3Response.Contents && s3Response.Contents.length > 0) {
           // Log first few keys for debugging
-          const keys = s3Response.Contents.slice(0, 3).map((obj: { Key: string}) => obj.Key);
+          const keys = s3Response.Contents.slice(0, 3).map(obj => obj.Key);
           logger.info(`Sample object keys: ${JSON.stringify(keys)}`);
         }
       } catch (s3Error: any) {
