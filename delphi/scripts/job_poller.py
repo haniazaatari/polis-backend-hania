@@ -447,7 +447,7 @@ class JobProcessor:
             job_config = json.loads(job.get('job_config', '{}'))
             
             # Determine which script to run based on job type
-            job_type = job.get('job_type', 'FULL_PIPELINE')
+            job_type = job.get('job_type')
 
             if job_type == 'CREATE_NARRATIVE_BATCH':
                 # This is a new batch submission
@@ -507,9 +507,9 @@ class JobProcessor:
                 # For batch status check jobs, we don't need any additional configuration
                 logger.info(f"Executing batch status check command: {' '.join(cmd)}")
 
-            else:
+            elif job_type == 'FULL_PIPELINE':
                 # Default: run the standard pipeline
-                cmd = ['./run_delphi.sh', f'--zid={conversation_id}']
+                cmd = ['python', './run_delphi.py', f'--zid={conversation_id}']
 
                 # Add any additional arguments from job_config
                 if job_config:
@@ -528,6 +528,15 @@ class JobProcessor:
                         cmd.append(f"--max-votes={job_config['max_votes']}")
                     if 'batch_size' in job_config:
                         cmd.append(f"--batch-size={job_config['batch_size']}")
+            else:
+                error_message = f"Unrecognized or missing job_type: '{job_type}' for job {job_id}. Expected one of 'CREATE_NARRATIVE_BATCH', 'AWAITING_NARRATIVE_BATCH', 'FULL_PIPELINE'."
+                logger.error(error_message)
+                self.update_job_logs(job, {
+                    'level': 'ERROR',
+                    'message': error_message
+                })
+                self.complete_job(job, False, error=error_message)
+                return False
             
             # Log the command
             self.update_job_logs(job, {
@@ -543,7 +552,7 @@ class JobProcessor:
             os.chdir(script_dir)
             
             # Ensure we have execute permissions on the script
-            os.chmod('./run_delphi.sh', 0o755)
+            os.chmod('./run_delphi.py', 0o755)
             
             logger.info(f"Running command from {os.getcwd()}: {' '.join(cmd)}")
             
