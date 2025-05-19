@@ -77,5 +77,5 @@ CMD ["bash", "-c", "\
     fi && \
     \
     echo 'Starting job poller...' && \
-    POLL_INTERVAL=${POLL_INTERVAL:-2} ./start_poller.sh \
+    python delphi/scripts/job_poller.py --interval=2\
 "]
