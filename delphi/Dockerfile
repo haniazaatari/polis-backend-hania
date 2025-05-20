@@ -43,7 +43,7 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY polismath/ ./polismath/
-COPY scripts/ ./scripts/  # This copies your local 'scripts' dir to /app/scripts/
+COPY scripts/ ./scripts/
 COPY umap_narrative/ ./umap_narrative/
 
 RUN mkdir -p data
@@ -54,10 +54,11 @@ ENV PYTHONPATH "${PYTHONPATH}:/app"
 
 COPY start_poller.sh .
 COPY run_delphi.sh .
+COPY run_delphi.py .
 COPY create_dynamodb_tables.py .
 COPY setup_minio.py .
 COPY scripts/setup_ollama.sh ./setup_ollama.sh
-RUN chmod +x start_poller.sh run_delphi.sh setup_ollama.sh
+RUN chmod +x start_poller.sh run_delphi.sh run_delphi.py setup_ollama.sh
 
 CMD ["bash", "-c", "\
     echo 'Ensuring DynamoDB tables are set up (runs in all environments)...'; \
@@ -73,5 +74,5 @@ CMD ["bash", "-c", "\
     fi && \
     \
     echo 'Starting job poller...' && \
-    python delphi/scripts/job_poller.py --interval=2\
+    python scripts/job_poller.py --interval=2\
 "]
