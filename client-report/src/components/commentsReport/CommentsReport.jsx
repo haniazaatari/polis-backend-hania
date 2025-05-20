@@ -593,7 +593,7 @@ const CommentsReport = () => {
                         ))}
 
                         {/* Add comment list for referenced comments */}
-                        {citationIds.length > 0 && (
+                        {/* {citationIds.length > 0 && (
                           <div style={{ marginTop: 50 }}>
                             <h5>Referenced Comments</h5>
                             <CommentList
@@ -610,7 +610,7 @@ const CommentsReport = () => {
                               }}
                             />
                           </div>
-                        )}
+                        )} */}
                       </article>
                     );
                   } catch (error) {
