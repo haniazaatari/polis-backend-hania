@@ -4,7 +4,7 @@ import { useReportId } from "../framework/useReportId";
 import getNarrativeJSON from "../../util/getNarrativeJSON";
 import CommentList from "../lists/commentList.jsx";
 
-const CommentsReport = () => {
+const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, voteColors }) => {
   const { report_id } = useReportId();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -534,23 +534,39 @@ const CommentsReport = () => {
                       <p>Not enough data has been provided for analysis, please check back later</p>
                     );
 
+                  if (
+                    typeof report.report_data !== "string" ||
+                    !report.report_data.trim().startsWith("{") ||
+                    !report.report_data.trim().endsWith("}")
+                  ) {
+                    return (
+                      <article style={{ maxWidth: "600px" }}>
+                        <h5>Report data is not in the expected JSON format.</h5>
+                        <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                          {report.report_data}
+                        </pre>
+                      </article>
+                    );
+                  }
+
                   try {
-                    // The report_data is directly the JSON string, not using modelResponse property
                     const respData = JSON.parse(report.report_data);
 
-                    // Extract all citation IDs from the narrative structure
-                    const extractCitations = (data) => {
-                      const citations = [];
+                    const extractCitationsForThisSection = (data) => {
+                      const collectedCitations = [];
 
                       if (data?.paragraphs) {
-                        data.paragraphs.forEach((paragraph) => {
+                        data.paragraphs.forEach((paragraph, pIdx) => {
                           if (paragraph?.sentences) {
-                            paragraph.sentences.forEach((sentence) => {
+                            paragraph.sentences.forEach((sentence, sIdx) => {
                               if (sentence?.clauses) {
-                                sentence.clauses.forEach((clause) => {
+                                sentence.clauses.forEach((clause, clIdx) => {
                                   if (clause?.citations && Array.isArray(clause.citations)) {
-                                    clause.citations.forEach((citation) => {
-                                      citations.push(citation);
+                                    clause.citations.forEach((citation, citIdx) => {
+                                      if (typeof citation === "number") {
+                                        collectedCitations.push(citation);
+                                      } else {
+                                      }
                                     });
                                   }
                                 });
@@ -559,31 +575,41 @@ const CommentsReport = () => {
                           }
                         });
                       }
+                      const uniqueCitations = [...new Set(collectedCitations)];
 
-                      return [...new Set(citations)]; // Deduplicate
+                      return uniqueCitations;
                     };
 
-                    const citationIds = extractCitations(respData);
-                    console.log("Extracted citation IDs:", citationIds);
+                    const sectionCitationIds = extractCitationsForThisSection(respData);
+
+                    // DEBUG: Check if all sectionCitationIds are in the main 'comments' prop
+                    const allTidsFound = sectionCitationIds.every((tid) =>
+                      comments.find((comment) => comment.tid === tid)
+                    );
+                    const missingTids = sectionCitationIds.filter(
+                      (tid) => !comments.find((comment) => comment.tid === tid)
+                    );
+
+                    // END DEBUG
 
                     return (
                       <article style={{ maxWidth: "600px" }}>
-                        {respData?.paragraphs?.map((section) => (
-                          <div key={section.id}>
-                            <h5>{section.title}</h5>
-                            {section.sentences.map((sentence, idx) => (
+                        {respData?.paragraphs?.map((pSection) => (
+                          <div key={pSection.id}>
+                            <h5>{pSection.title}</h5>
+                            {pSection.sentences.map((sentence, idx) => (
                               <p key={idx}>
                                 {sentence.clauses.map((clause, cIdx) => (
                                   <span key={cIdx}>
                                     {clause.text}
-                                    {clause.citations?.map((citation, citIdx) => (
-                                      <sup key={citIdx}>
-                                        {typeof citation === "object"
-                                          ? Object.entries(citation)[1]
-                                          : citation}
-                                        {citIdx < clause.citations.length - 1 ? ", " : ""}
-                                      </sup>
-                                    ))}
+                                    {clause.citations
+                                      ?.filter((c) => typeof c === "number")
+                                      .map((citation, citIdx, arr) => (
+                                        <sup key={citIdx}>
+                                          {citation}
+                                          {citIdx < arr.length - 1 ? ", " : ""}
+                                        </sup>
+                                      ))}
                                     {cIdx < sentence.clauses.length - 1 ? " " : ""}
                                   </span>
                                 ))}
@@ -592,32 +618,37 @@ const CommentsReport = () => {
                           </div>
                         ))}
 
-                        {/* Add comment list for referenced comments */}
-                        {/* {citationIds.length > 0 && (
+                        {sectionCitationIds.length > 0 && (
                           <div style={{ marginTop: 50 }}>
                             <h5>Referenced Comments</h5>
                             <CommentList
-                              conversation={null}
-                              ptptCount={0}
-                              math={math || {}}
-                              formatTid={(tid) => tid}
-                              tidsToRender={citationIds}
-                              comments={comments || []}
-                              voteColors={{
-                                agree: "#7FD47F",
-                                disagree: "#E95454",
-                                pass: "#999999",
-                              }}
+                              conversation={conversation}
+                              ptptCount={ptptCount}
+                              math={math}
+                              formatTid={formatTid}
+                              tidsToRender={sectionCitationIds} // Pass section-specific TIDs
+                              comments={comments}
+                              voteColors={voteColors}
                             />
                           </div>
-                        )} */}
+                        )}
                       </article>
                     );
                   } catch (error) {
-                    console.error(error);
+                    console.error(
+                      `[${sectionKey}] Error processing narrative report section:`,
+                      error,
+                      "Report data was:",
+                      report.report_data
+                    );
                     return (
                       <article style={{ maxWidth: "600px" }}>
-                        <h5>An error occurred</h5>
+                        <h5>An error occurred while processing this report section.</h5>
+                        <pre>{error.message}</pre>
+                        <p>Problematic data for section {sectionKey}:</p>
+                        <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                          {report.report_data}
+                        </pre>
                       </article>
                     );
                   }
