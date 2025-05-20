@@ -63,7 +63,14 @@ def setup_dynamodb(endpoint_url=None, region='us-west-2'):
     
     return boto3.resource('dynamodb', endpoint_url=endpoint_url, region_name=region)
 
-def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50, max_votes=None, batch_size=None):
+def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50, 
+               max_votes=None, batch_size=None, # For FULL_PIPELINE/PCA
+               model=None, # For FULL_PIPELINE's REPORT stage & CREATE_NARRATIVE_BATCH
+               # Parameters for CREATE_NARRATIVE_BATCH stage config
+               report_id_for_stage=None, 
+               max_batch_size_stage=None, # Renamed to avoid conflict with general batch_size
+               no_cache_stage=False 
+               ):
     """Submit a job to the Delphi job queue."""
     table = dynamodb.Table('Delphi_JobQueue')
     
@@ -84,7 +91,7 @@ def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50, max_votes=N
         pca_config = {}
         if max_votes:
             pca_config['max_votes'] = int(max_votes)
-        if batch_size:
+        if batch_size: # This is the general batch_size for PCA
             pca_config['batch_size'] = int(batch_size)
         stages.append({"stage": "PCA", "config": pca_config})
         
@@ -101,7 +108,7 @@ def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50, max_votes=N
         stages.append({
             "stage": "REPORT",
             "config": {
-                "model": "claude-3-7-sonnet-20250219",
+                "model": model if model else "claude-3-7-sonnet-20250219", # Use provided model or default
                 "include_topics": True
             }
         })
@@ -109,6 +116,29 @@ def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50, max_votes=N
         # Visualization
         job_config['stages'] = stages
         job_config['visualizations'] = ["basic", "enhanced", "multilayer"]
+
+    elif job_type == 'CREATE_NARRATIVE_BATCH':
+        if not report_id_for_stage:
+            raise ValueError("report_id_for_stage is required for CREATE_NARRATIVE_BATCH job type.")
+        
+        # Default values if not provided, matching typical expectations or server defaults if known
+        current_model = model if model else "claude-3-7-sonnet-20250219" # Default model
+        current_max_batch_size = int(max_batch_size_stage) if max_batch_size_stage is not None else 100 # Default batch size for stage
+        
+        job_config = {
+            "job_type": "CREATE_NARRATIVE_BATCH", # As per the TS snippet
+            "stages": [
+                {
+                    "stage": "CREATE_NARRATIVE_BATCH_CONFIG_STAGE",
+                    "config": {
+                        "model": current_model,
+                        "max_batch_size": current_max_batch_size,
+                        "no_cache": no_cache_stage, # boolean
+                        "report_id": report_id_for_stage,
+                    },
+                },
+            ],
+        }
     
     # Create job item with version number for optimistic locking
     # Use empty strings instead of None for DynamoDB compatibility
@@ -319,7 +349,7 @@ def interactive_mode():
             zid = Prompt.ask("[bold]Enter conversation ID (zid)[/bold]")
             job_type = Prompt.ask(
                 "[bold]Job type[/bold]", 
-                choices=["FULL_PIPELINE", "PCA", "UMAP", "REPORT"],
+                choices=["FULL_PIPELINE", "CREATE_NARRATIVE_BATCH"],
                 default="FULL_PIPELINE"
             )
             priority = int(Prompt.ask("[bold]Priority[/bold] (0-100)", default="50"))
@@ -327,15 +357,30 @@ def interactive_mode():
             # Optional parameters
             max_votes = None
             batch_size = None
+            model_param = None 
+            # CREATE_NARRATIVE_BATCH specific stage params
+            report_id_stage_param = None
+            max_batch_size_stage_param = None
+            no_cache_stage_param = False
             
-            if Confirm.ask("Would you like to set advanced parameters?"):
-                max_votes = Prompt.ask("Maximum votes to process", default="")
-                if not max_votes:
-                    max_votes = None
+            if job_type == "FULL_PIPELINE":
+                if Confirm.ask("Set parameters for FULL_PIPELINE (max_votes, batch_size, model)?"):
+                    max_votes_input = Prompt.ask("Max votes (optional)", default="")
+                    if max_votes_input: max_votes = max_votes_input
                     
-                batch_size = Prompt.ask("Batch size", default="")
-                if not batch_size:
-                    batch_size = None
+                    batch_size_input = Prompt.ask("Batch size (optional)", default="")
+                    if batch_size_input: batch_size = batch_size_input
+
+                    model_input = Prompt.ask("Model for REPORT stage (optional, e.g., claude-3-7-sonnet-20250219)", default="")
+                    if model_input: model_param = model_input
+            
+            elif job_type == "CREATE_NARRATIVE_BATCH":
+                report_id_stage_param = Prompt.ask("[bold]Report ID (for stage config)[/bold]")
+                model_param = Prompt.ask("[bold]Model[/bold] (e.g., claude-3-7-sonnet-20250219)", default="claude-3-7-sonnet-20250219")
+                max_batch_size_input = Prompt.ask("Max batch size (for stage config, optional, default 100)", default="")
+                if max_batch_size_input:
+                    max_batch_size_stage_param = max_batch_size_input
+                no_cache_stage_param = Confirm.ask("Enable no-cache for stage?", default=False)
             
             # Confirm submission
             if Confirm.ask(f"Submit job for conversation {zid}?"):
@@ -351,7 +396,12 @@ def interactive_mode():
                         job_type=job_type,
                         priority=priority,
                         max_votes=max_votes,
-                        batch_size=batch_size
+                        batch_size=batch_size,
+                        model=model_param, # Pass the collected model
+                        # CREATE_NARRATIVE_BATCH specific stage params
+                        report_id_for_stage=report_id_stage_param,
+                        max_batch_size_stage=max_batch_size_stage_param,
+                        no_cache_stage=no_cache_stage_param
                     )
                 
                 console.print(f"[bold green]Job submitted with ID: {job_id}[/bold green]")
@@ -751,12 +801,19 @@ def main():
     submit_parser = subparsers.add_parser("submit", help="Submit a new job")
     submit_parser.add_argument("--zid", required=True, help="Conversation ID (zid)")
     submit_parser.add_argument("--job-type", default="FULL_PIPELINE", 
-                               choices=["FULL_PIPELINE", "PCA", "UMAP", "REPORT"],
+                               choices=["FULL_PIPELINE", "CREATE_NARRATIVE_BATCH"],
                                help="Type of job to submit")
     submit_parser.add_argument("--priority", type=int, default=50, 
                                help="Job priority (0-100)")
-    submit_parser.add_argument("--max-votes", help="Maximum votes to process")
-    submit_parser.add_argument("--batch-size", help="Batch size for processing")
+    submit_parser.add_argument("--max-votes", help="Maximum votes to process (for FULL_PIPELINE/PCA)")
+    submit_parser.add_argument("--batch-size", help="Batch size for processing (for FULL_PIPELINE/PCA)")
+    # General model argument, used by FULL_PIPELINE's REPORT stage and CREATE_NARRATIVE_BATCH
+    submit_parser.add_argument("--model", help="Model to use (e.g., claude-3-7-sonnet-20250219)")
+
+    # Arguments for CREATE_NARRATIVE_BATCH stage config
+    submit_parser.add_argument("--report-id-stage", help="Report ID for the CREATE_NARRATIVE_BATCH stage config")
+    submit_parser.add_argument("--max-batch-size-stage", type=int, help="Max batch size for the CREATE_NARRATIVE_BATCH stage config")
+    submit_parser.add_argument("--no-cache-stage", action="store_true", help="Enable no-cache for the CREATE_NARRATIVE_BATCH stage (default: False)")
     
     # List command
     list_parser = subparsers.add_parser("list", help="List jobs")
@@ -800,13 +857,24 @@ def main():
     
     # Handle commands
     if args.command == "submit":
+        # Validate arguments for CREATE_NARRATIVE_BATCH
+        if args.job_type == 'CREATE_NARRATIVE_BATCH':
+            if not args.report_id_stage:
+                parser.error("--report-id-stage is required when --job-type is CREATE_NARRATIVE_BATCH")
+            # model, max_batch_size_stage, no_cache_stage have defaults or are optional in submit_job if not provided here
+        
         job_id = submit_job(
             dynamodb=dynamodb,
             zid=args.zid,
             job_type=args.job_type,
             priority=args.priority,
             max_votes=args.max_votes,
-            batch_size=args.batch_size
+            batch_size=args.batch_size,
+            model=args.model, # General model
+            # CREATE_NARRATIVE_BATCH specific stage params
+            report_id_for_stage=args.report_id_stage,
+            max_batch_size_stage=args.max_batch_size_stage,
+            no_cache_stage=args.no_cache_stage
         )
         
         if RICH_AVAILABLE and IS_TERMINAL:
