@@ -509,7 +509,8 @@ class JobProcessor:
 
             elif job_type == 'FULL_PIPELINE':
                 # Default: run the standard pipeline
-                cmd = ['python', './run_delphi.py', f'--zid={conversation_id}']
+                script_path = '/app/run_delphi.py'  # Absolute path
+                cmd = ['python', script_path, f'--zid={conversation_id}']
 
                 # Add any additional arguments from job_config
                 if job_config:
@@ -545,14 +546,14 @@ class JobProcessor:
             })
             
             # Change directory to delphi folder
-            os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            # os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # REMOVED
             
             # Change directory to the root of the repository
-            script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            os.chdir(script_dir)
+            # script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # REMOVED
+            # os.chdir(script_dir) # REMOVED
             
             # Ensure we have execute permissions on the script
-            os.chmod('./run_delphi.py', 0o755)
+            # os.chmod('./run_delphi.py', 0o755) # REMOVED - Handled in FULL_PIPELINE block
             
             logger.info(f"Running command from {os.getcwd()}: {' '.join(cmd)}")
             
