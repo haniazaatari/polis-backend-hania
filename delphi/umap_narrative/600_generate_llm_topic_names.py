@@ -47,10 +47,6 @@ def setup_environment(dynamo_endpoint=None):
     if dynamo_endpoint:
         os.environ['DYNAMODB_ENDPOINT'] = dynamo_endpoint
     elif not os.environ.get('DYNAMODB_ENDPOINT'):
-        # Only set if not already in environment
-        if not os.environ.get('DYNAMODB_ENDPOINT'):
-            os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
-        
         # Log the endpoint being used
         endpoint = os.environ.get('DYNAMODB_ENDPOINT')
         logger.info(f"Using DynamoDB endpoint: {endpoint}")
@@ -63,7 +59,7 @@ def setup_environment(dynamo_endpoint=None):
         os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
     
     if not os.environ.get('AWS_DEFAULT_REGION'):
-        os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
+        os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
     
     logger.info(f"DynamoDB endpoint: {os.environ.get('DYNAMODB_ENDPOINT')}")
     logger.info(f"AWS region: {os.environ.get('AWS_DEFAULT_REGION')}")
@@ -816,7 +812,7 @@ def main():
     parser.add_argument('--output_dir', type=str, default="polis_data",
                       help='Base directory for output files (default: polis_data)')
     parser.add_argument('--dynamo_endpoint', type=str, default=None,
-                      help='DynamoDB endpoint URL (default: http://localhost:8000)')
+                      help='DynamoDB endpoint URL')
     parser.add_argument('--start_cluster', type=int, default=None,
                       help='Starting cluster ID for processing a range (inclusive)')
     parser.add_argument('--end_cluster', type=int, default=None,

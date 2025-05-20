@@ -111,11 +111,7 @@ class PostgresConfig:
         password_str = f":{self.password}" if self.password else ""
         
         # Build URI
-        uri = f"postgresql://{self.user}{password_str}@{self.host}:{self.port}/{self.database}"
-        
-        # Add SSL mode if needed
-        if self.ssl_mode and self.ssl_mode != 'prefer':
-            uri += f"?sslmode={self.ssl_mode}"
+        uri = f"postgresql://{self.user}{password_str}@{self.host}:{self.port}/{self.database}?sslmode=require"
         
         return uri
     
@@ -379,7 +375,7 @@ class DynamoDBStorage:
             endpoint_url: Optional endpoint URL for local DynamoDB
         """
         # Get settings from environment variables with fallbacks
-        self.region_name = region_name or os.environ.get('AWS_REGION', 'us-west-2')
+        self.region_name = region_name or os.environ.get('AWS_REGION', 'us-east-1')
         self.endpoint_url = endpoint_url or os.environ.get('DYNAMODB_ENDPOINT')
         
         # Get AWS credentials from environment variables

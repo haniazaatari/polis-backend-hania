@@ -40,7 +40,7 @@ def init_dynamodb():
     # Create and initialize the client
     client = DynamoDBClient(
         endpoint_url='http://localhost:8000',
-        region_name='us-west-2',
+        region_name='us-east-1',
         aws_access_key_id='dummy',
         aws_secret_access_key='dummy'
     )

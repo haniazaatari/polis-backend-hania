@@ -49,6 +49,7 @@ services:
     volumes:
       # Persist logs to a volume, so they can be accessed after the container is stopped.
       - server-logs:/app/logs
+    restart: unless-stopped
 
   math:
     image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis/math:latest
@@ -64,6 +65,7 @@ services:
       - WEBSERVER_PASS=${WEBSERVER_PASS}
     networks:
       - "polis-net"
+    restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
  
@@ -78,17 +80,17 @@ services:
       - LOG_LEVEL=${DELPHI_LOG_LEVEL:-INFO}
       - DELPHI_DEV_OR_PROD=${DELPHI_DEV_OR_PROD:-prod}
       # DynamoDB connection settings for local mode (will be overridden in prod)
-      - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT:-http://dynamodb:8000}
+      - DYNAMODB_ENDPOINT=${DYNAMODB_ENDPOINT}
       - POLL_INTERVAL=${POLL_INTERVAL:-2}
       # Ollama connection
-      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_HOST=${OLLAMA_HOST:-http://ollama:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
       # AWS environment variables (will be provided in prod)
       - AWS_REGION=${AWS_REGION:-us-east-1}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       # S3 storage for visualization files
-      - AWS_S3_ENDPOINT=${AWS_S3_ENDPOINT:-http://minio:9000}
+      - AWS_S3_ENDPOINT=${AWS_S3_ENDPOINT}
       - AWS_S3_ACCESS_KEY_ID=${AWS_S3_ACCESS_KEY_ID:-minioadmin}
       - AWS_S3_SECRET_ACCESS_KEY=${AWS_S3_SECRET_ACCESS_KEY:-minioadmin}
       - AWS_S3_BUCKET_NAME=${AWS_S3_BUCKET_NAME:-delphi}
@@ -101,9 +103,6 @@ services:
       - DATABASE_USER=${POSTGRES_USER:-christian}
       - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-polis123}
       - DATABASE_SSL_MODE=${DATABASE_SSL_MODE:-disable}
-    depends_on:
-      - dynamodb
-      - ollama
     networks:
       - "polis-net"
     extra_hosts:
@@ -113,6 +112,7 @@ services:
         limits:
           memory: ${DELPHI_CONTAINER_MEMORY:-4g}
           cpus: ${DELPHI_CONTAINER_CPUS:-2}
+    restart: unless-stopped
 
   postgres:
     restart: always
@@ -181,6 +181,8 @@ services:
     user: root
     labels:
       polis_tag: ${TAG:-dev}
+    profiles:
+      - local-services
 
   # Ollama for LLM processing
   ollama:
@@ -215,6 +217,8 @@ services:
     command: server /data --console-address ":9001"
     networks:
       - "polis-net"
+    profiles:
+      - local-services
 
 networks:
   polis-net:

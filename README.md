@@ -43,7 +43,7 @@ If you're trying to set up a Polis deployment or development environment, then p
 Polis comes with Docker infrastructure for running a complete system, whether for a [production deployment](#-production-deployment) or a [development environment](#-development-tooling) (details for each can be found in later sections of this document).
 As a consequence, the only prerequisite to running Polis is that you install a recent `docker` (and Docker Desktop if you are on Mac or Windows).
 
-If you aren't able to use Docker for some reason, the various Dockerfiles found in subdirectories (`math`, `server`, `*-client`) of this repository _can_ be used as a reference for how you'd set up a system manually.
+If you aren't able to use Docker for some reason, the various Dockerfiles found in subdirectories (`math`, `server`, `delphi`, `*-client`) of this repository _can_ be used as a reference for how you'd set up a system manually.
 If you're interested in doing the legwork to support alternative infrastructure, please [let us know in an issue](https://github.com/compdemocracy.org/issues).
 
 ### Quick Start
@@ -79,7 +79,7 @@ cp example.env .env
 
 
 ```sh
-docker compose --profile postgres up --build
+docker compose --profile postgres --profile local-services up --build
 ```
 
 If you get a permission error, try running this command with `sudo`.
@@ -89,7 +89,7 @@ To avoid having to use `sudo` in the future (on a Linux or Windows machine with 
 Once you've built the docker images, you can run without `--build`, which may be faster. Run
 
 ```sh
-docker compose --profile postgres up
+docker compose --profile postgres --profile local-services up
 ```
 
 or simply
@@ -105,14 +105,14 @@ If you have only changed configuration values in .env, you can recreate your con
 fully rebuilding them with `--force-recreate`. For example:
 
 ```sh
-docker compose --profile postgres down
-docker compose --profile postgres up --force-recreate
+docker compose --profile postgres --profile local-services down
+docker compose --profile postgres --profile local-services up --force-recreate
 ```
 
 To see what the environment of your containers is going to look like, run:
 
 ```sh
-docker compose --profile postgres convert
+docker compose --profile postgres --profile local-services convert
 ```
 
 #### Using a local or remote (non-docker) database
@@ -139,6 +139,22 @@ make PROD start
 make PROD start-rebuild
 ```
 
+### Running without Local Cloud Service Emulators
+If you want to run the stack without the local MinIO and DynamoDB services (e.g., to test connecting to real AWS services configured in your .env file), simply omit the --profile local-services flag.
+
+Example: Run with the containerized DB but connect to external/real cloud services:
+
+```sh
+docker compose --profile postgres up
+```
+
+Example: Run with an external DB and external/real cloud services (closest to production):
+
+```sh
+docker compose up
+```
+
+
 ### Testing out your instance
 
 You can now test your setup by visiting `http://localhost:80/home`.
@@ -146,7 +162,7 @@ You can now test your setup by visiting `http://localhost:80/home`.
 Once the index page loads, you can create an account using the `/createuser` path.
 You'll be logged in right away; email validation is not required.
 
-When you're done working, you can end the process using `Ctrl+C`, or typing `docker compose --profile postgres down`
+When you're done working, you can end the process using `Ctrl+C`, or typing `docker compose --profile postgres --profile local-services down`
 if you are running in "detached mode".
 
 ### Updating the system
@@ -227,7 +243,7 @@ git config --local include.path ../.gitconfig
 
 #### Running as a background process
 
-If you would like to run docker compose as a background process, run the `up` commands with the `--detach` flag, and use `docker compose --profile postgres down` to stop.
+If you would like to run docker compose as a background process, run the `up` commands with the `--detach` flag, and use `docker compose --profile postgres --profile local-services down` to stop.
 
 #### Using Docker Machine as your development environment
 

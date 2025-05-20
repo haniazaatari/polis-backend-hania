@@ -8,7 +8,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 POLLER_SCRIPT="$SCRIPT_DIR/scripts/job_poller.py"
 
 # Default options
-ENDPOINT_URL="${DYNAMODB_ENDPOINT:-http://localhost:8000}"
+ENDPOINT_URL="${DYNAMODB_ENDPOINT}"
 POLL_INTERVAL="${POLL_INTERVAL:-10}"
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
 MAX_WORKERS="${MAX_WORKERS:-1}"

@@ -34,10 +34,10 @@ DB_CONFIG = {
 }
 
 DYNAMODB_CONFIG = {
-    'endpoint_url': os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000'),
-    'region': os.environ.get('AWS_REGION', 'us-west-2'),
-    'access_key': os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-    'secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+    'endpoint_url': os.environ.get('DYNAMODB_ENDPOINT'),
+    'region': os.environ.get('AWS_REGION', 'us-east-1'),
+    'access_key': os.environ.get('AWS_ACCESS_KEY_ID', None),
+    'secret_key': os.environ.get('AWS_SECRET_ACCESS_KEY', None)
 }
 
 # Visualization settings - controls the extremity scale and color mapping
@@ -62,7 +62,10 @@ except ImportError:
     # Define minimal versions of the required classes if imports fail
     class DynamoDBStorage:
         def __init__(self, endpoint_url=None):
-            self.endpoint_url = endpoint_url or DYNAMODB_CONFIG['endpoint_url']
+            if endpoint_url: # Checks if endpoint_url is a truthy value (not None, not empty string)
+                self.endpoint_url = endpoint_url
+            else:
+                self.endpoint_url = None
             self.region = DYNAMODB_CONFIG['region']
             self.dynamodb = boto3.resource('dynamodb', 
                                           endpoint_url=self.endpoint_url, 
@@ -103,10 +106,10 @@ def load_data_from_dynamodb(zid, layer_num=0):
     logger.info(f'Loading UMAP positions and cluster data for conversation {zid}, layer {layer_num}')
     
     # Set up DynamoDB client
-    endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://dynamodb-local:8000')
+    endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
     dynamodb = boto3.resource('dynamodb', 
                              endpoint_url=endpoint_url,
-                             region_name=os.environ.get('AWS_REGION', 'us-west-2'),
+                             region_name=os.environ.get('AWS_REGION', 'us-east-1'),
                              aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
                              aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey'))
     

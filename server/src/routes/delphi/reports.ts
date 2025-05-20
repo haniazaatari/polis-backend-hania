@@ -3,6 +3,7 @@ import logger from "../../utils/logger";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { getZidFromReport } from "../../utils/parameter";
+import Config from "../../config";
 
 /**
  * Handler for Delphi API route that retrieves LLM-generated reports from DynamoDB
@@ -36,9 +37,9 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
 
     // Force using local DynamoDB by hardcoding the endpoint
     const dynamoDBConfig: any = {
-      region: process.env.AWS_REGION || "us-east-1",
+      region: Config.AWS_REGION || "us-east-1",
       // Force to use the local DynamoDB endpoint
-      endpoint: "http://dynamodb:8000"
+      endpoint: Config.DYNAMODB_ENDPOINT,
     };
     
     // Log what we're using
@@ -48,8 +49,8 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
     
     // For local DynamoDB, use dummy credentials
     dynamoDBConfig.credentials = {
-      accessKeyId: 'DUMMYIDEXAMPLE',
-      secretAccessKey: 'DUMMYEXAMPLEKEY'
+      accessKeyId: Config.AWS_ACCESS_KEY_ID,
+      secretAccessKey: Config.AWS_S3_SECRET_ACCESS_KEY
     };
 
     // Create DynamoDB clients

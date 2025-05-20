@@ -68,11 +68,6 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
     logger.info(f"- DATABASE: {os.environ.get('DATABASE_NAME')}")
     logger.info(f"- USER: {os.environ.get('DATABASE_USER')}")
     
-    # DynamoDB settings (for local DynamoDB)
-    # Only set if not already in environment
-    if not os.environ.get('DYNAMODB_ENDPOINT'):
-        os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
-    
     # Log the endpoint being used
     endpoint = os.environ.get('DYNAMODB_ENDPOINT')
     logger.info(f"Using DynamoDB endpoint: {endpoint}")
@@ -83,7 +78,7 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
     if not os.environ.get('AWS_SECRET_ACCESS_KEY'):
         os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
     if not os.environ.get('AWS_REGION') and not os.environ.get('AWS_DEFAULT_REGION'):
-        os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
+        os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
 
 def fetch_conversation_data(zid):
     """
@@ -378,7 +373,7 @@ def process_conversation(zid, export_dynamo=True):
     dynamo_storage = None
     if export_dynamo:
         dynamo_storage = DynamoDBStorage(
-            region_name='us-west-2',
+            region_name='us-east-1',
             endpoint_url=os.environ.get('DYNAMODB_ENDPOINT')
         )
         
@@ -518,7 +513,7 @@ def main():
         # Process with mock data (store in DynamoDB if requested)
         if not args.no_dynamo:
             dynamo_storage = DynamoDBStorage(
-                region_name='us-west-2',
+                region_name='us-east-1',
                 endpoint_url=os.environ.get('DYNAMODB_ENDPOINT')
             )
             

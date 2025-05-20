@@ -9,8 +9,8 @@ Usage:
     python create_dynamodb_tables.py [options]
 
 Options:
-    --endpoint-url ENDPOINT_URL   DynamoDB endpoint URL (default: http://localhost:8000)
-    --region REGION               AWS region (default: us-west-2)
+    --endpoint-url ENDPOINT_URL   DynamoDB endpoint URL
+    --region REGION               AWS region (default: us-east-1)
     --delete-existing             Delete existing tables before creating new ones
     --evoc-only                   Create only EVōC tables
     --polismath-only              Create only Polis math tables
@@ -421,12 +421,12 @@ def _create_tables(dynamodb, tables, existing_tables):
     
     return created_tables
 
-def create_tables(endpoint_url=None, region_name='us-west-2', 
+def create_tables(endpoint_url=None, region_name='us-east-1', 
                  delete_existing=False, evoc_only=False, polismath_only=False,
                  aws_profile=None):
     # Use the environment variable if endpoint_url is not provided
     if endpoint_url is None:
-        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000')
+        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
     
     logger.info(f"Creating tables with DynamoDB endpoint: {endpoint_url}")
     """
@@ -498,9 +498,9 @@ def main():
     # Parse arguments
     parser = argparse.ArgumentParser(description='Create DynamoDB tables for Delphi system')
     parser.add_argument('--endpoint-url', type=str, default=None,
-                      help='DynamoDB endpoint URL (default: use DYNAMODB_ENDPOINT env var or http://localhost:8000)')
-    parser.add_argument('--region', type=str, default='us-west-2',
-                      help='AWS region (default: us-west-2)')
+                      help='DynamoDB endpoint URL (default: use DYNAMODB_ENDPOINT env var)')
+    parser.add_argument('--region', type=str, default='us-east-1',
+                      help='AWS region (default: us-east-1)')
     parser.add_argument('--delete-existing', action='store_true',
                       help='Delete existing tables before creating new ones')
     parser.add_argument('--evoc-only', action='store_true',

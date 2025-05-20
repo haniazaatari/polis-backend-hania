@@ -4,14 +4,15 @@ import { DynamoDB } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocument } from "@aws-sdk/lib-dynamodb";
 import logger from "../../utils/logger";
 import { getZidFromReport } from "../../utils/parameter";
+import Config from "../../config";
 
 // Initialize DynamoDB client
 const dynamoDbClient = new DynamoDB({
-  endpoint: process.env.DYNAMODB_ENDPOINT || "http://dynamodb:8000",
-  region: process.env.AWS_REGION || "us-west-2",
+  endpoint: Config.DYNAMODB_ENDPOINT as string,
+  region: Config.AWS_REGION as string,
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "DUMMYIDEXAMPLE",
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "DUMMYEXAMPLEKEY",
+    accessKeyId: Config.AWS_ACCESS_KEY_ID as string,
+    secretAccessKey: Config.AWS_SECRET_ACCESS_KEY as string,
   },
 });
 

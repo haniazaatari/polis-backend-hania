@@ -41,22 +41,27 @@ def s3_upload_file(local_file_path, s3_key):
     secret_key = os.environ.get('AWS_S3_SECRET_ACCESS_KEY')
     bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
     region = os.environ.get('AWS_REGION')
-    
-    if not all([endpoint_url, access_key, secret_key, bucket_name]):
-        logger.error("Missing S3 configuration. Cannot upload file.")
-        return False
+
+    if endpoint_url == "":
+        endpoint_url = None
+
+    if access_key == "":
+        access_key = None
+
+    if secret_key == "":
+        secret_key = None
     
     try:
         # Create S3 client
         s3_client = boto3.client(
             's3',
-            endpoint_url=endpoint_url,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
+            # endpoint_url=endpoint_url,
+            # aws_access_key_id=access_key,
+            # aws_secret_access_key=secret_key,
             region_name=region,
             # For MinIO/local development, these settings help
-            config=boto3.session.Config(signature_version='s3v4'),
-            verify=False
+            # config=boto3.session.Config(signature_version='s3v4'),
+            # verify=False
         )
         
         # Check if bucket exists, create if it doesn't
@@ -68,12 +73,13 @@ def s3_upload_file(local_file_path, s3_key):
             
             try:
                 # Create the bucket - for MinIO local we don't need LocationConstraint
-                if region == 'us-east-1' or 'localhost' in endpoint_url or 'minio' in endpoint_url:
-                    s3_client.create_bucket(Bucket=bucket_name)
+                if endpoint_url:
+                    if region == 'us-east-1' or 'localhost' in endpoint_url or 'minio' in endpoint_url:
+                        s3_client.create_bucket(Bucket=bucket_name)
                 else:
                     s3_client.create_bucket(
                         Bucket=bucket_name,
-                        CreateBucketConfiguration={'LocationConstraint': region}
+                        # CreateBucketConfiguration={'LocationConstraint': region} - not in us-east-1 - but in other regions
                     )
                 
                 # Apply bucket policy to make objects public-read
@@ -109,7 +115,7 @@ def s3_upload_file(local_file_path, s3_key):
         
         # For HTML files, set content type correctly
         extra_args = {
-            'ACL': 'public-read'  # Make object publicly readable
+        #     'ACL': 'public-read'  # Make object publicly readable - we don't want this, hence why we have signed urls
         }
         
         # Set the correct content type based on file extension
@@ -126,25 +132,30 @@ def s3_upload_file(local_file_path, s3_key):
             s3_key,
             ExtraArgs=extra_args
         )
+
+        if endpoint_url:
         
-        # Generate a URL for the uploaded file
-        if endpoint_url.startswith('http://localhost') or endpoint_url.startswith('http://127.0.0.1'):
-            # For local development with MinIO
-            url = f"{endpoint_url}/{bucket_name}/{s3_key}"
-            # Clean up URL if needed
-            url = url.replace('///', '//')
-        elif 'minio' in endpoint_url:
-            # For Docker container access to MinIO
-            url = f"{endpoint_url}/{bucket_name}/{s3_key}"
-            url = url.replace('///', '//')
-        else:
-            # For AWS S3
-            if endpoint_url.startswith('https://s3.'):
-                # Standard AWS S3 endpoint
-                url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
-            else:
-                # Custom S3 endpoint
+            # Generate a URL for the uploaded file
+            if endpoint_url.startswith('http://localhost') or endpoint_url.startswith('http://127.0.0.1'):
+                # For local development with MinIO
                 url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+                # Clean up URL if needed
+                url = url.replace('///', '//')
+            elif 'minio' in endpoint_url:
+                # For Docker container access to MinIO
+                url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+                url = url.replace('///', '//')
+            else:
+                # For AWS S3
+                if endpoint_url.startswith('https://s3.'):
+                    # Standard AWS S3 endpoint
+                    url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
+                else:
+                    # Custom S3 endpoint
+                    url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+        else:
+            # Custom S3 endpoint
+            url = f"{bucket_name}/{s3_key}"
         
         logger.info(f"File uploaded successfully to {url}")
         return url
@@ -240,29 +251,16 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
     
     # DynamoDB settings (for local DynamoDB)
     if not os.environ.get('DYNAMODB_ENDPOINT'):
-        # Only set if not already in environment
-        if not os.environ.get('DYNAMODB_ENDPOINT'):
-            os.environ['DYNAMODB_ENDPOINT'] = 'http://localhost:8000'
             
         # Log the endpoint being used
         endpoint = os.environ.get('DYNAMODB_ENDPOINT')
         logger.info(f"Using DynamoDB endpoint: {endpoint}")
-    if not os.environ.get('AWS_ACCESS_KEY_ID'):
-        os.environ['AWS_ACCESS_KEY_ID'] = 'fakeMyKeyId'
-    if not os.environ.get('AWS_SECRET_ACCESS_KEY'):
-        os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
     if not os.environ.get('AWS_DEFAULT_REGION'):
-        os.environ['AWS_DEFAULT_REGION'] = 'us-west-2'
+        os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
         
     # S3 settings
-    if not os.environ.get('AWS_S3_ENDPOINT'):
-        os.environ['AWS_S3_ENDPOINT'] = 'http://localhost:9000'
-    if not os.environ.get('AWS_S3_ACCESS_KEY_ID'):
-        os.environ['AWS_S3_ACCESS_KEY_ID'] = 'minioadmin'
-    if not os.environ.get('AWS_S3_SECRET_ACCESS_KEY'):
-        os.environ['AWS_S3_SECRET_ACCESS_KEY'] = 'minioadmin'
     if not os.environ.get('AWS_S3_BUCKET_NAME'):
-        os.environ['AWS_S3_BUCKET_NAME'] = 'delphi'
+        os.environ['AWS_S3_BUCKET_NAME'] = 'polis-delphi'
         
     logger.info(f"S3 Storage settings:")
     logger.info(f"- Endpoint: {os.environ.get('AWS_S3_ENDPOINT')}")
@@ -939,7 +937,7 @@ def main():
     parser.add_argument('--output_dir', type=str, default=None,
                       help='Directory to save the visualization')
     parser.add_argument('--dynamo_endpoint', type=str, default=None,
-                      help='DynamoDB endpoint URL (default: http://localhost:8000)')
+                      help='DynamoDB endpoint URL')
     
     args = parser.parse_args()
     

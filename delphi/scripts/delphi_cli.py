@@ -50,16 +50,18 @@ def create_elegant_header():
     console.print(header)
     console.print()
 
-def setup_dynamodb(endpoint_url=None, region='us-west-2'):
-    """Set up DynamoDB connection."""
-    # Use environment variable if endpoint not provided
+def setup_dynamodb(endpoint_url=None, region='us-east-1'):
     if endpoint_url is None:
-        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000')
+        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
     
-    # For local development
-    if 'localhost' in endpoint_url or 'host.docker.internal' in endpoint_url:
-        os.environ.setdefault('AWS_ACCESS_KEY_ID', 'fakeMyKeyId')
-        os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+    if endpoint_url == "":
+        endpoint_url = None
+            
+    if endpoint_url:
+        local_patterns = ['localhost', 'host.docker.internal', 'dynamodb:']
+        if any(pattern in endpoint_url for pattern in local_patterns):
+            os.environ.setdefault('AWS_ACCESS_KEY_ID', 'fakeMyKeyId')
+            os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
     
     return boto3.resource('dynamodb', endpoint_url=endpoint_url, region_name=region)
 
@@ -833,7 +835,7 @@ def main():
     
     # Common options
     parser.add_argument("--endpoint-url", help="DynamoDB endpoint URL")
-    parser.add_argument("--region", default="us-west-2", help="AWS region")
+    parser.add_argument("--region", default="us-east-1", help="AWS region")
     
     # Interactive mode is the default when no arguments are provided
     parser.add_argument("--interactive", action="store_true", 

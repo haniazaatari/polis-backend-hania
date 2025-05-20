@@ -791,7 +791,6 @@ helpersInitialized.then(
       try {
         handle_POST_delphi_jobs(req, res);
       } catch (err) {
-        console.error("Error in delphi jobs creation route:", err);
         res.json({
           status: "error",
           message: "Internal server error in job creation endpoint",
@@ -805,7 +804,6 @@ helpersInitialized.then(
       try {
         handle_GET_delphi_reports(req, res);
       } catch (err) {
-        console.error("Error in delphi reports route:", err);
         res.json({
           status: "error",
           message: "Internal server error in reports endpoint",
@@ -821,7 +819,6 @@ helpersInitialized.then(
       try {
         handle_GET_delphi_visualizations(req, res);
       } catch (err) {
-        console.error("Error in delphi visualizations route:", err);
         res.json({
           status: "error",
           message: "Internal server error in visualizations endpoint",
@@ -835,7 +832,6 @@ helpersInitialized.then(
       try {
         handle_POST_delphi_batch_reports(req, res);
       } catch (err) {
-        console.error("Error in delphi batch reports route:", err);
         res.json({
           status: "error",
           message: "Internal server error in batch reports endpoint",

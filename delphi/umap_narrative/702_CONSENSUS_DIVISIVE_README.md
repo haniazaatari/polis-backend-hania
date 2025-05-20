@@ -44,7 +44,7 @@ export DATABASE_SSL_MODE="disable"
 
 # DynamoDB configuration
 export DYNAMODB_ENDPOINT="http://localhost:8000"
-export AWS_REGION="us-west-2"
+export AWS_REGION="us-east-1"
 export AWS_ACCESS_KEY_ID="fakeMyKeyId"
 export AWS_SECRET_ACCESS_KEY="fakeSecretAccessKey"
 

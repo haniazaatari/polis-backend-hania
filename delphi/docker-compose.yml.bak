@@ -56,7 +56,7 @@ services:
       - DYNAMODB_ENDPOINT=http://host.docker.internal:8000
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
-      - AWS_REGION=us-west-2
+      - AWS_REGION=us-east-1
       # Ollama settings - configurable via environment variables
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
       - OLLAMA_HOST=http://host.docker.internal:11434  # Connect to Ollama on host network

@@ -89,7 +89,7 @@ Always use the commands above to determine the most substantial conversation whe
    ```bash
    docker exec polis-dev-delphi-1 python -c "
    import boto3, json
-   dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb:8000', region_name='us-west-2')
+   dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb:8000', region_name='us-east-1')
    table = dynamodb.Table('Delphi_JobQueue')
    job_id = '<YOUR_JOB_ID>'  # Replace with your job ID
    job = table.get_item(Key={'job_id': job_id})['Item']
@@ -103,7 +103,7 @@ Always use the commands above to determine the most substantial conversation whe
    ```bash
    docker exec polis-dev-delphi-1 python -c "
    import boto3, json
-   dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb:8000', region_name='us-west-2')
+   dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb:8000', region_name='us-east-1')
    table = dynamodb.Table('Delphi_JobQueue')
    job_id = '<YOUR_JOB_ID>'  # Replace with your job ID
    job = table.get_item(Key={'job_id': job_id})['Item']
@@ -143,7 +143,7 @@ When connecting to DynamoDB from the Delphi container, use these settings:
 DYNAMODB_ENDPOINT=http://host.docker.internal:8000
 AWS_ACCESS_KEY_ID=dummy
 AWS_SECRET_ACCESS_KEY=dummy
-AWS_REGION=us-west-2
+AWS_REGION=us-east-1
 ```
 
 These are configured in run_delphi.sh for all DynamoDB operations.

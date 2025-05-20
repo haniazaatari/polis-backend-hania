@@ -96,9 +96,9 @@ The service follows a serverless architecture:
 
 2. Push to ECR:
    ```bash
-   aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-west-2.amazonaws.com
-   docker tag polis-comment-graph-lambda:latest 123456789012.dkr.ecr.us-west-2.amazonaws.com/polis-comment-graph-lambda:latest
-   docker push 123456789012.dkr.ecr.us-west-2.amazonaws.com/polis-comment-graph-lambda:latest
+   aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+   docker tag polis-comment-graph-lambda:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/polis-comment-graph-lambda:latest
+   docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/polis-comment-graph-lambda:latest
    ```
 
 3. Create Lambda function using the AWS CLI:
@@ -106,9 +106,9 @@ The service follows a serverless architecture:
    aws lambda create-function \
      --function-name polis-comment-graph-lambda \
      --package-type Image \
-     --code ImageUri=123456789012.dkr.ecr.us-west-2.amazonaws.com/polis-comment-graph-lambda:latest \
+     --code ImageUri=123456789012.dkr.ecr.us-east-1.amazonaws.com/polis-comment-graph-lambda:latest \
      --role arn:aws:iam::123456789012:role/lambda-execution-role \
-     --environment "Variables={DATABASE_HOST=polis-db.cluster-xyz.us-west-2.rds.amazonaws.com,DATABASE_NAME=polis,DATABASE_USER=polis}" \
+     --environment "Variables={DATABASE_HOST=polis-db.cluster-xyz.us-east-1.rds.amazonaws.com,DATABASE_NAME=polis,DATABASE_USER=polis}" \
      --timeout 300 \
      --memory-size 1024
    ```
@@ -121,7 +121,7 @@ The service follows a serverless architecture:
 - `DATABASE_USER`: PostgreSQL username
 - `DATABASE_PASSWORD`: PostgreSQL password
 - `DYNAMODB_ENDPOINT`: Optional DynamoDB endpoint for local development
-- `AWS_REGION`: AWS region for DynamoDB and other services (default: us-west-2)
+- `AWS_REGION`: AWS region for DynamoDB and other services (default: us-east-1)
 - `MODEL_CACHE_DIR`: Directory to cache SentenceTransformer models (default: /tmp/model_cache)
 - `LOG_LEVEL`: Logging level (default: INFO)
 
@@ -178,7 +178,7 @@ Then create the required tables:
 python -c "
 import boto3
 dynamodb = boto3.resource('dynamodb', endpoint_url='http://localhost:8000', 
-                         region_name='us-west-2',
+                         region_name='us-east-1',
                          aws_access_key_id='fakeMyKeyId',
                          aws_secret_access_key='fakeSecretAccessKey')
 
