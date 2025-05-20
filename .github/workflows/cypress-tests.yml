@@ -19,32 +19,20 @@ jobs:
   cypress-run:
     runs-on: ubuntu-latest
     steps:
-      - name: Maximize Build Space
-        uses: easimon/maximize-build-space@v10
-        with:
-          root-reserve-mb: 8192
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-docker-images: 'true' 
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Clean up runner space
+      - name: Clean up runner space (Targeted)
         run: |
-          echo "Initial disk space:"
+          echo "Initial disk space (before cleanup):"
           df -h
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf "/usr/local/share/boost"
-          # sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-
-          sudo apt-get clean
-
-          # Prune Docker system aggressively
-          docker system prune -af --volumes
-
-          echo "Disk space after cleanup:"
+          echo "Removing large pre-installed software..."
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" /opt/hostedtoolcache /usr/local/lib/android/* || echo "Some paths not found or removal failed, continuing."
+          echo "Cleaning apt cache..."
+          sudo apt-get clean -y || echo "apt-get clean failed"
+          echo "Pruning Docker system..."
+          docker system prune -af --volumes || echo "docker system prune failed"
+          echo "Disk space after targeted cleanup:"
           df -h
 
       - name: Set up Docker Buildx
