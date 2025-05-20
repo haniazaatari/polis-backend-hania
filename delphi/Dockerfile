@@ -53,10 +53,11 @@ ENV PYTHONPATH "${PYTHONPATH}:/app"
 # Copy the required scripts and make them executable
 COPY start_poller.sh .
 COPY run_delphi.sh .
+COPY run_delphi.py .
 COPY create_dynamodb_tables.py .
 COPY setup_minio.py .
 COPY scripts/setup_ollama.sh ./setup_ollama.sh
-RUN chmod +x start_poller.sh run_delphi.sh setup_ollama.sh
+RUN chmod +x start_poller.sh run_delphi.sh run_delphi.py setup_ollama.sh
 
 # Command to:
 # 1. Initialize DynamoDB tables
