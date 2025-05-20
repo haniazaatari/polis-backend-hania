@@ -20,6 +20,7 @@ WORKDIR /app
 COPY requirements.txt .
 
 # Install Python dependencies
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir colorlog fastapi==0.115.0 pydantic
 
