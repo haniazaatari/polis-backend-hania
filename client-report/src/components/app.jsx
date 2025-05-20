@@ -49,7 +49,7 @@ const App = (props) => {
   const [isNarrativeReport, setIsNarrativeReport] = useState(
     window.location.pathname.split("/")[1] === "narrativeReport"
   );
-  
+
   const [isCommentsReport, setIsCommentsReport] = useState(
     window.location.pathname.split("/")[1] === "commentsReport"
   );
@@ -110,7 +110,7 @@ const App = (props) => {
     } else if (isNarrativeReport && window.location.pathname.split("/")[1] !== "narrativeReport") {
       setIsNarrativeReport(false);
     }
-    
+
     // Handle comments report route
     // Add debug logs
     const pathParts = window.location.pathname.split("/");
@@ -118,13 +118,10 @@ const App = (props) => {
       fullPath: window.location.pathname,
       firstPart: pathParts[1],
       isCommentsReportRoute: pathParts[1] === "commentsReport",
-      currentState: isCommentsReport
+      currentState: isCommentsReport,
     });
-    
-    if (
-      pathParts[1] === "commentsReport" &&
-      isCommentsReport !== true
-    ) {
+
+    if (pathParts[1] === "commentsReport" && isCommentsReport !== true) {
       console.log("SETTING isCommentsReport to TRUE");
       setIsCommentsReport(true);
     } else if (isCommentsReport && pathParts[1] !== "commentsReport") {
@@ -184,7 +181,7 @@ const App = (props) => {
       conversation_id: conversation_id,
       report_id: report_id,
       moderation: true,
-      mod_gt: isStrictMod ? 0 : -1,
+      mod_gt: -2,
       include_voting_patterns: true,
     });
   };
@@ -206,7 +203,9 @@ const App = (props) => {
       const response = await fetch(
         `${urlPrefix}api/v3/reportNarrative?report_id=${report_id}${
           searchParamsSection ? `&section=${searchParamsSection}` : ``
-        }${searchParamsModel ? `&model=${searchParamsModel}` : ``}${searchParamsCache ? `&noCache=${searchParamsCache}` : ``}`,
+        }${searchParamsModel ? `&model=${searchParamsModel}` : ``}${
+          searchParamsCache ? `&noCache=${searchParamsCache}` : ``
+        }`,
         {
           credentials: "include",
           method: "get",
@@ -546,35 +545,41 @@ const App = (props) => {
   useEffect(() => {
     const init = async () => {
       await getData();
-      
+
       // Call to the Delphi endpoint to get LLM-generated topic names
-      net.polisGet("/api/v3/delphi", {
-        report_id: report_id
-      })
-        .then(response => {
+      net
+        .polisGet("/api/v3/delphi", {
+          report_id: report_id,
+        })
+        .then((response) => {
           console.log("Delphi topics response:", response);
-          
+
           // Store the topics data for later use
           if (response && response.status === "success") {
             // Handle different response scenarios
             if (response.runs && Object.keys(response.runs).length > 0) {
               // We have LLM topic data!
               console.log("LLM topic runs found:", Object.keys(response.runs).length);
-              
+
               // Get the most recent run (should be first in the sorted object)
               const runKeys = Object.keys(response.runs);
               const latestRun = response.runs[runKeys[0]];
               console.log("Latest LLM topics run:", latestRun);
-              
+
               // In future, we'll integrate these topics with the visualization
               // For example, replacing group labels with LLM-generated topic names
             } else if (response.available_tables) {
               // This means the DynamoDB connection worked but our table doesn't exist
-              console.log("DynamoDB connected but table not found. Available tables:", response.available_tables);
+              console.log(
+                "DynamoDB connected but table not found. Available tables:",
+                response.available_tables
+              );
               console.log("Hint:", response.hint);
-              
+
               // Log that this is expected initially
-              console.log("NOTE: This is normal until the Delphi pipeline has been run for this conversation.");
+              console.log(
+                "NOTE: This is normal until the Delphi pipeline has been run for this conversation."
+              );
             } else if (response.error) {
               // Something went wrong with the DynamoDB query
               console.log("DynamoDB query error:", response.error);
@@ -591,10 +596,10 @@ const App = (props) => {
             }
           }
         })
-        .catch(error => {
+        .catch((error) => {
           console.error("Error calling Delphi endpoint:", error);
         });
-      
+
       setInterval(() => {
         if (shouldPoll) {
           getData();
@@ -666,18 +671,27 @@ const App = (props) => {
   }
 
   // Debug what's going to be rendered
-  console.log("RENDER DECISION:", { 
+  console.log("RENDER DECISION:", {
     route_type,
     shouldShowCommentsReport: route_type === "commentsReport",
-    shouldShowNarrativeReport: route_type === "narrativeReport" 
+    shouldShowNarrativeReport: route_type === "narrativeReport",
   });
-  
+
   // Directly render CommentsReport if the URL starts with /commentsReport
   if (route_type === "commentsReport") {
     console.log("RENDERING: CommentsReport");
-    return <CommentsReport />;
+    return (
+      <CommentsReport
+        math={math}
+        comments={comments}
+        conversation={conversation}
+        ptptCount={ptptCount}
+        formatTid={formatTid}
+        voteColors={voteColors}
+      />
+    );
   }
-  
+
   // Directly render NarrativeReport if the URL starts with /narrativeReport
   if (route_type === "narrativeReport") {
     console.log("RENDERING: NarrativeReport");
@@ -691,7 +705,7 @@ const App = (props) => {
       />
     );
   }
-  
+
   // Otherwise render the standard report
   console.log("RENDERING: Standard report");
   return (
@@ -724,10 +738,7 @@ const App = (props) => {
           voteColors={voteColors}
         />
 
-        <RawDataExport 
-          conversation={conversation} 
-          report_id={report_id} 
-        />
+        <RawDataExport conversation={conversation} report_id={report_id} />
 
         {isNarrativeReport ? (
           <>
