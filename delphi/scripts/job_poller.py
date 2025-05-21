@@ -735,20 +735,10 @@ class JobProcessor:
                             )
                             logger.info(f"Updated job {job_id} with execution results while preserving status {current_status}")
                         else:
-                            # Status not changed, update normally
-                            current_version = current_job['Item'].get('version', 1)
-                            self.table.update_item(
-                                Key={'job_id': job_id},
-                                UpdateExpression='SET job_results = :results, updated_at = :now, version = :new_version',
-                                ConditionExpression='version = :current_version',
-                                ExpressionAttributeValues={
-                                    ':results': json.dumps(result),
-                                    ':now': datetime.now().isoformat(),
-                                    ':current_version': current_version,
-                                    ':new_version': current_version + 1
-                                }
-                            )
-                            logger.info(f"Updated job {job_id} with execution results")
+                            # Job completed successfully and status wasn't changed by the script
+                            # Mark the job as COMPLETED
+                            self.complete_job(job, True, result=result)
+                            logger.info(f"Job {job_id} marked as COMPLETED")
                     else:
                         logger.error(f"Job {job_id} not found after script execution")
                 except Exception as e:
