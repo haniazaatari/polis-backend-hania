@@ -40,7 +40,7 @@ jobs:
 
       - name: Build and start Docker containers
         run: |
-          docker compose -f docker-compose.yml -f docker-compose.test.yml --env-file test.env --profile postgres --profile local-services up -d --build
+          docker compose -f docker-compose.yml -f docker-compose.test.yml --env-file test.env --profile postgres --profile local-services --build-arg IS_GITHUB_ACTION=true up -d --build
 
       - name: Health Check the Server http response
         uses: jtalk/url-health-check-action@v4
