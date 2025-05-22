@@ -1,6 +1,9 @@
 # ---- Stage 1: Builder ----
   FROM python:3.12-slim AS builder
 
+  # Define a build argument to signal if running in GitHub Actions
+  ARG IS_GITHUB_ACTION=false
+  
   ENV PYTHONDONTWRITEBYTECODE=1
   ENV PYTHONUNBUFFERED=1
   
@@ -21,11 +24,21 @@
   
   COPY requirements.txt .
   
-  RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
-      torch==2.3.1+cpu \
-      torchvision==0.18.1+cpu \
-      torchaudio==2.3.1+cpu
+  # Conditionally install PyTorch CPU versions if IS_GITHUB_ACTION is true
+  RUN if [ "$IS_GITHUB_ACTION" = "true" ]; then \
+          echo "IS_GITHUB_ACTION is true. Installing PyTorch CPU versions..."; \
+          pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+              torch==2.3.1+cpu \
+              torchvision==0.18.1+cpu \
+              torchaudio==2.3.1+cpu; \
+      else \
+          echo "IS_GITHUB_ACTION is false or not set. Skipping explicit PyTorch CPU-specific installation."; \
+          echo "PyTorch (if required) should be listed in requirements.txt for non-GitHub Action builds or installed by a subsequent step."; \
+      fi
   
+  # Install packages from requirements.txt
+  # If PyTorch was installed in the step above, pip should recognize it.
+  # If IS_GITHUB_ACTION was false, and PyTorch is in requirements.txt, it will be installed here.
   RUN pip install --no-cache-dir -r requirements.txt
   
   RUN pip install --no-cache-dir colorlog fastapi==0.115.0 pydantic
@@ -49,6 +62,7 @@
       (ls -lhR /usr/local/lib/python3.12/site-packages/nvidia || echo "NVIDIA directory not found.") && \
       (ls -lhR /usr/local/lib/python3.12/site-packages/torch/lib/*cuda* || echo "No CUDA libs in torch/lib.")
   
+  # ---- Stage 2: Final ----
   FROM python:3.12-slim AS final
   
   ENV PYTHONDONTWRITEBYTECODE=1
