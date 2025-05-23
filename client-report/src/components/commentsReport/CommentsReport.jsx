@@ -593,46 +593,48 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                     // END DEBUG
 
                     return (
-                      <article style={{ maxWidth: "600px" }}>
-                        {respData?.paragraphs?.map((pSection) => (
-                          <div key={pSection.id}>
-                            <h5>{pSection.title}</h5>
-                            {pSection.sentences.map((sentence, idx) => (
-                              <p key={idx}>
-                                {sentence.clauses.map((clause, cIdx) => (
-                                  <span key={cIdx}>
-                                    {clause.text}
-                                    {clause.citations
-                                      ?.filter((c) => typeof c === "number")
-                                      .map((citation, citIdx, arr) => (
-                                        <sup key={citIdx}>
-                                          {citation}
-                                          {citIdx < arr.length - 1 ? ", " : ""}
-                                        </sup>
-                                      ))}
-                                    {cIdx < sentence.clauses.length - 1 ? " " : ""}
-                                  </span>
-                                ))}
-                              </p>
-                            ))}
-                          </div>
-                        ))}
+                      <div className="narrative-layout-container">
+                        <article className="narrative-text-content">
+                          {respData?.paragraphs?.map((pSection) => (
+                            <div key={pSection.id}>
+                              <h5>{pSection.title}</h5>
+                              {pSection.sentences.map((sentence, idx) => (
+                                <p key={idx}>
+                                  {sentence.clauses.map((clause, cIdx) => (
+                                    <span key={cIdx}>
+                                      {clause.text}
+                                      {clause.citations
+                                        ?.filter((c) => typeof c === "number")
+                                        .map((citation, citIdx, arr) => (
+                                          <sup key={citIdx}>
+                                            {citation}
+                                            {citIdx < arr.length - 1 ? ", " : ""}
+                                          </sup>
+                                        ))}
+                                      {cIdx < sentence.clauses.length - 1 ? " " : ""}
+                                    </span>
+                                  ))}
+                                </p>
+                              ))}
+                            </div>
+                          ))}
+                        </article>
 
                         {sectionCitationIds.length > 0 && (
-                          <div style={{ marginTop: 50 }}>
+                          <div className="narrative-comments-column">
                             <h5>Referenced Comments</h5>
                             <CommentList
                               conversation={conversation}
                               ptptCount={ptptCount}
                               math={math}
                               formatTid={formatTid}
-                              tidsToRender={sectionCitationIds} // Pass section-specific TIDs
+                              tidsToRender={sectionCitationIds}
                               comments={comments}
                               voteColors={voteColors}
                             />
                           </div>
                         )}
-                      </article>
+                      </div>
                     );
                   } catch (error) {
                     console.error(
@@ -762,7 +764,8 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
       <style jsx>{`
         .comments-report {
           padding: 20px;
-          max-width: 1200px;
+          width: 90%;
+          max-width: 1600px;
           margin: 0 auto;
         }
 
@@ -1137,6 +1140,43 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           background-color: #ffebee;
           color: #c62828;
           border: 1px solid #ffcdd2;
+        }
+
+        /* New styles for narrative report layout */
+        .narrative-layout-container {
+          display: flex;
+          flex-direction: row;
+          gap: 20px; /* Adjust gap as needed */
+        }
+
+        .narrative-text-content {
+          flex-grow: 0; /* Do not grow beyond basis */
+          flex-shrink: 1; /* Allow shrinking if space is tight */
+          flex-basis: 520px; /* Preferred width, acts as max when grow is 0 */
+        }
+
+        .narrative-comments-column {
+          flex-grow: 1; /* Grow to fill available space */
+          flex-shrink: 1; /* Allow shrinking */
+          flex-basis: 0%; /* Start with no intrinsic width, rely on grow */
+          min-width: 400px; /* Ensure CommentList doesn't get too squished */
+        }
+
+        /* Responsive stacking for smaller screens */
+        @media (max-width: 992px) {
+          .narrative-layout-container {
+            flex-direction: column;
+          }
+
+          .narrative-text-content,
+          .narrative-comments-column {
+            flex-basis: auto; /* Reset flex-basis */
+            width: 100%; /* Take full width when stacked */
+          }
+
+          .narrative-comments-column {
+            margin-top: 30px; /* Add space when stacked below text */
+          }
         }
       `}</style>
     </div>
