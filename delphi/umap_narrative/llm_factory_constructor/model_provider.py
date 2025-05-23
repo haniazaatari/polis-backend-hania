@@ -505,7 +505,7 @@ def get_model_provider(provider_type: str = None, model_name: str = None) -> Mod
         Configured ModelProvider instance
     """
     # Check for environment variable configuration
-    provider_type = provider_type or os.environ.get("LLM_PROVIDER", "ollama")
+    provider_type = provider_type or os.environ.get("LLM_PROVIDER")
     
     if provider_type.lower() == "anthropic":
         model_name = model_name or os.environ.get("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022")
