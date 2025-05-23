@@ -71,7 +71,10 @@ def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50,
                # Parameters for CREATE_NARRATIVE_BATCH stage config
                report_id_for_stage=None, 
                max_batch_size_stage=None, # Renamed to avoid conflict with general batch_size
-               no_cache_stage=False 
+               no_cache_stage=False,
+               # Parameters for AWAITING_NARRATIVE_BATCH jobs
+               batch_id=None,
+               batch_job_id=None
                ):
     """Submit a job to the Delphi job queue."""
     table = dynamodb.Table('Delphi_JobQueue')
@@ -141,6 +144,21 @@ def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50,
                 },
             ],
         }
+    elif job_type == 'AWAITING_NARRATIVE_BATCH':
+        if not batch_id:
+            raise ValueError("batch_id is required for AWAITING_NARRATIVE_BATCH job type.")
+        if not batch_job_id:
+            raise ValueError("batch_job_id is required for AWAITING_NARRATIVE_BATCH job type.")
+            
+        job_config = {
+            "job_type": "AWAITING_NARRATIVE_BATCH",
+            "stages": [
+                {
+                    "stage": "NARRATIVE_BATCH_STATUS_CHECK",
+                    "config": {}
+                }
+            ]
+        }
     
     # Create job item with version number for optimistic locking
     # Use empty strings instead of None for DynamoDB compatibility
@@ -173,6 +191,11 @@ def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50,
         }),
         'created_by': 'delphi_cli'
     }
+    
+    # Add batch_id and batch_job_id for AWAITING_NARRATIVE_BATCH jobs
+    if job_type == 'AWAITING_NARRATIVE_BATCH':
+        job_item['batch_id'] = batch_id
+        job_item['batch_job_id'] = batch_job_id
     
     # Put item in DynamoDB
     response = table.put_item(Item=job_item)
@@ -351,7 +374,7 @@ def interactive_mode():
             zid = Prompt.ask("[bold]Enter conversation ID (zid)[/bold]")
             job_type = Prompt.ask(
                 "[bold]Job type[/bold]", 
-                choices=["FULL_PIPELINE", "CREATE_NARRATIVE_BATCH"],
+                choices=["FULL_PIPELINE", "CREATE_NARRATIVE_BATCH", "AWAITING_NARRATIVE_BATCH"],
                 default="FULL_PIPELINE"
             )
             priority = int(Prompt.ask("[bold]Priority[/bold] (0-100)", default="50"))
@@ -364,6 +387,9 @@ def interactive_mode():
             report_id_stage_param = None
             max_batch_size_stage_param = None
             no_cache_stage_param = False
+            # AWAITING_NARRATIVE_BATCH specific params
+            batch_id_param = None
+            batch_job_id_param = None
             
             if job_type == "FULL_PIPELINE":
                 if Confirm.ask("Set parameters for FULL_PIPELINE (max_votes, batch_size, model)?"):
@@ -384,6 +410,10 @@ def interactive_mode():
                     max_batch_size_stage_param = max_batch_size_input
                 no_cache_stage_param = Confirm.ask("Enable no-cache for stage?", default=False)
             
+            elif job_type == "AWAITING_NARRATIVE_BATCH":
+                batch_id_param = Prompt.ask("[bold]Batch ID[/bold]")
+                batch_job_id_param = Prompt.ask("[bold]Batch Job ID[/bold]")
+            
             # Confirm submission
             if Confirm.ask(f"Submit job for conversation {zid}?"):
                 with Progress(
@@ -403,7 +433,10 @@ def interactive_mode():
                         # CREATE_NARRATIVE_BATCH specific stage params
                         report_id_for_stage=report_id_stage_param,
                         max_batch_size_stage=max_batch_size_stage_param,
-                        no_cache_stage=no_cache_stage_param
+                        no_cache_stage=no_cache_stage_param,
+                        # AWAITING_NARRATIVE_BATCH specific params
+                        batch_id=batch_id_param,
+                        batch_job_id=batch_job_id_param
                     )
                 
                 console.print(f"[bold green]Job submitted with ID: {job_id}[/bold green]")
@@ -803,7 +836,7 @@ def main():
     submit_parser = subparsers.add_parser("submit", help="Submit a new job")
     submit_parser.add_argument("--zid", required=True, help="Conversation ID (zid)")
     submit_parser.add_argument("--job-type", default="FULL_PIPELINE", 
-                               choices=["FULL_PIPELINE", "CREATE_NARRATIVE_BATCH"],
+                               choices=["FULL_PIPELINE", "CREATE_NARRATIVE_BATCH", "AWAITING_NARRATIVE_BATCH"],
                                help="Type of job to submit")
     submit_parser.add_argument("--priority", type=int, default=50, 
                                help="Job priority (0-100)")
@@ -816,6 +849,10 @@ def main():
     submit_parser.add_argument("--report-id-stage", help="Report ID for the CREATE_NARRATIVE_BATCH stage config")
     submit_parser.add_argument("--max-batch-size-stage", type=int, help="Max batch size for the CREATE_NARRATIVE_BATCH stage config")
     submit_parser.add_argument("--no-cache-stage", action="store_true", help="Enable no-cache for the CREATE_NARRATIVE_BATCH stage (default: False)")
+    
+    # Arguments for AWAITING_NARRATIVE_BATCH jobs
+    submit_parser.add_argument("--batch-id", help="Batch ID for AWAITING_NARRATIVE_BATCH jobs")
+    submit_parser.add_argument("--batch-job-id", help="Original job ID that created the batch for AWAITING_NARRATIVE_BATCH jobs")
     
     # List command
     list_parser = subparsers.add_parser("list", help="List jobs")
@@ -864,6 +901,13 @@ def main():
             if not args.report_id_stage:
                 parser.error("--report-id-stage is required when --job-type is CREATE_NARRATIVE_BATCH")
             # model, max_batch_size_stage, no_cache_stage have defaults or are optional in submit_job if not provided here
+                
+        # Validate arguments for AWAITING_NARRATIVE_BATCH
+        if args.job_type == 'AWAITING_NARRATIVE_BATCH':
+            if not args.batch_id:
+                parser.error("--batch-id is required when --job-type is AWAITING_NARRATIVE_BATCH")
+            if not args.batch_job_id:
+                parser.error("--batch-job-id is required when --job-type is AWAITING_NARRATIVE_BATCH")
         
         job_id = submit_job(
             dynamodb=dynamodb,
@@ -876,7 +920,10 @@ def main():
             # CREATE_NARRATIVE_BATCH specific stage params
             report_id_for_stage=args.report_id_stage,
             max_batch_size_stage=args.max_batch_size_stage,
-            no_cache_stage=args.no_cache_stage
+            no_cache_stage=args.no_cache_stage,
+            # AWAITING_NARRATIVE_BATCH specific params
+            batch_id=args.batch_id,
+            batch_job_id=args.batch_job_id
         )
         
         if RICH_AVAILABLE and IS_TERMINAL:

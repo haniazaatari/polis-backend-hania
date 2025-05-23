@@ -50,6 +50,8 @@ services:
       # Persist logs to a volume, so they can be accessed after the container is stopped.
       - server-logs:/app/logs
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   math:
     image: 050917022930.dkr.ecr.us-east-1.amazonaws.com/polis/math:latest
