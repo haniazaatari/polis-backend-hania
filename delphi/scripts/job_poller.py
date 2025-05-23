@@ -624,21 +624,96 @@ class JobProcessor:
                         line = process.stdout.readline().strip()
                         if line:
                             stdout_lines.append(line)
-                            # Log significant lines
-                            if 'ERROR' in line or 'WARNING' in line or 'pipeline completed' in line:
-                                level = 'ERROR' if 'ERROR' in line else 'WARNING' if 'WARNING' in line else 'INFO'
+                            
+                            # Default level for significant stdout lines
+                            level = 'INFO'
+                            clean_message = line
+                            log_line = False
+                            
+                            # Log significant lines and determine appropriate level
+                            log_level_patterns = {
+                                "CRITICAL": [" - CRITICAL - ", "CRITICAL:"],
+                                "ERROR": [" - ERROR - ", "ERROR:", "Error:", "error:"],
+                                "WARNING": [" - WARNING - ", "WARN:", "WARNING:", "Warning:", "warning:"],
+                                "INFO": [" - INFO - ", "INFO:", "pipeline completed"],
+                                "DEBUG": [" - DEBUG - ", "DEBUG:"]
+                            }
+                            
+                            # First check if this is a line we want to log at all
+                            should_log = False
+                            for patterns in log_level_patterns.values():
+                                for pattern in patterns:
+                                    if pattern in line:
+                                        should_log = True
+                                        break
+                                if should_log:
+                                    break
+                            
+                            if should_log:
+                                # Determine the appropriate level
+                                for detected_level, patterns in log_level_patterns.items():
+                                    for pattern in patterns:
+                                        if pattern in line:
+                                            level = detected_level
+                                            # Try to clean the message by removing the timestamp and level prefix
+                                            parts = line.split(pattern, 1)
+                                            if len(parts) > 1:
+                                                clean_message = parts[1].strip()
+                                            break
+                                    if level != 'INFO':  # Stop once we find a non-default match
+                                        break
+                                
+                                # Log the cleaned message with the appropriate level
                                 self.update_job_logs(job, {
                                     'level': level,
-                                    'message': line
+                                    'message': clean_message
                                 })
                     
                     if process.stderr in readable:
                         line = process.stderr.readline().strip()
                         if line:
                             stderr_lines.append(line)
+                            
+                            # First check for special cases that should be INFO despite coming from stderr
+                            level = "ERROR"  # Default level for stderr
+                            clean_message = line
+                            
+                            # Check for pip notices and other informational stderr messages
+                            info_patterns = [
+                                "[notice]",          # pip notices
+                                "Requirement already satisfied",  # pip install messages
+                                "Collecting ",       # pip collecting packages
+                                "Downloading ",      # pip downloading packages
+                                "Installing "        # pip installing packages
+                            ]
+                            
+                            # Set level to INFO for special cases
+                            for pattern in info_patterns:
+                                if pattern in line:
+                                    level = "INFO"
+                                    break
+                            
+                            # Next, check for explicit log levels in the message
+                            log_level_patterns = {
+                                "CRITICAL": [" - CRITICAL - ", "CRITICAL:"],
+                                "ERROR": [" - ERROR - ", "ERROR:"],
+                                "WARNING": [" - WARNING - ", "WARN:", "WARNING:"],
+                                "INFO": [" - INFO - ", "INFO:"],
+                                "DEBUG": [" - DEBUG - ", "DEBUG:"]
+                            }
+                            
+                            # Detect explicit log level from the message (overrides special case detection)
+                            for detected_level, patterns in log_level_patterns.items():
+                                for pattern in patterns:
+                                    if pattern in line:
+                                        level = detected_level
+                                        break
+                                if level != "ERROR":  # Stop once we find a non-ERROR match
+                                    break
+                            
                             self.update_job_logs(job, {
-                                'level': 'ERROR',
-                                'message': line
+                                'level': level,
+                                'message': clean_message
                             })
                 
                 # Process completed before timeout
@@ -672,6 +747,50 @@ class JobProcessor:
                             line = line.strip()
                             if line:
                                 stdout_lines.append(line)
+                                
+                                # Default level for significant stdout lines
+                                level = 'INFO'
+                                clean_message = line
+                                log_line = False
+                                
+                                # Log significant lines and determine appropriate level
+                                log_level_patterns = {
+                                    "CRITICAL": [" - CRITICAL - ", "CRITICAL:"],
+                                    "ERROR": [" - ERROR - ", "ERROR:", "Error:", "error:"],
+                                    "WARNING": [" - WARNING - ", "WARN:", "WARNING:", "Warning:", "warning:"],
+                                    "INFO": [" - INFO - ", "INFO:", "pipeline completed"],
+                                    "DEBUG": [" - DEBUG - ", "DEBUG:"]
+                                }
+                                
+                                # First check if this is a line we want to log at all
+                                should_log = False
+                                for patterns in log_level_patterns.values():
+                                    for pattern in patterns:
+                                        if pattern in line:
+                                            should_log = True
+                                            break
+                                    if should_log:
+                                        break
+                                
+                                if should_log:
+                                    # Determine the appropriate level
+                                    for detected_level, patterns in log_level_patterns.items():
+                                        for pattern in patterns:
+                                            if pattern in line:
+                                                level = detected_level
+                                                # Try to clean the message by removing the timestamp and level prefix
+                                                parts = line.split(pattern, 1)
+                                                if len(parts) > 1:
+                                                    clean_message = parts[1].strip()
+                                                break
+                                        if level != 'INFO':  # Stop once we find a non-default match
+                                            break
+                                    
+                                    # Log the cleaned message with the appropriate level
+                                    self.update_job_logs(job, {
+                                        'level': level,
+                                        'message': clean_message
+                                    })
                     
                     # Process remaining stderr
                     if remaining_stderr:
@@ -679,6 +798,48 @@ class JobProcessor:
                             line = line.strip()
                             if line:
                                 stderr_lines.append(line)
+                                
+                                # First check for special cases that should be INFO despite coming from stderr
+                                level = "ERROR"  # Default level for stderr
+                                clean_message = line
+                                
+                                # Check for pip notices and other informational stderr messages
+                                info_patterns = [
+                                    "[notice]",          # pip notices
+                                    "Requirement already satisfied",  # pip install messages
+                                    "Collecting ",       # pip collecting packages
+                                    "Downloading ",      # pip downloading packages
+                                    "Installing "        # pip installing packages
+                                ]
+                                
+                                # Set level to INFO for special cases
+                                for pattern in info_patterns:
+                                    if pattern in line:
+                                        level = "INFO"
+                                        break
+                                
+                                # Next, check for explicit log levels in the message
+                                log_level_patterns = {
+                                    "CRITICAL": [" - CRITICAL - ", "CRITICAL:"],
+                                    "ERROR": [" - ERROR - ", "ERROR:"],
+                                    "WARNING": [" - WARNING - ", "WARN:", "WARNING:"],
+                                    "INFO": [" - INFO - ", "INFO:"],
+                                    "DEBUG": [" - DEBUG - ", "DEBUG:"]
+                                }
+                                
+                                # Detect explicit log level from the message (overrides special case detection)
+                                for detected_level, patterns in log_level_patterns.items():
+                                    for pattern in patterns:
+                                        if pattern in line:
+                                            level = detected_level
+                                            break
+                                    if level != "ERROR":  # Stop once we find a non-ERROR match
+                                        break
+                                
+                                self.update_job_logs(job, {
+                                    'level': level,
+                                    'message': clean_message
+                                })
             
             # Determine success/failure based on return code
             success = return_code == 0
@@ -741,8 +902,6 @@ class JobProcessor:
                             logger.info(f"Job {job_id} marked as COMPLETED")
                     else:
                         logger.error(f"Job {job_id} not found after script execution")
-                except Exception as e:
-                    logger.error(f"Failed to update job {job_id} with execution results: {e}")
                 except Exception as e:
                     logger.error(f"Failed to update job {job_id} with execution results: {e}")
             
