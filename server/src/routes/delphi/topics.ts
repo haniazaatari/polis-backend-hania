@@ -37,30 +37,45 @@ export function handle_GET_delphi(req: Request, res: Response) {
         `Fetching Delphi LLM topics for conversation_id: ${conversation_id}`
       );
 
-      // Force using local DynamoDB by hardcoding the endpoint
+      // Configure DynamoDB based on environment
       const dynamoDBConfig: any = {
         region: Config.AWS_REGION || "us-east-1",
       };
 
-      // Log what we're using
-      logger.info(`Forcing local DynamoDB connection:
-        Endpoint: ${dynamoDBConfig.endpoint}
-        Region: ${dynamoDBConfig.region}`);
+      // Debug logging
+      logger.info(`Config.dynamoDbEndpoint value: ${Config.dynamoDbEndpoint}`);
+      logger.info(`process.env.DYNAMODB_ENDPOINT value: ${process.env.DYNAMODB_ENDPOINT}`);
 
-      // For local DynamoDB, use dummy credentials
-      dynamoDBConfig.credentials = {
-        accessKeyId: "DUMMYIDEXAMPLE",
-        secretAccessKey: "DUMMYEXAMPLEKEY",
-      };
+      // If DYNAMODB_ENDPOINT is set, we're using local DynamoDB
+      if (Config.dynamoDbEndpoint) {
+        dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
+        // For local DynamoDB, use dummy credentials
+        dynamoDBConfig.credentials = {
+          accessKeyId: "DUMMYIDEXAMPLE",
+          secretAccessKey: "DUMMYEXAMPLEKEY",
+        };
+        logger.info(`Using local DynamoDB at endpoint: ${Config.dynamoDbEndpoint}`);
+      } else {
+        // For production, use real AWS credentials
+        if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
+          dynamoDBConfig.credentials = {
+            accessKeyId: Config.AWS_ACCESS_KEY_ID,
+            secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
+          };
+          logger.info(`Using production DynamoDB with AWS credentials`);
+        } else {
+          // Let the SDK use default credential provider chain (IAM role, etc.)
+          logger.info(`Using default AWS credential provider chain`);
+        }
+      }
 
       // Log connection config for debugging
-      logger.info(`DynamoDB Config: 
+      logger.info(`DynamoDB Config:
         Region: ${dynamoDBConfig.region}
         Endpoint: ${dynamoDBConfig.endpoint || "Default AWS endpoint"}
         AWS_ACCESS_KEY_ID: ${Config.AWS_ACCESS_KEY_ID ? "Set" : "Not set"}
-        AWS_SECRET_ACCESS_KEY: ${
-          Config.AWS_SECRET_ACCESS_KEY ? "Set" : "Not set"
-        }
+        AWS_SECRET_ACCESS_KEY: ${Config.AWS_SECRET_ACCESS_KEY ? "Set" : "Not set"}
+        DYNAMODB_ENDPOINT: ${Config.dynamoDbEndpoint || "Not set"}
       `);
 
       // Create DynamoDB clients

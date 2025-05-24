@@ -35,23 +35,33 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
     const conversation_id = zid.toString();
     logger.info(`Fetching Delphi reports for conversation_id: ${conversation_id}`);
 
-    // Force using local DynamoDB by hardcoding the endpoint
+    // Configure DynamoDB based on environment
     const dynamoDBConfig: any = {
       region: Config.AWS_REGION || "us-east-1",
-      // Force to use the local DynamoDB endpoint
-      endpoint: Config.DYNAMODB_ENDPOINT,
     };
-    
-    // Log what we're using
-    logger.info(`Forcing local DynamoDB connection:
-      Endpoint: ${dynamoDBConfig.endpoint}
-      Region: ${dynamoDBConfig.region}`);
-    
-    // For local DynamoDB, use dummy credentials
-    dynamoDBConfig.credentials = {
-      accessKeyId: Config.AWS_ACCESS_KEY_ID,
-      secretAccessKey: Config.AWS_S3_SECRET_ACCESS_KEY
-    };
+
+    // If DYNAMODB_ENDPOINT is set, we're using local DynamoDB
+    if (Config.dynamoDbEndpoint) {
+      dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
+      // For local DynamoDB, use dummy credentials
+      dynamoDBConfig.credentials = {
+        accessKeyId: "DUMMYIDEXAMPLE",
+        secretAccessKey: "DUMMYEXAMPLEKEY",
+      };
+      logger.info(`Using local DynamoDB at endpoint: ${Config.dynamoDbEndpoint}`);
+    } else {
+      // For production, use real AWS credentials
+      if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
+        dynamoDBConfig.credentials = {
+          accessKeyId: Config.AWS_ACCESS_KEY_ID,
+          secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
+        };
+        logger.info(`Using production DynamoDB with AWS credentials`);
+      } else {
+        // Let the SDK use default credential provider chain (IAM role, etc.)
+        logger.info(`Using default AWS credential provider chain`);
+      }
+    }
 
     // Create DynamoDB clients
     const client = new DynamoDBClient(dynamoDBConfig);
@@ -66,11 +76,12 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
     const tableName = "Delphi_NarrativeReports";
 
     // Query parameters to get reports for the conversation
+    // Note: Reports are stored with report_id as the prefix, not conversation_id
     const params = {
       TableName: tableName,
       FilterExpression: "begins_with(rid_section_model, :prefix)",
       ExpressionAttributeValues: {
-        ":prefix": `${conversation_id}#`
+        ":prefix": `${report_id}#`
       }
     };
     
@@ -119,7 +130,8 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
             model: model,
             timestamp: timestamp,
             report_data: report_data,
-            errors: item.errors
+            errors: item.errors,
+            metadata: item.metadata || null
           };
         }
       });

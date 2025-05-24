@@ -7,16 +7,28 @@ import { getZidFromReport } from "../../utils/parameter";
 import Config from "../../config";
 
 // Initialize DynamoDB client
-const dynamoDbClient = new DynamoDB({
-  // Use environment variables for endpoint and region, or the docker service name
-  endpoint: Config.DYNAMODB_ENDPOINT,
+const dynamoDbConfig: any = {
   region: Config.AWS_REGION || "us-east-1",
-  // For local development or Docker container
-  credentials: {
-    accessKeyId: Config.AWS_ACCESS_KEY_ID || "DUMMYIDEXAMPLE",
-    secretAccessKey: Config.AWS_SECRET_ACCESS_KEY || "DUMMYEXAMPLEKEY",
-  },
-});
+};
+
+// If dynamoDbEndpoint is set, we're running locally (e.g., with Docker)
+if (Config.dynamoDbEndpoint) {
+  dynamoDbConfig.endpoint = Config.dynamoDbEndpoint;
+  // Use dummy credentials for local DynamoDB
+  dynamoDbConfig.credentials = {
+    accessKeyId: "DUMMYIDEXAMPLE",
+    secretAccessKey: "DUMMYEXAMPLEKEY",
+  };
+} else if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
+  // Use real credentials from environment
+  dynamoDbConfig.credentials = {
+    accessKeyId: Config.AWS_ACCESS_KEY_ID,
+    secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
+  };
+}
+// If neither are set, the SDK will use default credential provider chain
+
+const dynamoDbClient = new DynamoDB(dynamoDbConfig);
 
 // Create DocumentClient
 const docClient = DynamoDBDocument.from(dynamoDbClient);
