@@ -41,6 +41,17 @@ def s3_upload_file(local_file_path, s3_key):
     secret_key = os.environ.get('AWS_S3_SECRET_ACCESS_KEY')
     bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
     region = os.environ.get('AWS_REGION')
+    
+    logger.info(f"S3 Configuration:")
+    logger.info(f"  Endpoint: {endpoint_url}")
+    logger.info(f"  Access Key: {'***' + access_key[-4:] if access_key else 'None'}")
+    logger.info(f"  Secret Key: {'***' if secret_key else 'None'}")
+    logger.info(f"  Bucket: {bucket_name}")
+    logger.info(f"  Region: {region}")
+    
+    # Debug current environment
+    logger.info(f"Current AWS_ACCESS_KEY_ID in env: {os.environ.get('AWS_ACCESS_KEY_ID', 'Not set')[:10]}..." if os.environ.get('AWS_ACCESS_KEY_ID') else "AWS_ACCESS_KEY_ID not set")
+    logger.info(f"Will use access_key: {access_key[:10]}..." if access_key else "No access key")
 
     if endpoint_url == "":
         endpoint_url = None
@@ -52,15 +63,21 @@ def s3_upload_file(local_file_path, s3_key):
         secret_key = None
     
     try:
-        # Create S3 client
-        s3_client = boto3.client(
+        # Create a new session to avoid credential conflicts
+        session = boto3.Session()
+        
+        # Create S3 client with explicit credentials
+        s3_client = session.client(
             's3',
-            # endpoint_url=endpoint_url,
-            # aws_access_key_id=access_key,
-            # aws_secret_access_key=secret_key,
+            endpoint_url=endpoint_url,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
             region_name=region,
             # For MinIO/local development, these settings help
-            # config=boto3.session.Config(signature_version='s3v4'),
+            config=boto3.session.Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'path'}  # Required for MinIO
+            ),
             # verify=False
         )
         
@@ -126,12 +143,24 @@ def s3_upload_file(local_file_path, s3_key):
         elif local_file_path.endswith('.svg'):
             extra_args['ContentType'] = 'image/svg+xml'
             
-        s3_client.upload_file(
-            local_file_path,
-            bucket_name, 
-            s3_key,
-            ExtraArgs=extra_args
-        )
+        try:
+            s3_client.upload_file(
+                local_file_path,
+                bucket_name, 
+                s3_key,
+                ExtraArgs=extra_args
+            )
+            # Verify the upload by checking if the object exists
+            head_response = s3_client.head_object(Bucket=bucket_name, Key=s3_key)
+            logger.info(f"Upload verified - object exists at {s3_key}")
+            logger.info(f"Object size: {head_response.get('ContentLength', 'unknown')} bytes")
+            
+            # Double-check by listing objects
+            list_response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=s3_key)
+            logger.info(f"List objects response: {list_response.get('KeyCount', 0)} objects found")
+        except Exception as upload_error:
+            logger.error(f"Upload failed: {upload_error}")
+            raise
 
         if endpoint_url:
         
@@ -782,8 +811,9 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
                 job_id = os.environ.get('DELPHI_JOB_ID', 'unknown')
                 report_id = os.environ.get('DELPHI_REPORT_ID', 'unknown')
                 
-                # Create S3 key using report ID and job ID
-                s3_key = f"visualizations/{report_id}/{job_id}/layer_{layer_id}_datamapplot.html"
+                # Create S3 key using conversation_id (zid) and job ID
+                # Server expects files under conversation_id, not report_id
+                s3_key = f"visualizations/{zid}/{job_id}/layer_{layer_id}_datamapplot.html"
                 s3_url = s3_upload_file(viz_file, s3_key)
                 
                 if s3_url:
