@@ -15,6 +15,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   const [visualizationsLoading, setVisualizationsLoading] = useState(true);
   const [narrativeReports, setNarrativeReports] = useState({});
   const [narrativeLoading, setNarrativeLoading] = useState(true);
+  const [narrativeRunInfo, setNarrativeRunInfo] = useState(null);
   const [jobFormOpen, setJobFormOpen] = useState(false);
   const [jobFormData, setJobFormData] = useState({
     job_type: "FULL_PIPELINE",
@@ -101,6 +102,20 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
         if (response && response.status === "success" && response.reports) {
           setNarrativeReports(response.reports);
+          
+          // Store run info
+          if (response.available_runs) {
+            setNarrativeRunInfo({
+              current: response.current_run,
+              available: response.available_runs
+            });
+            
+            // Log available runs info
+            if (response.available_runs.length > 1) {
+              console.log(`Found ${response.available_runs.length} narrative report runs:`, response.available_runs);
+              console.log(`Currently showing run from: ${response.current_run}`);
+            }
+          }
         }
 
         setNarrativeLoading(false);
@@ -524,19 +539,69 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           let sectionTitle = sectionKey
             .replace("group_informed_consensus", "Group Consensus")
             .replace("groups", "Group Differences")
-            .replace("uncertainty", "Areas of Uncertainty")
-            .replace(/^topic_/, "Topic: ")
-            .replace(/_/g, " ")
-            .split(" ")
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(" ");
+            .replace("uncertainty", "Areas of Uncertainty");
+            
+          // For topic sections, extract the actual topic name from metadata if available
+          if (sectionKey.startsWith("topic_") && report.metadata && report.metadata.topic_name) {
+            sectionTitle = report.metadata.topic_name;
+          } else if (sectionKey.startsWith("topic_")) {
+            // Try to match topic name from LLM topics data
+            let topicFound = false;
+            if (selectedRun && selectedRun.topics_by_layer) {
+              // Extract topic number from section key (e.g., "topic_16" -> "16")
+              const topicNumMatch = sectionKey.match(/topic_(\d+)/);
+              if (topicNumMatch) {
+                const topicNum = topicNumMatch[1];
+                // Search through all layers for this topic number
+                Object.values(selectedRun.topics_by_layer).forEach(layer => {
+                  if (layer[topicNum] && layer[topicNum].topic_name) {
+                    sectionTitle = layer[topicNum].topic_name;
+                    topicFound = true;
+                  }
+                });
+              } else {
+                // For old reports using topic names as keys, try to match by converting back
+                // e.g., "topic_commercial_gallery_system" -> "Commercial Gallery System"
+                const topicKeyMatch = sectionKey.match(/topic_(.+)/);
+                if (topicKeyMatch) {
+                  const topicKey = topicKeyMatch[1];
+                  const reconstructedName = topicKey
+                    .replace(/_/g, ' ')
+                    .split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ');
+                  
+                  // Search for this reconstructed name in the topics
+                  Object.values(selectedRun.topics_by_layer).forEach(layer => {
+                    Object.values(layer).forEach(topic => {
+                      if (topic.topic_name === reconstructedName || 
+                          topic.topic_name.toLowerCase() === topicKey.replace(/_/g, ' ')) {
+                        sectionTitle = topic.topic_name;
+                        topicFound = true;
+                      }
+                    });
+                  });
+                }
+              }
+            }
+            
+            if (!topicFound) {
+              // Fallback: format the key nicely
+              sectionTitle = sectionKey
+                .replace(/^topic_/, "Topic: ")
+                .replace(/_/g, " ")
+                .split(" ")
+                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(" ");
+            }
+          }
 
           return (
             <div key={sectionKey} className="report-section">
               <h3>{sectionTitle}</h3>
               <div className="report-metadata">
                 <span>Generated: {new Date(report.timestamp).toLocaleString()}</span>
-                <span>Model: {report.model}</span>
+                <span> | Model: {report.model || "N/A"}</span>
               </div>
               <div className="report-content">
                 {(() => {
