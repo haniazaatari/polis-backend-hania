@@ -504,6 +504,18 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
     return (
       <div className="narrative-reports-container">
+        {narrativeRunInfo && narrativeRunInfo.available && narrativeRunInfo.available.length > 1 && (
+          <div className="run-info-banner">
+            <p>
+              Showing reports from: <strong>{new Date(narrativeRunInfo.current + ':00Z').toLocaleString()}</strong>
+              {narrativeRunInfo.available.length > 1 && (
+                <span className="run-info-note">
+                  {' '}({narrativeRunInfo.available.length} runs available - showing most recent)
+                </span>
+              )}
+            </p>
+          </div>
+        )}
         {orderedSections.map((sectionKey) => {
           const report = narrativeReports[sectionKey];
           if (!report) return null;
@@ -937,6 +949,24 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
         .narrative-reports-container {
           margin-top: 20px;
+        }
+        
+        .run-info-banner {
+          background: #e3f2fd;
+          border: 1px solid #90caf9;
+          border-radius: 4px;
+          padding: 12px 16px;
+          margin-bottom: 20px;
+        }
+        
+        .run-info-banner p {
+          margin: 0;
+          color: #1976d2;
+        }
+        
+        .run-info-note {
+          color: #666;
+          font-size: 0.9em;
         }
 
         .report-section {
