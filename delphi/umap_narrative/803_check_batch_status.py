@@ -81,10 +81,8 @@ class BatchStatusChecker:
 
         # Try to import Anthropic client with comprehensive error handling
         try:
-            logger.info("Attempting to import Anthropic SDK...")
             try:
                 from anthropic import Anthropic, APIError, APIConnectionError, APIResponseValidationError, APIStatusError
-                logger.info("Successfully imported Anthropic SDK")
             except ImportError as e:
                 logger.error(f"Failed to import Anthropic SDK: {str(e)}")
                 logger.error(f"System paths: {sys.path}")
@@ -93,7 +91,6 @@ class BatchStatusChecker:
                     import subprocess
                     subprocess.check_call([sys.executable, "-m", "pip", "install", "anthropic"])
                     from anthropic import Anthropic, APIError, APIConnectionError, APIResponseValidationError, APIStatusError
-                    logger.info("Successfully installed and imported Anthropic SDK")
                 except Exception as e:
                     logger.error(f"Failed to install Anthropic SDK: {str(e)}")
                     logger.error(traceback.format_exc())
@@ -101,21 +98,13 @@ class BatchStatusChecker:
                     return
 
             # Initialize Anthropic client
-            logger.info("Initializing Anthropic client...")
             anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not anthropic_api_key:
                 logger.error("ANTHROPIC_API_KEY environment variable is not set - cannot check batch status")
-                # Print all available environment variables (without values) to help debug
-                logger.info("Available environment variables:")
-                for key in sorted(os.environ.keys()):
-                    if not key.startswith(('AWS_', 'PATH', 'PYTHONPATH', 'HOME', 'USER')):
-                        logger.info(f"- {key}")
                 self.anthropic = None
             else:
-                logger.info("API key found, initializing Anthropic client")
                 try:
                     self.anthropic = Anthropic(api_key=anthropic_api_key)
-                    logger.info("Anthropic client initialized successfully")
                 except Exception as e:
                     logger.error(f"Failed to initialize Anthropic client: {str(e)}")
                     logger.error(traceback.format_exc())
@@ -231,13 +220,8 @@ class BatchStatusChecker:
                 return None
 
             # Get batch details from Anthropic with detailed error handling
-            logger.info(f"Job {job_id}: Retrieving batch {batch_id} status from Anthropic API")
             try:
                 batch = self.anthropic.beta.messages.batches.retrieve(batch_id)
-
-                # Log batch status
-                logger.info(f"Job {job_id}: Batch {batch_id} status: {batch.processing_status}")
-                logger.info(f"Job {job_id}: Batch {batch_id} details: {batch}")
 
                 # Update job with current batch status
                 try:
@@ -249,7 +233,6 @@ class BatchStatusChecker:
                             ':time': datetime.now().isoformat()
                         }
                     )
-                    logger.info(f"Job {job_id}: Successfully updated job with batch status: {batch.processing_status}")
                 except Exception as update_error:
                     logger.error(f"Job {job_id}: Failed to update job with batch status: {str(update_error)}")
                     logger.error(traceback.format_exc())
@@ -714,7 +697,7 @@ class BatchStatusChecker:
             # The task of checking and recognizing this terminal state is complete.
             current_job_processing_signal = self.EXIT_CODE_TERMINAL_STATE
         elif batch_api_status in NON_TERMINAL_BATCH_STATES:  # 'preparing', 'in_progress'
-            logger.info(f"Batch {batch_id} for job {job_id} is still '{batch_api_status}'. Will need to check again later.")
+            logger.info(f"Job {job_id}: Batch still {batch_api_status}")
             current_job_processing_signal = self.EXIT_CODE_PROCESSING_CONTINUES
         else:  # batch_api_status is None (error during check_batch_status) or an unexpected value
             logger.error(f"Batch {batch_id} for job {job_id}: check_batch_status returned '{batch_api_status}'. This indicates an issue with retrieving status or an unexpected status.")
@@ -766,10 +749,8 @@ async def main():
         logger.info("Running in polling mode.")
         try:
             while True:
-                logger.info("Polling for pending batch jobs...")
                 await checker.check_and_process_jobs() # In polling mode, this processes all found pending jobs.
                                                        # The return value is not used for sys.exit here.
-                logger.info(f"Waiting {args.polling_interval} seconds before next polling cycle...")
                 await asyncio.sleep(args.polling_interval)
         except KeyboardInterrupt:
             logger.info("Batch status checker (polling mode) stopped by user.")

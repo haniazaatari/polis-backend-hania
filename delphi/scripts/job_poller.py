@@ -123,14 +123,9 @@ class JobProcessor:
 
             # Filter for jobs with batch_id field
             batch_jobs = []
-            if processing_items:  # Only log if we found jobs
-                logger.info(f"Found {len(processing_items)} PROCESSING jobs to check for batch_id")
-            else:
-                logger.debug("No PROCESSING jobs found")
             
             for item in processing_items:
                 job_id = item['job_id']
-                logger.info(f"Checking PROCESSING job {job_id} for batch_id field")
                 # Get full item with consistent read
                 try:
                     processing_full_item = self.table.get_item(
@@ -139,38 +134,22 @@ class JobProcessor:
                         },
                         ConsistentRead=True
                     )
-                    logger.info(f"Got response for {job_id}: has_item={'Item' in processing_full_item}")
                 except Exception as e:
                     logger.error(f"Error getting item {job_id}: {e}")
                     continue
 
                 if 'Item' in processing_full_item:
                     full_item = processing_full_item['Item']
-                    # Debug log
-                    has_batch_id = 'batch_id' in full_item
-                    job_type = full_item.get('job_type')
-                    status = full_item.get('status')
-                    logger.info(f"Got full item for {job_id}: has_batch_id={has_batch_id}, job_type={job_type}, status={status}")
-
-                    # Log for all jobs
-                    logger.info(f"Job {job_id}: has_batch_id={has_batch_id}, job_type={job_type}, status={status}")
-
                     # Consider jobs that have batch_id and are in PROCESSING status
                     # This includes AWAITING_NARRATIVE_BATCH, CREATE_NARRATIVE_BATCH, etc.
-                    logger.info(f"Checking condition: has_batch_id={has_batch_id}, status={full_item.get('status')}, should_add={has_batch_id and full_item.get('status') == 'PROCESSING'}")
-                    if has_batch_id and full_item.get('status') == 'PROCESSING':
-                        logger.info(f"Found job {job_id} with batch_id={full_item.get('batch_id')} for status checking")
+                    if 'batch_id' in full_item and full_item.get('status') == 'PROCESSING':
                         batch_jobs.append(full_item)
 
             # Return the oldest batch job if any found
             if batch_jobs:
-                logger.info(f"Found {len(batch_jobs)} batch jobs to process")
                 # Sort by created_at timestamp (oldest first)
                 batch_jobs.sort(key=lambda x: x.get('created_at', ''))
-                logger.info(f"Returning oldest batch job: {batch_jobs[0]['job_id']}")
                 return batch_jobs[0]
-            else:
-                logger.debug("No batch jobs found for processing")
 
             return None
         except Exception as e:
@@ -187,8 +166,6 @@ class JobProcessor:
         is_batch_check = (current_status == 'PROCESSING' and
                           'batch_id' in job)
 
-        logger.info(f"Claiming job {job_id} with status={current_status}, is_batch_check={is_batch_check}")
-
         try:
             # Update the job using optimistic locking with conditional update
             now = datetime.now().isoformat()
@@ -197,7 +174,6 @@ class JobProcessor:
             try:
                 # For batch status checking (NARRATIVE_BATCH jobs with PROCESSING status)
                 if is_batch_check:
-                    logger.info(f"Claiming NARRATIVE_BATCH job {job_id} for batch status check - keeping PROCESSING status")
                     response = self.table.update_item(
                         Key={
                             'job_id': job_id
@@ -224,7 +200,6 @@ class JobProcessor:
                     )
                 # For normal PENDING jobs
                 else:
-                    logger.info(f"Claiming pending job {job_id} - changing status to PROCESSING")
                     response = self.table.update_item(
                         Key={
                             'job_id': job_id
@@ -263,23 +238,12 @@ class JobProcessor:
 
                 # Get the updated job with the new status
                 updated_job = response['Attributes']
-                if is_batch_check:
-                    logger.info(f"Successfully claimed batch status check job {job_id}")
-                else:
-                    logger.info(f"Successfully claimed job {job_id}")
                 return updated_job
 
             except ClientError as e:
                 if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
                     if is_batch_check:
                         logger.warning(f"Batch status check job {job_id} was already claimed or modified by another worker")
-                        # Try to get more info about the job's current state
-                        try:
-                            current_job = self.table.get_item(Key={'job_id': job_id}, ConsistentRead=True)
-                            if 'Item' in current_job:
-                                logger.info(f"Current job state: version={current_job['Item'].get('version')}, worker={current_job['Item'].get('worker_id')}")
-                        except Exception as info_error:
-                            logger.error(f"Error getting job info: {info_error}")
                     else:
                         logger.warning(f"Job {job_id} was already claimed or modified by another worker")
                 else:
@@ -442,7 +406,6 @@ class JobProcessor:
         # Set a default timeout if not specified in the job
         timeout_seconds = job.get('timeout_seconds', 3600)  # Default 1 hour timeout
         
-        logger.info(f"Processing job {job_id} for conversation {conversation_id} with timeout {timeout_seconds}s")
         
         # Update log with processing start
         self.update_job_logs(job, {
@@ -487,7 +450,6 @@ class JobProcessor:
                 if no_cache:
                     cmd.append('--no-cache')
 
-                logger.info(f"Executing batch creation command: {' '.join(cmd)}")
 
             elif job_type == 'AWAITING_NARRATIVE_BATCH':
                 # This is a job that needs to check batch status
@@ -512,8 +474,6 @@ class JobProcessor:
                 cmd_job_id = batch_job_id if batch_job_id else job_id
                 cmd.append(f'--job-id={cmd_job_id}')
 
-                # For batch status check jobs, we don't need any additional configuration
-                logger.info(f"Executing batch status check command: {' '.join(cmd)}")
 
             elif job_type == 'FULL_PIPELINE':
                 # Default: run the standard pipeline
@@ -563,7 +523,6 @@ class JobProcessor:
             # Ensure we have execute permissions on the script
             # os.chmod('./run_delphi.py', 0o755) # REMOVED - Handled in FULL_PIPELINE block
             
-            logger.info(f"Running command from {os.getcwd()}: {' '.join(cmd)}")
             
             # Add environment variables for Docker to work
             env = os.environ.copy()
@@ -866,7 +825,6 @@ class JobProcessor:
             # Specific handling for AWAITING_NARRATIVE_BATCH jobs based on new exit codes
             if job_type == 'AWAITING_NARRATIVE_BATCH':
                 if return_code == EXIT_CODE_PROCESSING_CONTINUES:
-                    logger.info(f"Job {job_id} (AWAITING_NARRATIVE_BATCH): Script 803 indicated underlying batch is still processing (exit code 3). Keeping job active.")
                     # Update job's last checked time or similar, but don't complete it.
                     # The job remains in PROCESSING status. Update 'updated_at' and 'version'.
                     try:
@@ -883,7 +841,6 @@ class JobProcessor:
                                 ':exit_code': return_code
                             }
                         )
-                        logger.info(f"Job {job_id} updated_at timestamp refreshed, will be checked again.")
                     except Exception as e:
                         logger.error(f"Failed to update timestamp for job {job_id} after script exit code 3: {e}")
                     return True # Indicate poller handled this, job processing for this cycle is "done" but job itself is not final
