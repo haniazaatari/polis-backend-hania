@@ -783,59 +783,59 @@ helpersInitialized.then(
     app.get("/api/v3/testConnection", moveToBody, handle_GET_testConnection);
 
     app.get("/api/v3/testDatabase", moveToBody, handle_GET_testDatabase);
-    
+
     app.get("/api/v3/delphi", moveToBody, handle_GET_delphi);
-    
+
     // Add POST endpoint for creating Delphi jobs
-    app.post("/api/v3/delphi/jobs", moveToBody, function(req, res) {
+    app.post("/api/v3/delphi/jobs", moveToBody, function (req, res) {
       try {
         handle_POST_delphi_jobs(req, res);
       } catch (err) {
         res.json({
           status: "error",
           message: "Internal server error in job creation endpoint",
-          error: err.message || "Unknown error"
+          error: err.message || "Unknown error",
         });
       }
     });
-    
+
     // Add GET endpoint for Delphi reports
-    app.get("/api/v3/delphi/reports", moveToBody, function(req, res) {
+    app.get("/api/v3/delphi/reports", moveToBody, function (req, res) {
       try {
         handle_GET_delphi_reports(req, res);
       } catch (err) {
         res.json({
           status: "error",
           message: "Internal server error in reports endpoint",
-          error: err.message || "Unknown error"
+          error: err.message || "Unknown error",
         });
       }
     });
-    
+
     // Use the directly imported handler from the top of the file
-    
+
     // Add error handling wrapper for async route handler
-    app.get("/api/v3/delphi/visualizations", moveToBody, function(req, res) {
+    app.get("/api/v3/delphi/visualizations", moveToBody, function (req, res) {
       try {
         handle_GET_delphi_visualizations(req, res);
       } catch (err) {
         res.json({
           status: "error",
           message: "Internal server error in visualizations endpoint",
-          error: err.message || "Unknown error"
+          error: err.message || "Unknown error",
         });
       }
     });
-    
+
     // Add POST endpoint for batch report generation
-    app.post("/api/v3/delphi/batchReports", moveToBody, function(req, res) {
+    app.post("/api/v3/delphi/batchReports", moveToBody, function (req, res) {
       try {
         handle_POST_delphi_batch_reports(req, res);
       } catch (err) {
         res.json({
           status: "error",
           message: "Internal server error in batch reports endpoint",
-          error: err.message || "Unknown error"
+          error: err.message || "Unknown error",
         });
       }
     });
@@ -1581,7 +1581,7 @@ helpersInitialized.then(
     // Report route for LLM-generated group topics
     app.get(
       /^\/commentsReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
-      function(req, res, next) {
+      function (req, res, next) {
         return fetchIndexForReportPage(req, res, next);
       }
     );
@@ -1650,6 +1650,8 @@ helpersInitialized.then(
     app.get(/^\/cached\/.*/, proxy);
     app.get(/^\/font\/.*/, proxy);
     app.get(/^\/.*embed.*js\/.*/, proxy);
+    app.get(/^\/report_bundle.*\.js$/, proxy);
+    app.get(/^\/report_style.*\.css$/, proxy);
 
     // ends in slash? redirect to non-slash version
     app.get(/.*\//, function (req, res) {
