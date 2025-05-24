@@ -943,11 +943,18 @@ def process_layers_and_create_visualizations(
                 logger.info(f"Storing LLM topic names for layer {layer_idx} in DynamoDB...")
                 # Get model name from environment variable or use default
                 model_name = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
+                # Get job_id from environment - check both possible names
+                job_id = os.environ.get("DELPHI_JOB_ID") or os.environ.get("JOB_ID")
+                if not job_id:
+                    logger.error("DELPHI_JOB_ID environment variable not set, cannot store LLM topic names")
+                    continue
+                    
                 llm_topic_models = DataConverter.batch_convert_llm_topic_names(
                     conversation_id,
                     cluster_labels,
                     layer_idx,
-                    model_name=model_name  # Model used by Ollama
+                    model_name=model_name,  # Model used by Ollama
+                    job_id=job_id
                 )
                 result = dynamo_storage.batch_create_llm_topic_names(llm_topic_models)
                 logger.info(f"Stored {result['success']} LLM topic names with {result['failure']} failures")

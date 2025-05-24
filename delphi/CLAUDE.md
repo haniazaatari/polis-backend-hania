@@ -2,6 +2,10 @@
 
 This document provides comprehensive guidance for working with the Delphi system, including database interactions, environment configuration, Docker services, and the distributed job queue system. It serves as both documentation and a practical reference for day-to-day operations.
 
+## Code notes
+
+Don't write fallbacks. Write error logging. Fallbacks create silent failures and bugs. Error logging surfaces errors.
+
 ## Documentation Directory
 
 For a comprehensive list of all documentation files with descriptions, see:

@@ -180,7 +180,7 @@ class PostgresClient:
         # Mark as initialized
         self._initialized = True
         
-        logger.info(f"Initialized PostgreSQL connection to {self.config.host}:{self.config.port}/{self.config.database}")
+        # logger.info(f"Initialized PostgreSQL connection to {self.config.host}:{self.config.port}/{self.config.database}")
     
     def shutdown(self) -> None:
         """

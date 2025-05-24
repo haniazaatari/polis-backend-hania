@@ -169,8 +169,10 @@ export function handle_GET_delphi(req: Request, res: Response) {
       // Function to execute the actual query
       function proceedWithQuery() {
         // Query parameters to get LLM topic names for the conversation
+        // Use the GSI to query by conversation_id since we don't have job_id
         const params = {
           TableName: tableName,
+          IndexName: "ConversationIndex",
           KeyConditionExpression: "conversation_id = :cid",
           ExpressionAttributeValues: {
             ":cid": conversation_id,
@@ -196,31 +198,26 @@ export function handle_GET_delphi(req: Request, res: Response) {
             }
 
             // Process results - organize topics by run, then by layer, then by cluster
-            // Group by creation timestamp and model to identify different runs
+            // Group by job_id to identify different runs
             const items = data.Items;
 
-            // First group by model and creation date (truncate to day for grouping)
+            // First group by job_id
             const runGroups: Record<string, any[]> = {};
 
             items.forEach((item) => {
-              const modelName = item.model_name || "unknown";
-              const createdAt = item.created_at || "";
-              const createdDate = createdAt.substring(0, 10); // Take just the date part YYYY-MM-DD
+              const jobId = item.job_id || "unknown";
 
-              // Create a run key based on model and creation date
-              const runKey = `${modelName}_${createdDate}`;
-
-              if (!runGroups[runKey]) {
-                runGroups[runKey] = [];
+              if (!runGroups[jobId]) {
+                runGroups[jobId] = [];
               }
 
-              runGroups[runKey].push(item);
+              runGroups[jobId].push(item);
             });
 
             // Now organize each run into layers and clusters
             const allRuns: Record<string, any> = {};
 
-            Object.entries(runGroups).forEach(([runKey, runItems]) => {
+            Object.entries(runGroups).forEach(([jobId, runItems]) => {
               const topicsByLayer: Record<string, Record<string, any>> = {};
 
               // Process each item in this run
@@ -239,6 +236,7 @@ export function handle_GET_delphi(req: Request, res: Response) {
                   model_name: item.model_name,
                   created_at: item.created_at,
                   topic_key: item.topic_key,
+                  job_id: item.job_id,
                 };
               });
 
@@ -246,8 +244,10 @@ export function handle_GET_delphi(req: Request, res: Response) {
               const sampleItem = runItems[0];
 
               // Add run with metadata
-              allRuns[runKey] = {
+              allRuns[jobId] = {
+                job_id: jobId,
                 model_name: sampleItem.model_name,
+                created_at: sampleItem.created_at,
                 created_date: sampleItem.created_at?.substring(0, 10),
                 topics_by_layer: topicsByLayer,
                 item_count: runItems.length,
@@ -257,9 +257,9 @@ export function handle_GET_delphi(req: Request, res: Response) {
             // Return all runs, with the most recent runs first
             const sortedRuns = Object.entries(allRuns)
               .sort(([keyA, runA], [keyB, runB]) => {
-                // Sort by created_date in descending order (newest first)
-                const dateA = runA.created_date || "";
-                const dateB = runB.created_date || "";
+                // Sort by created_at in descending order (newest first)
+                const dateA = runA.created_at || "";
+                const dateB = runB.created_at || "";
                 return dateB.localeCompare(dateA);
               })
               .reduce((acc, [key, value]) => {

@@ -334,19 +334,20 @@ def load_comment_texts(zid):
         # Clean up connection
         postgres_client.shutdown()
 
-def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
+def load_conversation_data_from_dynamo(zid, layer_id, job_id, dynamo_storage):
     """
     Load data from DynamoDB for a specific conversation and layer.
     
     Args:
         zid: Conversation ID
         layer_id: Layer ID
+        job_id: Job ID for this run
         dynamo_storage: DynamoDBStorage instance
         
     Returns:
         Dictionary with data from DynamoDB
     """
-    logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id}")
+    logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id}, job {job_id}")
     
     # Initialize data dictionary
     data = {
@@ -563,8 +564,9 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['llm_topic_names'])
         logger.debug(f"LLMTopicNames table name: {dynamo_storage.table_names['llm_topic_names']}")
         
+        # Query using the composite key with job_id
         response = table.query(
-            KeyConditionExpression=Key('conversation_id').eq(str(zid))
+            KeyConditionExpression=Key('conversation_job_id').eq(f"{str(zid)}#{job_id}")
         )
         topic_names = response.get('Items', [])
         
@@ -572,7 +574,7 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         while 'LastEvaluatedKey' in response:
             logger.debug(f"Handling pagination for topic names...")
             response = table.query(
-                KeyConditionExpression=Key('conversation_id').eq(str(zid)),
+                KeyConditionExpression=Key('conversation_job_id').eq(f"{str(zid)}#{job_id}"),
                 ExclusiveStartKey=response['LastEvaluatedKey']
             )
             topic_names.extend(response.get('Items', []))
@@ -860,12 +862,13 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
         logger.error(f"Outer traceback: {traceback.format_exc()}")
         return None
 
-def generate_visualization(zid, layer_id=0, output_dir=None, dynamo_endpoint=None):
+def generate_visualization(zid, job_id, layer_id=0, output_dir=None, dynamo_endpoint=None):
     """
     Generate visualization for a specific conversation and layer.
     
     Args:
         zid: Conversation ID
+        job_id: Job ID for this run
         layer_id: Optional Layer ID (default: 0)
         output_dir: Optional directory to save the visualization
         dynamo_endpoint: Optional DynamoDB endpoint URL
@@ -910,8 +913,8 @@ def generate_visualization(zid, layer_id=0, output_dir=None, dynamo_endpoint=Non
         logger.info(f"Successfully loaded {len(comment_texts)} comment texts")
         
         # Load data from DynamoDB
-        logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id}...")
-        data = load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage)
+        logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id}, job {job_id}...")
+        data = load_conversation_data_from_dynamo(zid, layer_id, job_id, dynamo_storage)
         if not data:
             logger.error("Failed to load data from DynamoDB")
             return None
@@ -962,6 +965,8 @@ def main():
     parser = argparse.ArgumentParser(description='Generate DataMapPlot visualization for a layer of a conversation')
     parser.add_argument('--conversation_id', '--zid', type=str, required=True,
                       help='Conversation ID to process')
+    parser.add_argument('--job_id', type=str, required=True,
+                      help='Job ID for this run')
     parser.add_argument('--layer', type=int, default=0,
                       help='Layer ID to visualize (default: 0)')
     parser.add_argument('--output_dir', type=str, default=None,
@@ -975,6 +980,7 @@ def main():
     
     viz_file = generate_visualization(
         args.conversation_id,
+        job_id=args.job_id,
         layer_id=args.layer,
         output_dir=args.output_dir,
         dynamo_endpoint=args.dynamo_endpoint

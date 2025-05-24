@@ -503,7 +503,7 @@ def generate_topic_names(layer_data, conversation_name=None, model_name=None, pr
     logger.info(f"Generated {len(cluster_topic_names)} topic names")
     return cluster_topic_names
 
-def save_topic_names(conversation_id, layer_id, topic_names, model_name, dynamo_storage=None, output_base_dir="polis_data"):
+def save_topic_names(conversation_id, layer_id, topic_names, model_name, job_id, dynamo_storage=None, output_base_dir="polis_data"):
     """
     Save generated topic names to DynamoDB.
     
@@ -512,6 +512,7 @@ def save_topic_names(conversation_id, layer_id, topic_names, model_name, dynamo_
         layer_id: Layer ID
         topic_names: Dictionary mapping cluster IDs to topic names
         model_name: Name of the LLM model used
+        job_id: Job ID for this run (required)
         dynamo_storage: Optional DynamoDBStorage instance
         output_base_dir: Base directory for output files (not used)
         
@@ -541,7 +542,9 @@ def save_topic_names(conversation_id, layer_id, topic_names, model_name, dynamo_
                 
             topic_key = f"layer{layer_id}_{cluster_id}"
             model = {
+                'conversation_job_id': f"{conversation_id}#{job_id}",  # Composite key
                 'conversation_id': conversation_id,
+                'job_id': job_id,
                 'topic_key': topic_key,
                 'layer_id': layer_id,
                 'cluster_id': int(cluster_id),
@@ -647,12 +650,13 @@ def update_visualization_with_llm_names(conversation_id, layer_id, topic_names, 
         logger.error(f"Error creating visualization: {e}")
         return None
 
-def update_conversation_with_ollama(conversation_id, layer_id=None, model_name=None, output_base_dir="polis_data", dynamo_endpoint=None, start_cluster=None, end_cluster=None):
+def update_conversation_with_ollama(conversation_id, job_id, layer_id=None, model_name=None, output_base_dir="polis_data", dynamo_endpoint=None, start_cluster=None, end_cluster=None):
     """
     Update a conversation with Ollama-generated topic names.
     
     Args:
         conversation_id: Conversation ID
+        job_id: Job ID for this run (required)
         layer_id: Optional specific layer ID to update (if None, update all layers)
         model_name: Ollama model name to use
         output_base_dir: Base directory for output files
@@ -699,7 +703,7 @@ def update_conversation_with_ollama(conversation_id, layer_id=None, model_name=N
     if layer_id is not None:
         return update_layer_with_ollama(
             conversation_id, layer_id, conversation_name, 
-            model_name, output_base_dir, dynamo_storage,
+            model_name, job_id, output_base_dir, dynamo_storage,
             start_cluster, end_cluster
         )
     
@@ -717,7 +721,7 @@ def update_conversation_with_ollama(conversation_id, layer_id=None, model_name=N
             for layer_id in layer_ids:
                 result = update_layer_with_ollama(
                     conversation_id, layer_id, conversation_name, 
-                    model_name, output_base_dir, dynamo_storage,
+                    model_name, job_id, output_base_dir, dynamo_storage,
                     start_cluster, end_cluster
                 )
                 results.append(result)
@@ -731,7 +735,7 @@ def update_conversation_with_ollama(conversation_id, layer_id=None, model_name=N
             for layer_id in range(3):
                 result = update_layer_with_ollama(
                     conversation_id, layer_id, conversation_name, 
-                    model_name, output_base_dir, dynamo_storage,
+                    model_name, job_id, output_base_dir, dynamo_storage,
                     start_cluster, end_cluster
                 )
                 results.append(result)
@@ -742,7 +746,7 @@ def update_conversation_with_ollama(conversation_id, layer_id=None, model_name=N
         logger.error(f"Error processing conversation layers: {e}")
         return False
 
-def update_layer_with_ollama(conversation_id, layer_id, conversation_name, model_name, output_base_dir, dynamo_storage, start_cluster=None, end_cluster=None):
+def update_layer_with_ollama(conversation_id, layer_id, conversation_name, model_name, job_id, output_base_dir, dynamo_storage, start_cluster=None, end_cluster=None):
     """
     Update a specific layer with Ollama-generated topic names.
     
@@ -751,6 +755,7 @@ def update_layer_with_ollama(conversation_id, layer_id, conversation_name, model
         layer_id: Layer ID to update
         conversation_name: Name of the conversation
         model_name: Ollama model name to use
+        job_id: Job ID for this run (required)
         output_base_dir: Base directory for output files (not used)
         dynamo_storage: DynamoDBStorage instance
         start_cluster: Starting cluster ID for processing a range (inclusive)
@@ -794,7 +799,7 @@ def update_layer_with_ollama(conversation_id, layer_id, conversation_name, model
     
     # Save topic names to DynamoDB only
     success = save_topic_names(
-        conversation_id, layer_id, topic_names, model_name, 
+        conversation_id, layer_id, topic_names, model_name, job_id,
         dynamo_storage, output_base_dir
     )
     
@@ -805,6 +810,8 @@ def main():
     parser = argparse.ArgumentParser(description='Update cluster topics with Ollama-generated names')
     parser.add_argument('--conversation_id', type=str, required=True,
                       help='Conversation ID to process')
+    parser.add_argument('--job_id', type=str, required=True,
+                      help='Job ID for this run')
     parser.add_argument('--layer', type=int, required=False, default=None,
                       help='Specific layer ID to update (default: all layers)')
     parser.add_argument('--model', type=str, default=None,
@@ -824,6 +831,7 @@ def main():
     
     success = update_conversation_with_ollama(
         args.conversation_id,
+        args.job_id,
         layer_id=args.layer,
         model_name=args.model,
         output_base_dir=args.output_dir,

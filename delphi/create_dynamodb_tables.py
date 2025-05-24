@@ -362,12 +362,32 @@ def create_evoc_tables(dynamodb, delete_existing=False):
         },
         'Delphi_CommentClustersLLMTopicNames': {
             'KeySchema': [
-                {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'conversation_job_id', 'KeyType': 'HASH'},  # Format: conversation_id#job_id
                 {'AttributeName': 'topic_key', 'KeyType': 'RANGE'}
             ],
             'AttributeDefinitions': [
-                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
-                {'AttributeName': 'topic_key', 'AttributeType': 'S'}
+                {'AttributeName': 'conversation_job_id', 'AttributeType': 'S'},
+                {'AttributeName': 'topic_key', 'AttributeType': 'S'},
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},  # For GSI
+                {'AttributeName': 'job_id', 'AttributeType': 'S'}  # For GSI
+            ],
+            'GlobalSecondaryIndexes': [
+                {
+                    'IndexName': 'ConversationIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'conversation_id', 'KeyType': 'HASH'}
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                },
+                {
+                    'IndexName': 'JobIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'job_id', 'KeyType': 'HASH'}
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                }
             ],
             'ProvisionedThroughput': {
                 'ReadCapacityUnits': 5,

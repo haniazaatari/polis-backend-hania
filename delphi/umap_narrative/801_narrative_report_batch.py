@@ -87,15 +87,20 @@ class NarrativeReportService:
             section: The section of the report
             model: The model used to generate the report
             report_data: The generated report content
-            job_id: The ID of the job that generated this report (optional)
+            job_id: The ID of the job that generated this report (required)
             metadata: Additional metadata to store with the report (optional)
 
         Returns:
             Response from DynamoDB
         """
         try:
-            # Create a combined key for the report (report_id, section, model)
-            rid_section_model = f"{report_id}#{section}#{model}"
+            # Require job_id for proper run tracking
+            if not job_id:
+                raise ValueError("job_id is required for storing reports")
+            
+            # Create a combined key for the report (report_id, job_id, section)
+            # Model is stored as an attribute, not part of the key
+            rid_section_model = f"{report_id}#{job_id}#{section}"
 
             # Current timestamp
             timestamp = datetime.now().isoformat()
@@ -105,14 +110,11 @@ class NarrativeReportService:
                 'rid_section_model': rid_section_model,
                 'timestamp': timestamp,
                 'report_id': report_id,
+                'job_id': job_id,
                 'section': section,
                 'model': model,
                 'report_data': report_data
             }
-
-            # Add job_id if provided
-            if job_id:
-                item['job_id'] = job_id
                 
             # Add metadata if provided
             if metadata:
@@ -369,14 +371,21 @@ class BatchReportGenerator:
         
         try:
             # Get all LLMTopicNames entries for layer 0
+            # Require job_id to get topics from this specific run
+            if not self.job_id:
+                raise ValueError("job_id is required to fetch topic names")
+            
             table = dynamo_storage.dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
-            response = table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(self.conversation_id) &
-                               boto3.dynamodb.conditions.Attr('layer_id').eq(0)
+            
+            # Query using the composite key
+            response = table.query(
+                KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_job_id').eq(f"{self.conversation_id}#{self.job_id}")
             )
             
-            topic_names_items = response.get('Items', [])
-            logger.info(f"Found {len(topic_names_items)} layer 0 topic names in LLMTopicNames")
+            # Filter for layer 0 items only
+            all_items = response.get('Items', [])
+            topic_names_items = [item for item in all_items if item.get('layer_id') == 0]
+            logger.info(f"Found {len(topic_names_items)} layer 0 topic names in LLMTopicNames (from {len(all_items)} total)")
             
             # Get all comment clusters
             clusters_table = dynamo_storage.dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
@@ -424,10 +433,17 @@ class BatchReportGenerator:
                                     if 'S' in comment:
                                         sample_comments.append(comment['S'])
                     
+                    # Get topic_key - this is required for stable mapping
+                    topic_key = topic_item.get('topic_key')
+                    if not topic_key:
+                        logger.error(f"Missing topic_key for cluster {cluster_id} in conversation {self.conversation_id}")
+                        raise ValueError(f"topic_key is required but missing for cluster {cluster_id}")
+                    
                     # Create topic entry
                     topic = {
                         "cluster_id": cluster_id,
                         "name": topic_name,
+                        "topic_key": topic_key,
                         "citations": topic_comments.get(cluster_id, []),
                         "sample_comments": sample_comments
                     }
@@ -561,8 +577,11 @@ class BatchReportGenerator:
         for topic in topics:
             topic_name = topic['name']
             topic_cluster_id = topic['cluster_id']
-            topic_key = topic_name.lower().replace(' ', '_')
-            section_name = f"topic_{topic_key}"
+            topic_key = topic['topic_key']  # Use the stable topic_key from DynamoDB
+            section_name = topic_key  # Use topic_key directly as section name
+            
+            # Log the mapping for clarity
+            logger.info(f"Topic mapping - cluster_id: {topic_cluster_id}, topic_name: {topic_name}, topic_key: {topic_key}, section_name: {section_name}")
             
             # Create filter for this topic
             filter_args = {
@@ -838,12 +857,11 @@ class BatchReportGenerator:
                 for i, request in enumerate(batch_requests):
                     # Extract metadata for custom_id
                     metadata = request.get('metadata', {})
-                    topic_name = metadata.get('topic_name', 'Unknown Topic')
-                    cluster_id = metadata.get('cluster_id', i)
-                    section_name = metadata.get('section_name', f"topic_{topic_name.lower().replace(' ', '_')}")
+                    section_name = metadata.get('section_name', 'unknown_section')
 
                     # Create a valid custom_id (only allow a-zA-Z0-9_-)
-                    custom_id = f"{self.conversation_id}_{cluster_id}_{section_name}"
+                    # Since section_name now contains layer and cluster info (e.g., layer0_0), we don't need cluster_id
+                    custom_id = f"{self.conversation_id}_{section_name}"
                     safe_custom_id = re.sub(r'[^a-zA-Z0-9_-]', '_', custom_id)
 
                     # Validate custom_id length (max 64 chars for Anthropic API)

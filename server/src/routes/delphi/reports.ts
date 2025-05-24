@@ -103,25 +103,32 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
         });
       }
 
-      // Process results - organize reports by section and model
+      // Process results - organize reports by job_id to identify different runs
       const items = data.Items;
       
-      // First, group by timestamp to identify different runs
+      // Group by job_id to identify different runs
       const reportRuns: Record<string, any[]> = {};
       
       items.forEach(item => {
-        const timestamp = item.timestamp || '';
-        // Group by timestamp truncated to minute to group reports from same batch
-        const runKey = timestamp.substring(0, 16); // YYYY-MM-DDTHH:MM
+        const job_id = item.job_id;
         
-        if (!reportRuns[runKey]) {
-          reportRuns[runKey] = [];
+        if (!job_id) {
+          logger.error(`Report item missing job_id: ${item.rid_section_model}`);
+          return; // Skip this item
         }
-        reportRuns[runKey].push(item);
+        
+        if (!reportRuns[job_id]) {
+          reportRuns[job_id] = [];
+        }
+        reportRuns[job_id].push(item);
       });
       
-      // Get the most recent run
-      const sortedRunKeys = Object.keys(reportRuns).sort((a, b) => b.localeCompare(a));
+      // Sort runs by timestamp of first item in each run (most recent first)
+      const sortedRunKeys = Object.keys(reportRuns).sort((a, b) => {
+        const aTime = reportRuns[a][0]?.timestamp || '';
+        const bTime = reportRuns[b][0]?.timestamp || '';
+        return bTime.localeCompare(aTime);
+      });
       const mostRecentRunKey = sortedRunKeys[0];
       const mostRecentItems = reportRuns[mostRecentRunKey] || [];
       
@@ -131,30 +138,27 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
       const reportsBySection: Record<string, any> = {};
       
       mostRecentItems.forEach(item => {
-        const rid_section_model = item.rid_section_model || '';
-        const parts = rid_section_model.split('#');
+        // New key format: report_id#job_id#section
+        // All needed fields are stored as attributes
+        const section = item.section;
+        const model = item.model || 'unknown';
+        const timestamp = item.timestamp || '';
+        const report_data = item.report_data || '';
         
-        if (parts.length >= 2) {
-          const section = parts[1];
-          const model = parts[2] || 'unknown';
-          const timestamp = item.timestamp || '';
-          const report_data = item.report_data || '';
-          
-          // Initialize section if it doesn't exist
-          if (!reportsBySection[section]) {
-            reportsBySection[section] = {};
-          }
-          
-          // Add report data
-          reportsBySection[section] = {
-            section: section,
-            model: model,
-            timestamp: timestamp,
-            report_data: report_data,
-            errors: item.errors,
-            metadata: item.metadata || null
-          };
+        if (!section) {
+          logger.error(`Report item missing section: ${item.rid_section_model}`);
+          return;
         }
+        
+        // Add report data
+        reportsBySection[section] = {
+          section: section,
+          model: model,
+          timestamp: timestamp,
+          report_data: report_data,
+          errors: item.errors,
+          metadata: item.metadata || null
+        };
       });
 
       // Get info about all runs for potential UI dropdown
@@ -162,8 +166,9 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
         const runItems = reportRuns[runKey];
         const sampleItem = runItems[0];
         return {
-          timestamp: runKey,
-          model: sampleItem.rid_section_model?.split('#')[2] || 'unknown',
+          job_id: runKey,
+          timestamp: sampleItem.timestamp,
+          model: sampleItem.model || 'unknown',
           sectionCount: runItems.length,
           isCurrent: runKey === mostRecentRunKey
         };

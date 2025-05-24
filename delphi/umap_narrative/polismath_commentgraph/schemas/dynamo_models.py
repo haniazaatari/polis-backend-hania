@@ -154,7 +154,9 @@ class EnhancedTopicName(BaseModel):
 
 class LLMTopicName(BaseModel):
     """LLM-generated topic name."""
+    conversation_job_id: str  # Composite key: conversation_id#job_id
     conversation_id: str
+    job_id: str
     topic_key: str  # format: "layer{layer_id}_{cluster_id}"
     layer_id: int
     cluster_id: int

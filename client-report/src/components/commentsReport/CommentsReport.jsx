@@ -509,9 +509,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     // Order of sections to display
     const sectionOrder = ["group_informed_consensus", "groups", "uncertainty"];
 
-    // Topic sections will have names starting with 'topic_'
+    // Topic sections will have names starting with 'topic_' or 'layer'
     const topicSections = Object.keys(narrativeReports)
-      .filter((key) => key.startsWith("topic_"))
+      .filter((key) => key.startsWith("topic_") || key.startsWith("layer"))
       .sort();
 
     // Combine ordered sections with topic sections
@@ -522,10 +522,18 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         {narrativeRunInfo && narrativeRunInfo.available && narrativeRunInfo.available.length > 1 && (
           <div className="run-info-banner">
             <p>
-              Showing reports from: <strong>{new Date(narrativeRunInfo.current + ':00Z').toLocaleString()}</strong>
+              {(() => {
+                // Find the current run info
+                const currentRun = narrativeRunInfo.available.find(run => run.isCurrent);
+                if (currentRun && currentRun.timestamp) {
+                  return <>Showing reports from: <strong>{new Date(currentRun.timestamp).toLocaleString()}</strong></>;
+                } else {
+                  return <>Showing most recent reports</>;
+                }
+              })()}
               {narrativeRunInfo.available.length > 1 && (
                 <span className="run-info-note">
-                  {' '}({narrativeRunInfo.available.length} runs available - showing most recent)
+                  {' '}({narrativeRunInfo.available.length} runs available)
                 </span>
               )}
             </p>
@@ -833,6 +841,40 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
               This narrative report provides insights about group consensus, differences, and key
               topics in the conversation.
             </p>
+            
+            {/* Debug: Topic mapping */}
+            {selectedRun && selectedRun.topics_by_layer && selectedRun.topics_by_layer[0] && (
+              <div style={{ 
+                background: '#f5f5f5', 
+                border: '1px solid #ddd', 
+                borderRadius: '4px', 
+                padding: '15px', 
+                marginBottom: '20px',
+                fontFamily: 'monospace',
+                fontSize: '12px'
+              }}>
+                <h4 style={{ margin: '0 0 10px 0', fontFamily: 'sans-serif' }}>Debug: Layer to Topic Mapping</h4>
+                <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left', padding: '5px', borderBottom: '1px solid #ccc' }}>Layer ID</th>
+                      <th style={{ textAlign: 'left', padding: '5px', borderBottom: '1px solid #ccc' }}>Topic Name</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(selectedRun.topics_by_layer[0])
+                      .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                      .map(([clusterId, topic]) => (
+                        <tr key={clusterId}>
+                          <td style={{ padding: '5px', borderBottom: '1px solid #eee' }}>layer0_{clusterId}</td>
+                          <td style={{ padding: '5px', borderBottom: '1px solid #eee' }}>{topic.topic_name}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            
             {renderNarrativeReports()}
           </div>
         </div>

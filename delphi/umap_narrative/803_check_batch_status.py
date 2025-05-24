@@ -426,36 +426,48 @@ class BatchStatusChecker:
                             if entry.get('result', {}).get('type') == 'succeeded':
                                 processed_count += 1
 
-                                # Extract metadata from custom_id
-                                custom_id = entry.get('request', {}).get('custom_id')
+                                # Extract metadata from custom_id - it's at the top level of the entry
+                                custom_id = entry.get('custom_id')
                                 logger.info(f"Job {job_id}: Processing successful result for custom_id: {custom_id}")
 
-                                # Handle missing custom_id by using a fallback based on entry index
-                                if custom_id:
-                                    parts = custom_id.split('_')
-
-                                    # Try to determine section name from custom_id
-                                    section_name = None
-                                    if len(parts) > 2:
-                                        # Skip conversation_id and cluster_id
-                                        section_name = '_'.join(parts[2:])
-                                else:
-                                    # If custom_id is None, we need to create a fallback
-                                    parts = []
-                                    section_name = None
-
-                                # If section_name couldn't be determined, use a default
-                                if not section_name:
-                                    section_name = f"topic_{len(results)}"
+                                # Extract section name from custom_id - this is critical for proper mapping
+                                if not custom_id:
+                                    logger.error(f"Job {job_id}: Missing custom_id in batch result entry - cannot process this result")
+                                    logger.error(f"Job {job_id}: Entry data: {json.dumps(entry, indent=2)}")
+                                    failed_count += 1
+                                    results.append({
+                                        'custom_id': None,
+                                        'status': 'failed',
+                                        'error': 'Missing custom_id in batch response',
+                                        'timestamp': datetime.now().isoformat()
+                                    })
+                                    continue
+                                
+                                # Parse section name from custom_id format: conversation_id_section_name
+                                parts = custom_id.split('_', 1)
+                                if len(parts) != 2:
+                                    logger.error(f"Job {job_id}: Invalid custom_id format: {custom_id} - expected format: conversationId_sectionName")
+                                    failed_count += 1
+                                    results.append({
+                                        'custom_id': custom_id,
+                                        'status': 'failed',
+                                        'error': f'Invalid custom_id format: {custom_id}',
+                                        'timestamp': datetime.now().isoformat()
+                                    })
+                                    continue
+                                
+                                section_name = parts[1]
 
                                 logger.info(f"Job {job_id}: Extracted section name: {section_name}")
 
+                                # Get the message from the result
+                                message = entry.get('result', {}).get('message', {})
+                                
                                 # Get the model name
-                                model = entry.get('request', {}).get('params', {}).get('model')
+                                model = message.get('model', 'unknown')
                                 logger.info(f"Job {job_id}: Using model: {model}")
 
                                 # Get the response content
-                                message = entry.get('result', {}).get('message', {})
                                 content_items = message.get('content', [])
 
                                 if content_items and len(content_items) > 0:
@@ -468,18 +480,19 @@ class BatchStatusChecker:
 
                                 # Store in report table
                                 try:
-                                    # Format the key with # delimiters to match server query expectations
-                                    rid_section_model = f"{report_id}#{section_name}#{model}"
+                                    # Format the key with # delimiters: report_id#job_id#section
+                                    # Model is an attribute, not part of the key
+                                    rid_section_model = f"{report_id}#{job_id}#{section_name}"
                                     timestamp = datetime.now().isoformat()
 
                                     item = {
                                         'rid_section_model': rid_section_model,
                                         'timestamp': timestamp,
                                         'report_id': report_id,
+                                        'job_id': job_id,
                                         'section': section_name,
                                         'model': model,
                                         'report_data': content,
-                                        'job_id': job_id,
                                         'batch_id': batch_id,
                                         'custom_id': custom_id
                                     }
@@ -508,7 +521,7 @@ class BatchStatusChecker:
                             elif entry.get('result', {}).get('type') == "failed":
                                 # Log failed requests
                                 failed_count += 1
-                                custom_id = entry.get('request', {}).get('custom_id')
+                                custom_id = entry.get('custom_id')
                                 error_message = entry.get('result', {}).get('error', {}).get('message', 'Unknown error')
                                 logger.error(f"Job {job_id}: Request failed for {custom_id}: {error_message}")
 
@@ -521,7 +534,7 @@ class BatchStatusChecker:
                             else:
                                 # Unknown result type
                                 result_type = entry.get('result', {}).get('type', 'unknown')
-                                custom_id = entry.get('request', {}).get('custom_id', 'unknown')
+                                custom_id = entry.get('custom_id', 'unknown')
                                 logger.warning(f"Job {job_id}: Unknown result type: {result_type} for {custom_id}")
                                 results.append({
                                     'custom_id': custom_id,

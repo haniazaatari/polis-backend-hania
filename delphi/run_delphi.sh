@@ -123,7 +123,9 @@ if [ $PIPELINE_EXIT_CODE -eq 0 ]; then
   mkdir -p $OUTPUT_DIR
   
   # Generate layer 0 visualization
-  python /app/umap_narrative/700_datamapplot_for_layer.py --conversation_id=${ZID} --layer=0 --output_dir=$OUTPUT_DIR ${VERBOSE}
+  # Get job ID from environment - use DELPHI_JOB_ID if available, otherwise generate one
+  JOB_ID=${DELPHI_JOB_ID:-$(date +%s)}
+  python /app/umap_narrative/700_datamapplot_for_layer.py --conversation_id=${ZID} --job_id=${JOB_ID} --layer=0 --output_dir=$OUTPUT_DIR ${VERBOSE}
   
   echo -e "${GREEN}UMAP Narrative pipeline completed successfully!${NC}"
   echo "Results stored in DynamoDB and visualizations for conversation ${ZID}"
