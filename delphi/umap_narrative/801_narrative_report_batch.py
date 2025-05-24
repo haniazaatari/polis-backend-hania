@@ -95,7 +95,7 @@ class NarrativeReportService:
         """
         try:
             # Create a combined key for the report (report_id, section, model)
-            rid_section_model = f"{report_id}_{section}_{model}"
+            rid_section_model = f"{report_id}#{section}#{model}"
 
             # Current timestamp
             timestamp = datetime.now().isoformat()
@@ -139,7 +139,7 @@ class NarrativeReportService:
         """
         try:
             # Create the combined key
-            rid_section_model = f"{report_id}_{section}_{model}"
+            rid_section_model = f"{report_id}#{section}#{model}"
 
             # Get from DynamoDB
             response = self.table.get_item(Key={'rid_section_model': rid_section_model})
