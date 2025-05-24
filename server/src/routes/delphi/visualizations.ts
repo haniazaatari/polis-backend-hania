@@ -209,9 +209,12 @@ export async function handle_GET_delphi_visualizations(
           Key: key,
         };
 
-        // Instead of using presigned URLs that don't work across network boundaries,
-        // just return a direct URL to the object that can be accessed from the browser
-        url = `http://localhost:9000/${bucketName}/${key}`;
+        // Use public endpoint if configured, otherwise fall back to localhost
+        const publicEndpoint = Config.AWS_S3_PUBLIC_ENDPOINT || Config.AWS_S3_ENDPOINT || "http://localhost:9000";
+        // Remove protocol and trailing slash for clean URL construction
+        const cleanEndpoint = publicEndpoint.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        const protocol = publicEndpoint.startsWith('https') ? 'https' : 'http';
+        url = `${protocol}://${cleanEndpoint}/${bucketName}/${key}`;
       } catch (err: any) {
         logger.error(
           `Error generating signed URL for ${key}: ${err.message || err}`
@@ -306,11 +309,24 @@ async function fetchJobMetadata(
     // Configure DynamoDB client
     const dynamoDBConfig: any = {
       region: Config.AWS_REGION || "us-east-1",
-      credentials: {
+    };
+
+    // If dynamoDbEndpoint is set, we're running locally (e.g., with Docker)
+    if (Config.dynamoDbEndpoint) {
+      dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
+      // Use dummy credentials for local DynamoDB
+      dynamoDBConfig.credentials = {
         accessKeyId: "DUMMYIDEXAMPLE",
         secretAccessKey: "DUMMYEXAMPLEKEY",
-      },
-    };
+      };
+    } else if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
+      // Use real credentials from environment
+      dynamoDBConfig.credentials = {
+        accessKeyId: Config.AWS_ACCESS_KEY_ID,
+        secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
+      };
+    }
+    // If neither are set, the SDK will use default credential provider chain
 
     // Create DynamoDB clients
     const client = new DynamoDBClient(dynamoDBConfig);
