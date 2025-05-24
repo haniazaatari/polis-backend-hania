@@ -410,7 +410,7 @@ class JobProcessor:
         # Update log with processing start
         self.update_job_logs(job, {
             'level': 'INFO',
-            'message': f'Starting processing of conversation {conversation_id}'
+            'message': f'Grabbed {conversation_id}'
         })
         
         try:
@@ -459,7 +459,7 @@ class JobProcessor:
                 if batch_id:
                     self.update_job_logs(job, {
                         'level': 'INFO',
-                        'message': f'Checking status of batch {batch_id} for job {batch_job_id or job_id}'
+                        'message': f'Narrative batch id: {batch_id} for job: {batch_job_id or job_id}'
                     })
                 else:
                     self.update_job_logs(job, {

@@ -154,7 +154,6 @@ class BatchStatusChecker:
                 if 'batch_id' in item:
                     result.append(item)
 
-            logger.info(f"Found {len(result)} pending batch jobs")
             return result
         except Exception as e:
             logger.error(f"Error finding pending jobs: {str(e)}")
@@ -742,7 +741,6 @@ async def main():
             logger.error(f"check_and_process_jobs did not return an explicit exit signal for job {args.job_id}. Defaulting to script error exit code.")
             sys.exit(EXIT_CODE_SCRIPT_ERROR) # Using module-level constant
         else:
-            logger.info(f"Exiting with code: {exit_signal} for job ID: {args.job_id}")
             sys.exit(exit_signal)
     else:
         # Polling loop for continuous operation
