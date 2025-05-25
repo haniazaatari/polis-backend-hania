@@ -102,17 +102,20 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
         if (response && response.status === "success" && response.reports) {
           setNarrativeReports(response.reports);
-          
+
           // Store run info
           if (response.available_runs) {
             setNarrativeRunInfo({
               current: response.current_run,
-              available: response.available_runs
+              available: response.available_runs,
             });
-            
+
             // Log available runs info
             if (response.available_runs.length > 1) {
-              console.log(`Found ${response.available_runs.length} narrative report runs:`, response.available_runs);
+              console.log(
+                `Found ${response.available_runs.length} narrative report runs:`,
+                response.available_runs
+              );
               console.log(`Currently showing run from: ${response.current_run}`);
             }
           }
@@ -417,7 +420,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             {Array.isArray(visualizationJobs) && visualizationJobs.length > 0 && (
               <div className="visualization-job">
                 <div className="job-header">
-                  <h3>Latest Visualization</h3>
+                  <h3>Interactive Topics Visualization (all comments)</h3>
                   <div className="job-meta">
                     <span className={`job-status status-${visualizationJobs[0].status}`}>
                       {visualizationJobs[0].status}
@@ -437,13 +440,12 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                       .filter((vis) => vis && vis.type === "interactive" && vis.layerId === 0)
                       .map((vis) => (
                         <div key={vis.key} className="visualization-card">
-                          <h4>Interactive Visualization</h4>
                           <div className="iframe-container">
                             <iframe
                               src={vis.url}
                               title={`Layer ${vis.layerId} visualization`}
                               width="100%"
-                              height="500"
+                              height="800"
                               frameBorder="0"
                             ></iframe>
                           </div>
@@ -509,9 +511,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     // Order of sections to display
     const sectionOrder = ["group_informed_consensus", "groups", "uncertainty"];
 
-    // Topic sections will have names starting with 'topic_'
+    // Topic sections will have names in format: layer0_0, layer0_1, etc.
     const topicSections = Object.keys(narrativeReports)
-      .filter((key) => key.startsWith("topic_"))
+      .filter((key) => key.match(/^layer\d+_\d+$/))
       .sort();
 
     // Combine ordered sections with topic sections
@@ -519,18 +521,22 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
     return (
       <div className="narrative-reports-container">
-        {narrativeRunInfo && narrativeRunInfo.available && narrativeRunInfo.available.length > 1 && (
-          <div className="run-info-banner">
-            <p>
-              Showing reports from: <strong>{new Date(narrativeRunInfo.current + ':00Z').toLocaleString()}</strong>
-              {narrativeRunInfo.available.length > 1 && (
-                <span className="run-info-note">
-                  {' '}({narrativeRunInfo.available.length} runs available - showing most recent)
-                </span>
-              )}
-            </p>
-          </div>
-        )}
+        {narrativeRunInfo &&
+          narrativeRunInfo.available &&
+          narrativeRunInfo.available.length > 1 && (
+            <div className="run-info-banner">
+              <p>
+                Showing reports from:{" "}
+                <strong>{new Date(narrativeRunInfo.current + ":00Z").toLocaleString()}</strong>
+                {narrativeRunInfo.available.length > 1 && (
+                  <span className="run-info-note">
+                    {" "}
+                    ({narrativeRunInfo.available.length} runs available - showing most recent)
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
         {orderedSections.map((sectionKey) => {
           const report = narrativeReports[sectionKey];
           if (!report) return null;
@@ -540,59 +546,27 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             .replace("group_informed_consensus", "Group Consensus")
             .replace("groups", "Group Differences")
             .replace("uncertainty", "Areas of Uncertainty");
-            
-          // For topic sections, extract the actual topic name from metadata if available
-          if (sectionKey.startsWith("topic_") && report.metadata && report.metadata.topic_name) {
-            sectionTitle = report.metadata.topic_name;
-          } else if (sectionKey.startsWith("topic_")) {
-            // Try to match topic name from LLM topics data
-            let topicFound = false;
-            if (selectedRun && selectedRun.topics_by_layer) {
-              // Extract topic number from section key (e.g., "topic_16" -> "16")
-              const topicNumMatch = sectionKey.match(/topic_(\d+)/);
-              if (topicNumMatch) {
-                const topicNum = topicNumMatch[1];
-                // Search through all layers for this topic number
-                Object.values(selectedRun.topics_by_layer).forEach(layer => {
-                  if (layer[topicNum] && layer[topicNum].topic_name) {
-                    sectionTitle = layer[topicNum].topic_name;
-                    topicFound = true;
-                  }
-                });
-              } else {
-                // For old reports using topic names as keys, try to match by converting back
-                // e.g., "topic_commercial_gallery_system" -> "Commercial Gallery System"
-                const topicKeyMatch = sectionKey.match(/topic_(.+)/);
-                if (topicKeyMatch) {
-                  const topicKey = topicKeyMatch[1];
-                  const reconstructedName = topicKey
-                    .replace(/_/g, ' ')
-                    .split(' ')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                    .join(' ');
-                  
-                  // Search for this reconstructed name in the topics
-                  Object.values(selectedRun.topics_by_layer).forEach(layer => {
-                    Object.values(layer).forEach(topic => {
-                      if (topic.topic_name === reconstructedName || 
-                          topic.topic_name.toLowerCase() === topicKey.replace(/_/g, ' ')) {
-                        sectionTitle = topic.topic_name;
-                        topicFound = true;
-                      }
-                    });
-                  });
-                }
-              }
-            }
-            
-            if (!topicFound) {
-              // Fallback: format the key nicely
-              sectionTitle = sectionKey
-                .replace(/^topic_/, "Topic: ")
-                .replace(/_/g, " ")
-                .split(" ")
-                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(" ");
+
+          // For topic sections in new format: layer0_0, layer0_1, etc.
+          if (sectionKey.match(/^layer\d+_\d+$/)) {
+            const match = sectionKey.match(/^layer(\d+)_(\d+)$/);
+            const layerId = match[1];
+            const clusterId = match[2];
+
+            // Check metadata first
+            if (report.metadata && report.metadata.topic_name) {
+              sectionTitle = report.metadata.topic_name;
+            } else if (
+              selectedRun &&
+              selectedRun.topics_by_layer &&
+              selectedRun.topics_by_layer[layerId] &&
+              selectedRun.topics_by_layer[layerId][clusterId]
+            ) {
+              // Try to find the topic name from selectedRun data
+              sectionTitle = selectedRun.topics_by_layer[layerId][clusterId].topic_name;
+            } else {
+              // Fallback to a generic title
+              sectionTitle = `Layer ${layerId}, Topic ${clusterId}`;
             }
           }
 
@@ -795,12 +769,14 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
               </p>
 
               {selectedRun?.topics_by_layer &&
-                Object.keys(selectedRun.topics_by_layer).map((layerId) => (
-                  <div key={layerId} className="layer-section">
-                    <h2>Group Themes</h2>
-                    {renderTopicCards(layerId)}
-                  </div>
-                ))}
+                Object.keys(selectedRun.topics_by_layer)
+                  .sort()
+                  .map((layerId) => (
+                    <div key={layerId} className="layer-section">
+                      <h2>Group Themes - Layer {layerId}</h2>
+                      {renderTopicCards(layerId)}
+                    </div>
+                  ))}
             </div>
           </div>
 
@@ -982,13 +958,13 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         .visualizations-grid {
           display: grid;
           grid-template-columns: 1fr;
-          gap: 25px;
+          gap: 5px;
         }
 
         .visualization-card {
           border: 1px solid #e0e0e0;
           border-radius: 8px;
-          padding: 15px;
+          padding: 5px;
           background: #fafafa;
         }
 
@@ -1015,7 +991,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         .narrative-reports-container {
           margin-top: 20px;
         }
-        
+
         .run-info-banner {
           background: #e3f2fd;
           border: 1px solid #90caf9;
@@ -1023,12 +999,12 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           padding: 12px 16px;
           margin-bottom: 20px;
         }
-        
+
         .run-info-banner p {
           margin: 0;
           color: #1976d2;
         }
-        
+
         .run-info-note {
           color: #666;
           font-size: 0.9em;
