@@ -263,7 +263,7 @@ def characterize_comment_clusters(cluster_layer, comment_texts):
     
     return cluster_characteristics
 
-def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, layer=None, conversation_name=None, use_ollama=False):
+def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, layer=None, layer_idx=0, conversation_name=None, use_ollama=False):
     """
     Generate topic labels for clusters based on their characteristics.
     
@@ -312,23 +312,46 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
                     # Extract just the topic name with more thorough cleaning
                     raw_response = response['message']['content'].strip()
                     
-                    # Clean up various prefixes
-                    for prefix in ["Topic label:", "Here is a concise topic label:", "Here's a concise topic label:", 
-                                  "Concise topic label:", "Topic:", "Label:"]:
+                    # Clean up various prefixes - extended list from 600_generate_llm_topic_names.py
+                    prefixes_to_remove = [
+                        "Here are the topic labels:",
+                        "Here are the topic labels",
+                        "Here is the topic label:",
+                        "Here is the topic label",
+                        "The topic label is:",
+                        "The topic label is",
+                        "Topic label:",
+                        "Here is a concise topic label:",
+                        "Here's a concise topic label:",
+                        "Concise topic label:",
+                        "Topic name:",
+                        "Topic name",
+                        "Topic:",
+                        "Label:",
+                        "Label"
+                    ]
+                    
+                    for prefix in prefixes_to_remove:
                         if raw_response.startswith(prefix):
                             raw_response = raw_response.replace(prefix, "", 1).strip()
                     
                     # Get just the first line, as we only want the label
                     topic = raw_response.split('\n')[0].strip()
                     
-                    # If there are quotes, extract just what's in the quotes
-                    if '"' in topic:
-                        quoted_parts = topic.split('"')
-                        if len(quoted_parts) >= 3:  # Means there's content between quotes
-                            topic = quoted_parts[1]
+                    # Remove quotes if they're present (handle both double and single quotes)
+                    topic = topic.strip('"\'')
+                    
+                    # Remove common formats like "1. Topic Name" or "- Topic Name"
+                    if topic.startswith("1. ") or topic.startswith("- "):
+                        topic = topic[3:].strip()
                     
                     # Remove asterisks and other markdown formatting
                     topic = topic.replace('*', '')
+                    
+                    # Check if we ended up with empty string after all the cleaning
+                    if not topic or not topic.strip():
+                        logger.warning(f"Empty topic name after cleaning for cluster - original response: '{raw_response}'")
+                        return f"Topic {len(comments)}"  # Fallback
                     if len(topic) > 50:  # If it's too long, truncate
                         topic = topic[:50] + "..."
                     return topic
@@ -350,7 +373,12 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
                     cluster_comments, 
                     prompt_prefix=f"For conversation {conversation_name}: "
                 )
-                cluster_labels[cluster_id] = topic_name
+                # Add layer_cluster prefix to ensure uniqueness
+                # Use the passed layer_idx parameter, not the layer array
+                logger.info(f"DEBUG: Creating prefix for layer_idx={layer_idx}, cluster_id={cluster_id}, topic='{topic_name}'")
+                prefixed_topic_name = f"{layer_idx}_{cluster_id}: {topic_name}" if topic_name.strip() else f"{layer_idx}_{cluster_id}:"
+                logger.info(f"DEBUG: Final prefixed name: '{prefixed_topic_name}'")
+                cluster_labels[cluster_id] = prefixed_topic_name
                 
                 # Sleep briefly to avoid rate limiting
                 time.sleep(0.5)
@@ -930,6 +958,7 @@ def process_layers_and_create_visualizations(
                 characteristics,
                 comment_texts=comment_texts,
                 layer=cluster_layer,
+                layer_idx=layer_idx,
                 conversation_name=conversation_name,
                 use_ollama=True
             )
