@@ -538,19 +538,32 @@ def save_topic_names(conversation_id, layer_id, topic_names, model_name, dynamo_
             # Double-check we're not using placeholder names
             if topic_name == f"Topic {cluster_id}":
                 logger.warning(f"Using placeholder name 'Topic {cluster_id}' - this suggests Ollama didn't return a proper name")
-                
+            
+            # Check if topic_name is empty or just whitespace
+            if not topic_name or not topic_name.strip():
+                logger.warning(f"Empty topic name for cluster {cluster_id} - likely truncated by LLM prefix removal")
+            
             topic_key = f"layer{layer_id}_{cluster_id}"
+            
+            # Prepend the layer_cluster format to ensure uniqueness
+            # Format: "0_5: Environmental Ethics" or "0_3:" for empty names
+            # Special handling for "Unclustered" (-1 cluster)
+            if int(cluster_id) == -1 and topic_name == "Unclustered":
+                prefixed_topic_name = f"{layer_id}_{cluster_id}: Unclustered"
+            else:
+                prefixed_topic_name = f"{layer_id}_{cluster_id}: {topic_name}" if topic_name.strip() else f"{layer_id}_{cluster_id}:"
+            
             model = {
                 'conversation_id': conversation_id,
                 'topic_key': topic_key,
                 'layer_id': layer_id,
                 'cluster_id': int(cluster_id),
-                'topic_name': topic_name,
+                'topic_name': prefixed_topic_name,
                 'model_name': model_name,
                 'created_at': datetime.now().isoformat()
             }
             topic_models.append(model)
-            logger.info(f"Added topic model for cluster {cluster_id}: {topic_name}")
+            logger.info(f"Added topic model for cluster {cluster_id}: {prefixed_topic_name}")
         
         # Store in batch
         success_count = 0
@@ -784,7 +797,7 @@ def update_layer_with_ollama(conversation_id, layer_id, conversation_name, model
         logger.info(f"Filtered from {len(clusters)} to {len(filtered_clusters)} clusters")
     
     # Generate topic names with Ollama
-    topic_names = generate_topic_names_with_ollama(
+    topic_names = generate_topic_names(
         layer_data, conversation_name, model_name
     )
     
