@@ -376,7 +376,9 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
                 # Add layer_cluster prefix to ensure uniqueness
                 # Use the passed layer_idx parameter, not the layer array
                 logger.info(f"DEBUG: Creating prefix for layer_idx={layer_idx}, cluster_id={cluster_id}, topic='{topic_name}'")
-                prefixed_topic_name = f"{layer_idx}_{cluster_id}: {topic_name}" if topic_name.strip() else f"{layer_idx}_{cluster_id}:"
+                # Strip quotes again in case they were added back somehow
+                cleaned_topic_name = topic_name.strip().strip('"\'')
+                prefixed_topic_name = f"{layer_idx}_{cluster_id}: {cleaned_topic_name}" if cleaned_topic_name else f"{layer_idx}_{cluster_id}:"
                 logger.info(f"DEBUG: Final prefixed name: '{prefixed_topic_name}'")
                 cluster_labels[cluster_id] = prefixed_topic_name
                 
