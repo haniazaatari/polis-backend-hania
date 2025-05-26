@@ -902,7 +902,11 @@ class BatchReportGenerator:
 
                 # Debug: log the first request structure (without full content)
                 if formatted_batch_requests:
-                    debug_request = formatted_batch_requests[0].copy()
+                    # CRITICAL BUG FIX: Must use deepcopy here! 
+                    # Using shallow copy causes the debug truncation to modify the actual request sent to Anthropic
+                    # This was causing the first batch item to fail with "Report data is not in the expected JSON format"
+                    import copy
+                    debug_request = copy.deepcopy(formatted_batch_requests[0])
                     if 'params' in debug_request:
                         # Truncate system content
                         if 'system' in debug_request['params'] and isinstance(debug_request['params']['system'], str) and len(debug_request['params']['system']) > 100:
