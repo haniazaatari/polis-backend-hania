@@ -776,10 +776,6 @@ class BatchReportGenerator:
         if self.report_id:
             logger.info(f"Report ID: {self.report_id}")
 
-        # Limit batch size if needed
-        if len(batch_requests) > self.max_batch_size:
-            logger.info(f"Limiting batch size from {len(batch_requests)} to {self.max_batch_size}")
-            batch_requests = batch_requests[:self.max_batch_size]
 
         # Validate API key presence
         anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
