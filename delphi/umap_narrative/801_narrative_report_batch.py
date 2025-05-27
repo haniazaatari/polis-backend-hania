@@ -13,7 +13,7 @@ Usage:
 
 Args:
     --conversation_id: Conversation ID/zid
-    --model: LLM model to use (default: claude-3-5-sonnet-20241022)
+    --model: LLM model to use (defaults to ANTHROPIC_MODEL env var)
     --no-cache: Ignore cached report data
     --max-batch-size: Maximum number of topics to include in a single batch (default: 20)
 """
@@ -207,7 +207,7 @@ class PolisConverter:
 class BatchReportGenerator:
     """Generate batch reports for Polis conversations."""
 
-    def __init__(self, conversation_id, model="claude-3-5-sonnet-20241022", no_cache=False, max_batch_size=20, job_id=None):
+    def __init__(self, conversation_id, model=None, no_cache=False, max_batch_size=20, job_id=None):
         """Initialize the batch report generator.
 
         Args:
@@ -218,6 +218,10 @@ class BatchReportGenerator:
             job_id: Optional job ID from the job queue system
         """
         self.conversation_id = str(conversation_id)
+        if not model:
+            model = os.environ.get("ANTHROPIC_MODEL")
+            if not model:
+                raise ValueError("Model must be specified via --model argument or ANTHROPIC_MODEL environment variable")
         self.model = model
         self.no_cache = no_cache
         self.max_batch_size = max_batch_size
@@ -1101,8 +1105,8 @@ async def main():
     parser = argparse.ArgumentParser(description='Generate narrative reports for Polis conversations')
     parser.add_argument('--conversation_id', '--zid', type=str, required=True,
                         help='Conversation ID to process')
-    parser.add_argument('--model', type=str, default='claude-3-5-sonnet-20241022',
-                        help='LLM model to use (default: claude-3-5-sonnet-20241022)')
+    parser.add_argument('--model', type=str, default=None,
+                        help='LLM model to use (defaults to ANTHROPIC_MODEL env var)')
     parser.add_argument('--no-cache', action='store_true',
                         help='Ignore cached report data')
     parser.add_argument('--max-batch-size', type=int, default=5,

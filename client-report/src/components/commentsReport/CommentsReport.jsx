@@ -22,7 +22,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     priority: 50,
     max_votes: "",
     batch_size: "",
-    model: "claude-3-7-sonnet-20250219",
+    model: "claude-opus-4-20250514",
     include_topics: true,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -210,7 +210,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     net
       .polisPost("/api/v3/delphi/batchReports", {
         report_id: report_id,
-        model: "claude-3-5-sonnet-20241022",
+        model: "claude-opus-4-20250514",
         no_cache: false,
       })
       .then((response) => {
@@ -361,9 +361,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
               onChange={handleJobFormChange}
               disabled={isSubmitting}
             >
-              <option value="claude-3-7-sonnet-20250219">Claude 3 Sonnet</option>
-              <option value="claude-3-opus-20240229">Claude 3 Opus</option>
-              <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+              <option value="claude-opus-4-20250514">Claude Opus 4</option>
+              <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet</option>
+              <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
             </select>
           </div>
 

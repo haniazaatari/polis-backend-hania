@@ -56,8 +56,14 @@ export async function handle_POST_delphi_batch_reports(
       `Generating batch reports for conversation_id: ${conversation_id}`
     );
 
-    // Optional parameters
-    const model = (req.body.model as string) || "claude-3-5-sonnet-20241022";
+    // Model parameter - must be explicitly set
+    const model = (req.body.model as string) || process.env.ANTHROPIC_MODEL;
+    if (!model) {
+      return res.json({
+        status: "error",
+        message: "Model must be specified in request or ANTHROPIC_MODEL environment variable must be set",
+      });
+    }
     const max_batch_size = (req.body.max_batch_size as number) || 20;
     const no_cache = (req.body.no_cache as boolean) || false;
 

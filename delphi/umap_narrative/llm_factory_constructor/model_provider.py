@@ -391,11 +391,9 @@ class AnthropicProvider(ModelProvider):
         """
         # Anthropic doesn't have a list models endpoint, so we hardcode the known models
         available_models = [
-            "claude-3-opus-20240229",
-            "claude-3-sonnet-20240229",
-            "claude-3-haiku-20240307",
             "claude-3-5-sonnet-20241022",
-            "claude-3-5-haiku-20241022"
+            "claude-3-7-sonnet-20250219",
+            "claude-opus-4-20250514"
         ]
         logger.info(f"Available Anthropic models: {available_models}")
         return available_models
@@ -508,7 +506,9 @@ def get_model_provider(provider_type: str = None, model_name: str = None) -> Mod
     provider_type = provider_type or os.environ.get("LLM_PROVIDER")
     
     if provider_type.lower() == "anthropic":
-        model_name = model_name or os.environ.get("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022")
+        model_name = model_name or os.environ.get("ANTHROPIC_MODEL")
+        if not model_name:
+            raise ValueError("Model name must be specified or ANTHROPIC_MODEL environment variable must be set")
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         logger.info(f"Using Anthropic provider with model: {model_name}")
         return AnthropicProvider(model_name=model_name, api_key=api_key)

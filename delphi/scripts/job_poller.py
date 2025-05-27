@@ -428,7 +428,9 @@ class JobProcessor:
                 })
 
                 # Extract batch configuration
-                model = "claude-3-5-sonnet-20241022"  # Default model
+                model = os.environ.get("ANTHROPIC_MODEL")  # No fallback - must be set
+                if not model:
+                    raise ValueError("ANTHROPIC_MODEL environment variable must be set")
                 max_batch_size = 20  # Default batch size
                 no_cache = False  # Default cache behavior
 
