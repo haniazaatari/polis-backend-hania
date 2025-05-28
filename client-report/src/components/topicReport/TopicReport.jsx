@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import net from "../../util/net";
 import CommentList from "../lists/commentList.jsx";
 
-const TopicReport = ({ report_id }) => {
+const TopicReport = ({ report_id, math, comments, conversation, ptptCount, formatTid, voteColors }) => {
   const [topics, setTopics] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState("");
   const [topicContent, setTopicContent] = useState(null);
@@ -139,6 +139,28 @@ const TopicReport = ({ report_id }) => {
       });
   };
 
+  // Extract citation IDs from the topic content
+  const extractCitations = (content) => {
+    const citations = [];
+    if (content && content.paragraphs) {
+      content.paragraphs.forEach(paragraph => {
+        if (paragraph.sentences) {
+          paragraph.sentences.forEach(sentence => {
+            if (sentence.clauses) {
+              sentence.clauses.forEach(clause => {
+                if (clause.citations && Array.isArray(clause.citations)) {
+                  citations.push(...clause.citations.filter(c => typeof c === 'number'));
+                }
+              });
+            }
+          });
+        }
+      });
+    }
+    return [...new Set(citations)]; // Remove duplicates
+  };
+
+
   const renderContent = () => {
     if (!topicContent) return null;
 
@@ -154,29 +176,58 @@ const TopicReport = ({ report_id }) => {
       );
     }
 
+    // Extract citations for this topic
+    const citationIds = extractCitations(topicContent);
+    console.log("Extracted citations:", citationIds);
+    console.log("Comments loaded:", comments?.length || 0);
+
     // Render the topic content in the same format as the main report
     return (
-      <div className="topic-content">
-        {topicContent.paragraphs && topicContent.paragraphs.map((paragraph, idx) => (
-          <div key={idx} className="paragraph">
-            <h3>{paragraph.title}</h3>
-            {paragraph.sentences && paragraph.sentences.map((sentence, sIdx) => (
-              <p key={sIdx}>
-                {sentence.clauses && sentence.clauses.map((clause, cIdx) => (
-                  <span key={cIdx}>
-                    {clause.text}
-                    {clause.citations && clause.citations.length > 0 && (
-                      <sup className="citations">
-                        {clause.citations.join(', ')}
-                      </sup>
-                    )}
-                    {cIdx < sentence.clauses.length - 1 && ' '}
-                  </span>
-                ))}
-              </p>
-            ))}
+      <div className="topic-layout-container">
+        <div className="topic-text-content">
+          <div className="topic-content">
+            {topicContent.paragraphs && topicContent.paragraphs.map((paragraph, idx) => (
+            <div key={idx} className="paragraph">
+              <h3>{paragraph.title}</h3>
+              {paragraph.sentences && paragraph.sentences.map((sentence, sIdx) => (
+                <p key={sIdx}>
+                  {sentence.clauses && sentence.clauses.map((clause, cIdx) => (
+                    <span key={cIdx}>
+                      {clause.text}
+                      {clause.citations && clause.citations.length > 0 && (
+                        <sup className="citations">
+                          {clause.citations.join(', ')}
+                        </sup>
+                      )}
+                      {cIdx < sentence.clauses.length - 1 && ' '}
+                    </span>
+                  ))}
+                </p>
+              ))}
+            </div>
+          ))}
           </div>
-        ))}
+        </div>
+        
+        {/* Comments list section - side by side */}
+        {citationIds.length > 0 && comments && comments.length > 0 && (
+          <div className="topic-comments-column">
+            <h3 style={{ marginBottom: '20px' }}>Comments Referenced in This Topic</h3>
+            <CommentList
+              conversation={conversation}
+              ptptCount={ptptCount}
+              math={math}
+              formatTid={formatTid}
+              tidsToRender={citationIds}
+              comments={comments}
+              voteColors={voteColors || {
+                agree: "#21a53a",
+                disagree: "#e74c3c", 
+                pass: "#b3b3b3"
+              }}
+            />
+          </div>
+        )}
       </div>
     );
   };
@@ -186,10 +237,12 @@ const TopicReport = ({ report_id }) => {
   }
 
   return (
-    <div className="topic-report-container" style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+    <div className="topic-report-container">
       <style>{`
         .topic-report-container {
-          max-width: 800px;
+          padding: 20px;
+          font-family: Arial, sans-serif;
+          max-width: 1600px;
           margin: 0 auto;
         }
         .topic-selector {
@@ -197,11 +250,22 @@ const TopicReport = ({ report_id }) => {
         }
         .topic-selector select {
           width: 100%;
+          max-width: 800px;
           padding: 10px;
           font-size: 16px;
           border: 1px solid #ccc;
           border-radius: 4px;
           background-color: white;
+        }
+        .topic-layout-container {
+          display: flex;
+          flex-direction: row;
+          gap: 20px;
+        }
+        .topic-text-content {
+          flex-grow: 0;
+          flex-shrink: 1;
+          flex-basis: 520px;
         }
         .topic-content {
           background: #f9f9f9;
@@ -226,10 +290,33 @@ const TopicReport = ({ report_id }) => {
           font-size: 0.85em;
           margin-left: 2px;
         }
+        .topic-comments-column {
+          flex-grow: 1;
+          flex-shrink: 1;
+          flex-basis: 0%;
+          min-width: 400px;
+        }
         .loading {
           text-align: center;
           padding: 20px;
           color: #666;
+        }
+        
+        /* Responsive stacking for smaller screens */
+        @media (max-width: 992px) {
+          .topic-layout-container {
+            flex-direction: column;
+          }
+          
+          .topic-text-content,
+          .topic-comments-column {
+            flex-basis: auto;
+            width: 100%;
+          }
+          
+          .topic-comments-column {
+            margin-top: 30px;
+          }
         }
       `}</style>
       
