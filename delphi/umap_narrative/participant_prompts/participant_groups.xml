@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<participantGroupAnalysisPrompt version="1.0">
+    <metadata>
+        <title>Guide to Analyzing and Reporting Participant Groups in Pol.is Conversations</title>
+        <purpose>Generate consistent, evidence-based reports comparing participant groups and describing 
+            their distinctive voting behaviors and patterns</purpose>
+    </metadata>
+
+    <criticalInstructions>
+        <instruction>
+            Generate a JSON response that conforms to the provided schema. DO NOT INCLUDE ANY OTHER TEXT.
+        </instruction>
+        <instruction>
+            DO NOT return ```json at the beginning of the response. This is not markdown. Do not end
+            the response with ```, your response MUST begin with { and end with }
+        </instruction>
+        <instruction>
+            Focus on PARTICIPANT GROUP VOTING BEHAVIORS, not comment topic analysis. These are groups of people
+            with similar voting patterns, not groups of similar comments.
+        </instruction>
+    </criticalInstructions>
+
+    <definitions>
+        <term name="participant_group">
+            <description>A cluster of participants who exhibit similar voting patterns across the conversation,
+                identified through UMAP dimensionality reduction of participant voting vectors</description>
+            <characteristics>behavioral_similarity, voting_pattern_consistency, group_cohesion</characteristics>
+        </term>
+        <term name="distinctive_voting_pattern">
+            <description>Voting behavior that significantly differentiates one participant group from others</description>
+            <threshold>30</threshold>
+            <unit>percent difference from other groups</unit>
+        </term>
+        <term name="group_consensus">
+            <description>Comments where a participant group shows strong internal agreement</description>
+            <threshold>70</threshold>
+            <unit>percent agreement within group</unit>
+        </term>
+        <term name="one_vs_all_analysis">
+            <description>Analytical approach comparing each participant group's voting patterns against 
+                the combined patterns of all other groups</description>
+            <purpose>identify_unique_group_characteristics</purpose>
+        </term>
+    </definitions>
+
+    <analysisProcess>
+        <dataProcessing>
+            <step order="1">
+                <name>Identify Distinctive Group Voting Patterns</name>
+                <calculations>
+                    <calculation>group_specific_agreement_rates</calculation>
+                    <calculation>one_vs_all_voting_differences</calculation>
+                    <calculation>group_consensus_identification</calculation>
+                    <calculation>distinctive_behavior_detection</calculation>
+                </calculations>
+            </step>
+            <step order="2">
+                <name>Analyze Group Behavioral Characteristics</name>
+                <calculations>
+                    <calculation>group_voting_consistency</calculation>
+                    <calculation>engagement_pattern_analysis</calculation>
+                    <calculation>group_size_and_cohesion</calculation>
+                    <pattern>behavioral_clustering_validation</pattern>
+                </calculations>
+            </step>
+            <step order="3">
+                <name>Synthesize Group Behavioral Narratives</name>
+                <analyses>
+                    <analysis>voting_behavior_characterization</analysis>
+                    <analysis>group_distinction_explanation</analysis>
+                    <analysis>behavioral_pattern_interpretation</analysis>
+                    <pattern>group_interaction_dynamics</pattern>
+                </analyses>
+            </step>
+        </dataProcessing>
+
+        <reportingStructure>
+            <paragraph type="participant_group_overview">
+                <elements>
+                    <element>number_of_participant_groups</element>
+                    <element>clustering_methodology</element>
+                    <element>key_behavioral_distinctions</element>
+                    <element>group_size_distribution</element>
+                </elements>
+                <criticalInstructions>
+                    <instruction>
+                        Focus on PARTICIPANT BEHAVIOR PATTERNS, not comment content themes. Describe how different
+                        groups of people approached voting in the conversation.
+                    </instruction>
+                    <instruction>
+                        Explain the UMAP clustering approach and how it identified groups based on voting similarity.
+                    </instruction>
+                    <instruction>
+                        Avoid confusing participant groups with comment topic clusters - these are fundamentally
+                        different analytical approaches.
+                    </instruction>
+                </criticalInstructions>
+                <format>
+                    UMAP clustering analysis of participant voting patterns identified [number_of_groups] distinct 
+                    behavioral groups within the conversation. These groups were formed based on similarity in 
+                    voting behaviors across all comments, revealing [number_of_groups] different approaches to 
+                    engaging with the conversation topics.
+
+                    The participant groups varied significantly in size, with Group [X] comprising approximately 
+                    [percentage]% of participants, while Group [Y] represented [percentage]% of the total. 
+                    These size differences reflect the diversity of behavioral approaches within the conversation.
+
+                    The most significant behavioral distinctions emerged in how groups approached [key_voting_pattern_difference], 
+                    with some groups showing [description_of_distinctive_behavior] while others demonstrated 
+                    [contrasting_behavior]. This pattern of differential engagement highlighted fundamental 
+                    differences in how participants [specific_behavioral_characteristic].
+                </format>
+                <paragraphInstructions>
+                    <instruction>
+                        Provide a comprehensive overview that:
+                        - Introduces the participant clustering methodology
+                        - Describes all identified participant groups
+                        - Highlights major behavioral distinctions between groups
+                        - Focuses on voting patterns rather than comment content
+                        - Provides group size information and distribution
+                        - Sets context for detailed group analysis
+                    </instruction>
+                </paragraphInstructions>
+                <length>2-3 paragraphs</length>
+            </paragraph>
+            
+            <paragraph type="participant_group_behaviors">
+                <elements>
+                    <element>group_voting_patterns</element>
+                    <element>distinctive_behaviors</element>
+                    <element>one_vs_all_analysis</element>
+                    <element>behavioral_consistency</element>
+                </elements>
+                <criticalInstructions>
+                    <instruction>
+                        For each participant group, explain HOW they voted differently from other groups, 
+                        not WHAT topics they voted on. Focus on behavioral patterns and voting consistency.
+                    </instruction>
+                    <instruction>
+                        Use one-vs-all analysis to highlight what makes each group unique compared to 
+                        all other participants combined.
+                    </instruction>
+                    <instruction>
+                        Provide specific examples of distinctive voting behaviors with exact percentages 
+                        and comment citations.
+                    </instruction>
+                </criticalInstructions>
+                <format>
+                    Group [A], comprising [participant_count] participants ([percentage]% of total), 
+                    demonstrated a distinctive pattern of [behavioral_characteristic]. In one-vs-all analysis, 
+                    this group showed significantly [higher/lower] agreement rates on statements related to 
+                    [topic_area], with [specific_percentage]% agreement compared to [other_percentage]% 
+                    among all other participants.
+
+                    This behavioral pattern was most evident in their response to [specific_comment_type], 
+                    where Group [A] consistently [agreed/disagreed] at rates [percentage_difference]% 
+                    different from the remaining participant population. Their voting behavior suggested 
+                    a [characterization_of_approach] approach to the conversation topics.
+
+                    Group [B]'s [participant_count] participants ([percentage]% of total) exhibited 
+                    contrasting behavioral patterns, characterized by [different_behavioral_characteristic]. 
+                    Their distinctive feature was [specific_voting_pattern], particularly evident in 
+                    their responses to [comment_category] where they showed [percentage]% agreement 
+                    compared to [other_percentage]% among other groups combined.
+
+                    [Continue for additional groups...]
+                </format>
+                <paragraphInstructions>
+                    <instruction>
+                        For each participant group, provide:
+                        - Clear characterization of distinctive voting behaviors
+                        - Specific examples with percentages and comment citations
+                        - One-vs-all comparative analysis highlighting uniqueness
+                        - Group size and composition information
+                        - Analysis of behavioral consistency within the group
+                        - Interpretation of what the voting patterns suggest about group approach
+                    </instruction>
+                </paragraphInstructions>
+                <length>1-2 paragraphs per group</length>
+            </paragraph>
+        </reportingStructure>
+
+        <citationRules>
+            <template>
+                commentId
+            </template>
+            <rules>
+                <rule>minimum_citations_per_behavioral_claim>2</rule>
+                <rule>maximum_citations_per_clause>8</rule>
+                <rule>include_voting_percentages>true</rule>
+                <rule>focus_on_distinctive_patterns>true</rule>
+            </rules>
+        </citationRules>
+
+        <validationRequirements>
+            <dataQuality>
+                <requirement>minimum_votes_per_cited_statement>25</requirement>
+                <requirement>minimum_participants_per_group>10</requirement>
+            </dataQuality>
+
+            <reportingCompleteness>
+                <requirement>all_participant_groups_represented>true</requirement>
+                <requirement>behavioral_patterns_explained>true</requirement>
+                <requirement>one_vs_all_analysis_included>true</requirement>
+                <requirement>group_sizes_reported>true</requirement>
+            </reportingCompleteness>
+        </validationRequirements>
+
+        <specialCases>
+            <case type="hybrid_voting_group">
+                <description>Participant group that shows mixed voting patterns across different topic areas</description>
+                <handling>
+                    <action>identify_context_dependent_behavior</action>
+                    <action>explain_conditional_voting_patterns</action>
+                    <action>highlight_behavioral_complexity</action>
+                </handling>
+            </case>
+            <case type="highly_engaged_group">
+                <description>Participant group with significantly higher voting participation rates</description>
+                <handling>
+                    <action>note_engagement_differences</action>
+                    <action>analyze_voting_volume_impact</action>
+                    <action>consider_representation_effects</action>
+                </handling>
+            </case>
+            <case type="consensus_seeking_group">
+                <description>Participant group that tends to vote similarly to overall population averages</description>
+                <handling>
+                    <action>identify_moderate_positioning</action>
+                    <action>analyze_consensus_building_behavior</action>
+                    <action>highlight_bridge_building_patterns</action>
+                </handling>
+            </case>
+        </specialCases>
+
+        <languageGuidelines>
+            <participantGroupTerms>
+                <term>voting_behavior</term>
+                <term>behavioral_pattern</term>
+                <term>engagement_style</term>
+                <term>response_pattern</term>
+                <term>voting_approach</term>
+                <term>participation_style</term>
+                <term>behavioral_consistency</term>
+                <term>group_dynamics</term>
+                <term>voting_tendency</term>
+            </participantGroupTerms>
+
+            <styleRules>
+                <rule>distinguish_behavior_from_content</rule>
+                <rule>emphasize_voting_patterns_over_topics</rule>
+                <rule>maintain_neutral_tone_about_participants</rule>
+                <rule>use_precise_language_for_behavioral_differences</rule>
+                <rule>avoid_personality_attribution</rule>
+            </styleRules>
+        </languageGuidelines>
+
+        <qualityChecklist>
+            <check>all_participant_groups_analyzed_comprehensively</check>
+            <check>behavioral_claims_supported_by_voting_data</check>
+            <check>citation_rules_followed_consistently</check>
+            <check>one_vs_all_analysis_completed</check>
+            <check>group_sizes_and_distributions_reported</check>
+            <check>behavioral_patterns_clearly_distinguished</check>
+            <check>participant_focus_maintained_throughout</check>
+        </qualityChecklist>
+    </analysisProcess>
+
+    <validationRules>
+        <rule>All behavioral characterizations must be based on quantitative voting pattern analysis</rule>
+        <rule>Each behavioral claim requires at least two supporting comment citations</rule>
+        <rule>Citations must reference specific comments that demonstrate the behavioral pattern</rule>
+        <rule>Group references must use actual group identifiers from clustering data</rule>
+        <rule>Percentages must be reported for all comparative claims</rule>
+        <rule>One-vs-all analysis must be included for each group</rule>
+    </validationRules>
+
+    <responseFormat>
+        <condensedJSONSchema>
+            {
+            "id": "participant_group_analysis",
+            "title": "Participant Group Analysis",
+            "paragraphs": [
+            {
+            "id": "string", // e.g. "participant_group_overview"
+            "title": "string",
+            "sentences": [
+            {
+            "clauses": [
+            {
+            "text": "string",
+            "citations": [
+            123
+            ]
+            }
+            ]
+            }
+            ]
+            }
+            ]
+            }
+        </condensedJSONSchema>
+        <typescriptTypesReference>
+            type Citation = {
+            commentId: number;
+            };
+
+            type Clause = {
+            text: string;
+            citations: Citation[];
+            };
+
+            type Sentence = {
+            clauses: Clause[];
+            };
+
+            type Paragraph = {
+            id: string; // e.g. "participant_group_overview"
+            title: string;
+            sentences: Sentence[];
+            };
+
+            type ParticipantGroupSubtask = {
+            id: string;
+            title: string;
+            paragraphs: Paragraph[];
+            };
+        </typescriptTypesReference>
+    </responseFormat>
+    
+    <example>
+        {
+        "id": "participant_group_analysis",
+        "title": "Participant Group Analysis",
+        "paragraphs": [
+        {
+        "id": "participant_group_overview",
+        "title": "Overview of Participant Groups",
+        "sentences": [
+        {
+        "clauses": [
+        {
+        "text": "UMAP clustering analysis of participant voting patterns identified 5 distinct behavioral groups within the conversation.",
+        "citations": []
+        }
+        ]
+        }
+        ]
+        },
+        {
+        "id": "group_0_analysis",
+        "title": "Group 0: Consensus Seekers",
+        "sentences": [
+        {
+        "clauses": [
+        {
+        "text": "Group 0, comprising 45 participants (23% of total), demonstrated a distinctive pattern of moderate engagement across all topic areas.",
+        "citations": [152, 163, 177]
+        },
+        {
+        "text": "In one-vs-all analysis, this group showed 67% agreement on statements related to policy implementation compared to 45% among all other participants.",
+        "citations": [201, 218, 235]
+        }
+        ]
+        }
+        ]
+        },
+        {
+        "id": "group_1_analysis", 
+        "title": "Group 1: Strong Advocates",
+        "sentences": [
+        {
+        "clauses": [
+        {
+        "text": "Group 1's 38 participants (19% of total) exhibited contrasting behavioral patterns, characterized by high conviction voting.",
+        "citations": [267, 289, 301]
+        },
+        {
+        "text": "Their distinctive feature was consistent strong agreement or disagreement, particularly evident in their responses to policy statements where they showed 85% agreement compared to 52% among other groups combined.",
+        "citations": [334, 356, 378]
+        }
+        ]
+        }
+        ]
+        }
+        ]
+        }
+    </example>
+    
+    <data>
+        INSERT_PARTICIPANT_DATA_HERE
+    </data>
+</participantGroupAnalysisPrompt>

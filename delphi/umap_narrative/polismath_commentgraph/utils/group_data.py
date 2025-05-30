@@ -697,3 +697,268 @@ class GroupDataProcessor:
                     'n_groups': 0
                 }
             }
+    
+    def get_participant_group_vote_data(self, zid: int, participant_groups: Dict[int, int]) -> Dict[str, Any]:
+        """
+        Calculate vote statistics for participant groups (from 703 clustering) vs. all comments.
+        
+        Args:
+            zid: Conversation ID  
+            participant_groups: Dictionary mapping participant_id -> group_id from 703 clustering
+            
+        Returns:
+            Dictionary with vote data organized by participant groups and comments
+        """
+        try:
+            logger.info(f"Getting participant group vote data for conversation {zid}")
+            
+            # Get all votes and comments
+            votes = self.postgres_client.get_votes_by_conversation(zid)
+            comments = self.postgres_client.get_comments_by_conversation(zid)
+            
+            logger.info(f"Found {len(votes)} votes and {len(comments)} comments")
+            
+            # Initialize vote data structure
+            vote_data = {}
+            for comment in comments:
+                tid = comment['tid']
+                vote_data[tid] = {
+                    'comment_id': tid,
+                    'comment_text': comment.get('txt', ''),
+                    'total_votes': 0,
+                    'total_agrees': 0, 
+                    'total_disagrees': 0,
+                    'total_passes': 0,
+                    'participant_groups': defaultdict(lambda: {
+                        'votes': 0,
+                        'agrees': 0,
+                        'disagrees': 0, 
+                        'passes': 0
+                    })
+                }
+            
+            # Process votes by participant groups
+            for vote in votes:
+                pid = vote.get('pid')
+                tid = vote.get('tid')  
+                vote_val = vote.get('vote')
+                
+                if tid not in vote_data:
+                    continue
+                    
+                # Get participant group (default to -1 for ungrouped)
+                participant_group = participant_groups.get(pid, -1)
+                
+                # Update total votes
+                vote_data[tid]['total_votes'] += 1
+                
+                # Update vote counts
+                if vote_val == 1:
+                    vote_data[tid]['total_agrees'] += 1
+                    vote_data[tid]['participant_groups'][participant_group]['agrees'] += 1
+                elif vote_val == -1:
+                    vote_data[tid]['total_disagrees'] += 1
+                    vote_data[tid]['participant_groups'][participant_group]['disagrees'] += 1
+                elif vote_val == 0:
+                    vote_data[tid]['total_passes'] += 1
+                    vote_data[tid]['participant_groups'][participant_group]['passes'] += 1
+                
+                # Update group vote count
+                vote_data[tid]['participant_groups'][participant_group]['votes'] += 1
+            
+            # Calculate percentages and extremity for each comment
+            for tid, data in vote_data.items():
+                groups_data = data['participant_groups']
+                
+                # Calculate overall percentages
+                total_votes = data['total_votes']
+                if total_votes > 0:
+                    data['overall_agree_pct'] = data['total_agrees'] / total_votes
+                    data['overall_disagree_pct'] = data['total_disagrees'] / total_votes
+                    data['overall_pass_pct'] = data['total_passes'] / total_votes
+                else:
+                    data['overall_agree_pct'] = data['overall_disagree_pct'] = data['overall_pass_pct'] = 0
+                
+                # Calculate percentages for each participant group
+                group_vote_pcts = {}
+                for group_id, group_data in groups_data.items():
+                    group_total = group_data['votes']
+                    if group_total > 0:
+                        agree_pct = group_data['agrees'] / group_total
+                        disagree_pct = group_data['disagrees'] / group_total  
+                        pass_pct = group_data['passes'] / group_total
+                    else:
+                        agree_pct = disagree_pct = pass_pct = 0
+                    
+                    group_vote_pcts[group_id] = {
+                        'agree': agree_pct,
+                        'disagree': disagree_pct,
+                        'pass': pass_pct,
+                        'total_votes': group_total
+                    }
+                
+                data['group_percentages'] = group_vote_pcts
+                
+                # Calculate extremity (how much groups differ from overall consensus)
+                data['participant_group_extremity'] = self.calculate_participant_group_extremity(
+                    group_vote_pcts, data['overall_agree_pct']
+                )
+            
+            return {
+                'vote_data': vote_data,
+                'participant_groups': participant_groups,
+                'n_groups': len(set(participant_groups.values())),
+                'group_sizes': {gid: list(participant_groups.values()).count(gid) 
+                              for gid in set(participant_groups.values())}
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting participant group vote data: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                'vote_data': {},
+                'participant_groups': {},
+                'n_groups': 0,
+                'group_sizes': {}
+            }
+    
+    def calculate_participant_group_extremity(self, group_vote_pcts: Dict, overall_agree_pct: float) -> float:
+        """
+        Calculate how much participant groups differ from overall consensus.
+        
+        Args:
+            group_vote_pcts: Dictionary of group_id -> {'agree': pct, 'disagree': pct, 'pass': pct}
+            overall_agree_pct: Overall agreement percentage for this comment
+            
+        Returns:
+            Float from 0-1 representing maximum deviation from consensus
+        """
+        if not group_vote_pcts or len(group_vote_pcts) < 2:
+            return 0.0
+        
+        max_deviation = 0.0
+        
+        # Find maximum deviation from overall consensus
+        for group_id, percentages in group_vote_pcts.items():
+            if group_id == -1:  # Skip ungrouped participants
+                continue
+                
+            if percentages['total_votes'] < 3:  # Skip groups with too few votes
+                continue
+                
+            # Calculate deviation from consensus for agreement percentage
+            agree_deviation = abs(percentages['agree'] - overall_agree_pct)
+            max_deviation = max(max_deviation, agree_deviation)
+        
+        return min(max_deviation, 1.0)  # Cap at 1.0
+    
+    def filter_participant_group_distinctive_comments(self, zid: int, participant_groups: Dict[int, int], 
+                                                    group_id: int, threshold: float = 0.3) -> Dict[str, List[Dict]]:
+        """
+        Filter comments where a specific participant group differs significantly from all others.
+        
+        Args:
+            zid: Conversation ID
+            participant_groups: Dictionary mapping participant_id -> group_id 
+            group_id: Specific group to analyze (one vs. all)
+            threshold: Minimum difference to be considered distinctive (default 0.3)
+            
+        Returns:
+            Dictionary with distinctive_agrees, distinctive_disagrees, consensus_breaks
+        """
+        try:
+            # Get vote data for participant groups
+            vote_data_result = self.get_participant_group_vote_data(zid, participant_groups)
+            vote_data = vote_data_result['vote_data']
+            
+            distinctive_agrees = []
+            distinctive_disagrees = []
+            consensus_breaks = []
+            
+            for tid, data in vote_data.items():
+                group_percentages = data['group_percentages']
+                
+                if group_id not in group_percentages:
+                    continue
+                    
+                target_group = group_percentages[group_id]
+                if target_group['total_votes'] < 3:  # Skip if too few votes
+                    continue
+                
+                # Calculate average of all other groups
+                other_groups_agrees = []
+                other_groups_disagrees = []
+                
+                for other_gid, other_pcts in group_percentages.items():
+                    if other_gid != group_id and other_gid != -1 and other_pcts['total_votes'] >= 3:
+                        other_groups_agrees.append(other_pcts['agree'])
+                        other_groups_disagrees.append(other_pcts['disagree'])
+                
+                if not other_groups_agrees:  # No other groups to compare with
+                    continue
+                
+                avg_others_agree = sum(other_groups_agrees) / len(other_groups_agrees)
+                avg_others_disagree = sum(other_groups_disagrees) / len(other_groups_disagrees)
+                
+                # Check for distinctive agreement (group agrees much more than others)
+                agree_diff = target_group['agree'] - avg_others_agree
+                if agree_diff > threshold:
+                    distinctive_agrees.append({
+                        'comment_id': tid,
+                        'comment_text': data['comment_text'],
+                        'group_agree_pct': target_group['agree'],
+                        'others_agree_pct': avg_others_agree,
+                        'difference': agree_diff,
+                        'group_votes': target_group['total_votes']
+                    })
+                
+                # Check for distinctive disagreement (group disagrees much more than others)  
+                disagree_diff = target_group['disagree'] - avg_others_disagree
+                if disagree_diff > threshold:
+                    distinctive_disagrees.append({
+                        'comment_id': tid,
+                        'comment_text': data['comment_text'], 
+                        'group_disagree_pct': target_group['disagree'],
+                        'others_disagree_pct': avg_others_disagree,
+                        'difference': disagree_diff,
+                        'group_votes': target_group['total_votes']
+                    })
+                
+                # Check for consensus breaks (differs significantly from overall)
+                overall_agree = data['overall_agree_pct']
+                consensus_diff = abs(target_group['agree'] - overall_agree)
+                if consensus_diff > threshold:
+                    consensus_breaks.append({
+                        'comment_id': tid,
+                        'comment_text': data['comment_text'],
+                        'group_agree_pct': target_group['agree'], 
+                        'overall_agree_pct': overall_agree,
+                        'difference': consensus_diff,
+                        'group_votes': target_group['total_votes']
+                    })
+            
+            # Sort by difference (most distinctive first)
+            distinctive_agrees.sort(key=lambda x: x['difference'], reverse=True)
+            distinctive_disagrees.sort(key=lambda x: x['difference'], reverse=True) 
+            consensus_breaks.sort(key=lambda x: x['difference'], reverse=True)
+            
+            return {
+                'distinctive_agrees': distinctive_agrees,
+                'distinctive_disagrees': distinctive_disagrees,
+                'consensus_breaks': consensus_breaks,
+                'group_id': group_id,
+                'analysis_threshold': threshold
+            }
+            
+        except Exception as e:
+            logger.error(f"Error filtering distinctive comments for group {group_id}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                'distinctive_agrees': [],
+                'distinctive_disagrees': [], 
+                'consensus_breaks': [],
+                'group_id': group_id,
+                'analysis_threshold': threshold
+            }

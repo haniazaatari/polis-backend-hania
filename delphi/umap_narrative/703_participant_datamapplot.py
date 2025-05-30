@@ -358,6 +358,71 @@ def extract_group_characteristic_comments(cluster_assignments: np.ndarray,
     
     return group_characteristics
 
+def store_participant_cluster_assignments_in_dynamodb(zid: int, participant_ids: List[int], cluster_assignments: np.ndarray, group_names: Dict[int, str] = None) -> None:
+    """
+    Store participant cluster assignments in DynamoDB for use by other scripts.
+    
+    Args:
+        zid: Conversation ID
+        participant_ids: List of participant IDs
+        cluster_assignments: Array of cluster assignments for each participant
+        group_names: Optional dictionary mapping cluster_id to group name
+    """
+    try:
+        # Set up DynamoDB client
+        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://dynamodb-local:8000')
+        dynamodb = boto3.resource('dynamodb', 
+                                 endpoint_url=endpoint_url,
+                                 region_name=os.environ.get('AWS_REGION', 'us-east-1'),
+                                 aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
+                                 aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey'))
+        
+        # Check if table exists, if not, create it
+        try:
+            table = dynamodb.Table('Delphi_UMAPParticipantClusters')
+            table.load()  # This will raise an exception if table doesn't exist
+        except:
+            # Create table if it doesn't exist
+            logger.info('Creating Delphi_UMAPParticipantClusters table...')
+            table = dynamodb.create_table(
+                TableName='Delphi_UMAPParticipantClusters',
+                KeySchema=[
+                    {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'participant_id', 'KeyType': 'RANGE'}
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'participant_id', 'AttributeType': 'N'}
+                ],
+                BillingMode='PAY_PER_REQUEST'
+            )
+            table.wait_until_exists()
+            logger.info('Created Delphi_UMAPParticipantClusters table')
+        
+        # Store each participant's cluster assignment
+        timestamp = datetime.now().isoformat()
+        with table.batch_writer() as batch:
+            for i, participant_id in enumerate(participant_ids):
+                cluster_id = int(cluster_assignments[i])
+                item = {
+                    'conversation_id': str(zid),
+                    'participant_id': int(participant_id),
+                    'cluster_id': cluster_id,
+                    'method': 'umap_kmeans_clustering',
+                    'created_at': timestamp
+                }
+                
+                # Add cluster description if available
+                if group_names and cluster_id in group_names:
+                    item['__internal_debug__clusterDescription'] = group_names[cluster_id]
+                
+                batch.put_item(Item=item)
+        
+        logger.info(f'Stored {len(participant_ids)} participant cluster assignments in DynamoDB')
+        
+    except Exception as e:
+        logger.warning(f'Failed to store participant cluster assignments in DynamoDB: {e}')
+
 def store_group_names_in_dynamodb(zid: int, group_names: Dict[int, str]) -> None:
     """
     Store participant group names in DynamoDB for future use.
@@ -1000,7 +1065,16 @@ def create_participant_datamapplot(zid: int, layer_num: int = 0, output_dir: Opt
             for cluster_id in group_characteristics.keys():
                 group_names[cluster_id] = f"Group {cluster_id}"
         
-        # 5. Create visualizations
+        # 5. Store participant cluster assignments in DynamoDB (with group names)
+        logger.info("Storing participant cluster assignments in DynamoDB...")
+        store_participant_cluster_assignments_in_dynamodb(
+            zid, 
+            umap_result['participant_ids'], 
+            umap_result['cluster_assignments'],
+            group_names
+        )
+        
+        # 6. Create visualizations
         success = create_participant_datamapplot_visualizations(
             umap_result,
             group_names,
