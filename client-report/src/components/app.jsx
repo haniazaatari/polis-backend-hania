@@ -32,6 +32,16 @@ function assertExists(obj, key) {
   }
 }
 
+const computeVoteTotal = (users) => {
+  let voteTotal = 0;
+
+  for (const count in users) {
+    voteTotal += users[count];
+  }
+
+  return voteTotal;
+};
+
 const App = (props) => {
   const [loading, setLoading] = useState(true);
   const [consensus, setConsensus] = useState(null);
@@ -43,6 +53,9 @@ const App = (props) => {
   const [model, setModel] = useState("openai");
   const [isNarrativeReport, setIsNarrativeReport] = useState(
     window.location.pathname.split("/")[1] === "narrativeReport"
+  );
+  const [isStatsOnly, setIsStatsOnly] = useState(
+    window.location.pathname.split("/")[1] === "stats"
   );
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth,
@@ -586,7 +599,26 @@ const App = (props) => {
     );
   }
 
-  return (
+  return isStatsOnly ? (
+    <section style={{ maxWidth: 1200, display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+      <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+        <h3>Participants</h3>
+        <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{ptptCountTotal}</p>
+      </div>
+      <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+        <h3>Comments</h3>
+        <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["n-cmts"]}</p>
+      </div>
+      <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+        <h3>Votes</h3>
+        <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{computeVoteTotal(math["user-vote-counts"])}</p>
+      </div>
+      <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+        <h3>Opinion Groups</h3>
+        <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["group-clusters"].length}</p>
+      </div>
+    </section>
+  ) : (
     <div style={{ margin: "0px 10px" }} data-testid="reports-overview">
       <Heading conversation={conversation} />
       <div

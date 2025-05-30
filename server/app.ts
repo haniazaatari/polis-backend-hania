@@ -1517,6 +1517,10 @@ helpersInitialized.then(
       /^\/narrativeReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       fetchIndexForReportPage
     );
+    app.get(
+      /^\/stats\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      fetchIndexForReportPage
+    );
 
     app.get(/^\/thirdPartyCookieTestPt1\.html$/, fetchThirdPartyCookieTestPt1);
     app.get(/^\/thirdPartyCookieTestPt2\.html$/, fetchThirdPartyCookieTestPt2);
