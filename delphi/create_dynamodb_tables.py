@@ -373,6 +373,18 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                 'ReadCapacityUnits': 5,
                 'WriteCapacityUnits': 5
             }
+        },
+        'Delphi_ParticipantGroupsSummary': {
+            'KeySchema': [
+                {'AttributeName': 'conversation_id', 'KeyType': 'HASH'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'}
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
         }
     }
     

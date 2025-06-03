@@ -51,8 +51,17 @@ from polismath_commentgraph.utils.group_data import GroupDataProcessor
 
 # Import existing narrative report infrastructure  
 import importlib.util
-spec = importlib.util.spec_from_file_location("narrative_batch", 
-    "/home/christian-weilbach/Development/polis/delphi/umap_narrative/801_narrative_report_batch.py")
+import os
+
+# Use relative path that works both in host and container
+current_dir = os.path.dirname(os.path.abspath(__file__))
+narrative_batch_path = os.path.join(current_dir, "801_narrative_report_batch.py")
+
+# Fallback to absolute container path if relative doesn't work
+if not os.path.exists(narrative_batch_path):
+    narrative_batch_path = "/app/umap_narrative/801_narrative_report_batch.py"
+
+spec = importlib.util.spec_from_file_location("narrative_batch", narrative_batch_path)
 narrative_batch = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(narrative_batch)
 NarrativeReportService = narrative_batch.NarrativeReportService
@@ -585,6 +594,175 @@ class ParticipantBatchReportGenerator:
                 self.postgres_client.shutdown()
             except:
                 pass
+        
+        # After generating all reports, create unified JSON structure
+        if success:
+            await self.create_unified_participant_groups_json()
+        
+        return success
+    
+    async def create_unified_participant_groups_json(self):
+        """Create unified JSON structure for all participant groups, similar to 801 topics format."""
+        try:
+            logger.info("Creating unified participant groups JSON structure...")
+            
+            # Load all participant clusters
+            clusters = self.load_participant_clusters_from_dynamodb(self.conversation_id)
+            if not clusters:
+                logger.warning("No participant clusters found for unified JSON creation")
+                return
+            
+            # Load all generated reports from DynamoDB
+            dynamodb = boto3.resource(
+                'dynamodb',
+                endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
+                region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-west-2'),
+                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
+                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+            )
+            
+            reports_table = dynamodb.Table('Delphi_ParticipantNarrativeReports')
+            
+            # Scan all reports for this conversation using rid_section_model pattern
+            response = reports_table.scan(
+                FilterExpression=boto3.dynamodb.conditions.Attr('rid_section_model').contains(str(self.conversation_id))
+            )
+            
+            groups = []
+            
+            for cluster_id, cluster_data in sorted(clusters.items()):
+                logger.info(f"Processing unified JSON for group {cluster_id}")
+                
+                # Find the most recent report for this cluster
+                cluster_reports = [item for item in response.get('Items', []) 
+                                 if item.get('metadata', {}).get('cluster_id') == str(cluster_id)]
+                
+                if not cluster_reports:
+                    logger.warning(f"No reports found for cluster {cluster_id}")
+                    continue
+                
+                # Get the most recent report
+                latest_report = max(cluster_reports, key=lambda x: x.get('timestamp', ''))
+                
+                # Extract citations from the report
+                citations = self.extract_citations_from_report(latest_report)
+                
+                # Get distinctive comments for this group
+                distinctive_data = self.get_participant_cluster_voting_patterns(cluster_id, cluster_data['participants'])
+                
+                # Create group entry
+                group = {
+                    "cluster_id": cluster_id,
+                    "name": cluster_data['cluster_name'],
+                    "group_key": f"participant_group_{cluster_id}",
+                    "participant_count": cluster_data['participant_count'],
+                    "citations": citations,
+                    "distinctive_patterns": {
+                        "agreements": len(distinctive_data.get('distinctive_agrees', [])),
+                        "disagreements": len(distinctive_data.get('distinctive_disagrees', [])),
+                        "consensus_breaks": len(distinctive_data.get('consensus_breaks', []))
+                    },
+                    "sample_comments": self.get_sample_comments_for_group(distinctive_data)[:5]  # Top 5 sample comments
+                }
+                groups.append(group)
+            
+            # Create unified structure
+            unified_json = {
+                "id": "participant_groups_analysis",
+                "title": "Participant Groups Analysis",
+                "conversation_id": self.conversation_id,
+                "groups": groups,
+                "metadata": {
+                    "total_groups": len(groups),
+                    "total_participants": sum(g["participant_count"] for g in groups),
+                    "generation_timestamp": datetime.now().isoformat(),
+                    "model": self.model
+                }
+            }
+            
+            # Sort groups by participant count (descending)
+            unified_json["groups"].sort(key=lambda x: x['participant_count'], reverse=True)
+            
+            # Store unified JSON in DynamoDB
+            unified_table = dynamodb.Table('Delphi_ParticipantGroupsSummary')
+            
+            # Create table if it doesn't exist
+            try:
+                unified_table.load()
+            except:
+                logger.info('Creating Delphi_ParticipantGroupsSummary table...')
+                unified_table = dynamodb.create_table(
+                    TableName='Delphi_ParticipantGroupsSummary',
+                    KeySchema=[
+                        {'AttributeName': 'conversation_id', 'KeyType': 'HASH'}
+                    ],
+                    AttributeDefinitions=[
+                        {'AttributeName': 'conversation_id', 'AttributeType': 'S'}
+                    ],
+                    BillingMode='PAY_PER_REQUEST'
+                )
+                unified_table.wait_until_exists()
+                logger.info('Created Delphi_ParticipantGroupsSummary table')
+            
+            # Store the unified JSON
+            unified_table.put_item(
+                Item={
+                    'conversation_id': self.conversation_id,
+                    'groups_data': json.dumps(unified_json),
+                    'timestamp': datetime.now().isoformat(),
+                    'model': self.model,
+                    'total_groups': len(groups),
+                    'total_participants': sum(g["participant_count"] for g in groups)
+                }
+            )
+            
+            logger.info(f"Successfully created unified participant groups JSON with {len(groups)} groups")
+            return unified_json
+            
+        except Exception as e:
+            logger.error(f"Error creating unified participant groups JSON: {e}")
+            logger.error(traceback.format_exc())
+            return None
+    
+    def extract_citations_from_report(self, report_item):
+        """Extract all citation comment IDs from a participant report."""
+        citations = []
+        try:
+            if 'report_data' in report_item:
+                report_data = json.loads(report_item['report_data'])
+                
+                # Navigate through paragraphs -> sentences -> clauses to extract citations
+                for paragraph in report_data.get('paragraphs', []):
+                    for sentence in paragraph.get('sentences', []):
+                        for clause in sentence.get('clauses', []):
+                            clause_citations = clause.get('citations', [])
+                            if isinstance(clause_citations, list):
+                                citations.extend(clause_citations)
+                
+        except Exception as e:
+            logger.warning(f"Error extracting citations from report: {e}")
+        
+        # Remove duplicates and return
+        return list(set(citations))
+    
+    def get_sample_comments_for_group(self, distinctive_data):
+        """Get sample comments that represent this group's distinctive patterns."""
+        sample_comments = []
+        
+        # Get a few examples from each category
+        if distinctive_data.get('distinctive_agrees'):
+            sample_comments.extend([comment.get('text', '')[:200] + '...' if len(comment.get('text', '')) > 200 else comment.get('text', '') 
+                                  for comment in distinctive_data['distinctive_agrees'][:2]])
+        
+        if distinctive_data.get('distinctive_disagrees'):
+            sample_comments.extend([comment.get('text', '')[:200] + '...' if len(comment.get('text', '')) > 200 else comment.get('text', '') 
+                                  for comment in distinctive_data['distinctive_disagrees'][:2]])
+        
+        if distinctive_data.get('consensus_breaks'):
+            sample_comments.extend([comment.get('text', '')[:200] + '...' if len(comment.get('text', '')) > 200 else comment.get('text', '') 
+                                  for comment in distinctive_data['consensus_breaks'][:1]])
+        
+        return [comment for comment in sample_comments if comment.strip()]
 
 async def main():
     """Main function to parse arguments and execute participant cluster report generation."""
@@ -593,6 +771,7 @@ async def main():
     parser.add_argument("--model", type=str, help="LLM model to use (defaults to ANTHROPIC_MODEL env var)")
     parser.add_argument("--no-cache", action='store_true', help="Ignore cached report data")
     parser.add_argument("--max-batch-size", type=int, default=10, help="Maximum number of participant groups per batch")
+    parser.add_argument("--create-unified-json", action='store_true', help="Only create unified JSON from existing reports")
     
     args = parser.parse_args()
     
@@ -604,13 +783,27 @@ async def main():
             max_batch_size=args.max_batch_size
         )
         
-        success = await generator.generate_reports()
-        if success:
-            logger.info("Participant cluster narrative report generation completed successfully")
-            return 0
+        if args.create_unified_json:
+            # Only create unified JSON from existing reports
+            logger.info("Creating unified JSON from existing participant reports...")
+            unified_json = await generator.create_unified_participant_groups_json()
+            if unified_json:
+                logger.info("Successfully created unified participant groups JSON")
+                logger.info(f"Total groups: {len(unified_json.get('groups', []))}")
+                logger.info(f"Total participants: {unified_json.get('metadata', {}).get('total_participants', 0)}")
+                return 0
+            else:
+                logger.error("Failed to create unified JSON")
+                return 1
         else:
-            logger.error("Participant cluster narrative report generation failed")
-            return 1
+            # Generate reports normally
+            success = await generator.generate_reports()
+            if success:
+                logger.info("Participant cluster narrative report generation completed successfully")
+                return 0
+            else:
+                logger.error("Participant cluster narrative report generation failed")
+                return 1
             
     except Exception as e:
         logger.error(f"Error in main: {e}")
