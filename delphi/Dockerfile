@@ -87,12 +87,11 @@
   EXPOSE 8080
   ENV PYTHONPATH "${PYTHONPATH}:/app"
   
-  COPY start_poller.sh .
   COPY run_delphi.py .
   COPY create_dynamodb_tables.py .
   COPY setup_minio.py .
   COPY scripts/setup_ollama.sh ./setup_ollama.sh
-  RUN chmod +x start_poller.sh run_delphi.py setup_ollama.sh
+  RUN chmod +x run_delphi.py setup_ollama.sh
   
   CMD ["bash", "-c", "\
       echo 'Ensuring DynamoDB tables are set up (runs in all environments)...'; \
