@@ -833,46 +833,48 @@ def create_visualizations(
         )
         
         # Generate static datamapplot visualizations
-        create_static_datamapplot(
-            conversation_id,
-            document_map,
-            cluster_layer,
-            numeric_topic_names,
-            output_dir,
-            layer_idx
-        )
+        # TEMPORARILY DISABLED - These static files aren't used by the web interface
+        # create_static_datamapplot(
+        #     conversation_id,
+        #     document_map,
+        #     cluster_layer,
+        #     numeric_topic_names,
+        #     output_dir,
+        #     layer_idx
+        # )
         
         # Generate consensus/divisive visualization 
-        try:
-            logger.info(f"Generating consensus/divisive visualization for layer {layer_idx}...")
-            # Use subprocess to run as a separate process to avoid any memory leaks
-            import subprocess
-            script_path = os.path.join(os.path.dirname(__file__), "702_consensus_divisive_datamapplot.py")
-            command = [
-                "python", script_path, 
-                "--zid", str(conversation_id),
-                "--layer", str(layer_idx), 
-                "--output_dir", output_dir
-            ]
-            
-            # Run the script with appropriate environment variables
-            env = os.environ.copy()
-            process = subprocess.Popen(
-                command,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                universal_newlines=True
-            )
-            stdout, stderr = process.communicate()
-            
-            if process.returncode != 0:
-                logger.warning(f"Consensus/divisive visualization failed: {stderr}")
-            else:
-                logger.info(f"Consensus/divisive visualization for layer {layer_idx} completed successfully")
-                
-        except Exception as e:
-            logger.warning(f"Error running consensus/divisive visualization: {e}")
+        # TEMPORARILY DISABLED - These files aren't used by the web interface and slow down processing
+        # try:
+        #     logger.info(f"Generating consensus/divisive visualization for layer {layer_idx}...")
+        #     # Use subprocess to run as a separate process to avoid any memory leaks
+        #     import subprocess
+        #     script_path = os.path.join(os.path.dirname(__file__), "702_consensus_divisive_datamapplot.py")
+        #     command = [
+        #         "python", script_path, 
+        #         "--zid", str(conversation_id),
+        #         "--layer", str(layer_idx), 
+        #         "--output_dir", output_dir
+        #     ]
+        #     
+        #     # Run the script with appropriate environment variables
+        #     env = os.environ.copy()
+        #     process = subprocess.Popen(
+        #         command,
+        #         env=env,
+        #         stdout=subprocess.PIPE,
+        #         stderr=subprocess.PIPE,
+        #         universal_newlines=True
+        #     )
+        #     stdout, stderr = process.communicate()
+        #     
+        #     if process.returncode != 0:
+        #         logger.warning(f"Consensus/divisive visualization failed: {stderr}")
+        #     else:
+        #         logger.info(f"Consensus/divisive visualization for layer {layer_idx} completed successfully")
+        #         
+        # except Exception as e:
+        #     logger.warning(f"Error running consensus/divisive visualization: {e}")
         
         # Add to list of layer files and info
         if named_file:

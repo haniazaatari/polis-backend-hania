@@ -29,6 +29,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   const [jobCreationResult, setJobCreationResult] = useState(null);
   const [batchReportLoading, setBatchReportLoading] = useState(false);
   const [batchReportResult, setBatchReportResult] = useState(null);
+  const [selectedLayer, setSelectedLayer] = useState(0);
 
   useEffect(() => {
     if (!report_id) return;
@@ -241,6 +242,69 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   // Get the current selected run data
   const selectedRun = selectedRunKey ? runs[selectedRunKey] : null;
 
+  // Get available layers with topic counts from visualization data
+  const getAvailableLayers = () => {
+    if (!visualizationJobs || !visualizationJobs[0] || !visualizationJobs[0].visualizations) {
+      return [];
+    }
+
+    const layerMap = new Map();
+    
+    // Get layers from visualizations
+    visualizationJobs[0].visualizations
+      .filter((vis) => vis && vis.type === "interactive")
+      .forEach((vis) => {
+        layerMap.set(vis.layerId, { layerId: vis.layerId, topicCount: 0 });
+      });
+
+    // Add topic counts from selected run data
+    if (selectedRun && selectedRun.topics_by_layer) {
+      Object.keys(selectedRun.topics_by_layer).forEach((layerId) => {
+        const numLayerId = parseInt(layerId);
+        const topicCount = Object.keys(selectedRun.topics_by_layer[layerId]).length;
+        if (layerMap.has(numLayerId)) {
+          layerMap.set(numLayerId, { layerId: numLayerId, topicCount });
+        }
+      });
+    }
+
+    return Array.from(layerMap.values()).sort((a, b) => a.layerId - b.layerId);
+  };
+
+  const availableLayers = getAvailableLayers();
+
+  // Render layer switching buttons
+  const renderLayerSwitcher = () => {
+    if (availableLayers.length <= 1) {
+      return null; // Don't show switcher if only one layer
+    }
+
+    return (
+      <div className="layer-switcher">
+        <h3>Layer Selection</h3>
+        <p className="switcher-description">
+          Choose visualization granularity: Layer 0 shows finest-grained topics, higher layers show broader groupings.
+        </p>
+        <div className="layer-buttons">
+          {availableLayers.map((layer) => (
+            <button
+              key={layer.layerId}
+              className={`layer-button ${selectedLayer === layer.layerId ? 'active' : ''}`}
+              onClick={() => setSelectedLayer(layer.layerId)}
+            >
+              Layer {layer.layerId}: {layer.topicCount} Topic{layer.topicCount !== 1 ? 's' : ''}
+              <span className="layer-description">
+                {layer.layerId === 0 ? ' (Finest)' : 
+                 layer.layerId === availableLayers[availableLayers.length - 1].layerId ? ' (Coarsest)' : 
+                 ' (Medium)'}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   // Render topic cards for a layer
   const renderTopicCards = (layerId) => {
     if (!selectedRun || !selectedRun.topics_by_layer || !selectedRun.topics_by_layer[layerId]) {
@@ -435,10 +499,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                 Array.isArray(visualizationJobs[0].visualizations) &&
                 visualizationJobs[0].visualizations.length > 0 ? (
                   <div className="visualizations-grid">
-                    {/* Show all layer visualizations */}
+                    {/* Show selected layer visualization */}
                     {visualizationJobs[0].visualizations
-                      .filter((vis) => vis && vis.type === "interactive")
-                      .sort((a, b) => a.layerId - b.layerId) // Sort by layer ID
+                      .filter((vis) => vis && vis.type === "interactive" && vis.layerId === selectedLayer)
                       .map((vis) => (
                         <div key={vis.key} className="visualization-card">
                           <h4>Layer {vis.layerId} Interactive Visualization</h4>
@@ -458,9 +521,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                       .filter(
                         (vis) =>
                           vis &&
-                          (vis.type === "static_png" || vis.type === "presentation_png")
+                          (vis.type === "static_png" || vis.type === "presentation_png") &&
+                          vis.layerId === selectedLayer
                       )
-                      .sort((a, b) => a.layerId - b.layerId) // Sort by layer ID
                       .map((vis) => (
                         <div key={vis.key} className="visualization-card">
                           <h4>Layer {vis.layerId} Static Visualization</h4>
@@ -788,6 +851,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
               These visualizations show the spatial relationships between topics and comments.
               Similar comments are positioned closer together on the map.
             </p>
+            {renderLayerSwitcher()}
             {renderVisualizations()}
           </div>
 
