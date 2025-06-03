@@ -30,6 +30,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   const [batchReportLoading, setBatchReportLoading] = useState(false);
   const [batchReportResult, setBatchReportResult] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState(0);
+  const [selectedReportSection, setSelectedReportSection] = useState("");
 
   useEffect(() => {
     if (!report_id) return;
@@ -272,6 +273,71 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   };
 
   const availableLayers = getAvailableLayers();
+
+  // Get available report sections for dropdown
+  const getAvailableReportSections = () => {
+    if (!narrativeReports || Object.keys(narrativeReports).length === 0) {
+      return [];
+    }
+
+    // Order of sections to display
+    const sectionOrder = ["group_informed_consensus", "groups", "uncertainty"];
+    
+    // Topic sections will have names in format: layer0_0, layer0_1, etc.
+    const topicSections = Object.keys(narrativeReports)
+      .filter((key) => key.match(/^layer\d+_\d+$/))
+      .sort();
+
+    // Combine ordered sections with topic sections
+    const orderedSections = [...sectionOrder, ...topicSections];
+
+    return orderedSections
+      .filter(sectionKey => narrativeReports[sectionKey]) // Only include sections that exist
+      .map(sectionKey => {
+        const report = narrativeReports[sectionKey];
+        
+        // Create a human-readable section title
+        let sectionTitle = sectionKey
+          .replace("group_informed_consensus", "Group Consensus")
+          .replace("groups", "Group Differences")
+          .replace("uncertainty", "Areas of Uncertainty");
+
+        // For topic sections in new format: layer0_0, layer0_1, etc.
+        if (sectionKey.match(/^layer\d+_\d+$/)) {
+          const match = sectionKey.match(/^layer(\d+)_(\d+)$/);
+          const layerId = match[1];
+          const clusterId = match[2];
+
+          // Check metadata first
+          if (report.metadata && report.metadata.topic_name) {
+            sectionTitle = report.metadata.topic_name;
+          } else if (
+            selectedRun &&
+            selectedRun.topics_by_layer &&
+            selectedRun.topics_by_layer[layerId] &&
+            selectedRun.topics_by_layer[layerId][clusterId]
+          ) {
+            // Try to find the topic name from selectedRun data
+            sectionTitle = selectedRun.topics_by_layer[layerId][clusterId].topic_name;
+          } else {
+            // Fallback to a generic title
+            sectionTitle = `Layer ${layerId}, Topic ${clusterId}`;
+          }
+        }
+
+        return {
+          key: sectionKey,
+          title: sectionTitle
+        };
+      });
+  };
+
+  const availableReportSections = getAvailableReportSections();
+
+  // Handle report section selection change
+  const handleReportSectionChange = (event) => {
+    setSelectedReportSection(event.target.value);
+  };
 
   // Render layer switching buttons
   const renderLayerSwitcher = () => {
@@ -554,7 +620,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     );
   };
 
-  // Render narrative reports section
+  // Render narrative reports section with dropdown
   const renderNarrativeReports = () => {
     if (narrativeLoading) {
       return <div className="loading">Loading narrative reports...</div>;
@@ -572,17 +638,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         </div>
       );
     }
-
-    // Order of sections to display
-    const sectionOrder = ["group_informed_consensus", "groups", "uncertainty"];
-
-    // Topic sections will have names in format: layer0_0, layer0_1, etc.
-    const topicSections = Object.keys(narrativeReports)
-      .filter((key) => key.match(/^layer\d+_\d+$/))
-      .sort();
-
-    // Combine ordered sections with topic sections
-    const orderedSections = [...sectionOrder, ...topicSections];
 
     return (
       <div className="narrative-reports-container">
@@ -602,179 +657,161 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
               </p>
             </div>
           )}
-        {orderedSections.map((sectionKey) => {
-          const report = narrativeReports[sectionKey];
-          if (!report) return null;
+        
+        {/* Report section dropdown */}
+        <div className="report-selector">
+          <select 
+            value={selectedReportSection} 
+            onChange={handleReportSectionChange}
+          >
+            <option value="">Select a report section...</option>
+            {availableReportSections.map(section => (
+              <option key={section.key} value={section.key}>
+                {section.title}
+              </option>
+            ))}
+          </select>
+        </div>
 
-          // Create a human-readable section title
-          let sectionTitle = sectionKey
-            .replace("group_informed_consensus", "Group Consensus")
-            .replace("groups", "Group Differences")
-            .replace("uncertainty", "Areas of Uncertainty");
+        {/* Render selected report */}
+        {selectedReportSection && renderSelectedReport()}
+      </div>
+    );
+  };
 
-          // For topic sections in new format: layer0_0, layer0_1, etc.
-          if (sectionKey.match(/^layer\d+_\d+$/)) {
-            const match = sectionKey.match(/^layer(\d+)_(\d+)$/);
-            const layerId = match[1];
-            const clusterId = match[2];
+  // Render the selected report section
+  const renderSelectedReport = () => {
+    const report = narrativeReports[selectedReportSection];
+    if (!report) return null;
 
-            // Check metadata first
-            if (report.metadata && report.metadata.topic_name) {
-              sectionTitle = report.metadata.topic_name;
-            } else if (
-              selectedRun &&
-              selectedRun.topics_by_layer &&
-              selectedRun.topics_by_layer[layerId] &&
-              selectedRun.topics_by_layer[layerId][clusterId]
+    // Get the display title
+    const selectedSection = availableReportSections.find(s => s.key === selectedReportSection);
+    const sectionTitle = selectedSection ? selectedSection.title : selectedReportSection;
+
+    return (
+      <div key={selectedReportSection} className="report-section">
+        <h3>{sectionTitle}</h3>
+        <div className="report-metadata">
+          <span>Generated: {new Date(report.timestamp).toLocaleString()}</span>
+          <span> | Model: {report.model || "N/A"}</span>
+        </div>
+        <div className="report-content">
+          {(() => {
+            if (!report.report_data) return null;
+            if (report.errors)
+              return (
+                <p>Not enough data has been provided for analysis, please check back later</p>
+              );
+
+            if (
+              typeof report.report_data !== "string" ||
+              !report.report_data.trim().startsWith("{") ||
+              !report.report_data.trim().endsWith("}")
             ) {
-              // Try to find the topic name from selectedRun data
-              sectionTitle = selectedRun.topics_by_layer[layerId][clusterId].topic_name;
-            } else {
-              // Fallback to a generic title
-              sectionTitle = `Layer ${layerId}, Topic ${clusterId}`;
+              return (
+                <article style={{ maxWidth: "600px" }}>
+                  <h5>Report data is not in the expected JSON format.</h5>
+                  <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                    {report.report_data}
+                  </pre>
+                </article>
+              );
             }
-          }
 
-          return (
-            <div key={sectionKey} className="report-section">
-              <h3>{sectionTitle}</h3>
-              <div className="report-metadata">
-                <span>Generated: {new Date(report.timestamp).toLocaleString()}</span>
-                <span> | Model: {report.model || "N/A"}</span>
-              </div>
-              <div className="report-content">
-                {(() => {
-                  if (!report.report_data) return null;
-                  if (report.errors)
-                    return (
-                      <p>Not enough data has been provided for analysis, please check back later</p>
-                    );
+            try {
+              const respData = JSON.parse(report.report_data);
 
-                  if (
-                    typeof report.report_data !== "string" ||
-                    !report.report_data.trim().startsWith("{") ||
-                    !report.report_data.trim().endsWith("}")
-                  ) {
-                    return (
-                      <article style={{ maxWidth: "600px" }}>
-                        <h5>Report data is not in the expected JSON format.</h5>
-                        <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-                          {report.report_data}
-                        </pre>
-                      </article>
-                    );
-                  }
+              const extractCitationsForThisSection = (data) => {
+                const collectedCitations = [];
 
-                  try {
-                    const respData = JSON.parse(report.report_data);
+                if (data?.paragraphs) {
+                  data.paragraphs.forEach((paragraph, pIdx) => {
+                    if (paragraph?.sentences) {
+                      paragraph.sentences.forEach((sentence, sIdx) => {
+                        if (sentence?.clauses) {
+                          sentence.clauses.forEach((clause, clIdx) => {
+                            if (clause?.citations && Array.isArray(clause.citations)) {
+                              clause.citations.forEach((citation, citIdx) => {
+                                if (typeof citation === "number") {
+                                  collectedCitations.push(citation);
+                                }
+                              });
+                            }
+                          });
+                        }
+                      });
+                    }
+                  });
+                }
+                return [...new Set(collectedCitations)];
+              };
 
-                    const extractCitationsForThisSection = (data) => {
-                      const collectedCitations = [];
+              const sectionCitationIds = extractCitationsForThisSection(respData);
 
-                      if (data?.paragraphs) {
-                        data.paragraphs.forEach((paragraph, pIdx) => {
-                          if (paragraph?.sentences) {
-                            paragraph.sentences.forEach((sentence, sIdx) => {
-                              if (sentence?.clauses) {
-                                sentence.clauses.forEach((clause, clIdx) => {
-                                  if (clause?.citations && Array.isArray(clause.citations)) {
-                                    clause.citations.forEach((citation, citIdx) => {
-                                      if (typeof citation === "number") {
-                                        collectedCitations.push(citation);
-                                      } else {
-                                      }
-                                    });
-                                  }
-                                });
-                              }
-                            });
-                          }
-                        });
-                      }
-                      const uniqueCitations = [...new Set(collectedCitations)];
-
-                      return uniqueCitations;
-                    };
-
-                    const sectionCitationIds = extractCitationsForThisSection(respData);
-
-                    // DEBUG: Check if all sectionCitationIds are in the main 'comments' prop
-                    const allTidsFound = sectionCitationIds.every((tid) =>
-                      comments.find((comment) => comment.tid === tid)
-                    );
-                    const missingTids = sectionCitationIds.filter(
-                      (tid) => !comments.find((comment) => comment.tid === tid)
-                    );
-
-                    // END DEBUG
-
-                    return (
-                      <div className="narrative-layout-container">
-                        <article className="narrative-text-content">
-                          {respData?.paragraphs?.map((pSection) => (
-                            <div key={pSection.id}>
-                              <h5>{pSection.title}</h5>
-                              {pSection.sentences.map((sentence, idx) => (
-                                <p key={idx}>
-                                  {sentence.clauses.map((clause, cIdx) => (
-                                    <span key={cIdx}>
-                                      {clause.text}
-                                      {clause.citations
-                                        ?.filter((c) => typeof c === "number")
-                                        .map((citation, citIdx, arr) => (
-                                          <sup key={citIdx}>
-                                            {citation}
-                                            {citIdx < arr.length - 1 ? ", " : ""}
-                                          </sup>
-                                        ))}
-                                      {cIdx < sentence.clauses.length - 1 ? " " : ""}
-                                    </span>
+              return (
+                <div className="narrative-layout-container">
+                  <article className="narrative-text-content">
+                    {respData?.paragraphs?.map((pSection) => (
+                      <div key={pSection.id}>
+                        <h5>{pSection.title}</h5>
+                        {pSection.sentences.map((sentence, idx) => (
+                          <p key={idx}>
+                            {sentence.clauses.map((clause, cIdx) => (
+                              <span key={cIdx}>
+                                {clause.text}
+                                {clause.citations
+                                  ?.filter((c) => typeof c === "number")
+                                  .map((citation, citIdx, arr) => (
+                                    <sup key={citIdx}>
+                                      {citation}
+                                      {citIdx < arr.length - 1 ? ", " : ""}
+                                    </sup>
                                   ))}
-                                </p>
-                              ))}
-                            </div>
-                          ))}
-                        </article>
-
-                        {sectionCitationIds.length > 0 && (
-                          <div className="narrative-comments-column">
-                            <h5>Referenced Comments</h5>
-                            <CommentList
-                              conversation={conversation}
-                              ptptCount={ptptCount}
-                              math={math}
-                              formatTid={formatTid}
-                              tidsToRender={sectionCitationIds}
-                              comments={comments}
-                              voteColors={voteColors}
-                            />
-                          </div>
-                        )}
+                                {cIdx < sentence.clauses.length - 1 ? " " : ""}
+                              </span>
+                            ))}
+                          </p>
+                        ))}
                       </div>
-                    );
-                  } catch (error) {
-                    console.error(
-                      `[${sectionKey}] Error processing narrative report section:`,
-                      error,
-                      "Report data was:",
-                      report.report_data
-                    );
-                    return (
-                      <article style={{ maxWidth: "600px" }}>
-                        <h5>An error occurred while processing this report section.</h5>
-                        <pre>{error.message}</pre>
-                        <p>Problematic data for section {sectionKey}:</p>
-                        <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-                          {report.report_data}
-                        </pre>
-                      </article>
-                    );
-                  }
-                })()}
-              </div>
-            </div>
-          );
-        })}
+                    ))}
+                  </article>
+
+                  {sectionCitationIds.length > 0 && (
+                    <div className="narrative-comments-column">
+                      <h5>Referenced Comments</h5>
+                      <CommentList
+                        conversation={conversation}
+                        ptptCount={ptptCount}
+                        math={math}
+                        formatTid={formatTid}
+                        tidsToRender={sectionCitationIds}
+                        comments={comments}
+                        voteColors={voteColors}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            } catch (error) {
+              console.error(
+                `[${selectedReportSection}] Error processing narrative report section:`,
+                error,
+                "Report data was:",
+                report.report_data
+              );
+              return (
+                <article style={{ maxWidth: "600px" }}>
+                  <h5>An error occurred while processing this report section.</h5>
+                  <pre>{error.message}</pre>
+                  <p>Problematic data for section {selectedReportSection}:</p>
+                  <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                    {report.report_data}
+                  </pre>
+                </article>
+              );
+            }
+          })()}
+        </div>
       </div>
     );
   };
@@ -816,6 +853,60 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         </div>
       ) : (
         <div className="report-content">
+          {/* Action buttons at the top */}
+          <div className="section">
+            <h2>Analysis Actions</h2>
+            <div className="action-buttons-grid">
+              <div className="action-button-group">
+                <h3>Data Processing</h3>
+                <div className="section-header-actions">
+                  <button className="create-job-button" onClick={toggleJobForm}>
+                    {jobFormOpen ? "Cancel" : "Run New Delphi Analysis"}
+                  </button>
+                </div>
+                {jobFormOpen && renderJobCreationForm()}
+              </div>
+              
+              <div className="action-button-group">
+                <h3>Narrative Generation</h3>
+                <div className="section-header-actions">
+                  <button
+                    className="batch-report-button"
+                    onClick={handleGenerateNarrativeReport}
+                    disabled={batchReportLoading}
+                  >
+                    {batchReportLoading ? "Generating..." : "Generate Batch Topics"}
+                  </button>
+                </div>
+                {batchReportResult && (
+                  <div className={`result-message ${batchReportResult.success ? "success" : "error"}`}>
+                    {batchReportResult.message}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="section">
+            <h2>Topic Visualizations</h2>
+            <p className="info-text">
+              These visualizations show the spatial relationships between topics and comments.
+              Similar comments are positioned closer together on the map.
+            </p>
+            {renderLayerSwitcher()}
+            {renderVisualizations()}
+          </div>
+
+          <div className="section">
+            <h2>Narrative Report</h2>
+            <p className="info-text">
+              This narrative report provides insights about group consensus, differences, and key
+              topics in the conversation.
+            </p>
+            {renderNarrativeReports()}
+          </div>
+
+          {/* Topics section moved to bottom */}
           <div className="section">
             <div className="run-info">
               <div className="run-header">
@@ -833,49 +924,13 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                 algorithm has analyzed the content of comments to extract the main themes.
               </p>
 
-              {selectedRun?.topics_by_layer &&
-                Object.keys(selectedRun.topics_by_layer)
-                  .sort()
-                  .map((layerId) => (
-                    <div key={layerId} className="layer-section">
-                      <h2>Group Themes - Layer {layerId}</h2>
-                      {renderTopicCards(layerId)}
-                    </div>
-                  ))}
+              {selectedRun?.topics_by_layer && selectedRun.topics_by_layer[selectedLayer] && (
+                <div className="layer-section">
+                  <h2>Group Themes - Layer {selectedLayer}</h2>
+                  {renderTopicCards(selectedLayer)}
+                </div>
+              )}
             </div>
-          </div>
-
-          <div className="section">
-            <h2>Topic Visualizations</h2>
-            <p className="info-text">
-              These visualizations show the spatial relationships between topics and comments.
-              Similar comments are positioned closer together on the map.
-            </p>
-            {renderLayerSwitcher()}
-            {renderVisualizations()}
-          </div>
-
-          <div className="section">
-            <h2>Narrative Report</h2>
-            <div className="section-header-actions">
-              <button
-                className="batch-report-button"
-                onClick={handleGenerateNarrativeReport}
-                disabled={batchReportLoading}
-              >
-                {batchReportLoading ? "Generating..." : "Generate Batch Topics"}
-              </button>
-            </div>
-            {batchReportResult && (
-              <div className={`result-message ${batchReportResult.success ? "success" : "error"}`}>
-                {batchReportResult.message}
-              </div>
-            )}
-            <p className="info-text">
-              This narrative report provides insights about group consensus, differences, and key
-              topics in the conversation.
-            </p>
-            {renderNarrativeReports()}
           </div>
         </div>
       )}
@@ -1314,6 +1369,115 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           .narrative-comments-column {
             margin-top: 30px; /* Add space when stacked below text */
           }
+        }
+
+        /* Layer switcher styles */
+        .layer-switcher {
+          background: #f8f9fa;
+          padding: 20px;
+          border-radius: 8px;
+          margin-bottom: 20px;
+          border: 1px solid #e9ecef;
+        }
+
+        .layer-switcher h3 {
+          margin-top: 0;
+          margin-bottom: 10px;
+          color: #333;
+        }
+
+        .switcher-description {
+          margin-bottom: 15px;
+          color: #666;
+          font-size: 0.9em;
+        }
+
+        .layer-buttons {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .layer-button {
+          background: white;
+          border: 2px solid #03a9f4;
+          color: #03a9f4;
+          padding: 12px 16px;
+          border-radius: 6px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          min-width: 140px;
+        }
+
+        .layer-button:hover {
+          background: #e3f2fd;
+        }
+
+        .layer-button.active {
+          background: #03a9f4;
+          color: white;
+        }
+
+        .layer-description {
+          font-size: 0.8em;
+          font-weight: normal;
+          opacity: 0.8;
+          margin-top: 2px;
+        }
+
+        /* Action buttons grid */
+        .action-buttons-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 30px;
+          margin-top: 20px;
+        }
+
+        .action-button-group {
+          background: white;
+          border: 1px solid #e0e0e0;
+          border-radius: 8px;
+          padding: 20px;
+        }
+
+        .action-button-group h3 {
+          margin-top: 0;
+          margin-bottom: 15px;
+          color: #333;
+          font-size: 1.1em;
+        }
+
+        @media (max-width: 768px) {
+          .action-buttons-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .layer-buttons {
+            justify-content: center;
+          }
+          
+          .layer-button {
+            min-width: 120px;
+          }
+        }
+
+        /* Report selector styles (matching TopicReport pattern) */
+        .report-selector {
+          margin-bottom: 30px;
+        }
+        
+        .report-selector select {
+          width: 100%;
+          max-width: 800px;
+          padding: 10px;
+          font-size: 16px;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          background-color: white;
         }
       `}</style>
     </div>
