@@ -106,6 +106,7 @@ services:
       - DATABASE_USER=${POSTGRES_USER:-christian}
       - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-polis123}
       - DATABASE_SSL_MODE=${DATABASE_SSL_MODE}
+      - NUMBA_DISABLE_JIT=${NUMBA_DISABLE_JIT}
     networks:
       - "polis-net"
     extra_hosts:
@@ -113,7 +114,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${DELPHI_CONTAINER_MEMORY:-4g}
+          memory: ${DELPHI_CONTAINER_MEMORY:-16g}
           cpus: ${DELPHI_CONTAINER_CPUS:-2}
     restart: unless-stopped
 
