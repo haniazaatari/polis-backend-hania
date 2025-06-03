@@ -244,23 +244,7 @@ class ParticipantBatchReportGenerator:
                 logger.warning(f"Could not load participant cluster assignments: {e}")
                 return {}
             
-            # Load cluster names from LLM naming if available
-            try:
-                names_table = dynamodb.Table('Delphi_ParticipantGroupsLLMNames')
-                response = names_table.query(
-                    KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(conversation_id)
-                )
-                
-                for item in response['Items']:
-                    cluster_id = int(item['cluster_id'])
-                    if cluster_id in clusters:
-                        clusters[cluster_id]['cluster_name'] = item['group_name']
-                
-                named_clusters = [c for c in clusters.values() if c['cluster_name'] != f"Group {c['cluster_id']}"]
-                logger.info(f"Loaded LLM-generated names for {len(named_clusters)} clusters")
-                
-            except Exception as e:
-                logger.warning(f"Could not load cluster names: {e}")
+            # Note: LLM cluster naming table removed - using simple numbered groups only
             
             return clusters
             

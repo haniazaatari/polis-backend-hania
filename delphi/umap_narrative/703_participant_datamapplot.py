@@ -423,83 +423,9 @@ def store_participant_cluster_assignments_in_dynamodb(zid: int, participant_ids:
     except Exception as e:
         logger.warning(f'Failed to store participant cluster assignments in DynamoDB: {e}')
 
-def store_group_names_in_dynamodb(zid: int, group_names: Dict[int, str]) -> None:
-    """
-    Store participant group names in DynamoDB for future use.
-    
-    Args:
-        zid: Conversation ID
-        group_names: Dictionary mapping cluster_id to group name
-    """
-    try:
-        # Set up DynamoDB client
-        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://dynamodb-local:8000')
-        dynamodb = boto3.resource('dynamodb', 
-                                 endpoint_url=endpoint_url,
-                                 region_name=os.environ.get('AWS_REGION', 'us-east-1'),
-                                 aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-                                 aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey'))
-        
-        table = dynamodb.Table('Delphi_ParticipantGroupsLLMNames')
-        
-        # Store each group name
-        for cluster_id, group_name in group_names.items():
-            group_key = f"layer0_cluster{cluster_id}"
-            
-            table.put_item(Item={
-                'conversation_id': str(zid),
-                'group_key': group_key,
-                'cluster_id': cluster_id,
-                'group_name': group_name,
-                'created_at': datetime.now().isoformat(),
-                'method': 'datamapplot_clustering'
-            })
-        
-        logger.info(f'Stored {len(group_names)} group names in DynamoDB')
-        
-    except Exception as e:
-        logger.warning(f'Failed to store group names in DynamoDB: {e}')
+# LLM naming functionality removed - using simple numbered groups
 
-def load_group_names_from_dynamodb(zid: int) -> Dict[int, str]:
-    """
-    Load existing participant group names from DynamoDB.
-    
-    Args:
-        zid: Conversation ID
-        
-    Returns:
-        Dictionary mapping cluster_id to group name
-    """
-    try:
-        # Set up DynamoDB client
-        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://dynamodb-local:8000')
-        dynamodb = boto3.resource('dynamodb', 
-                                 endpoint_url=endpoint_url,
-                                 region_name=os.environ.get('AWS_REGION', 'us-east-1'),
-                                 aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-                                 aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey'))
-        
-        table = dynamodb.Table('Delphi_ParticipantGroupsLLMNames')
-        
-        # Query for this conversation's group names
-        response = table.query(
-            KeyConditionExpression='conversation_id = :conversation_id',
-            ExpressionAttributeValues={':conversation_id': str(zid)}
-        )
-        
-        group_names = {}
-        for item in response['Items']:
-            cluster_id = item.get('cluster_id')
-            group_name = item.get('group_name')
-            if cluster_id is not None and group_name:
-                group_names[int(cluster_id)] = group_name
-        
-        logger.info(f'Loaded {len(group_names)} group names from DynamoDB')
-        return group_names
-        
-    except Exception as e:
-        logger.warning(f'Failed to load group names from DynamoDB: {e}')
-        return {}
+# LLM naming functionality removed - using simple numbered groups
 
 def generate_llm_group_names(group_characteristics: Dict[int, Dict[str, List[str]]], zid: int) -> Dict[int, str]:
     """
