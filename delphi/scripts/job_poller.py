@@ -3,7 +3,7 @@
 Delphi Job Poller Service
 
 This script runs as a daemon to poll the Delphi_JobQueue for pending jobs
-and execute them using run_delphi.sh.
+and execute them using run_delphi.py.
 
 Usage:
     python job_poller.py [options]
@@ -399,7 +399,7 @@ class JobProcessor:
             logger.error(f"Error completing job {job_id}: {e}")
     
     def process_job(self, job):
-        """Process a job using run_delphi.sh."""
+        """Process a job using run_delphi.py."""
         job_id = job['job_id']
         conversation_id = job['conversation_id']
         
