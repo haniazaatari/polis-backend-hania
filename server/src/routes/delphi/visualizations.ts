@@ -2,18 +2,37 @@ import { Request, Response } from "express";
 import logger from "../../utils/logger";
 import { getZidFromReport } from "../../utils/parameter";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import {
-  DynamoDBDocumentClient,
-  QueryCommand,
-  ScanCommand,
-} from "@aws-sdk/lib-dynamodb";
-import {
-  S3Client,
-  ListObjectsV2Command,
-  GetObjectCommand,
-} from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { S3Client, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import Config from "../../config";
+// import { datetime } from "aws-sdk/clients/redshiftdata";
+
+const dynamoDBConfig: any = {
+  region: Config.AWS_REGION || "us-east-1",
+};
+
+// If dynamoDbEndpoint is set, we're running locally
+if (Config.dynamoDbEndpoint) {
+  dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
+  // Use dummy credentials for local DynamoDB
+  dynamoDBConfig.credentials = {
+    accessKeyId: "DUMMYIDEXAMPLE",
+    secretAccessKey: "DUMMYEXAMPLEKEY",
+  };
+} else if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
+  dynamoDBConfig.credentials = {
+    accessKeyId: Config.AWS_ACCESS_KEY_ID,
+    secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
+  };
+}
+
+const client = new DynamoDBClient(dynamoDBConfig);
+const docClient = DynamoDBDocumentClient.from(client, {
+  marshallOptions: {
+    convertEmptyValues: true,
+    removeUndefinedValues: true,
+  },
+});
 
 /**
  * Handler for Delphi API route that retrieves visualization information
@@ -30,7 +49,7 @@ export async function handle_GET_delphi_visualizations(
     const jobId = req.query.job_id as string;
 
     if (!report_id) {
-      return res.json({
+      return res.status(400).json({
         status: "error",
         message: "report_id is required",
       });
@@ -42,7 +61,7 @@ export async function handle_GET_delphi_visualizations(
       zid = await getZidFromReport(report_id);
     } catch (err: any) {
       logger.error(`Error getting zid from report: ${err.message || err}`);
-      return res.json({
+      return res.status(404).json({
         status: "error",
         message: "Could not find conversation for report_id",
         report_id,
@@ -50,7 +69,7 @@ export async function handle_GET_delphi_visualizations(
     }
 
     if (!zid) {
-      return res.json({
+      return res.status(404).json({
         status: "error",
         message: "Could not find conversation for report_id",
         report_id,
@@ -65,7 +84,7 @@ export async function handle_GET_delphi_visualizations(
     // Configure S3 client
     const s3Config: any = {
       region: Config.AWS_REGION || "us-east-1",
-      endpoint: Config.AWS_S3_ENDPOINT || "http://minio:9000",
+      endpoint: Config.AWS_S3_ENDPOINT,
       credentials: {
         accessKeyId: Config.AWS_S3_ACCESS_KEY_ID || "minioadmin",
         secretAccessKey: Config.AWS_S3_SECRET_ACCESS_KEY || "minioadmin",
@@ -73,7 +92,6 @@ export async function handle_GET_delphi_visualizations(
       forcePathStyle: true, // Required for MinIO
     };
 
-    // Log S3 connection info
     logger.info(`S3 Config: 
       Endpoint: ${s3Config.endpoint}
       Region: ${s3Config.region}
@@ -81,35 +99,16 @@ export async function handle_GET_delphi_visualizations(
     `);
 
     // Create S3 client
-    let s3Client;
-    try {
-      s3Client = new S3Client(s3Config);
-    } catch (err: any) {
-      logger.error(`Error creating S3 client: ${err.message || err}`);
-      return res.json({
-        status: "error",
-        message: "Failed to initialize S3 client",
-        error: err.message || String(err),
-        report_id,
-      });
-    }
-
+    const s3Client = new S3Client(s3Config);
     const bucketName = Config.AWS_S3_BUCKET_NAME || "polis-delphi";
 
     // Define S3 path prefix to search
-    // Use conversation_id instead of report_id since files are stored by conversation_id
     const prefix = jobId
       ? `visualizations/${conversation_id}/${jobId}/`
       : `visualizations/${conversation_id}/`;
 
-    // Get job metadata from DynamoDB if available
-    let jobMetadata: Record<string, any> = {};
-    try {
-      jobMetadata = await fetchJobMetadata(report_id, conversation_id);
-    } catch (err: any) {
-      logger.error(`Error fetching job metadata: ${err.message || err}`);
-      // Continue without job metadata
-    }
+    // Fetch job metadata using the optimized function
+    const jobMetadata = await fetchJobMetadata(conversation_id);
 
     // List objects in the bucket
     let s3Response;
@@ -117,39 +116,22 @@ export async function handle_GET_delphi_visualizations(
       const listObjectsParams = {
         Bucket: bucketName,
         Prefix: prefix,
-        MaxKeys: 1000, // Increase if you expect more than 1000 objects
+        MaxKeys: 1000,
       };
-
-      // Enhanced logging for debugging
       logger.info(
         `Listing S3 objects with params: ${JSON.stringify(listObjectsParams)}`
       );
-
-      try {
-        s3Response = await s3Client.send(
-          new ListObjectsV2Command(listObjectsParams)
-        );
-
-        // Log successful response
-        logger.info(
-          `S3 listing successful. Found ${
-            s3Response.Contents?.length || 0
-          } objects.`
-        );
-        if (s3Response.Contents && s3Response.Contents.length > 0) {
-          // Log first few keys for debugging
-          const keys = s3Response.Contents.slice(0, 3).map(obj => obj.Key);
-          logger.info(`Sample object keys: ${JSON.stringify(keys)}`);
-        }
-      } catch (s3Error: any) {
-        // Log detailed S3 error
-        logger.error(`S3 listing error: ${s3Error.message || s3Error}`);
-        logger.error(`Error name: ${s3Error.name}, code: ${s3Error.code}`);
-        throw s3Error;
-      }
+      s3Response = await s3Client.send(
+        new ListObjectsV2Command(listObjectsParams)
+      );
+      logger.info(
+        `S3 listing successful. Found ${
+          s3Response.Contents?.length || 0
+        } objects.`
+      );
     } catch (err: any) {
       logger.error(`Error listing S3 objects: ${err.message || err}`);
-      return res.json({
+      return res.status(500).json({
         status: "error",
         message: "Error listing visualizations",
         error: err.message || String(err),
@@ -166,27 +148,21 @@ export async function handle_GET_delphi_visualizations(
         report_id,
         conversation_id,
         visualizations: [],
-        jobs: jobMetadata,
+        jobs: Object.values(jobMetadata), // Return job metadata even if no visualizations
       });
     }
 
     // Group visualizations by job
     const visualizationsByJob: Record<string, any[]> = {};
 
-    // Process each object
     for (const obj of s3Response.Contents) {
       const key = obj.Key || "";
-
-      // Parse job ID from the key
-      // Expected format: visualizations/{report_id}/{job_id}/layer_{layer_id}_datamapplot.html
       const keyParts = key.split("/");
-
-      if (keyParts.length < 4) continue; // Skip if doesn't match expected format
+      if (keyParts.length < 4) continue;
 
       const currentJobId = keyParts[2];
       const fileName = keyParts[3];
 
-      // Skip if not an HTML file
       if (
         !fileName.endsWith(".html") &&
         !fileName.endsWith(".png") &&
@@ -195,51 +171,37 @@ export async function handle_GET_delphi_visualizations(
         continue;
       }
 
-      // Parse layer ID
       const layerMatch = fileName.match(/layer_(\d+)/);
       const layerId = layerMatch ? parseInt(layerMatch[1]) : null;
+      if (layerId === null) continue;
 
-      if (layerId === null) continue; // Skip if can't determine layer
-
-      // Generate a signed URL for this object
       let url;
       try {
-        const getObjectParams = {
-          Bucket: bucketName,
-          Key: key,
-        };
-
-        // Use public endpoint if configured, otherwise fall back to localhost
-        const publicEndpoint = Config.AWS_S3_PUBLIC_ENDPOINT || Config.AWS_S3_ENDPOINT || "http://localhost:9000";
-        // Remove protocol and trailing slash for clean URL construction
-        const cleanEndpoint = publicEndpoint.replace(/^https?:\/\//, '').replace(/\/$/, '');
-        const protocol = publicEndpoint.startsWith('https') ? 'https' : 'http';
+        const publicEndpoint =
+          Config.AWS_S3_PUBLIC_ENDPOINT ||
+          Config.AWS_S3_ENDPOINT ||
+          "http://localhost:9000";
+        const cleanEndpoint = publicEndpoint
+          .replace(/^https?:\/\//, "")
+          .replace(/\/$/, "");
+        const protocol = publicEndpoint.startsWith("https") ? "https" : "http";
         url = `${protocol}://${cleanEndpoint}/${bucketName}/${key}`;
       } catch (err: any) {
         logger.error(
           `Error generating signed URL for ${key}: ${err.message || err}`
         );
-        continue; // Skip this file and continue
+        continue;
       }
 
-      // Determine visualization type
       let type = "unknown";
-      if (fileName.includes("datamapplot.html")) {
-        type = "interactive";
-      } else if (fileName.includes("static.png")) {
-        type = "static_png";
-      } else if (fileName.includes("presentation.png")) {
-        type = "presentation_png";
-      } else if (fileName.includes("static.svg")) {
-        type = "static_svg";
-      }
+      if (fileName.includes("datamapplot.html")) type = "interactive";
+      else if (fileName.includes("static.png")) type = "static_png";
+      else if (fileName.includes("presentation.png")) type = "presentation_png";
+      else if (fileName.includes("static.svg")) type = "static_svg";
 
-      // Initialize job array if needed
       if (!visualizationsByJob[currentJobId]) {
         visualizationsByJob[currentJobId] = [];
       }
-
-      // Add to the job's visualizations
       visualizationsByJob[currentJobId].push({
         key,
         url,
@@ -250,35 +212,33 @@ export async function handle_GET_delphi_visualizations(
       });
     }
 
-    // Sort visualizations by layer ID
     Object.values(visualizationsByJob).forEach((visArray) => {
       visArray.sort((a, b) => (a.layerId || 0) - (b.layerId || 0));
     });
 
-    // Combine job metadata with visualizations
-    const jobsWithVisualizations = Object.keys(visualizationsByJob).map(
-      (jobId) => {
-        const jobInfo = jobMetadata[jobId] || {
+    const jobsWithVisualizations = Object.keys(jobMetadata).map((jobId) => ({
+      ...(jobMetadata[jobId] || { jobId, status: "unknown", createdAt: null }),
+      visualizations: visualizationsByJob[jobId] || [], // Associate visualizations or provide empty array
+    }));
+
+    // Add jobs found in S3 but not in metadata (edge case)
+    Object.keys(visualizationsByJob).forEach((jobId) => {
+      if (!jobMetadata[jobId]) {
+        jobsWithVisualizations.push({
           jobId,
-          status: "unknown",
+          status: "metadata_not_found",
           createdAt: null,
-        };
-
-        return {
-          ...jobInfo,
           visualizations: visualizationsByJob[jobId],
-        };
+        });
       }
-    );
+    });
 
-    // Sort jobs by createdAt (newest first)
     jobsWithVisualizations.sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return dateB - dateA;
     });
 
-    // Return the results
     return res.json({
       status: "success",
       message: "Visualizations retrieved successfully",
@@ -289,7 +249,7 @@ export async function handle_GET_delphi_visualizations(
   } catch (err: any) {
     logger.error(`Error in delphi visualizations endpoint: ${err.message}`);
     logger.error(err.stack);
-    return res.json({
+    return res.status(500).json({
       status: "error",
       message: "Error processing request",
       error: err.message,
@@ -299,77 +259,68 @@ export async function handle_GET_delphi_visualizations(
 }
 
 /**
- * Fetch job metadata from DynamoDB
+ * Fetch job metadata from DynamoDB using a GSI Query, with support for pagination.
+ * @param conversation_id The conversation ID to query for jobs.
  */
 async function fetchJobMetadata(
-  report_id: string,
   conversation_id: string
 ): Promise<Record<string, any>> {
   try {
-    // Configure DynamoDB client
-    const dynamoDBConfig: any = {
-      region: Config.AWS_REGION || "us-east-1",
-    };
+    logger.info(
+      `Querying GSI 'ConversationIndex' for all job pages with conversation_id: ${conversation_id}`
+    );
 
-    // If dynamoDbEndpoint is set, we're running locally (e.g., with Docker)
-    if (Config.dynamoDbEndpoint) {
-      dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
-      // Use dummy credentials for local DynamoDB
-      dynamoDBConfig.credentials = {
-        accessKeyId: "DUMMYIDEXAMPLE",
-        secretAccessKey: "DUMMYEXAMPLEKEY",
+    const allItems: any[] = [];
+    let lastEvaluatedKey;
+
+    do {
+      const queryParams: any = {
+        TableName: "Delphi_JobQueue",
+        IndexName: "ConversationIndex",
+        KeyConditionExpression: "conversation_id = :cid",
+        ExpressionAttributeValues: {
+          ":cid": conversation_id,
+        },
+        // For subsequent requests, start from where the last one left off.
+        ExclusiveStartKey: lastEvaluatedKey,
       };
-    } else if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
-      // Use real credentials from environment
-      dynamoDBConfig.credentials = {
-        accessKeyId: Config.AWS_ACCESS_KEY_ID,
-        secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
-      };
-    }
-    // If neither are set, the SDK will use default credential provider chain
 
-    // Create DynamoDB clients
-    const client = new DynamoDBClient(dynamoDBConfig);
-    const docClient = DynamoDBDocumentClient.from(client, {
-      marshallOptions: {
-        convertEmptyValues: true,
-        removeUndefinedValues: true,
-      },
-    });
+      const queryResponse = await docClient.send(new QueryCommand(queryParams));
 
-    // Scan for jobs by conversation ID (using scan instead of query since the index may not exist)
-    // This is less efficient but works without requiring a secondary index
-    const scanParams = {
-      TableName: "Delphi_JobQueue",
-      FilterExpression: "conversation_id = :cid",
-      ExpressionAttributeValues: {
-        ":cid": conversation_id,
-      },
-    };
-
-    try {
-      logger.info(`Scanning for jobs with conversation_id: ${conversation_id}`);
-      const scanResponse = await docClient.send(new ScanCommand(scanParams));
-
-      if (!scanResponse.Items || scanResponse.Items.length === 0) {
-        logger.info(`No jobs found for conversation ${conversation_id}`);
-        return {};
+      // Add the items from the current page to our accumulator array.
+      if (queryResponse.Items) {
+        allItems.push(...queryResponse.Items);
       }
 
-      // Process jobs from scan
-      return processJobItems(scanResponse.Items);
-    } catch (err: any) {
-      logger.error(`Error fetching job metadata: ${err.message}`);
+      // Set the key for the next iteration. If it's undefined, the loop will terminate.
+      lastEvaluatedKey = queryResponse.LastEvaluatedKey;
+
+      if (lastEvaluatedKey) {
+        logger.info("More job items to fetch, continuing with next page...");
+      }
+    } while (lastEvaluatedKey);
+
+    // After the loop, allItems contains all items from all pages.
+    if (allItems.length === 0) {
+      logger.info(`No jobs found for conversation ${conversation_id}`);
       return {};
     }
+
+    logger.info(
+      `Found a total of ${allItems.length} jobs across all pages for conversation ${conversation_id}`
+    );
+
+    // Process the complete list of items.
+    return processJobItems(allItems);
   } catch (err: any) {
-    logger.error(`Error setting up DynamoDB: ${err.message}`);
+    logger.error(`Error fetching job metadata via GSI Query: ${err.message}`);
+    // Return an empty object so the main handler can continue without metadata if needed.
     return {};
   }
 }
 
 /**
- * Process job items from DynamoDB into a map of job metadata
+ * Process job items from DynamoDB into a map of job metadata.
  */
 function processJobItems(items: any[]): Record<string, any> {
   const jobMap: Record<string, any> = {};
@@ -377,13 +328,24 @@ function processJobItems(items: any[]): Record<string, any> {
   for (const item of items) {
     const job_id = item.job_id;
 
+    let jobResults = null;
+    try {
+      if (item.job_results) {
+        jobResults = JSON.parse(item.job_results);
+      }
+    } catch (e) {
+      logger.warn(
+        `Failed to parse job_results for job_id ${job_id}: ${item.job_results}`
+      );
+    }
+
     jobMap[job_id] = {
       jobId: job_id,
       status: item.status || "unknown",
       createdAt: item.created_at || null,
       startedAt: item.started_at || null,
       completedAt: item.completed_at || null,
-      results: item.job_results ? JSON.parse(item.job_results) : null,
+      results: jobResults,
     };
   }
 

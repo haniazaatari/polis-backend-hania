@@ -5,6 +5,58 @@ import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { getZidFromReport } from "../../utils/parameter";
 import Config from "../../config";
 
+// Configure DynamoDB based on environment
+const dynamoDBConfig: any = {
+  region: Config.AWS_REGION || "us-east-1",
+};
+
+// Debug logging
+logger.info(`Config.dynamoDbEndpoint value: ${Config.dynamoDbEndpoint}`);
+logger.info(
+  `process.env.DYNAMODB_ENDPOINT value: ${process.env.DYNAMODB_ENDPOINT}`
+);
+
+// If DYNAMODB_ENDPOINT is set, we're using local DynamoDB
+if (Config.dynamoDbEndpoint) {
+  dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
+  // For local DynamoDB, use dummy credentials
+  dynamoDBConfig.credentials = {
+    accessKeyId: "DUMMYIDEXAMPLE",
+    secretAccessKey: "DUMMYEXAMPLEKEY",
+  };
+  logger.info(`Using local DynamoDB at endpoint: ${Config.dynamoDbEndpoint}`);
+} else {
+  // For production, use real AWS credentials
+  if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
+    dynamoDBConfig.credentials = {
+      accessKeyId: Config.AWS_ACCESS_KEY_ID,
+      secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
+    };
+    logger.info(`Using production DynamoDB with AWS credentials`);
+  } else {
+    // Let the SDK use default credential provider chain (IAM role, etc.)
+    logger.info(`Using default AWS credential provider chain`);
+  }
+}
+
+// Log connection config for debugging
+logger.info(`DynamoDB Config:
+  Region: ${dynamoDBConfig.region}
+  Endpoint: ${dynamoDBConfig.endpoint || "Default AWS endpoint"}
+  AWS_ACCESS_KEY_ID: ${Config.AWS_ACCESS_KEY_ID ? "Set" : "Not set"}
+  AWS_SECRET_ACCESS_KEY: ${Config.AWS_SECRET_ACCESS_KEY ? "Set" : "Not set"}
+  DYNAMODB_ENDPOINT: ${Config.dynamoDbEndpoint || "Not set"}
+`);
+
+// Create DynamoDB clients
+const client = new DynamoDBClient(dynamoDBConfig);
+const docClient = DynamoDBDocumentClient.from(client, {
+  marshallOptions: {
+    convertEmptyValues: true,
+    removeUndefinedValues: true,
+  },
+});
+
 /**
  * Handler for Delphi API route that retrieves LLM topic names from DynamoDB
  */
@@ -36,56 +88,6 @@ export function handle_GET_delphi(req: Request, res: Response) {
       logger.info(
         `Fetching Delphi LLM topics for conversation_id: ${conversation_id}`
       );
-
-      // Configure DynamoDB based on environment
-      const dynamoDBConfig: any = {
-        region: Config.AWS_REGION || "us-east-1",
-      };
-
-      // Debug logging
-      logger.info(`Config.dynamoDbEndpoint value: ${Config.dynamoDbEndpoint}`);
-      logger.info(`process.env.DYNAMODB_ENDPOINT value: ${process.env.DYNAMODB_ENDPOINT}`);
-
-      // If DYNAMODB_ENDPOINT is set, we're using local DynamoDB
-      if (Config.dynamoDbEndpoint) {
-        dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
-        // For local DynamoDB, use dummy credentials
-        dynamoDBConfig.credentials = {
-          accessKeyId: "DUMMYIDEXAMPLE",
-          secretAccessKey: "DUMMYEXAMPLEKEY",
-        };
-        logger.info(`Using local DynamoDB at endpoint: ${Config.dynamoDbEndpoint}`);
-      } else {
-        // For production, use real AWS credentials
-        if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
-          dynamoDBConfig.credentials = {
-            accessKeyId: Config.AWS_ACCESS_KEY_ID,
-            secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
-          };
-          logger.info(`Using production DynamoDB with AWS credentials`);
-        } else {
-          // Let the SDK use default credential provider chain (IAM role, etc.)
-          logger.info(`Using default AWS credential provider chain`);
-        }
-      }
-
-      // Log connection config for debugging
-      logger.info(`DynamoDB Config:
-        Region: ${dynamoDBConfig.region}
-        Endpoint: ${dynamoDBConfig.endpoint || "Default AWS endpoint"}
-        AWS_ACCESS_KEY_ID: ${Config.AWS_ACCESS_KEY_ID ? "Set" : "Not set"}
-        AWS_SECRET_ACCESS_KEY: ${Config.AWS_SECRET_ACCESS_KEY ? "Set" : "Not set"}
-        DYNAMODB_ENDPOINT: ${Config.dynamoDbEndpoint || "Not set"}
-      `);
-
-      // Create DynamoDB clients
-      const client = new DynamoDBClient(dynamoDBConfig);
-      const docClient = DynamoDBDocumentClient.from(client, {
-        marshallOptions: {
-          convertEmptyValues: true,
-          removeUndefinedValues: true,
-        },
-      });
 
       // Table name for LLM topic names
       const tableName = "Delphi_CommentClustersLLMTopicNames";
