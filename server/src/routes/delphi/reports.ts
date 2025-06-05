@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import logger from "../../utils/logger";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, ScanCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { getZidFromReport } from "../../utils/parameter";
 import Config from "../../config";
 
@@ -10,284 +10,243 @@ import Config from "../../config";
  */
 export async function handle_GET_delphi_reports(req: Request, res: Response) {
   logger.info("Delphi Reports API request received");
-  
-  // Get parameters from request
-  const report_id = req.query.report_id as string;
-  const section = req.query.section as string;
-  const topic_key = req.query.topic_key as string;
-  
-  if (!report_id) {
-    return res.json({ 
-      status: "error", 
-      message: "report_id is required" 
+
+  const requestReportId = req.query.report_id as string;
+  const sectionFilter = req.query.section as string;
+  const topicKeyFilter = req.query.topic_key as string;
+
+  if (!requestReportId) {
+    return res.json({
+      status: "error",
+      message: "report_id (requestReportId) is required",
     });
   }
 
-  // Extract zid from report_id - we need this to query DynamoDB
+  let gsiQueryableReportId: string;
+
   try {
-    const zid = await getZidFromReport(report_id);
-    if (!zid) {
+    const zid = await getZidFromReport(requestReportId);
+    if (zid === null || zid === undefined) {
+      logger.error(
+        `Could not resolve requestReportId '${requestReportId}' to a ZID/GSI-report_id.`
+      );
       return res.json({
         status: "error",
-        message: "Could not find conversation for report_id",
-        report_id: report_id
+        message:
+          "Could not find a valid identifier for the report_id to query DynamoDB.",
+        request_report_id: requestReportId,
+      });
+    }
+    gsiQueryableReportId = zid.toString();
+    logger.info(
+      `Fetching Delphi reports for GSI report_id: ${gsiQueryableReportId} (derived from requestReportId: ${requestReportId})`
+    );
+  } catch (err: any) {
+    logger.error(
+      `Error resolving requestReportId '${requestReportId}' via getZidFromReport: ${err.message}`
+    );
+    return res.json({
+      status: "error",
+      message: "Error resolving report identifier.",
+      request_report_id: requestReportId,
+      error_details: err.message,
+    });
+  }
+
+  // --- DynamoDB Client Setup ---
+  // For optimal performance, clients should be initialized once globally.
+  // Kept here as per focus on query logic first.
+  const dynamoDBConfig: any = {
+    region: Config.AWS_REGION || "us-east-1",
+  };
+  if (Config.dynamoDbEndpoint) {
+    dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
+    dynamoDBConfig.credentials = {
+      accessKeyId: "DUMMYIDEXAMPLE",
+      secretAccessKey: "DUMMYEXAMPLEKEY",
+    };
+    logger.info(`Using local DynamoDB at endpoint: ${Config.dynamoDbEndpoint}`);
+  } else {
+    if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
+      dynamoDBConfig.credentials = {
+        accessKeyId: Config.AWS_ACCESS_KEY_ID,
+        secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
+      };
+      logger.info(`Using production DynamoDB with AWS credentials`);
+    } else {
+      logger.info(`Using default AWS credential provider chain`);
+    }
+  }
+  const client = new DynamoDBClient(dynamoDBConfig);
+  const docClient = DynamoDBDocumentClient.from(client, {
+    marshallOptions: {
+      convertEmptyValues: true,
+      removeUndefinedValues: true,
+    },
+  });
+  // --- End of DynamoDB Client Setup ---
+
+  const tableName = "Delphi_NarrativeReports";
+  const gsiName = "ReportIdTimestampIndex";
+
+  try {
+    logger.info(
+      `Querying GSI '${gsiName}' on table '${tableName}' for GSI report_id: '${gsiQueryableReportId}'`
+    );
+    const allItems: any[] = [];
+    let lastEvaluatedKeyGSI;
+    do {
+      const queryParams: any = {
+        TableName: tableName,
+        IndexName: gsiName,
+        KeyConditionExpression: "report_id = :gsi_rid",
+        ExpressionAttributeValues: { ":gsi_rid": gsiQueryableReportId },
+        ExclusiveStartKey: lastEvaluatedKeyGSI,
+      };
+      const queryResult = await docClient.send(new QueryCommand(queryParams));
+      if (queryResult.Items) {
+        allItems.push(...queryResult.Items);
+      }
+      lastEvaluatedKeyGSI = queryResult.LastEvaluatedKey;
+    } while (lastEvaluatedKeyGSI);
+
+    logger.info(
+      `GSI Query found ${allItems.length} total items for GSI report_id: '${gsiQueryableReportId}'`
+    );
+
+    if (allItems.length === 0) {
+      return res.json({
+        status: "success",
+        message: "No reports found for the given report identifier.",
+        request_report_id: requestReportId,
+        queried_gsi_report_id: gsiQueryableReportId,
+        reports: {},
       });
     }
 
-    const conversation_id = zid.toString();
-    logger.info(`Fetching Delphi reports for conversation_id: ${conversation_id}`);
-
-    // Configure DynamoDB based on environment
-    const dynamoDBConfig: any = {
-      region: Config.AWS_REGION || "us-east-1",
-    };
-
-    // If DYNAMODB_ENDPOINT is set, we're using local DynamoDB
-    if (Config.dynamoDbEndpoint) {
-      dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
-      // For local DynamoDB, use dummy credentials
-      dynamoDBConfig.credentials = {
-        accessKeyId: "DUMMYIDEXAMPLE",
-        secretAccessKey: "DUMMYEXAMPLEKEY",
-      };
-      logger.info(`Using local DynamoDB at endpoint: ${Config.dynamoDbEndpoint}`);
-    } else {
-      // For production, use real AWS credentials
-      if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
-        dynamoDBConfig.credentials = {
-          accessKeyId: Config.AWS_ACCESS_KEY_ID,
-          secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
-        };
-        logger.info(`Using production DynamoDB with AWS credentials`);
-      } else {
-        // Let the SDK use default credential provider chain (IAM role, etc.)
-        logger.info(`Using default AWS credential provider chain`);
+    // --- Processing Logic ---
+    const reportRuns: Record<string, any[]> = {};
+    allItems.forEach((item) => {
+      const timestamp = item.timestamp || "";
+      const runKey = timestamp.substring(0, 16);
+      if (!reportRuns[runKey]) {
+        reportRuns[runKey] = [];
       }
-    }
+      reportRuns[runKey].push(item);
+    });
 
-    // Create DynamoDB clients
-    const client = new DynamoDBClient(dynamoDBConfig);
-    const docClient = DynamoDBDocumentClient.from(client, {
-      marshallOptions: {
-        convertEmptyValues: true,
-        removeUndefinedValues: true,
+    const sortedRunKeys = Object.keys(reportRuns).sort((a, b) =>
+      b.localeCompare(a)
+    );
+    if (sortedRunKeys.length === 0) {
+      return res.json({
+        status: "success",
+        message: "No report runs found after grouping.",
+        request_report_id: requestReportId,
+        queried_gsi_report_id: gsiQueryableReportId,
+        reports: {},
+      });
+    }
+    const mostRecentRunKey = sortedRunKeys[0];
+    const mostRecentItems = reportRuns[mostRecentRunKey] || [];
+    logger.info(
+      `Found ${
+        Object.keys(reportRuns).length
+      } report runs, using most recent from ${mostRecentRunKey}`
+    );
+
+    const reportsBySection: Record<string, any> = {};
+    mostRecentItems.forEach((item) => {
+      const rid_section_model = item.rid_section_model || "";
+      const parts = rid_section_model.split("#");
+      if (parts.length >= 2) {
+        const section = parts[1];
+        const model = parts.length > 2 ? parts[2] : "unknown";
+        // This populates reportsBySection where each key is a section name,
+        // and the value is the report object for that section from the most recent run.
+        reportsBySection[section] = {
+          section: section,
+          model: model,
+          timestamp: item.timestamp || "",
+          report_data: item.report_data || "",
+          errors: item.errors,
+          metadata: item.metadata || null,
+        };
       }
     });
 
-    // Table name for LLM topic names
-    const tableName = "Delphi_NarrativeReports";
+    const allRuns = sortedRunKeys.map((runKey) => {
+      const runItems = reportRuns[runKey];
+      const sampleItem = runItems.length > 0 ? runItems[0] : {};
+      const rid_section_model_parts = sampleItem.rid_section_model?.split("#");
+      const modelFromSample =
+        rid_section_model_parts && rid_section_model_parts.length > 2
+          ? rid_section_model_parts[2]
+          : "unknown";
+      return {
+        timestamp: runKey,
+        model: modelFromSample,
+        sectionCount: runItems.length,
+        isCurrent: runKey === mostRecentRunKey,
+      };
+    });
 
-    // BUGFIX: DynamoDB Local has issues with Scan operations missing items
-    // Solution: Do a discovery scan first to find all existing sections, then query each one
-    
-    logger.info(`Discovering existing sections for report_id: ${report_id}`);
-    
-    // First, do a full table scan to discover what sections actually exist
-    // We'll filter client-side to work around DynamoDB Local scan bugs
-    const discoveryParams = {
-      TableName: tableName,
-      ConsistentRead: true
-    };
-    
-    const allTableItems: any[] = [];
-    let lastEvaluatedKey;
-    
-    try {
-      // Scan entire table to discover sections (with pagination)
-      do {
-        const scanParams = lastEvaluatedKey 
-          ? { ...discoveryParams, ExclusiveStartKey: lastEvaluatedKey }
-          : discoveryParams;
-          
-        const scanResult = await docClient.send(new ScanCommand(scanParams));
-        
-        if (scanResult.Items) {
-          // Filter for our report_id client-side
-          const relevantItems = scanResult.Items.filter(item => 
-            item.rid_section_model && item.rid_section_model.startsWith(`${report_id}#`)
-          );
-          allTableItems.push(...relevantItems);
-        }
-        
-        lastEvaluatedKey = scanResult.LastEvaluatedKey;
-      } while (lastEvaluatedKey);
-      
-      logger.info(`Discovery scan found ${allTableItems.length} total items for report_id: ${report_id}`);
-      
-      // Extract unique section-model combinations from discovered items
-      const sectionModelCombos = new Set<string>();
-      allTableItems.forEach(item => {
-        if (item.rid_section_model) {
-          sectionModelCombos.add(item.rid_section_model);
-        }
-      });
-      
-      logger.info(`Found ${sectionModelCombos.size} unique section-model combinations`);
-      
-      // Now query each discovered combination to get all versions (timestamps)
-      const allItems: any[] = [];
-      
-      for (const rid_section_model of sectionModelCombos) {
-        const queryParams = {
-          TableName: tableName,
-          KeyConditionExpression: "rid_section_model = :key",
-          ExpressionAttributeValues: {
-            ":key": rid_section_model
-          },
-          ConsistentRead: true
-        };
-        
-        try {
-          const queryResult = await docClient.send(new QueryCommand(queryParams));
-          if (queryResult.Items && queryResult.Items.length > 0) {
-            allItems.push(...queryResult.Items);
-          }
-        } catch (queryError: any) {
-          logger.warn(`Failed to query ${rid_section_model}: ${queryError.message}`);
-        }
-      }
-      
-      logger.info(`Total reports retrieved via targeted queries: ${allItems.length}`);
-      
-      const data = { Items: allItems };
+    // --- Filtering logic ---
+    let filteredReports = reportsBySection;
 
-      // Early return if no items found
-      if (!data.Items || data.Items.length === 0) {
+    if (sectionFilter && topicKeyFilter) {
+      // Attempt to access reportsBySection[sectionFilter][topicKeyFilter]
+      if (
+        reportsBySection[sectionFilter] &&
+        reportsBySection[sectionFilter][topicKeyFilter]
+      ) {
         return res.json({
           status: "success",
-          message: "No reports found for this conversation",
-          report_id: report_id,
-          conversation_id: conversation_id,
-          reports: {}
+          message: "Topic report retrieved successfully",
+          request_report_id: requestReportId,
+          queried_gsi_report_id: gsiQueryableReportId,
+          section: sectionFilter,
+          topic_key: topicKeyFilter,
+          data: reportsBySection[sectionFilter][topicKeyFilter],
+        });
+      } else {
+        return res.json({
+          status: "error",
+          message: "Topic report not found",
+          request_report_id: requestReportId,
+          queried_gsi_report_id: gsiQueryableReportId,
+          section: sectionFilter,
+          topic_key: topicKeyFilter,
         });
       }
-
-      // Process results - organize reports by section and model
-      const items = data.Items;
-      
-      // First, group by timestamp to identify different runs
-      const reportRuns: Record<string, any[]> = {};
-      
-      items.forEach(item => {
-        const timestamp = item.timestamp || '';
-        // Group by timestamp truncated to minute to group reports from same batch
-        const runKey = timestamp.substring(0, 16); // YYYY-MM-DDTHH:MM
-        
-        if (!reportRuns[runKey]) {
-          reportRuns[runKey] = [];
-        }
-        reportRuns[runKey].push(item);
-      });
-      
-      // Get the most recent run
-      const sortedRunKeys = Object.keys(reportRuns).sort((a, b) => b.localeCompare(a));
-      const mostRecentRunKey = sortedRunKeys[0];
-      const mostRecentItems = reportRuns[mostRecentRunKey] || [];
-      
-      logger.info(`Found ${Object.keys(reportRuns).length} report runs, using most recent from ${mostRecentRunKey}`);
-      
-      // Group by section and model for the most recent run
-      const reportsBySection: Record<string, any> = {};
-      
-      mostRecentItems.forEach(item => {
-        const rid_section_model = item.rid_section_model || '';
-        const parts = rid_section_model.split('#');
-        
-        if (parts.length >= 2) {
-          const section = parts[1];
-          const model = parts[2] || 'unknown';
-          const timestamp = item.timestamp || '';
-          const report_data = item.report_data || '';
-          
-          // Initialize section if it doesn't exist
-          if (!reportsBySection[section]) {
-            reportsBySection[section] = {};
-          }
-          
-          // Add report data
-          reportsBySection[section] = {
-            section: section,
-            model: model,
-            timestamp: timestamp,
-            report_data: report_data,
-            errors: item.errors,
-            metadata: item.metadata || null
-          };
-        }
-      });
-
-      // Get info about all runs for potential UI dropdown
-      const allRuns = sortedRunKeys.map(runKey => {
-        const runItems = reportRuns[runKey];
-        const sampleItem = runItems[0];
-        return {
-          timestamp: runKey,
-          model: sampleItem.rid_section_model?.split('#')[2] || 'unknown',
-          sectionCount: runItems.length,
-          isCurrent: runKey === mostRecentRunKey
-        };
-      });
-
-      // Filter results if section and/or topic_key provided
-      let filteredReports = reportsBySection;
-      
-      if (section && topic_key) {
-        // Return specific topic report
-        if (reportsBySection[section] && reportsBySection[section][topic_key]) {
-          return res.json({
-            status: "success",
-            message: "Topic report retrieved successfully",
-            report_id: report_id,
-            conversation_id: conversation_id,
-            section: section,
-            topic_key: topic_key,
-            data: reportsBySection[section][topic_key]
-          });
-        } else {
-          return res.json({
-            status: "error",
-            message: "Topic report not found",
-            report_id: report_id,
-            section: section,
-            topic_key: topic_key
-          });
-        }
-      } else if (section) {
-        // Return all topics for a section
-        filteredReports = {
-          [section]: reportsBySection[section] || {}
-        };
-      }
-
-      // Return the results
-      return res.json({
-        status: "success",
-        message: "Reports retrieved successfully",
-        report_id: report_id,
-        conversation_id: conversation_id,
-        reports: filteredReports,
-        current_run: mostRecentRunKey,
-        available_runs: allRuns
-      });
-    } catch (err: any) {
-      logger.error(`Error querying DynamoDB: ${err.message}`);
-      logger.error(JSON.stringify(err, null, 2));
-      
-      return res.json({
-        status: "error",
-        message: `Error querying DynamoDB: ${err.message}`,
-        report_id: report_id,
-        conversation_id: conversation_id,
-        reports: {}
-      });
+    } else if (sectionFilter) {
+      filteredReports = {
+        [sectionFilter]: reportsBySection[sectionFilter] || {},
+      };
     }
+
+    return res.json({
+      status: "success",
+      message: "Reports retrieved successfully",
+      request_report_id: requestReportId,
+      queried_gsi_report_id: gsiQueryableReportId,
+      reports: filteredReports,
+      current_run: mostRecentRunKey,
+      available_runs: allRuns,
+    });
   } catch (err: any) {
-    logger.error(`Error in delphi reports endpoint: ${err.message}`);
+    logger.error(
+      `Error during DynamoDB operation or report processing: ${err.message}`
+    );
+    if (err.stack) {
+      logger.error(err.stack);
+    }
     return res.json({
       status: "error",
-      message: "Error processing request",
-      error: err.message,
-      report_id: report_id
+      message: `Error processing request: ${err.message}`,
+      request_report_id: requestReportId,
+      queried_gsi_report_id: gsiQueryableReportId,
+      reports: {},
     });
   }
 }
