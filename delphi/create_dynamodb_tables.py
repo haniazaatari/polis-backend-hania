@@ -260,7 +260,6 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                 'WriteCapacityUnits': 5
             }
         },
-        # Report table
         'Delphi_NarrativeReports': {
             'KeySchema': [
                 {'AttributeName': 'rid_section_model', 'KeyType': 'HASH'},
@@ -268,7 +267,24 @@ def create_evoc_tables(dynamodb, delete_existing=False):
             ],
             'AttributeDefinitions': [
                 {'AttributeName': 'rid_section_model', 'AttributeType': 'S'},
-                {'AttributeName': 'timestamp', 'AttributeType': 'S'}
+                {'AttributeName': 'timestamp', 'AttributeType': 'S'},
+                {'AttributeName': 'report_id', 'AttributeType': 'S'}
+            ],
+            'GlobalSecondaryIndexes': [
+                {
+                    'IndexName': 'ReportIdTimestampIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'report_id', 'KeyType': 'HASH'},
+                        {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
+                    ],
+                    'Projection': {
+                        'ProjectionType': 'ALL'
+                    },
+                    'ProvisionedThroughput': {
+                        'ReadCapacityUnits': 5,
+                        'WriteCapacityUnits': 5
+                    }
+                }
             ],
             'ProvisionedThroughput': {
                 'ReadCapacityUnits': 5,
@@ -410,12 +426,35 @@ def _create_tables(dynamodb, tables, existing_tables):
             continue
         
         try:
+            # Ensure all GSI key attributes are in AttributeDefinitions
+            # This is good practice though boto3 might infer sometimes
+            if 'GlobalSecondaryIndexes' in table_schema:
+                for gsi in table_schema['GlobalSecondaryIndexes']:
+                    for key_element in gsi['KeySchema']:
+                        attr_name = key_element['AttributeName']
+                        # Check if this attr_name is already defined
+                        is_defined = False
+                        for ad in table_schema['AttributeDefinitions']:
+                            if ad['AttributeName'] == attr_name:
+                                is_defined = True
+                                break
+                        if not is_defined:
+                            # This part is a bit tricky as we need to know the type.
+                            # For this specific GSI, we know 'report_id' is 'S'.
+                            # A more robust solution would require type info alongside GSI def.
+                            # For now, relying on explicit definition as done above.
+                            logger.warning(f"Attribute {attr_name} for GSI in {table_name} was not in AttributeDefinitions. Ensure it's added if not inferred.")
+
+
             table = dynamodb.create_table(
                 TableName=table_name,
                 **table_schema
             )
             logger.info(f"Created table {table_name}")
             created_tables.append(table_name)
+            table.meta.client.get_waiter('table_exists').wait(TableName=table_name)
+            logger.info(f"Table {table_name} is active.")
+
         except Exception as e:
             logger.error(f"Error creating table {table_name}: {str(e)}")
     
@@ -441,10 +480,10 @@ def create_tables(endpoint_url=None, region_name='us-east-1',
         aws_profile: AWS profile to use (optional)
     """
     # Set up environment variables for credentials if not already set (for local development)
-    if not os.environ.get('AWS_ACCESS_KEY_ID') and endpoint_url and ('localhost' in endpoint_url or 'host.docker.internal' in endpoint_url):
+    if not os.environ.get('AWS_ACCESS_KEY_ID') and endpoint_url and ('localhost' in endpoint_url or 'host.docker.internal' in endpoint_url or 'polis-dynamodb-local' in endpoint_url):
         os.environ['AWS_ACCESS_KEY_ID'] = 'fakeMyKeyId'
     
-    if not os.environ.get('AWS_SECRET_ACCESS_KEY') and endpoint_url and ('localhost' in endpoint_url or 'host.docker.internal' in endpoint_url):
+    if not os.environ.get('AWS_SECRET_ACCESS_KEY') and endpoint_url and ('localhost' in endpoint_url or 'host.docker.internal' in endpoint_url or 'polis-dynamodb-local' in endpoint_url):
         os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
     
     # Create DynamoDB session and resource

@@ -51,7 +51,7 @@ class JobProcessor:
         self.worker_id = str(uuid.uuid4())
         
         # Set up DynamoDB client
-        if 'localhost' in self.endpoint_url or 'host.docker.internal' in self.endpoint_url:
+        if 'localhost' in self.endpoint_url or 'host.docker.internal' in self.endpoint_url or 'polis-dynamodb-local' in self.endpoint_url:
             # For local development
             os.environ.setdefault('AWS_ACCESS_KEY_ID', 'fakeMyKeyId')
             os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')

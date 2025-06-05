@@ -18,13 +18,13 @@ import logger from "./logger";
 type Credentials = {
   accessKeyId: string;
   secretAccessKey: string;
-}
+};
 
 type ClientConfig = {
   region: string;
   endpoint?: string;
   credentials: Credentials;
-}
+};
 
 export default class DynamoStorageService {
   private client: DynamoDBClient;
@@ -35,52 +35,35 @@ export default class DynamoStorageService {
     const credentials: Credentials = {
       accessKeyId: config.awsAccessKeyId,
       secretAccessKey: config.awsSecretAccessKey,
-    }
-    const clientConfig: ClientConfig = { region: config.awsRegion, credentials };
+    };
+    const clientConfig: ClientConfig = {
+      region: config.awsRegion,
+      credentials,
+    };
 
     if (config.dynamoDbEndpoint) {
       clientConfig.endpoint = config.dynamoDbEndpoint;
     }
-    
+
     this.client = new DynamoDBClient(clientConfig);
     this.tableName = tableName;
     this.cacheDisabled = disableCache || false;
   }
 
   /**
-   * Checks if the table exists, and if not, creates it.
+   * Checks if the table exists
    */
-  async initTable(): Promise<void> {
+  async initTable(): Promise<void | Error> {
     try {
       const describeCmd = new DescribeTableCommand({
         TableName: this.tableName,
       });
       await this.client.send(describeCmd);
       logger.info(`Table "${this.tableName}" already exists.`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      if (error.name === "ResourceNotFoundException") {
-        logger.info(`Table "${this.tableName}" not found. Creating now...`);
-        const createCmd = new CreateTableCommand({
-          TableName: this.tableName,
-          AttributeDefinitions: [
-            { AttributeName: "rid_section_model", AttributeType: "S" },
-            { AttributeName: "timestamp", AttributeType: "S" },
-          ],
-          KeySchema: [
-            { AttributeName: "rid_section_model", KeyType: "HASH" },
-            { AttributeName: "timestamp", KeyType: "RANGE" },
-          ],
-          ProvisionedThroughput: {
-            ReadCapacityUnits: 5,
-            WriteCapacityUnits: 5,
-          },
-        });
-        await this.client.send(createCmd);
-        logger.info(`Table "${this.tableName}" created successfully.`);
-      } else {
-        throw error;
-      }
+      console.log(error);
+      throw error;
     }
   }
 
@@ -97,7 +80,7 @@ export default class DynamoStorageService {
       console.log(`item stored successfully: ${response}`);
       return response;
     } catch (error) {
-      logger.error(error)
+      logger.error(error);
     }
   }
 

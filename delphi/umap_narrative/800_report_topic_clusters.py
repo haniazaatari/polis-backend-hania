@@ -75,36 +75,13 @@ class ReportStorageService:
         self.table = self.dynamodb.Table(self.table_name)
     
     def init_table(self):
-        """Check if the table exists, and create it if it doesn't."""
+        """Check if the table exists"""
         try:
             self.table.table_status
             logger.info(f"Table {self.table_name} exists and is accessible.")
         except Exception as e:
             logger.error(f"Error checking table {self.table_name}: {str(e)}")
-            logger.info(f"Creating table {self.table_name}...")
-            
-            # Create the table
-            self.dynamodb.create_table(
-                TableName=self.table_name,
-                KeySchema=[
-                    {'AttributeName': 'rid_section_model', 'KeyType': 'HASH'},
-                    {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
-                ],
-                AttributeDefinitions=[
-                    {'AttributeName': 'rid_section_model', 'AttributeType': 'S'},
-                    {'AttributeName': 'timestamp', 'AttributeType': 'S'}
-                ],
-                ProvisionedThroughput={
-                    'ReadCapacityUnits': 5,
-                    'WriteCapacityUnits': 5
-                }
-            )
-            
-            # Wait for the table to be created
-            waiter = boto3.client('dynamodb').get_waiter('table_exists')
-            waiter.wait(TableName=self.table_name)
-            
-            logger.info(f"Table {self.table_name} created successfully.")
+            return []
     
     def put_item(self, item):
         """Store an item in DynamoDB.
@@ -594,7 +571,8 @@ class ReportGenerator:
                 "timestamp": datetime.now().isoformat(),
                 "report_data": resp,
                 "model": self.model,
-                "errors": "NO_CONTENT_AFTER_FILTER" if not structured_comments.strip() else None
+                "errors": "NO_CONTENT_AFTER_FILTER" if not structured_comments.strip() else None,
+                "report_id": self.conversation_id
             }
             
             self.storage.put_item(report_item)
@@ -1382,7 +1360,8 @@ class ReportGenerator:
                 "timestamp": datetime.now().isoformat(),
                 "report_data": resp,
                 "model": self.model,
-                "errors": "NO_CONTENT_AFTER_FILTER" if not structured_comments.strip() else None
+                "errors": "NO_CONTENT_AFTER_FILTER" if not structured_comments.strip() else None,
+                "report_id": self.conversation_id
             }
             
             self.storage.put_item(report_item)
@@ -1475,7 +1454,8 @@ class ReportGenerator:
             "rid_section_model": f"{self.conversation_id}#topics",
             "timestamp": datetime.now().isoformat(),
             "model": self.model,
-            "report_data": json.dumps(topics)
+            "report_data": json.dumps(topics),
+            "report_id": self.conversation_id
         }
         
         self.storage.put_item(topics_item)
@@ -1626,7 +1606,8 @@ class ReportGenerator:
                     "timestamp": datetime.now().isoformat(),
                     "report_data": resp,
                     "model": self.model,
-                    "errors": "NO_CONTENT_AFTER_FILTER" if not structured_comments.strip() else None
+                    "errors": "NO_CONTENT_AFTER_FILTER" if not structured_comments.strip() else None,
+                    "report_id": self.conversation_id
                 }
                 
                 self.storage.put_item(report_item)

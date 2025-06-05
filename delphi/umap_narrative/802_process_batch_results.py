@@ -64,36 +64,13 @@ class ReportStorageService:
         self.table = self.dynamodb.Table(self.table_name)
     
     def init_table(self):
-        """Check if the table exists, and create it if it doesn't."""
+        """Check if the table exists"""
         try:
             self.table.table_status
             logger.info(f"Table {self.table_name} exists and is accessible.")
         except Exception as e:
             logger.error(f"Error checking table {self.table_name}: {str(e)}")
-            logger.info(f"Creating table {self.table_name}...")
-            
-            # Create the table
-            self.dynamodb.create_table(
-                TableName=self.table_name,
-                KeySchema=[
-                    {'AttributeName': 'rid_section_model', 'KeyType': 'HASH'},
-                    {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
-                ],
-                AttributeDefinitions=[
-                    {'AttributeName': 'rid_section_model', 'AttributeType': 'S'},
-                    {'AttributeName': 'timestamp', 'AttributeType': 'S'}
-                ],
-                ProvisionedThroughput={
-                    'ReadCapacityUnits': 5,
-                    'WriteCapacityUnits': 5
-                }
-            )
-            
-            # Wait for the table to be created
-            waiter = boto3.client('dynamodb').get_waiter('table_exists')
-            waiter.wait(TableName=self.table_name)
-            
-            logger.info(f"Table {self.table_name} created successfully.")
+            return e
     
     def put_item(self, item):
         """Store an item in DynamoDB.
@@ -407,6 +384,7 @@ class BatchResultProcessor:
                 "errors": None,
                 "batch_id": self.batch_id,
                 "request_id": req_id,
+                "report_id": conversation_id,
                 "metadata": {
                     "topic_name": topic_name,
                     "cluster_id": metadata.get('cluster_id')
@@ -518,7 +496,8 @@ class BatchResultProcessor:
                                     "errors": None,
                                     "batch_id": self.batch_id,
                                     "request_id": req_id,
-                                    "sequential_fallback": True
+                                    "sequential_fallback": True,
+                                    "report_id": conversation_id,
                                 }
                                 
                                 self.report_storage.put_item(report_item)
