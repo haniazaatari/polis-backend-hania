@@ -5,6 +5,35 @@ import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { getZidFromReport } from "../../utils/parameter";
 import Config from "../../config";
 
+const dynamoDBConfig: any = {
+  region: Config.AWS_REGION || "us-east-1",
+};
+if (Config.dynamoDbEndpoint) {
+  dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
+  dynamoDBConfig.credentials = {
+    accessKeyId: "DUMMYIDEXAMPLE",
+    secretAccessKey: "DUMMYEXAMPLEKEY",
+  };
+  logger.info(`Using local DynamoDB at endpoint: ${Config.dynamoDbEndpoint}`);
+} else {
+  if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
+    dynamoDBConfig.credentials = {
+      accessKeyId: Config.AWS_ACCESS_KEY_ID,
+      secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
+    };
+    logger.info(`Using production DynamoDB with AWS credentials`);
+  } else {
+    logger.info(`Using default AWS credential provider chain`);
+  }
+}
+const client = new DynamoDBClient(dynamoDBConfig);
+const docClient = DynamoDBDocumentClient.from(client, {
+  marshallOptions: {
+    convertEmptyValues: true,
+    removeUndefinedValues: true,
+  },
+});
+
 /**
  * Handler for Delphi API route that retrieves LLM-generated reports from DynamoDB
  */
@@ -52,39 +81,6 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
       error_details: err.message,
     });
   }
-
-  // --- DynamoDB Client Setup ---
-  // For optimal performance, clients should be initialized once globally.
-  // Kept here as per focus on query logic first.
-  const dynamoDBConfig: any = {
-    region: Config.AWS_REGION || "us-east-1",
-  };
-  if (Config.dynamoDbEndpoint) {
-    dynamoDBConfig.endpoint = Config.dynamoDbEndpoint;
-    dynamoDBConfig.credentials = {
-      accessKeyId: "DUMMYIDEXAMPLE",
-      secretAccessKey: "DUMMYEXAMPLEKEY",
-    };
-    logger.info(`Using local DynamoDB at endpoint: ${Config.dynamoDbEndpoint}`);
-  } else {
-    if (Config.AWS_ACCESS_KEY_ID && Config.AWS_SECRET_ACCESS_KEY) {
-      dynamoDBConfig.credentials = {
-        accessKeyId: Config.AWS_ACCESS_KEY_ID,
-        secretAccessKey: Config.AWS_SECRET_ACCESS_KEY,
-      };
-      logger.info(`Using production DynamoDB with AWS credentials`);
-    } else {
-      logger.info(`Using default AWS credential provider chain`);
-    }
-  }
-  const client = new DynamoDBClient(dynamoDBConfig);
-  const docClient = DynamoDBDocumentClient.from(client, {
-    marshallOptions: {
-      convertEmptyValues: true,
-      removeUndefinedValues: true,
-    },
-  });
-  // --- End of DynamoDB Client Setup ---
 
   const tableName = "Delphi_NarrativeReports";
   const gsiName = "ReportIdTimestampIndex";
