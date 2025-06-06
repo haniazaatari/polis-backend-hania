@@ -67,8 +67,8 @@ class BatchStatusChecker:
         # Set up DynamoDB connection
         self.dynamodb = boto3.resource(
             'dynamodb',
-            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000'),
-            region_name=os.environ.get('AWS_REGION', 'us-west-2'),
+            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
+            region_name=os.environ.get('AWS_REGION', 'us-east-1'),
             aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
             aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
         )
@@ -114,47 +114,53 @@ class BatchStatusChecker:
             logger.error(traceback.format_exc())
             self.anthropic = None
 
-    def find_pending_jobs(self, specific_job_id=None) -> List[Dict]:
-        """Find jobs with pending batch requests.
+    def find_pending_jobs(self, specific_job_id: Optional[str] = None) -> List[Dict]:
+        """
+        Find jobs with pending batch requests, with full pagination support.
 
         Args:
             specific_job_id: Optional specific job ID to check
 
         Returns:
-            List of job items with batch information
+            List of job items with batch information.
         """
         try:
             if specific_job_id:
-                # Get specific job
                 response = self.job_table.get_item(Key={'job_id': specific_job_id})
-                items = [response.get('Item')] if 'Item' in response else []
+                items_to_process = [response.get('Item')] if 'Item' in response else []
             else:
-                # Scan for jobs with batch_id and status not completed
-                # Using ExpressionAttributeNames to avoid the 'status' reserved keyword
-                response = self.job_table.scan(
-                    FilterExpression='attribute_exists(batch_id) AND (attribute_not_exists(#s) OR #s <> :completed_status)',
-                    ExpressionAttributeNames={'#s': 'status'},
-                    ExpressionAttributeValues={':completed_status': 'COMPLETED'}
-                )
-                items = response.get('Items', [])
+                # Polling mode: Query the GSI to get all 'PROCESSING' jobs.
+                logger.info("Querying GSI 'StatusCreatedIndex' for all pages of jobs with status 'PROCESSING'")
+                
+                items_to_process = []
+                last_evaluated_key = None
 
-                # Continue scan if there are more results
-                while 'LastEvaluatedKey' in response:
-                    response = self.job_table.scan(
-                        FilterExpression='attribute_exists(batch_id) AND (attribute_not_exists(#s) OR #s <> :completed_status)',
-                        ExpressionAttributeNames={'#s': 'status'},
-                        ExpressionAttributeValues={':completed_status': 'COMPLETED'},
-                        ExclusiveStartKey=response['LastEvaluatedKey']
-                    )
-                    items.extend(response.get('Items', []))
+                while True:
+                    query_kwargs = {
+                        'IndexName': 'StatusCreatedIndex',
+                        'KeyConditionExpression': '#s = :status',
+                        'ExpressionAttributeNames': {'#s': 'status'},
+                        'ExpressionAttributeValues': {':status': 'PROCESSING'}
+                    }
+                    
+                    # If there's a key from the last response, add it to start the next query from there.
+                    if last_evaluated_key:
+                        query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+                    
+                    response = self.job_table.query(**query_kwargs)
+                    items_to_process.extend(response.get('Items', []))
+                    
+                    # Get the key for the next page. If it's not present, we're done.
+                    last_evaluated_key = response.get('LastEvaluatedKey')
+                    if not last_evaluated_key:
+                        break
+                
+                logger.info(f"Found {len(items_to_process)} total jobs in 'PROCESSING' state across all pages.")
 
-            # Filter for jobs with batch information
-            result = []
-            for item in items:
-                if 'batch_id' in item:
-                    result.append(item)
-
+            # Post-query filtering: only return jobs that have a batch_id.
+            result = [item for item in items_to_process if item and 'batch_id' in item]
             return result
+            
         except Exception as e:
             logger.error(f"Error finding pending jobs: {str(e)}")
             logger.error(traceback.format_exc())
