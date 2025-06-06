@@ -243,16 +243,39 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   // Get the current selected run data
   const selectedRun = selectedRunKey ? runs[selectedRunKey] : null;
 
+  // Helper function to find the best job to display (prioritize completed jobs with visualizations)
+  const getBestVisualizationJob = () => {
+    if (!visualizationJobs || visualizationJobs.length === 0) {
+      return null;
+    }
+
+    // First, try to find a completed job with visualizations
+    const completedJobWithViz = visualizationJobs.find(job => 
+      job.status === "COMPLETED" && 
+      job.visualizations && 
+      Array.isArray(job.visualizations) && 
+      job.visualizations.length > 0
+    );
+    
+    if (completedJobWithViz) {
+      return completedJobWithViz;
+    }
+    
+    // If no completed job with visualizations, return the first job
+    return visualizationJobs[0];
+  };
+
   // Get available layers with topic counts from visualization data
   const getAvailableLayers = () => {
-    if (!visualizationJobs || !visualizationJobs[0] || !visualizationJobs[0].visualizations) {
+    const bestJob = getBestVisualizationJob();
+    if (!bestJob || !bestJob.visualizations) {
       return [];
     }
 
     const layerMap = new Map();
     
     // Get layers from visualizations
-    visualizationJobs[0].visualizations
+    bestJob.visualizations
       .filter((vis) => vis && vis.type === "interactive")
       .forEach((vis) => {
         layerMap.set(vis.layerId, { layerId: vis.layerId, topicCount: 0 });
@@ -555,26 +578,28 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           </div>
         ) : (
           <div className="visualizations-container">
-            {Array.isArray(visualizationJobs) && visualizationJobs.length > 0 && (
-              <div className="visualization-job">
-                <div className="job-header">
-                  <h3>Interactive Topics Visualization (all comments)</h3>
-                  <div className="job-meta">
-                    <span className={`job-status status-${visualizationJobs[0].status}`}>
-                      {visualizationJobs[0].status}
-                    </span>
-                    <span className="job-date">
-                      Created: {new Date(visualizationJobs[0].createdAt).toLocaleString()}
-                    </span>
+            {(() => {
+              const bestJob = getBestVisualizationJob();
+              return bestJob && (
+                <div className="visualization-job">
+                  <div className="job-header">
+                    <h3>Interactive Topics Visualization (all comments)</h3>
+                    <div className="job-meta">
+                      <span className={`job-status status-${bestJob.status}`}>
+                        {bestJob.status}
+                      </span>
+                      <span className="job-date">
+                        Created: {new Date(bestJob.createdAt).toLocaleString()}
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                {visualizationJobs[0].visualizations &&
-                Array.isArray(visualizationJobs[0].visualizations) &&
-                visualizationJobs[0].visualizations.length > 0 ? (
+                  {bestJob.visualizations &&
+                  Array.isArray(bestJob.visualizations) &&
+                  bestJob.visualizations.length > 0 ? (
                   <div className="visualizations-grid">
                     {/* Show selected layer visualization */}
-                    {visualizationJobs[0].visualizations
+                    {bestJob.visualizations
                       .filter((vis) => vis && vis.type === "interactive" && vis.layerId === selectedLayer)
                       .map((vis) => (
                         <div key={vis.key} className="visualization-card">
@@ -591,7 +616,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                         </div>
                       ))}
 
-                    {visualizationJobs[0].visualizations
+                    {bestJob.visualizations
                       .filter(
                         (vis) =>
                           vis &&
@@ -620,8 +645,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                     </p>
                   </div>
                 )}
-              </div>
-            )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </>
