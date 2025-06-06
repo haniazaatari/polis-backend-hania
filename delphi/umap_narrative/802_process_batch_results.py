@@ -25,6 +25,7 @@ import asyncio
 import argparse
 import boto3
 import requests
+import traceback
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
@@ -40,27 +41,11 @@ logger = logging.getLogger(__name__)
 class ReportStorageService:
     """Storage service for report data in DynamoDB."""
     
-    def __init__(self, table_name="Delphi_NarrativeReports", disable_cache=False):
-        """Initialize the report storage service.
-        
-        Args:
-            table_name: Name of the DynamoDB table to use
-            disable_cache: Whether to disable cache usage
-        """
-        # Set up DynamoDB connection
+    def __init__(self, dynamodb_resource, table_name="Delphi_NarrativeReports", disable_cache=False):
+        """Initialize the report storage service."""
         self.table_name = table_name
         self.disable_cache = disable_cache
-        
-        # Set up DynamoDB client
-        self.dynamodb = boto3.resource(
-            'dynamodb',
-            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
-            region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-west-2'),
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
-        )
-        
-        # Get the table
+        self.dynamodb = dynamodb_resource
         self.table = self.dynamodb.Table(self.table_name)
     
     def init_table(self):
@@ -89,25 +74,10 @@ class ReportStorageService:
 class BatchReportStorageService:
     """Storage service for batch job metadata in DynamoDB."""
     
-    def __init__(self, table_name="Delphi_BatchJobs"):
-        """Initialize the batch job storage service.
-        
-        Args:
-            table_name: Name of the DynamoDB table to use
-        """
-        # Set up DynamoDB connection
+    def __init__(self, dynamodb_resource, table_name="Delphi_BatchJobs"):
+        """Initialize the batch job storage service."""
         self.table_name = table_name
-        
-        # Set up DynamoDB client
-        self.dynamodb = boto3.resource(
-            'dynamodb',
-            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
-            region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-west-2'),
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
-        )
-        
-        # Get the table
+        self.dynamodb = dynamodb_resource
         self.table = self.dynamodb.Table(self.table_name)
     
     def get_item(self, batch_id):
@@ -228,21 +198,24 @@ class BatchResultProcessor:
     """Process batch narrative report results."""
     
     def __init__(self, batch_id, force=False):
-        """Initialize the batch result processor.
-        
-        Args:
-            batch_id: ID of the batch job to process
-            force: Force processing even if the job is not marked as completed
-        """
+        """Initialize the batch result processor."""
         self.batch_id = batch_id
         self.force = force
         
-        # Initialize storage services
-        self.batch_storage = BatchReportStorageService()
-        self.report_storage = ReportStorageService()
+        dynamodb = boto3.resource(
+            'dynamodb',
+            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
+            region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+        )
+        # Set local credentials only if a local endpoint is actually being used
+        if dynamodb.meta.client.meta.endpoint_url:
+            os.environ.setdefault('AWS_ACCESS_KEY_ID', 'fakeMyKeyId')
+            os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+
+        self.batch_storage = BatchReportStorageService(dynamodb_resource=dynamodb)
+        self.report_storage = ReportStorageService(dynamodb_resource=dynamodb)
+
         self.report_storage.init_table()
-        
-        # Initialize batch job data
         self.batch_job = None
         self.anthropic_checker = AnthropicBatchChecker()
     
@@ -413,7 +386,8 @@ class BatchResultProcessor:
         return True
     
     async def process_sequential_fallback(self):
-        """Process batch job with sequential fallback.
+        """
+        Process batch job with sequential fallback, avoiding N+1 queries.
         
         This is used when the Anthropic Batch API is not available.
         
@@ -421,109 +395,121 @@ class BatchResultProcessor:
             True if processing is successful, False otherwise
         """
         # Get request data
-        if 'batch_data' not in self.batch_job and 'request_map' not in self.batch_job:
-            logger.error(f"Batch job {self.batch_id} does not have request data")
+        if 'request_map' not in self.batch_job:
+            logger.error(f"Batch job {self.batch_id} does not have request data for fallback.")
             return False
         
-        # Get model provider
+        # Get model provider and request data
         model_name = self.batch_job.get('model', 'claude-3-5-sonnet-20241022')
         model_provider = get_model_provider('anthropic', model_name)
-        
-        # Process each request sequentially
-        total_requests = len(self.batch_job.get('request_map', {}))
+        request_map = self.batch_job.get('request_map', {})
+        total_requests = len(request_map)
         successful_requests = 0
         
         logger.info(f"Processing {total_requests} requests sequentially")
         
-        # Update batch job status
+        # Update batch job status to show it's in sequential processing
         self.batch_storage.update_item(self.batch_id, {
             "status": "sequential_processing",
             "updated_at": datetime.now().isoformat()
         })
         
+        existing_reports = set()
+        if not self.force and request_map:
+            keys_to_check = []
+            for metadata in request_map.values():
+                # Construct the primary key for the Delphi_NarrativeReports table
+                keys_to_check.append({
+                    'rid_section_model': f"{metadata.get('conversation_id')}#{metadata.get('section_name')}#{model_name}"
+                })
+            
+            # batch_get_item has a limit of 100 keys per request, so we may need to batch our check
+            if keys_to_check:
+                logger.info(f"Checking for {len(keys_to_check)} existing reports before processing...")
+                for i in range(0, len(keys_to_check), 100):
+                    batch_keys = keys_to_check[i:i + 100]
+                    response = self.report_storage.dynamodb.batch_get_item(
+                        RequestItems={self.report_storage.table_name: {'Keys': batch_keys}}
+                    )
+                    
+                    for item in response.get('Responses', {}).get(self.report_storage.table_name, []):
+                        existing_reports.add(item['rid_section_model'])
+                
+                logger.info(f"Found {len(existing_reports)} existing reports to skip.")
         # Process each request
-        for req_id, metadata in self.batch_job.get('request_map', {}).items():
-            # Get topic info
+        for req_id, metadata in request_map.items():
+            # Get topic info from metadata
             topic_name = metadata.get('topic_name', 'Unknown')
             section_name = metadata.get('section_name', 'Unknown')
             conversation_id = metadata.get('conversation_id', 'Unknown')
             
             logger.info(f"Processing request {req_id} for topic '{topic_name}'")
             
-            # Check if we already have a report for this topic
             rid_section_model = f"{conversation_id}#{section_name}#{model_name}"
             
-            # Skip if we already have a report (but not if force is enabled)
-            if not self.force:
-                response = self.report_storage.table.query(
-                    KeyConditionExpression=boto3.dynamodb.conditions.Key('rid_section_model').eq(rid_section_model)
-                )
-                
-                if response.get('Items'):
-                    logger.info(f"Report already exists for topic '{topic_name}', skipping")
-                    successful_requests += 1
-                    continue
+            if rid_section_model in existing_reports:
+                logger.info(f"Report already exists for topic '{topic_name}', skipping.")
+                successful_requests += 1
+                continue
             
             try:
-                # Get the original request data
-                if 'batch_data' in self.batch_job and 'requests' in self.batch_job['batch_data']:
-                    # Find the request data for this req_id
-                    for req in self.batch_job['batch_data']['requests']:
-                        if req.get('request_id') == req_id:
-                            # Get system and messages
-                            system = req.get('system', '')
-                            messages = req.get('messages', [])
-                            
-                            # Process only if we have both
-                            if system and messages and len(messages) > 0:
-                                user_message = messages[0].get('content', '')
-                                
-                                # Generate response
-                                logger.info(f"Generating response for topic '{topic_name}'")
-                                
-                                # Add a short delay to avoid rate limiting
-                                await asyncio.sleep(1)
-                                
-                                # Get response
-                                response_text = model_provider.get_response(system, user_message)
-                                
-                                # Store in Delphi_NarrativeReports
-                                report_item = {
-                                    "rid_section_model": rid_section_model,
-                                    "timestamp": datetime.now().isoformat(),
-                                    "report_data": response_text,
-                                    "model": model_name,
-                                    "errors": None,
-                                    "batch_id": self.batch_id,
-                                    "request_id": req_id,
-                                    "sequential_fallback": True,
-                                    "report_id": conversation_id,
-                                }
-                                
-                                self.report_storage.put_item(report_item)
-                                
-                                logger.info(f"Stored report for topic '{topic_name}'")
-                                successful_requests += 1
-                                
-                                # Update batch job with progress
-                                self.batch_storage.update_item(self.batch_id, {
-                                    "completed_requests": successful_requests,
-                                    "updated_at": datetime.now().isoformat()
-                                })
-                                
-                                break
-                            else:
-                                logger.warning(f"Missing system or messages for request {req_id}")
+                # Find the original request data to pass to the LLM
+                # This uses the 'custom_id' which was originally derived from section_name
+                original_request_data = next(
+                    (req for req in self.batch_job.get('batch_data', {}).get('requests', []) 
+                    if req.get('custom_id', '').endswith(section_name)), 
+                    None
+                )
+
+                if original_request_data:
+                    system = original_request_data.get('params', {}).get('system', '')
+                    user_message_list = original_request_data.get('params', {}).get('messages', [{}])[0].get('content', [])
+                    
+                    # Extract the text from the complex message structure
+                    user_message = ""
+                    if user_message_list and isinstance(user_message_list, list) and 'text' in user_message_list[0]:
+                        user_message = user_message_list[0]['text']
+
+                    if system and user_message:
+                        logger.info(f"Generating response for topic '{topic_name}'")
                         
+                        # Add a short delay to avoid rate limiting
+                        await asyncio.sleep(1)
+                        
+                        # Get response from the LLM
+                        response_text = await model_provider.get_response(system, user_message)
+                        
+                        # Store in Delphi_NarrativeReports
+                        report_item = {
+                            "rid_section_model": rid_section_model,
+                            "timestamp": datetime.now().isoformat(),
+                            "report_data": response_text,
+                            "model": model_name,
+                            "errors": None,
+                            "batch_id": self.batch_id,
+                            "request_id": req_id,
+                            "sequential_fallback": True,
+                            "report_id": conversation_id,
+                        }
+                        
+                        self.report_storage.put_item(report_item)
+                        
+                        logger.info(f"Stored report for topic '{topic_name}'")
+                        successful_requests += 1
+                        
+                        # Update batch job with progress
+                        self.batch_storage.update_item(self.batch_id, {
+                            "completed_requests": successful_requests,
+                            "updated_at": datetime.now().isoformat()
+                        })
+                    else:
+                        logger.warning(f"Missing system or messages for request {req_id}")
                 else:
-                    logger.warning(f"No batch_data.requests found for request {req_id}")
+                    logger.warning(f"Could not find matching original request data for request ID {req_id}")
             
             except Exception as e:
                 logger.error(f"Error processing request {req_id} for topic '{topic_name}': {str(e)}")
-                import traceback
                 logger.error(traceback.format_exc())
-        
-        # Update batch job status
         updates = {
             "updated_at": datetime.now().isoformat(),
             "completed_requests": successful_requests,
@@ -540,7 +526,6 @@ class BatchResultProcessor:
         
         logger.info(f"Processed {successful_requests} of {total_requests} requests sequentially")
         return True
-
 async def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description='Process batch narrative report results')
