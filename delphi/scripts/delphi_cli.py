@@ -224,17 +224,19 @@ def list_jobs(dynamodb, status=None, limit=10):
         )
     else:
         # Scan for all jobs and sort manually by created_at
-        response = table.scan(
-            ConsistentRead=True,  # Use consistent reads to immediately see new jobs
-            Limit=limit * 2       # Get more items since we'll sort and trim
-        )
+        # THIS CODE WILL EVENTUALLY CRASH EVERYTHING
+        # response = table.scan(
+        #     ConsistentRead=True,  # Use consistent reads to immediately see new jobs
+        #     Limit=limit * 2       # Get more items since we'll sort and trim
+        # )
         
-        # Sort items by created_at in descending order
-        items = response.get('Items', [])
-        items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        # # Sort items by created_at in descending order
+        # items = response.get('Items', [])
+        # items.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         
-        # Trim to requested limit
-        return items[:limit]
+        # # Trim to requested limit
+        # return items[:limit]
+        return []
     
     return response.get('Items', [])
 
@@ -507,48 +509,37 @@ def interactive_mode():
 
 def get_conversation_status(dynamodb, zid):
     """Get detailed information about a conversation run."""
-    # 1. Check Delphi_UMAPConversationConfig table (formerly ConversationMeta)
     conversation_meta_table = dynamodb.Table('Delphi_UMAPConversationConfig')
     topic_names_table = dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
-    
+    job_table = dynamodb.Table('Delphi_JobQueue') 
+
     try:
-        # Query with conversation_id schema
         meta_response = conversation_meta_table.get_item(
-            Key={
-                'conversation_id': str(zid)
-            }
+            Key={'conversation_id': str(zid)}
         )
-        
         if 'Item' not in meta_response:
             return None, f"Conversation {zid} not found in Delphi_UMAPConversationConfig table."
-        
         meta_data = meta_response['Item']
         
-        # Query topics with conversation_id schema
         topics_response = topic_names_table.query(
             KeyConditionExpression='conversation_id = :cid',
-            ExpressionAttributeValues={
-                ':cid': str(zid)
-            }
+            ExpressionAttributeValues={':cid': str(zid)}
         )
         topics_items = topics_response.get('Items', [])
         
-        # Get the most recent job for this conversation from DelphiJobQueue
-        job_table = dynamodb.Table('Delphi_JobQueue')
-        job_response = job_table.scan(
-            FilterExpression='conversation_id = :cid',
+        job_response = job_table.query(
+            IndexName='ConversationIndex',
+            KeyConditionExpression='conversation_id = :cid',
             ExpressionAttributeValues={
                 ':cid': str(zid)
-            }
+            },
+            # Query in reverse order to get the newest jobs first
+            ScanIndexForward=False 
         )
         
-        # Sort jobs by created_at in descending order to get the most recent
         jobs = job_response.get('Items', [])
-        if jobs:
-            jobs.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-            last_job = jobs[0]
-        else:
-            last_job = None
+        
+        last_job = jobs[0] if jobs else None
         
         return {
             'meta': meta_data,
