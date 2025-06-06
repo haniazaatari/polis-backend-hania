@@ -491,6 +491,7 @@ class DynamoDBStorage:
             return None
     
     def list_conversations(self) -> List[Dict[str, Any]]:
+        # NOT SURE IF THIS FUNCTION IS USED, BUT WE SHOULD REFACTOR IF USING TO AN GENERATOR USING YIELD, IN ORDER TO AVOID LOADING THE FULL TABLE INTO MEMORY, WHICH WILL CRASH THE APP IF IT GETS TO BIG
         """
         List all conversations.
         

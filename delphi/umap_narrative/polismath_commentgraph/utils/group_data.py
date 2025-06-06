@@ -38,8 +38,8 @@ class GroupDataProcessor:
         """Initialize DynamoDB connection for storing extremity values."""
         try:
             # Get DynamoDB endpoint from environment or use default
-            endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000')
-            region = os.environ.get('AWS_REGION', 'us-west-2')
+            endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
+            region = os.environ.get('AWS_REGION', 'us-east-1')
             
             # Set up DynamoDB client
             self.dynamodb = boto3.resource(

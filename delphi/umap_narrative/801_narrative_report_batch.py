@@ -58,23 +58,23 @@ logger = logging.getLogger(__name__)
 class NarrativeReportService:
     """Storage service for narrative reports in DynamoDB."""
 
-    def __init__(self, table_name="Delphi_NarrativeReports"):
+    def __init__(self, table_name="Delphi_NarrativeReports", dynamodb_resource=None):
         """Initialize the narrative report service.
 
         Args:
             table_name: Name of the DynamoDB table to use
         """
-        # Set up DynamoDB connection
         self.table_name = table_name
-
-        # Set up DynamoDB client
-        self.dynamodb = boto3.resource(
-            'dynamodb',
-            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
-            region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-west-2'),
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
-        )
+        if dynamodb_resource:
+            self.dynamodb = dynamodb_resource
+        else:
+            self.dynamodb = boto3.resource(
+                'dynamodb',
+                endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
+                region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
+                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+            )
 
         # Get the table
         self.table = self.dynamodb.Table(self.table_name)
@@ -208,15 +208,7 @@ class BatchReportGenerator:
     """Generate batch reports for Polis conversations."""
 
     def __init__(self, conversation_id, model=None, no_cache=False, max_batch_size=20, job_id=None):
-        """Initialize the batch report generator.
-
-        Args:
-            conversation_id: ID of the conversation to generate reports for
-            model: Name of the LLM model to use
-            no_cache: Whether to ignore cached report data
-            max_batch_size: Maximum number of topics in a batch
-            job_id: Optional job ID from the job queue system
-        """
+        """Initialize the batch report generator."""
         self.conversation_id = str(conversation_id)
         if not model:
             model = os.environ.get("ANTHROPIC_MODEL")
@@ -227,18 +219,21 @@ class BatchReportGenerator:
         self.max_batch_size = max_batch_size
         self.job_id = job_id or os.environ.get('DELPHI_JOB_ID')
         self.report_id = os.environ.get('DELPHI_REPORT_ID')
-
-        # Initialize PostgreSQL client
         self.postgres_client = PostgresClient()
+        self.dynamodb = boto3.resource(
+            'dynamodb',
+            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
+            region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+            # Using setdefault below for credentials makes these optional if already set
+        )
+        # Ensure local credentials are set if using a local endpoint
+        if self.dynamodb.meta.client.meta.endpoint_url:
+            os.environ.setdefault('AWS_ACCESS_KEY_ID', 'fakeMyKeyId')
+            os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
 
-        # Initialize DynamoDB storage for reports
-        self.report_storage = NarrativeReportService()
-
-        # Initialize group data processor
+        self.report_storage = NarrativeReportService(dynamodb_resource=self.dynamodb)
         self.group_processor = GroupDataProcessor(self.postgres_client)
 
-        # Set up base path for prompt templates
-        # Get the current script's directory and use it as base for prompt templates
         current_dir = Path(__file__).parent
         self.prompt_base_path = current_dir / "report_experimental"
     
@@ -304,116 +299,74 @@ class BatchReportGenerator:
             # Clean up connection
             self.postgres_client.shutdown()
     
+    # (Inside the BatchReportGenerator class)
     def load_comment_clusters_from_dynamodb(self, conversation_id):
         """
-        Load cluster assignments for comments from DynamoDB.
-        
-        Args:
-            conversation_id: Conversation ID to retrieve clusters for
-            
-        Returns:
-            Dictionary mapping comment IDs to their cluster assignments
+        Load cluster assignments for comments from DynamoDB using an efficient Query.
         """
         try:
-            # Initialize DynamoDB connection
-            dynamodb = boto3.resource(
-                'dynamodb',
-                endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000'),
-                region_name=os.environ.get('AWS_REGION', 'us-west-2'),
-                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
-            )
-            
-            # Connect to comment clusters table
-            clusters_table = dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
-            
-            # Use scan with filter instead of query for compatibility with all DynamoDB setups
-            # This is less efficient but more compatible
-            response = clusters_table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(str(conversation_id)),
-                Limit=1000  # Process in batches
-            )
-            
-            # Create mapping of comment IDs to cluster IDs
+            # Use the shared dynamodb resource
+            clusters_table = self.dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
             cluster_map = {}
-            for item in response.get('Items', []):
-                comment_id = item.get('comment_id')
-                layer0_cluster_id = item.get('layer0_cluster_id')
-                if comment_id is not None and layer0_cluster_id is not None:
-                    cluster_map[str(comment_id)] = layer0_cluster_id
-                    
-            # Handle pagination if needed
-            while 'LastEvaluatedKey' in response:
-                response = clusters_table.scan(
-                    FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(str(conversation_id)),
-                    ExclusiveStartKey=response['LastEvaluatedKey'],
-                    Limit=1000
-                )
+            
+            logger.info(f"Querying for cluster assignments for conversation_id: {conversation_id}")
+
+            # --- OPTIMIZATION: Replace Scan with Query and handle pagination ---
+            last_evaluated_key = None
+            while True:
+                query_kwargs = {
+                    'KeyConditionExpression': boto3.dynamodb.conditions.Key('conversation_id').eq(str(conversation_id))
+                }
+                if last_evaluated_key:
+                    query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+
+                response = clusters_table.query(**query_kwargs)
+                
                 for item in response.get('Items', []):
                     comment_id = item.get('comment_id')
                     layer0_cluster_id = item.get('layer0_cluster_id')
                     if comment_id is not None and layer0_cluster_id is not None:
                         cluster_map[str(comment_id)] = layer0_cluster_id
-            
+                
+                last_evaluated_key = response.get('LastEvaluatedKey')
+                if not last_evaluated_key:
+                    break
+
             logger.info(f"Loaded {len(cluster_map)} cluster assignments from DynamoDB")
             return cluster_map
         except Exception as e:
             logger.error(f"Error loading cluster assignments from DynamoDB: {e}")
             return {}
-    
+    # (Inside the BatchReportGenerator class)
     async def get_topics(self):
-        """Get topics for the conversation from DynamoDB."""
-        # Get topics from ClusterTopics table
-        dynamo_storage = DynamoDBStorage(
-            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT')
-        )
-        
-        # Get topic data from DynamoDB
-        topics = []
-        
+        """Get topics for the conversation from DynamoDB efficiently."""
         try:
-            # Get all LLMTopicNames entries for layer 0
-            table = dynamo_storage.dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
-            response = table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(self.conversation_id) &
-                               boto3.dynamodb.conditions.Attr('layer_id').eq(0)
+            topic_names_table = self.dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
+            topic_names_response = topic_names_table.query(
+                KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id),
+                FilterExpression=boto3.dynamodb.conditions.Attr('layer_id').eq(0) # Filter for layer_id after query
             )
-            
-            topic_names_items = response.get('Items', [])
+            topic_names_items = topic_names_response.get('Items', [])
             logger.info(f"Found {len(topic_names_items)} layer 0 topic names in LLMTopicNames")
+            all_clusters = await asyncio.to_thread(self.load_comment_clusters_from_dynamodb, self.conversation_id)
             
-            # Get all comment clusters
-            clusters_table = dynamo_storage.dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
-            response = clusters_table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(self.conversation_id)
-            )
-            
-            clusters = response.get('Items', [])
-            logger.info(f"Found {len(clusters)} comment cluster entries")
-            
-            # Process clusters to get comment IDs for each topic
             topic_comments = defaultdict(list)
-            for item in clusters:
-                # Look at layer0 clusters
-                if 'layer0_cluster_id' in item:
-                    cluster_id = item['layer0_cluster_id']
-                    comment_id = item.get('comment_id')
-                    if comment_id:
-                        topic_comments[cluster_id].append(int(comment_id))
-            
+            for comment_id, cluster_id in all_clusters.items():
+                topic_comments[cluster_id].append(int(comment_id))
             logger.info(f"Collected comments for {len(topic_comments)} clusters")
-            
-            # Create topics data structure
+
+            topics = []
             for topic_item in topic_names_items:
                 cluster_id = topic_item.get('cluster_id')
                 topic_name = topic_item.get('topic_name', f"Topic {cluster_id}")
                 
-                logger.info(f"Processing topic for cluster {cluster_id}: {topic_name}")
-                
                 if cluster_id is not None:
-                    # Try to get sample comments for this topic
+                    cluster_response = self.dynamodb.Table('Delphi_CommentClustersStructureKeywords').query(
+                        KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id) &
+                                            boto3.dynamodb.conditions.Key('cluster_key').eq(f'layer0_{cluster_id}')
+                    )
                     sample_comments = []
-                    cluster_response = dynamo_storage.dynamodb.Table('Delphi_CommentClustersStructureKeywords').query(
+                    cluster_response = self.dynamodb.Table('Delphi_CommentClustersStructureKeywords').query(
                         KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id) &
                                              boto3.dynamodb.conditions.Key('cluster_key').eq(f'layer0_{cluster_id}')
                     )
@@ -435,28 +388,24 @@ class BatchReportGenerator:
                         raise ValueError(f"topic_key is required but missing for cluster {cluster_id}")
                     
                     # Create topic entry
+                    
                     topic = {
                         "cluster_id": cluster_id,
                         "name": topic_name,
-                        "topic_key": topic_key,
+                        "topic_key": topic_item.get('topic_key'),
                         "citations": topic_comments.get(cluster_id, []),
                         "sample_comments": sample_comments
                     }
                     topics.append(topic)
             
             logger.info(f"Created {len(topics)} topics for conversation {self.conversation_id}")
-            
-            # Sort topics by number of citations (descending)
             topics.sort(key=lambda x: len(x['citations']), reverse=True)
-            
             return topics
         
         except Exception as e:
             logger.error(f"Error getting topics: {str(e)}")
-            import traceback
             logger.error(traceback.format_exc())
             return []
-    
     def filter_topics(self, comment, topic_cluster_id=None, topic_citations=None, sample_comments=None):
         """Filter for comments that are part of a specific topic."""
         # Get comment ID
@@ -624,42 +573,42 @@ class BatchReportGenerator:
 
                     ```json
                     {{
-                      "id": "topic_overview_and_consensus",
-                      "title": "Overview of Topic and Consensus",
-                      "paragraphs": [
+                    "id": "topic_overview_and_consensus",
+                    "title": "Overview of Topic and Consensus",
+                    "paragraphs": [
                         {{
-                          "id": "topic_overview",
-                          "title": "Overview of Topic",
-                          "sentences": [
+                        "id": "topic_overview",
+                        "title": "Overview of Topic",
+                        "sentences": [
                             {{
-                              "clauses": [
+                            "clauses": [
                                 {{
-                                  "text": "This topic reveals patterns of participant views on economic development, community identity, and resource priorities.",
-                                  "citations": [190, 191, 1142]
+                                "text": "This topic reveals patterns of participant views on economic development, community identity, and resource priorities.",
+                                "citations": [190, 191, 1142]
                                 }},
                                 {{
-                                  "text": "Analysis of what the comments reveal about underlying values and priorities in the community.",
-                                  "citations": [1245, 1256]
+                                "text": "Analysis of what the comments reveal about underlying values and priorities in the community.",
+                                "citations": [1245, 1256]
                                 }}
-                              ]
+                            ]
                             }}
-                          ]
+                        ]
                         }},
                         {{
-                          "id": "topic_by_groups",
-                          "title": "Group Perspectives on Topic",
-                          "sentences": [
+                        "id": "topic_by_groups",
+                        "title": "Group Perspectives on Topic",
+                        "sentences": [
                             {{
-                              "clauses": [
+                            "clauses": [
                                 {{
-                                  "text": "Comparison of how different groups approached this topic, with analysis of the values that drive their different perspectives.",
-                                  "citations": [190, 191]
+                                "text": "Comparison of how different groups approached this topic, with analysis of the values that drive their different perspectives.",
+                                "citations": [190, 191]
                                 }}
-                              ]
+                            ]
                             }}
-                          ]
+                        ]
                         }}
-                      ]
+                    ]
                     }}
                     ```
 
@@ -787,18 +736,11 @@ class BatchReportGenerator:
             logger.error("ERROR: ANTHROPIC_API_KEY environment variable is not set. Cannot submit batch.")
             if self.job_id:
                 try:
-                    # Update job status to reflect missing API key
-                    dynamodb = boto3.resource(
-                        'dynamodb',
-                        endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000'),
-                        region_name=os.environ.get('AWS_REGION', 'us-west-2'),
-                        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-                        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
-                    )
-                    job_table = dynamodb.Table('Delphi_JobQueue')
+                    job_table = self.dynamodb.Table('Delphi_JobQueue')
                     job_table.update_item(
                         Key={'job_id': self.job_id},
-                        UpdateExpression="SET job_status = :status, error_message = :error",
+                        UpdateExpression="SET #s = :status, error_message = :error",
+                        ExpressionAttributeNames={'#s': 'status'},
                         ExpressionAttributeValues={
                             ':status': 'FAILED',
                             ':error': 'Missing ANTHROPIC_API_KEY environment variable'
@@ -1078,17 +1020,12 @@ class BatchReportGenerator:
             # Try to update job status in DynamoDB
             if self.job_id:
                 try:
-                    dynamodb = boto3.resource(
-                        'dynamodb',
-                        endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000'),
-                        region_name=os.environ.get('AWS_REGION', 'us-west-2'),
-                        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-                        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
-                    )
-                    job_table = dynamodb.Table('Delphi_JobQueue')
+                    # --- FIX: Reuse the existing self.dynamodb client ---
+                    job_table = self.dynamodb.Table('Delphi_JobQueue')
                     job_table.update_item(
                         Key={'job_id': self.job_id},
-                        UpdateExpression="SET job_status = :status, error_message = :error",
+                        UpdateExpression="SET #s = :status, error_message = :error",
+                        ExpressionAttributeNames={'#s': 'status'},
                         ExpressionAttributeValues={
                             ':status': 'FAILED',
                             ':error': f"Error in batch submission: {str(e)}"
