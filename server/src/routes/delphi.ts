@@ -84,7 +84,6 @@ export async function handle_GET_delphi(req: Request, res: Response) {
         status: "success",
         message: "No LLM topics found for this conversation",
         report_id,
-        conversation_id,
         runs: {}, // Return "runs" object for consistency
       });
     }
@@ -139,7 +138,6 @@ export async function handle_GET_delphi(req: Request, res: Response) {
       status: "success",
       message: "LLM topics retrieved successfully",
       report_id,
-      conversation_id,
       runs: sortedRuns,
     });
   } catch (err: any) {

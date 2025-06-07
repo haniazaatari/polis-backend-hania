@@ -54,10 +54,12 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
   let gsiQueryableReportId: string;
 
   try {
+    // The GSI uses report_id as the partition key, so we should query with the original report_id
+    // rather than converting to zid. Keep zid lookup for validation purposes.
     const zid = await getZidFromReport(requestReportId);
     if (zid === null || zid === undefined) {
       logger.error(
-        `Could not resolve requestReportId '${requestReportId}' to a ZID/GSI-report_id.`
+        `Could not resolve requestReportId '${requestReportId}' to a ZID for validation.`
       );
       return res.json({
         status: "error",
@@ -66,9 +68,10 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
         request_report_id: requestReportId,
       });
     }
-    gsiQueryableReportId = zid.toString();
+    // Use the original report_id for GSI query since that's what's stored in DynamoDB
+    gsiQueryableReportId = requestReportId;
     logger.info(
-      `Fetching Delphi reports for GSI report_id: ${gsiQueryableReportId} (derived from requestReportId: ${requestReportId})`
+      `Fetching Delphi reports for GSI report_id: ${gsiQueryableReportId} (original requestReportId, validated against ZID: ${zid})`
     );
   } catch (err: any) {
     logger.error(

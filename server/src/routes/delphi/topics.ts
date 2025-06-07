@@ -126,7 +126,6 @@ export function handle_GET_delphi(req: Request, res: Response) {
                 hint:
                   "The table may need to be created by running the Delphi pipeline",
                 report_id: report_id,
-                conversation_id: conversation_id,
                 available_tables: tableNames,
                 topics: {},
               });
@@ -193,7 +192,6 @@ export function handle_GET_delphi(req: Request, res: Response) {
                 status: "success",
                 message: "No LLM topics found for this conversation",
                 report_id: report_id,
-                conversation_id: conversation_id,
                 topics: {},
               });
             }
@@ -275,7 +273,6 @@ export function handle_GET_delphi(req: Request, res: Response) {
               status: "success",
               message: "LLM topics retrieved successfully",
               report_id: report_id,
-              conversation_id: conversation_id,
               runs: sortedRuns,
             });
           })
@@ -291,7 +288,6 @@ export function handle_GET_delphi(req: Request, res: Response) {
                 hint:
                   "The table may need to be created by running the Delphi pipeline",
                 report_id: report_id,
-                conversation_id: conversation_id,
                 topics: {},
               });
             }
@@ -354,7 +350,6 @@ export function handle_GET_delphi(req: Request, res: Response) {
               error_type: err.name,
               help: helpMessage,
               report_id: report_id,
-              conversation_id: conversation_id,
               topics: {}, // Return empty topics to avoid client-side errors
             });
           });

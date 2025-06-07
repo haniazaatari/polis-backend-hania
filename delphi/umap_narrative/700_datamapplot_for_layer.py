@@ -792,7 +792,7 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
                 document_map,
                 label_strings,
                 hover_text=hover_text,
-                title=f"{conversation_name} - Layer {layer_id}",
+                title=f"Layer {layer_id}",
                 sub_title=f"Interactive map of {len(document_map)} comments with {len(topic_names)} topics",
                 point_radius_min_pixels=2,
                 point_radius_max_pixels=10,
@@ -814,9 +814,8 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
                 job_id = os.environ.get('DELPHI_JOB_ID', 'unknown')
                 report_id = os.environ.get('DELPHI_REPORT_ID', 'unknown')
                 
-                # Create S3 key using conversation_id (zid) and job ID
-                # Server expects files under conversation_id, not report_id
-                s3_key = f"visualizations/{zid}/{job_id}/layer_{layer_id}_datamapplot.html"
+                # Create S3 key using report_id and job ID to avoid exposing ZIDs
+                s3_key = f"visualizations/{report_id}/{job_id}/layer_{layer_id}_datamapplot.html"
                 s3_url = s3_upload_file(viz_file, s3_key)
                 
                 if s3_url:

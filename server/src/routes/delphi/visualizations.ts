@@ -102,10 +102,10 @@ export async function handle_GET_delphi_visualizations(
     const s3Client = new S3Client(s3Config);
     const bucketName = Config.AWS_S3_BUCKET_NAME || "polis-delphi";
 
-    // Define S3 path prefix to search
+    // Define S3 path prefix to search using report_id to avoid exposing ZIDs
     const prefix = jobId
-      ? `visualizations/${conversation_id}/${jobId}/`
-      : `visualizations/${conversation_id}/`;
+      ? `visualizations/${report_id}/${jobId}/`
+      : `visualizations/${report_id}/`;
 
     // Fetch job metadata using the optimized function
     const jobMetadata = await fetchJobMetadata(conversation_id);
@@ -136,7 +136,6 @@ export async function handle_GET_delphi_visualizations(
         message: "Error listing visualizations",
         error: err.message || String(err),
         report_id,
-        conversation_id,
       });
     }
 
@@ -146,7 +145,6 @@ export async function handle_GET_delphi_visualizations(
         status: "success",
         message: "No visualizations found",
         report_id,
-        conversation_id,
         visualizations: [],
         jobs: Object.values(jobMetadata), // Return job metadata even if no visualizations
       });
@@ -243,7 +241,6 @@ export async function handle_GET_delphi_visualizations(
       status: "success",
       message: "Visualizations retrieved successfully",
       report_id,
-      conversation_id,
       jobs: jobsWithVisualizations,
     });
   } catch (err: any) {

@@ -138,6 +138,7 @@ export async function handle_POST_delphi_jobs(
       job_type: job_type,
       priority: parseInt(String(priority), 10),
       conversation_id: String(zid), // Using conversation_id
+      report_id: report_id, // Include report_id for proper S3 paths
       retry_count: 0,
       max_retries: 3,
       timeout_seconds: 7200, // 2 hours default timeout
@@ -177,7 +178,6 @@ export async function handle_POST_delphi_jobs(
       res.json({
         status: "success",
         job_id: job_id,
-        conversation_id: zid,
       });
     } catch (dbError) {
       logger.error(

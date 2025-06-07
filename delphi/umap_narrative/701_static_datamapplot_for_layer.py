@@ -495,7 +495,7 @@ def generate_static_datamapplot(zid, layer_num=0, output_dir=None):
         fig, ax = datamapplot.create_plot(
             document_map,
             label_strings,
-            title=f"Conversation {zid} - Layer {layer_num}",
+            title=f"Layer {layer_num}",
             label_over_points=True,           # Place labels directly over the point clusters
             dynamic_label_size=True,          # Vary label size based on cluster size
             dynamic_label_size_scaling_factor=0.75,
