@@ -374,7 +374,7 @@ const TopicsVizReport = ({ report_id }) => {
             )}
           </div>
           <p className="switcher-description">
-            This map shows how comments cluster by semantic similarity using machine learning. Each colored region represents a topic—comments that share similar themes, language, or subject matter. 
+            Each colored region represents a topic—comments that share similar themes, language, or subject matter. 
             Polis 2 uses advanced NLP embeddings and hierarchical clustering to mathematically identify these topics. Choose your preferred level of detail: finer grained shows specific subtopics, while coarse shows broader themes.
           </p>
           <div className="layer-buttons">
