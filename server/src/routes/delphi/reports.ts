@@ -188,7 +188,7 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
       "unknown_timestamp_prefix"; // For compatibility if needed, but job_id is primary
     logger.info(
       `Found ${
-        Object.keys(reportRuns).length
+        Object.keys(reportsByJobId).length
       } report runs, using most recent from ${mostRecentRunKey}`
     );
 
