@@ -675,7 +675,7 @@ def create_consensus_divisive_datamapplot(zid, layer_num=0, output_dir=None):
                        bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray', boxstyle='round,pad=0.5'))
         
         # Add a title
-        ax.set_title(f'Conversation {zid} - Comments Colored by Consensus/Divisiveness', fontsize=16)
+        ax.set_title(f'Comments Colored by Consensus/Divisiveness', fontsize=16)
         
         # Remove axes
         ax.set_xticks([])
@@ -744,7 +744,7 @@ def create_consensus_divisive_datamapplot(zid, layer_num=0, output_dir=None):
         # Skip cluster labels in this version to focus on the extremity coloring
         
         # Add a title with more explanation
-        ax.set_title(f'Conversation {zid} - Comment Consensus/Divisiveness Map', fontsize=16)
+        ax.set_title(f'Comment Consensus/Divisiveness Map', fontsize=16)
         ax.text(0.5, 0.05, 'Green = Consensus Comments    Yellow = Mixed Opinions    Red = Divisive Comments', 
                 transform=ax.transAxes, ha='center', fontsize=14, 
                 bbox=dict(facecolor='white', alpha=0.7, edgecolor='gray', boxstyle='round,pad=0.5'))
