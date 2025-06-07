@@ -9,6 +9,7 @@ EVōC for clustering, and generates interactive visualizations with topic labeli
 import os
 import sys
 import json
+import uuid # For generating job_id
 import time
 import logging
 import numpy as np
@@ -578,7 +579,8 @@ def process_layers_and_store_characteristics(
     cluster_layers,
     comment_texts,
     output_dir=None,
-    dynamo_storage=None
+    dynamo_storage=None,
+    job_id=None # Added job_id
 ):
     """
     Process layers and store cluster characteristics and enhanced topic names in DynamoDB.
@@ -589,6 +591,7 @@ def process_layers_and_store_characteristics(
         comment_texts: List of comment text strings
         output_dir: Optional directory to save visualization data as JSON
         dynamo_storage: Optional DynamoDBStorage object for storing in DynamoDB
+        job_id: Job ID for this run
         
     Returns:
         Dictionary with layer data including characteristics and enhanced topic names
@@ -631,7 +634,8 @@ def process_layers_and_store_characteristics(
                 conversation_id,
                 cluster_characteristics,
                 layer_idx
-            )
+            ) # job_id is not directly part of characteristics PK, but good to have if we extend
+
             result = dynamo_storage.batch_create_cluster_characteristics(characteristic_models)
             logger.info(f"Stored {result['success']} cluster characteristics with {result['failure']} failures")
     
@@ -910,7 +914,8 @@ def process_layers_and_create_visualizations(
     comment_texts,
     output_dir,
     use_ollama=False,
-    dynamo_storage=None
+        dynamo_storage=None,
+        job_id=None # Added job_id
 ):
     """
     Process layers, store data, and create visualizations.
@@ -924,6 +929,7 @@ def process_layers_and_create_visualizations(
         output_dir: Directory to save visualizations
         use_ollama: Whether to use Ollama for topic naming (deprecated, will be moved to separate script)
         dynamo_storage: Optional DynamoDBStorage object for storing in DynamoDB
+        job_id: Job ID for this run
     """
     # Process layers and store characteristics
     layer_data = process_layers_and_store_characteristics(
@@ -931,7 +937,8 @@ def process_layers_and_create_visualizations(
         cluster_layers,
         comment_texts,
         output_dir=output_dir,
-        dynamo_storage=dynamo_storage
+        dynamo_storage=dynamo_storage,
+        job_id=job_id # Pass job_id
     )
     
     # Create visualizations with basic numeric labels
@@ -980,7 +987,8 @@ def process_layers_and_create_visualizations(
                     conversation_id,
                     cluster_labels,
                     layer_idx,
-                    model_name=model_name  # Model used by Ollama
+                    model_name=model_name,  # Model used by Ollama
+                    job_id=job_id # Pass job_id
                 )
                 result = dynamo_storage.batch_create_llm_topic_names(llm_topic_models)
                 logger.info(f"Stored {result['success']} LLM topic names with {result['failure']} failures")
@@ -1166,6 +1174,11 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False):
     if not comments:
         logger.error("Failed to fetch conversation data.")
         return False
+
+    # Generate a job_id for this pipeline run
+    # If DELPHI_JOB_ID is set (e.g., by a calling script like run_delphi.py), use that.
+    job_id = os.environ.get("DELPHI_JOB_ID", f"pipeline_run_{uuid.uuid4()}")
+    logger.info(f"Using job_id: {job_id} for this pipeline run.")
     
     conversation_id = str(zid)
     conversation_name = metadata.get('conversation_name', f"Conversation {zid}")
@@ -1251,7 +1264,8 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False):
         comment_texts,
         output_dir,
         use_ollama=use_ollama,
-        dynamo_storage=dynamo_storage
+        dynamo_storage=dynamo_storage,
+        job_id=job_id # Pass job_id
     )
     
     # Save metadata

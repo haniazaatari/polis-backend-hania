@@ -458,7 +458,8 @@ class DataConverter:
         layer_id: int,
         cluster_id: int,
         topic_name: str,
-        model_name: str = "unknown"
+        model_name: str = "unknown",
+        job_id: Optional[str] = None  # Added job_id
     ) -> LLMTopicName:
         """
         Create an LLMTopicName model from raw data.
@@ -469,18 +470,26 @@ class DataConverter:
             cluster_id: ID of the cluster
             topic_name: LLM-generated topic name
             model_name: Name of the LLM model used
+            job_id: ID of the job that generated this topic name
             
         Returns:
             LLMTopicName model object
         """
+        if not job_id:
+            # Fallback if job_id is not provided, though it should be
+            logger.warning("job_id not provided to create_llm_topic_name, using 'unknown_job'")
+            job_id = "unknown_job"
+
         # Create the model
         model = LLMTopicName(
             conversation_id=conversation_id,
-            layer_id=layer_id,
+            topic_key=f"{job_id}#{layer_id}#{cluster_id}", # New topic_key format
+            layer_id=layer_id, # Stored for easier filtering if needed, though part of key
             cluster_id=cluster_id,
             topic_name=topic_name,
             model_name=model_name,
-            created_at=datetime.now().isoformat()
+            created_at=datetime.now().isoformat(),
+            job_id=job_id # Store job_id as a top-level attribute
         )
         
         return model
@@ -565,7 +574,8 @@ class DataConverter:
         conversation_id: str,
         topic_names_dict: Dict[str, str],
         layer_id: int,
-        model_name: str = "unknown"
+        model_name: str = "unknown",
+        job_id: Optional[str] = None # Added job_id
     ) -> List[LLMTopicName]:
         """
         Convert batch of LLM-generated topic names from dictionary to model objects.
@@ -575,6 +585,7 @@ class DataConverter:
             topic_names_dict: Dictionary of LLM-generated topic names
             layer_id: Layer ID for the topic names
             model_name: Name of the LLM model used
+            job_id: ID of the job that generated these topic names
             
         Returns:
             List of LLMTopicName model objects
@@ -590,7 +601,8 @@ class DataConverter:
                     layer_id=layer_id,
                     cluster_id=cluster_id,
                     topic_name=topic_name,
-                    model_name=model_name
+                    model_name=model_name,
+                    job_id=job_id
                 )
                 
                 topic_names.append(llm_topic_name)

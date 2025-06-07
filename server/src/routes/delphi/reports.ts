@@ -43,6 +43,7 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
   const requestReportId = req.query.report_id as string;
   const sectionFilter = req.query.section as string;
   const topicKeyFilter = req.query.topic_key as string;
+  const requestedJobId = req.query.job_id as string | undefined; // New: Accept job_id query param
 
   if (!requestReportId) {
     return res.json({
@@ -124,30 +125,67 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
     }
 
     // --- Processing Logic ---
-    const reportRuns: Record<string, any[]> = {};
+    // Group items by their actual job_id
+    const reportsByJobId: Record<string, any[]> = {};
     allItems.forEach((item) => {
-      const timestamp = item.timestamp || "";
-      const runKey = timestamp.substring(0, 16);
-      if (!reportRuns[runKey]) {
-        reportRuns[runKey] = [];
+      const itemJobId =
+        item.job_id ||
+        `unknown_job_${item.timestamp?.substring(0, 10) || "nodate"}`;
+      if (!reportsByJobId[itemJobId]) {
+        reportsByJobId[itemJobId] = [];
       }
-      reportRuns[runKey].push(item);
+      reportsByJobId[itemJobId].push(item);
     });
 
-    const sortedRunKeys = Object.keys(reportRuns).sort((a, b) =>
-      b.localeCompare(a)
-    );
-    if (sortedRunKeys.length === 0) {
+    // Sort job runs by the latest timestamp within each job group (most recent job first)
+    const sortedJobIds = Object.keys(reportsByJobId).sort((jobA, jobB) => {
+      const latestTimestampA = reportsByJobId[jobA].reduce(
+        (latest, item) => (item.timestamp > latest ? item.timestamp : latest),
+        ""
+      );
+      const latestTimestampB = reportsByJobId[jobB].reduce(
+        (latest, item) => (item.timestamp > latest ? item.timestamp : latest),
+        ""
+      );
+      return latestTimestampB.localeCompare(latestTimestampA);
+    });
+
+    if (sortedJobIds.length === 0) {
       return res.json({
         status: "success",
         message: "No report runs found after grouping.",
         request_report_id: requestReportId,
         queried_gsi_report_id: gsiQueryableReportId,
         reports: {},
+        available_runs: [],
       });
     }
-    const mostRecentRunKey = sortedRunKeys[0];
-    const mostRecentItems = reportRuns[mostRecentRunKey] || [];
+
+    let itemsToProcess: any[];
+    let currentRunJobId: string;
+
+    if (requestedJobId) {
+      if (reportsByJobId[requestedJobId]) {
+        itemsToProcess = reportsByJobId[requestedJobId];
+        currentRunJobId = requestedJobId;
+        logger.info(`Processing requested job_id: ${requestedJobId}`);
+      } else {
+        logger.warn(
+          `Requested job_id '${requestedJobId}' not found for report '${gsiQueryableReportId}'. Returning empty.`
+        );
+        itemsToProcess = [];
+        currentRunJobId = requestedJobId; // Still indicate what was requested
+      }
+    } else {
+      // Default to the most recent job run
+      currentRunJobId = sortedJobIds[0];
+      itemsToProcess = reportsByJobId[currentRunJobId] || [];
+      logger.info(`Processing most recent job_id: ${currentRunJobId}`);
+    }
+
+    const mostRecentRunKey =
+      itemsToProcess[0]?.timestamp?.substring(0, 16) ||
+      "unknown_timestamp_prefix"; // For compatibility if needed, but job_id is primary
     logger.info(
       `Found ${
         Object.keys(reportRuns).length
@@ -155,7 +193,7 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
     );
 
     const reportsBySection: Record<string, any> = {};
-    mostRecentItems.forEach((item) => {
+    itemsToProcess.forEach((item) => {
       const rid_section_model = item.rid_section_model || "";
       const parts = rid_section_model.split("#");
       if (parts.length >= 2) {
@@ -169,24 +207,25 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
           timestamp: item.timestamp || "",
           report_data: item.report_data || "",
           errors: item.errors,
+          job_id: item.job_id, // Include job_id in the response for clarity
           metadata: item.metadata || null,
         };
       }
     });
 
-    const allRuns = sortedRunKeys.map((runKey) => {
-      const runItems = reportRuns[runKey];
-      const sampleItem = runItems.length > 0 ? runItems[0] : {};
-      const rid_section_model_parts = sampleItem.rid_section_model?.split("#");
-      const modelFromSample =
-        rid_section_model_parts && rid_section_model_parts.length > 2
-          ? rid_section_model_parts[2]
-          : "unknown";
+    const allRunsList = sortedJobIds.map((jobId) => {
+      const runItems = reportsByJobId[jobId];
+      const latestTimestampInJob = runItems.reduce(
+        (latest, item) => (item.timestamp > latest ? item.timestamp : latest),
+        ""
+      );
+      const modelFromSample = runItems[0]?.model || "unknown";
       return {
-        timestamp: runKey,
+        job_id: jobId,
+        latest_timestamp: latestTimestampInJob,
         model: modelFromSample,
         sectionCount: runItems.length,
-        isCurrent: runKey === mostRecentRunKey,
+        isCurrent: jobId === currentRunJobId,
       };
     });
 
@@ -230,8 +269,8 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
       request_report_id: requestReportId,
       queried_gsi_report_id: gsiQueryableReportId,
       reports: filteredReports,
-      current_run: mostRecentRunKey,
-      available_runs: allRuns,
+      current_job_id: currentRunJobId,
+      available_runs: allRunsList,
     });
   } catch (err: any) {
     logger.error(
