@@ -367,26 +367,25 @@ def s3_upload_file(local_file_path, s3_key):
             ExtraArgs=extra_args
         )
         
-       if endpoint_url:
-        
-            # Generate a URL for the uploaded file
-            if endpoint_url.startswith('http://localhost') or endpoint_url.startswith('http://127.0.0.1'):
-                # For local development with MinIO
-                url = f"{endpoint_url}/{bucket_name}/{s3_key}"
-                # Clean up URL if needed
-                url = url.replace('///', '//')
-            elif 'minio' in endpoint_url:
-                # For Docker container access to MinIO
-                url = f"{endpoint_url}/{bucket_name}/{s3_key}"
-                url = url.replace('///', '//')
-            else:
-                # For AWS S3
-                if endpoint_url.startswith('https://s3.'):
-                    # Standard AWS S3 endpoint
-                    url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
-                else:
-                    # Custom S3 endpoint
+        if endpoint_url:
+                # Generate a URL for the uploaded file
+                if endpoint_url.startswith('http://localhost') or endpoint_url.startswith('http://127.0.0.1'):
+                    # For local development with MinIO
                     url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+                    # Clean up URL if needed
+                    url = url.replace('///', '//')
+                elif 'minio' in endpoint_url:
+                    # For Docker container access to MinIO
+                    url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+                    url = url.replace('///', '//')
+                else:
+                    # For AWS S3
+                    if endpoint_url.startswith('https://s3.'):
+                        # Standard AWS S3 endpoint
+                        url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
+                    else:
+                        # Custom S3 endpoint
+                        url = f"{endpoint_url}/{bucket_name}/{s3_key}"
         else:
             # Custom S3 endpoint
             url = f"{bucket_name}/{s3_key}"

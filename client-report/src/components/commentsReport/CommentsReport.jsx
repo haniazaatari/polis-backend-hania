@@ -108,7 +108,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           // Store run info
           if (response.available_runs) {
             setNarrativeRunInfo({
-              current: response.current_run,
+              current_job_id: response.current_job_id, // Changed from current_run
               available: response.available_runs,
             });
 
@@ -118,7 +118,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                 `Found ${response.available_runs.length} narrative report runs:`,
                 response.available_runs
               );
-              console.log(`Currently showing run from: ${response.current_run}`);
+              console.log(
+                `Currently showing run for job_id: ${response.current_job_id}`
+              );
             }
           }
         }
@@ -676,22 +678,29 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     return (
       <div className="narrative-reports-container">
         {narrativeRunInfo &&
-          narrativeRunInfo.available &&
-          narrativeRunInfo.available.length > 1 && (
-            <div className="run-info-banner">
-              <p>
-                Showing reports from:{" "}
-                <strong>{new Date(narrativeRunInfo.current + ":00Z").toLocaleString()}</strong>
-                {narrativeRunInfo.available.length > 1 && (
-                  <span className="run-info-note">
-                    {" "}
-                    ({narrativeRunInfo.available.length} runs available - showing most recent)
-                  </span>
-                )}
-              </p>
-            </div>
-          )}
-        
+            narrativeRunInfo.available &&
+            narrativeRunInfo.available.length > 0 && (
+              <div className="run-info-banner">
+                <p>
+                  Showing reports for Job ID:{" "}
+                  <strong>{narrativeRunInfo.current_job_id}</strong>
+                  {(() => {
+                    const currentRunDetails = narrativeRunInfo.available.find(
+                      (run) => run.job_id === narrativeRunInfo.current_job_id
+                    );
+                    if (currentRunDetails && currentRunDetails.latest_timestamp) {
+                      return ` (Generated: ${new Date(
+                        currentRunDetails.latest_timestamp
+                      ).toLocaleString()})`;
+                    }
+                    return "";
+                  })()}
+                  . ({narrativeRunInfo.available.length} run
+                  {narrativeRunInfo.available.length !== 1 ? "s" : ""} available - showing most
+                  recent)
+                </p>
+              </div>
+            )}
         {/* Report section dropdown */}
         <div className="report-selector">
           <select 

@@ -66,6 +66,7 @@ export function handle_GET_delphi(req: Request, res: Response) {
 
   // Get report_id from request
   const report_id = req.query.report_id as string;
+  const requested_job_id = req.query.job_id as string | undefined; // Optional job_id to filter by
 
   if (!report_id) {
     return res.json({
@@ -199,30 +200,59 @@ export function handle_GET_delphi(req: Request, res: Response) {
             // Process results - organize topics by run, then by layer, then by cluster
             // Group by creation timestamp and model to identify different runs
             const items = data.Items;
+            let filteredItems = items;
 
-            // First group by model and creation date (truncate to day for grouping)
-            const runGroups: Record<string, any[]> = {};
+            // If a specific job_id is requested, filter items by it
+            // The job_id is the first part of the topic_key
+            if (requested_job_id) {
+              logger.info(`Filtering topics for job_id: ${requested_job_id}`);
+              filteredItems = items.filter((item) => {
+                const topicKey = (item.topic_key as string) || "";
+                return topicKey.startsWith(`${requested_job_id}#`);
+              });
+              logger.info(
+                `Found ${filteredItems.length} items matching job_id: ${requested_job_id}`
+              );
+            }
 
-            items.forEach((item) => {
+            // Group by job_id (extracted from topic_key)
+            const runGroups: Record<string, any[]> = {}; // Key is job_id
+
+            filteredItems.forEach((item) => {
               const modelName = item.model_name || "unknown";
               const createdAt = item.created_at || "";
-              const createdDate = createdAt.substring(0, 10); // Take just the date part YYYY-MM-DD
+              const topicKey = (item.topic_key as string) || "";
 
-              // Create a run key based on model and creation date
-              const runKey = `${modelName}_${createdDate}`;
+              // Extract job_id from topic_key (e.g., "job123#0#5")
+              const jobKeyParts = topicKey.split("#");
+              const item_job_id =
+                jobKeyParts.length > 0
+                  ? jobKeyParts[0]
+                  : `unknown_job_${createdAt.substring(0, 10)}`;
 
-              if (!runGroups[runKey]) {
-                runGroups[runKey] = [];
+              if (!runGroups[item_job_id]) {
+                runGroups[item_job_id] = [];
               }
 
-              runGroups[runKey].push(item);
+              runGroups[item_job_id].push(item);
             });
 
             // Now organize each run into layers and clusters
             const allRuns: Record<string, any> = {};
 
             Object.entries(runGroups).forEach(([runKey, runItems]) => {
+              // runKey is now job_id
               const topicsByLayer: Record<string, Record<string, any>> = {};
+
+              // Sort items within the run by layer_id and then cluster_id for consistent ordering
+              runItems.sort((a, b) => {
+                const layerA = parseInt(a.layer_id || "0");
+                const layerB = parseInt(b.layer_id || "0");
+                if (layerA !== layerB) return layerA - layerB;
+                const clusterA = parseInt(a.cluster_id || "0");
+                const clusterB = parseInt(b.cluster_id || "0");
+                return clusterA - clusterB;
+              });
 
               // Process each item in this run
               runItems.forEach((item) => {
@@ -248,8 +278,9 @@ export function handle_GET_delphi(req: Request, res: Response) {
 
               // Add run with metadata
               allRuns[runKey] = {
+                job_id: runKey, // runKey is the job_id
                 model_name: sampleItem.model_name,
-                created_date: sampleItem.created_at?.substring(0, 10),
+                created_at: sampleItem.created_at, // Keep full timestamp for sorting
                 topics_by_layer: topicsByLayer,
                 item_count: runItems.length,
               };
@@ -258,9 +289,9 @@ export function handle_GET_delphi(req: Request, res: Response) {
             // Return all runs, with the most recent runs first
             const sortedRuns = Object.entries(allRuns)
               .sort(([keyA, runA], [keyB, runB]) => {
-                // Sort by created_date in descending order (newest first)
-                const dateA = runA.created_date || "";
-                const dateB = runB.created_date || "";
+                // Sort by created_at (full timestamp) in descending order (newest first)
+                const dateA = runA.created_at || "";
+                const dateB = runB.created_at || "";
                 return dateB.localeCompare(dateA);
               })
               .reduce((acc, [key, value]) => {
