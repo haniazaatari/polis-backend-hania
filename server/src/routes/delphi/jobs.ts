@@ -177,7 +177,6 @@ export async function handle_POST_delphi_jobs(
       res.json({
         status: "success",
         job_id: job_id,
-        conversation_id: zid,
       });
     } catch (dbError) {
       logger.error(

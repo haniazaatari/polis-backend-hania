@@ -142,7 +142,6 @@ export async function handle_POST_delphi_batch_reports(
       status: "success",
       message: "Batch report generation job submitted",
       report_id: report_id,
-      conversation_id: conversation_id,
       job_id: job_id,
       batch_id: job_id, // Include batch_id field for frontend compatibility
       model: model,

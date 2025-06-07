@@ -136,7 +136,6 @@ export async function handle_GET_delphi_visualizations(
         message: "Error listing visualizations",
         error: err.message || String(err),
         report_id,
-        conversation_id,
       });
     }
 
@@ -146,7 +145,6 @@ export async function handle_GET_delphi_visualizations(
         status: "success",
         message: "No visualizations found",
         report_id,
-        conversation_id,
         visualizations: [],
         jobs: Object.values(jobMetadata), // Return job metadata even if no visualizations
       });
@@ -243,7 +241,6 @@ export async function handle_GET_delphi_visualizations(
       status: "success",
       message: "Visualizations retrieved successfully",
       report_id,
-      conversation_id,
       jobs: jobsWithVisualizations,
     });
   } catch (err: any) {
