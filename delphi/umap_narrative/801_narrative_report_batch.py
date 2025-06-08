@@ -9,13 +9,14 @@ This script is an optimized version of 800_report_topic_clusters.py that:
 4. Provides a way to check batch job status
 
 Usage:
-    python 801_narrative_report_batch.py --conversation_id CONVERSATION_ID [--model MODEL] [--no-cache]
+    python 801_narrative_report_batch.py --conversation_id CONVERSATION_ID [--model MODEL] [--no-cache] [--layers LAYER_NUMBERS...]
 
 Args:
     --conversation_id: Conversation ID/zid
     --model: LLM model to use (defaults to ANTHROPIC_MODEL env var)
     --no-cache: Ignore cached report data
     --max-batch-size: Maximum number of topics to include in a single batch (default: 20)
+    --layers: Specific layer numbers to process (e.g., --layers 0 1 2). If not specified, all layers will be processed.
 """
 
 import os
@@ -207,7 +208,7 @@ class PolisConverter:
 class BatchReportGenerator:
     """Generate batch reports for Polis conversations."""
 
-    def __init__(self, conversation_id, model=None, no_cache=False, max_batch_size=20, job_id=None):
+    def __init__(self, conversation_id, model=None, no_cache=False, max_batch_size=20, job_id=None, layers=None):
         """Initialize the batch report generator."""
         self.conversation_id = str(conversation_id)
         if not model:
@@ -217,6 +218,7 @@ class BatchReportGenerator:
         self.model = model
         self.no_cache = no_cache
         self.max_batch_size = max_batch_size
+        self.layers = layers  # List of layers to process, or None for all layers
         self.job_id = job_id or os.environ.get('DELPHI_JOB_ID')
         self.report_id = os.environ.get('DELPHI_REPORT_ID')
         self.postgres_client = PostgresClient()
@@ -270,17 +272,21 @@ class BatchReportGenerator:
             # Load cluster assignments from DynamoDB
             cluster_map = self.load_comment_clusters_from_dynamodb(self.conversation_id)
             
-            # Enrich comments with cluster assignments
+            # Enrich comments with cluster assignments from all layers
             enriched_count = 0
+            total_assignments = 0
             for comment in processed_comments:
                 comment_id = str(comment.get('comment_id', ''))
                 if comment_id in cluster_map:
-                    comment['layer0_cluster_id'] = cluster_map[comment_id]
+                    # Add cluster assignments for all layers
+                    for layer_id, cluster_id in cluster_map[comment_id].items():
+                        comment[f'layer{layer_id}_cluster_id'] = cluster_id
+                        total_assignments += 1
                     enriched_count += 1
             
             # Log cluster assignment results
             if enriched_count > 0:
-                logger.info(f"Enriched {enriched_count} comments with cluster assignments from DynamoDB")
+                logger.info(f"Enriched {enriched_count} comments with {total_assignments} total cluster assignments across all layers")
             else:
                 logger.warning("No comments could be enriched with cluster assignments")
             
@@ -303,6 +309,7 @@ class BatchReportGenerator:
     def load_comment_clusters_from_dynamodb(self, conversation_id):
         """
         Load cluster assignments for comments from DynamoDB using an efficient Query.
+        Returns a nested structure: {comment_id: {layer_id: cluster_id, ...}}
         """
         try:
             # Use the shared dynamodb resource
@@ -313,6 +320,8 @@ class BatchReportGenerator:
 
             # --- OPTIMIZATION: Replace Scan with Query and handle pagination ---
             last_evaluated_key = None
+            available_layers = set()
+            
             while True:
                 query_kwargs = {
                     'KeyConditionExpression': boto3.dynamodb.conditions.Key('conversation_id').eq(str(conversation_id))
@@ -324,106 +333,189 @@ class BatchReportGenerator:
                 
                 for item in response.get('Items', []):
                     comment_id = item.get('comment_id')
-                    layer0_cluster_id = item.get('layer0_cluster_id')
-                    if comment_id is not None and layer0_cluster_id is not None:
-                        cluster_map[str(comment_id)] = layer0_cluster_id
+                    if comment_id is not None:
+                        comment_id_str = str(comment_id)
+                        if comment_id_str not in cluster_map:
+                            cluster_map[comment_id_str] = {}
+                        
+                        # Extract all layer cluster assignments
+                        for key, value in item.items():
+                            if key.startswith('layer') and key.endswith('_cluster_id') and value is not None:
+                                # Extract layer number from key like 'layer0_cluster_id'
+                                layer_num_str = key.replace('layer', '').replace('_cluster_id', '')
+                                try:
+                                    layer_num = int(layer_num_str)
+                                    cluster_map[comment_id_str][layer_num] = value
+                                    available_layers.add(layer_num)
+                                except ValueError:
+                                    # Skip invalid layer keys
+                                    continue
                 
                 last_evaluated_key = response.get('LastEvaluatedKey')
                 if not last_evaluated_key:
                     break
 
-            logger.info(f"Loaded {len(cluster_map)} cluster assignments from DynamoDB")
+            logger.info(f"Loaded {len(cluster_map)} comment cluster assignments across {len(available_layers)} layers: {sorted(available_layers)}")
             return cluster_map
         except Exception as e:
             logger.error(f"Error loading cluster assignments from DynamoDB: {e}")
             return {}
     # (Inside the BatchReportGenerator class)
     async def get_topics(self):
-        """Get topics for the conversation from DynamoDB efficiently."""
+        """Get topics for the conversation from DynamoDB efficiently across all layers."""
         try:
             topic_names_table = self.dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
-            topic_names_response = topic_names_table.query(
-                KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id),
-                FilterExpression=boto3.dynamodb.conditions.Attr('layer_id').eq(0) # Filter for layer_id after query
-            )
-            topic_names_items = topic_names_response.get('Items', [])
-            logger.info(f"Found {len(topic_names_items)} layer 0 topic names in LLMTopicNames")
+            
+            # Load cluster assignments for all layers
             all_clusters = await asyncio.to_thread(self.load_comment_clusters_from_dynamodb, self.conversation_id)
             
-            topic_comments = defaultdict(list)
-            for comment_id, cluster_id in all_clusters.items():
-                topic_comments[cluster_id].append(int(comment_id))
-            logger.info(f"Collected comments for {len(topic_comments)} clusters")
-
-            topics = []
-            for topic_item in topic_names_items:
-                cluster_id = topic_item.get('cluster_id')
-                topic_name = topic_item.get('topic_name', f"Topic {cluster_id}")
-                
-                if cluster_id is not None:
-                    cluster_response = self.dynamodb.Table('Delphi_CommentClustersStructureKeywords').query(
-                        KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id) &
-                                            boto3.dynamodb.conditions.Key('cluster_key').eq(f'layer0_{cluster_id}')
-                    )
-                    sample_comments = []
-                    cluster_response = self.dynamodb.Table('Delphi_CommentClustersStructureKeywords').query(
-                        KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id) &
-                                             boto3.dynamodb.conditions.Key('cluster_key').eq(f'layer0_{cluster_id}')
-                    )
-                    
-                    if cluster_response.get('Items'):
-                        cluster_item = cluster_response.get('Items')[0]
-                        if 'sample_comments' in cluster_item:
-                            if isinstance(cluster_item['sample_comments'], list):
-                                sample_comments = cluster_item['sample_comments']
-                            elif isinstance(cluster_item['sample_comments'], dict) and 'L' in cluster_item['sample_comments']:
-                                for comment in cluster_item['sample_comments']['L']:
-                                    if 'S' in comment:
-                                        sample_comments.append(comment['S'])
-                    
-                    # Get topic_key - this is required for stable mapping
-                    topic_key = topic_item.get('topic_key')
-                    if not topic_key:
-                        logger.error(f"Missing topic_key for cluster {cluster_id} in conversation {self.conversation_id}")
-                        raise ValueError(f"topic_key is required but missing for cluster {cluster_id}")
-                    
-                    # Create topic entry
-                    
-                    topic = {
-                        "cluster_id": cluster_id,
-                        "name": topic_name,
-                        "topic_key": topic_item.get('topic_key'),
-                        "citations": topic_comments.get(cluster_id, []),
-                        "sample_comments": sample_comments
-                    }
-                    topics.append(topic)
+            # Determine which layers to process
+            available_layers = set()
+            for comment_clusters in all_clusters.values():
+                available_layers.update(comment_clusters.keys())
             
-            logger.info(f"Created {len(topics)} topics for conversation {self.conversation_id}")
-            topics.sort(key=lambda x: len(x['citations']), reverse=True)
-            return topics
+            layers_to_process = sorted(available_layers)
+            if self.layers is not None:
+                # Filter to only requested layers
+                layers_to_process = [layer for layer in layers_to_process if layer in self.layers]
+            
+            logger.info(f"Processing layers: {layers_to_process}")
+            
+            all_topics = []
+            
+            for layer_id in layers_to_process:
+                logger.info(f"Processing layer {layer_id}")
+                
+                # Query topics for this layer
+                topic_names_response = topic_names_table.query(
+                    KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id),
+                    FilterExpression=boto3.dynamodb.conditions.Attr('layer_id').eq(layer_id)
+                )
+                topic_names_items = topic_names_response.get('Items', [])
+                logger.info(f"Found {len(topic_names_items)} topic names for layer {layer_id}")
+                
+                # Build topic comments map for this layer
+                topic_comments = defaultdict(list)
+                for comment_id, comment_clusters in all_clusters.items():
+                    if layer_id in comment_clusters:
+                        cluster_id = comment_clusters[layer_id]
+                        topic_comments[cluster_id].append(int(comment_id))
+                
+                logger.info(f"Collected comments for {len(topic_comments)} clusters in layer {layer_id}")
+
+                # Process each topic in this layer
+                for topic_item in topic_names_items:
+                    cluster_id = topic_item.get('cluster_id')
+                    topic_name = topic_item.get('topic_name', f"Topic {cluster_id}")
+                    
+                    if cluster_id is not None:
+                        # Get sample comments from structure table
+                        cluster_response = self.dynamodb.Table('Delphi_CommentClustersStructureKeywords').query(
+                            KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id) &
+                                                boto3.dynamodb.conditions.Key('cluster_key').eq(f'layer{layer_id}_{cluster_id}')
+                        )
+                        
+                        sample_comments = []
+                        if cluster_response.get('Items'):
+                            cluster_item = cluster_response.get('Items')[0]
+                            if 'sample_comments' in cluster_item:
+                                if isinstance(cluster_item['sample_comments'], list):
+                                    sample_comments = cluster_item['sample_comments']
+                                elif isinstance(cluster_item['sample_comments'], dict) and 'L' in cluster_item['sample_comments']:
+                                    for comment in cluster_item['sample_comments']['L']:
+                                        if 'S' in comment:
+                                            sample_comments.append(comment['S'])
+                        
+                        # Get topic_key - this is required for stable mapping
+                        topic_key = topic_item.get('topic_key')
+                        if not topic_key:
+                            logger.error(f"Missing topic_key for cluster {cluster_id} in layer {layer_id} of conversation {self.conversation_id}")
+                            raise ValueError(f"topic_key is required but missing for layer {layer_id} cluster {cluster_id}")
+                        
+                        # Create topic entry with layer information
+                        topic = {
+                            "layer_id": layer_id,
+                            "cluster_id": cluster_id,
+                            "name": topic_name,
+                            "topic_key": topic_key,
+                            "citations": topic_comments.get(cluster_id, []),
+                            "sample_comments": sample_comments
+                        }
+                        all_topics.append(topic)
+            
+            # Add global sections (not tied to specific layers)
+            global_sections = [
+                {
+                    "section_type": "global",
+                    "name": "groups",
+                    "topic_key": "global_groups",
+                    "description": "Comments that divide opinion groups",
+                    "filter_type": "comment_extremity",
+                    "filter_threshold": 1.0,
+                    "citations": [],  # Will be populated by filtering logic
+                    "sample_comments": []
+                },
+                {
+                    "section_type": "global", 
+                    "name": "group_informed_consensus",
+                    "topic_key": "global_group_informed_consensus",
+                    "description": "Comments with broad cross-group agreement",
+                    "filter_type": "group_aware_consensus",
+                    "filter_threshold": "dynamic",  # Based on group count
+                    "citations": [],  # Will be populated by filtering logic
+                    "sample_comments": []
+                },
+                {
+                    "section_type": "global",
+                    "name": "uncertainty", 
+                    "topic_key": "global_uncertainty",
+                    "description": "Comments with high uncertainty/unsure responses",
+                    "filter_type": "uncertainty_ratio",
+                    "filter_threshold": 0.2,
+                    "citations": [],  # Will be populated by filtering logic  
+                    "sample_comments": []
+                }
+            ]
+            
+            all_topics.extend(global_sections)
+            logger.info(f"Created {len(all_topics)} sections total: {len(all_topics) - len(global_sections)} layer topics + {len(global_sections)} global sections")
+            
+            # Sort: global sections first, then by layer and citation count
+            all_topics.sort(key=lambda x: (
+                0 if x.get('section_type') == 'global' else 1,  # Global sections first
+                x.get('layer_id', -1),  # Then by layer
+                -len(x.get('citations', []))  # Then by citation count descending
+            ))
+            return all_topics
         
         except Exception as e:
             logger.error(f"Error getting topics: {str(e)}")
             logger.error(traceback.format_exc())
             return []
-    def filter_topics(self, comment, topic_cluster_id=None, topic_citations=None, sample_comments=None):
-        """Filter for comments that are part of a specific topic."""
+    def filter_topics(self, comment, topic_cluster_id=None, topic_layer_id=None, topic_citations=None, sample_comments=None, filter_type=None, filter_threshold=None):
+        """Filter for comments that are part of a specific topic or meet global section criteria."""
         # Get comment ID
         comment_id = comment.get('comment_id')
         if not comment_id:
             return False
         
-        # Check if we have a specific cluster ID to filter by
-        if topic_cluster_id is not None:
-            layer0_cluster_id = comment.get('layer0_cluster_id')
-            if layer0_cluster_id is not None:
+        # Handle global section filtering
+        if filter_type is not None:
+            return self._apply_global_filter(comment, filter_type, filter_threshold)
+        
+        # Handle layer-specific topic filtering (existing logic)
+        if topic_cluster_id is not None and topic_layer_id is not None:
+            # Get the cluster ID for the specified layer
+            layer_cluster_key = f'layer{topic_layer_id}_cluster_id'
+            comment_cluster_id = comment.get(layer_cluster_key)
+            if comment_cluster_id is not None:
                 # Debug logging for cluster 0
                 if str(topic_cluster_id) == "0" and comment_id in [1, 2, 3]:  # Log first few comments
-                    logger.info(f"DEBUG: Checking comment {comment_id} - layer0_cluster_id={layer0_cluster_id}, topic_cluster_id={topic_cluster_id}")
-                    logger.info(f"DEBUG: String comparison: '{str(layer0_cluster_id)}' == '{str(topic_cluster_id)}' = {str(layer0_cluster_id) == str(topic_cluster_id)}")
+                    logger.info(f"DEBUG: Checking comment {comment_id} - layer{topic_layer_id}_cluster_id={comment_cluster_id}, topic_cluster_id={topic_cluster_id}")
+                    logger.info(f"DEBUG: String comparison: '{str(comment_cluster_id)}' == '{str(topic_cluster_id)}' = {str(comment_cluster_id) == str(topic_cluster_id)}")
                 
                 # Simple string comparison is more reliable across different numeric types
-                if str(layer0_cluster_id) == str(topic_cluster_id):
+                if str(comment_cluster_id) == str(topic_cluster_id):
                     return True
                 
         # Check if this comment ID is in our topic citations
@@ -449,6 +541,201 @@ class BatchReportGenerator:
         
         return False
     
+    def _apply_global_filter(self, comment, filter_type, filter_threshold):
+        """
+        Apply global section filtering based on Polis statistical metrics.
+        
+        Args:
+            comment: Comment data dictionary
+            filter_type: Type of filter ('comment_extremity', 'group_aware_consensus', 'uncertainty_ratio')
+            filter_threshold: Threshold value for filtering (or 'dynamic' for group_aware_consensus)
+            
+        Returns:
+            Boolean indicating whether comment passes the filter
+        """
+        try:
+            if filter_type == "comment_extremity":
+                # Filter for comments that divide opinion groups (extremity > 1.0)
+                extremity = comment.get('comment_extremity', 0)
+                return extremity > filter_threshold
+                
+            elif filter_type == "group_aware_consensus":
+                # Filter for comments with broad cross-group agreement
+                # Uses dynamic thresholds based on number of groups
+                consensus = comment.get('group_aware_consensus', 0)
+                num_groups = comment.get('num_groups', 2)
+                
+                # Get dynamic threshold based on group count (matches Node.js logic)
+                if filter_threshold == "dynamic":
+                    if num_groups == 2:
+                        threshold = 0.7
+                    elif num_groups == 3:
+                        threshold = 0.47
+                    elif num_groups == 4:
+                        threshold = 0.32
+                    else:  # 5+ groups
+                        threshold = 0.24
+                else:
+                    threshold = filter_threshold
+                    
+                return consensus > threshold
+                
+            elif filter_type == "uncertainty_ratio":
+                # Filter for comments with high uncertainty/unsure responses (>= 20% pass votes)
+                passes = comment.get('passes', 0)
+                votes = comment.get('votes', 0)
+                
+                if votes == 0:
+                    return False
+                    
+                uncertainty_ratio = passes / votes
+                return uncertainty_ratio >= filter_threshold
+                
+            else:
+                logger.warning(f"Unknown filter type: {filter_type}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error applying global filter {filter_type}: {str(e)}")
+            return False
+    
+    def _get_dynamic_comment_limit(self, layer_id=None, total_layers=None, comment_count=None, filter_type=None):
+        """
+        Calculate dynamic comment limit based on layer granularity and conversation size.
+        Implements the fractal approach where coarse layers get fewer, higher quality comments.
+        
+        Args:
+            layer_id: Current layer ID (None for global sections)
+            total_layers: Total number of available layers  
+            comment_count: Total number of comments in conversation
+            filter_type: Type of filter (for global sections)
+            
+        Returns:
+            Integer comment limit for this section
+        """
+        try:
+            # Base limits for different categories
+            base_limits = {
+                "global_sections": 50,   # Fixed limit for global sections
+                "fine_layers": 100,      # More comments for specific topics (layer 0)
+                "medium_layers": 75,     # Balanced approach (middle layers)
+                "coarse_layers": 50      # Fewer, highest quality comments (top layer)
+            }
+            
+            # Determine category
+            if filter_type is not None:
+                # This is a global section
+                category = "global_sections"
+            elif layer_id is not None and total_layers is not None:
+                # This is a layer-specific topic
+                if layer_id == 0:
+                    category = "fine_layers"  # Most specific layer
+                elif layer_id == total_layers - 1:
+                    category = "coarse_layers"  # Most general layer
+                else:
+                    category = "medium_layers"  # Middle layers
+            else:
+                # Fallback to medium limit
+                category = "medium_layers"
+            
+            # Get base limit
+            limit = base_limits[category]
+            
+            # Scale down for very large conversations to manage token usage
+            if comment_count is not None:
+                if comment_count > 10000:
+                    # Halve limits for huge conversations (>10k comments)
+                    limit = int(limit * 0.5)
+                elif comment_count > 5000:
+                    # Reduce by 25% for large conversations (5k-10k comments)
+                    limit = int(limit * 0.75)
+                elif comment_count > 2000:
+                    # Reduce by 10% for medium-large conversations (2k-5k comments)
+                    limit = int(limit * 0.9)
+            
+            # Ensure minimum limit
+            limit = max(limit, 10)
+            
+            logger.debug(f"Dynamic comment limit: category={category}, base={base_limits[category]}, "
+                        f"final={limit}, comment_count={comment_count}, layer_id={layer_id}")
+            
+            return limit
+            
+        except Exception as e:
+            logger.error(f"Error calculating dynamic comment limit: {str(e)}")
+            # Fallback to conservative limit
+            return 50
+    
+    def _select_high_quality_comments(self, comments, limit, filter_type=None):
+        """
+        Select the highest quality comments based on Polis statistical metrics.
+        
+        Args:
+            comments: List of comment dictionaries
+            limit: Maximum number of comments to select
+            filter_type: Type of filter being applied (affects sorting priority)
+            
+        Returns:
+            List of selected high-quality comments
+        """
+        if len(comments) <= limit:
+            return comments
+            
+        try:
+            # Create sorting key based on filter type and available metrics
+            def get_sort_key(comment):
+                # Base score starts with vote count (engagement indicator)
+                votes = comment.get('votes', 0)
+                vote_score = int(votes) if isinstance(votes, (int, float)) else 0
+                
+                # Add metric-specific scoring
+                if filter_type == "comment_extremity":
+                    # For extremity filtering, prioritize highly divisive comments
+                    extremity = comment.get('comment_extremity', 0)
+                    metric_score = extremity * 1000  # Scale up for sorting
+                elif filter_type == "group_aware_consensus":
+                    # For consensus filtering, prioritize high agreement comments
+                    consensus = comment.get('group_aware_consensus', 0)
+                    metric_score = consensus * 1000  # Scale up for sorting
+                elif filter_type == "uncertainty_ratio":
+                    # For uncertainty filtering, prioritize comments with high pass rates
+                    passes = comment.get('passes', 0)
+                    total_votes = comment.get('votes', 1)
+                    uncertainty = passes / max(total_votes, 1)
+                    metric_score = uncertainty * 1000  # Scale up for sorting
+                else:
+                    # For topic filtering, use a combination of votes and engagement
+                    agrees = comment.get('agrees', 0)
+                    disagrees = comment.get('disagrees', 0)
+                    total_engagement = int(agrees) + int(disagrees) if isinstance(agrees, (int, float)) and isinstance(disagrees, (int, float)) else 0
+                    metric_score = total_engagement
+                
+                # Combine scores (metric score is primary, vote count is secondary)
+                return (metric_score, vote_score)
+            
+            # Sort comments by quality score (descending)
+            sorted_comments = sorted(comments, key=get_sort_key, reverse=True)
+            
+            # Select top comments up to limit
+            selected = sorted_comments[:limit]
+            
+            logger.info(f"Selected {len(selected)} high-quality comments from {len(comments)} "
+                       f"(filter_type={filter_type}, limit={limit})")
+            
+            return selected
+            
+        except Exception as e:
+            logger.error(f"Error selecting high-quality comments: {str(e)}")
+            # Fallback to simple vote-based selection
+            try:
+                sorted_comments = sorted(comments, 
+                                       key=lambda c: int(c.get('votes', 0)) if isinstance(c.get('votes'), (int, float)) else 0, 
+                                       reverse=True)
+                return sorted_comments[:limit]
+            except Exception:
+                # Last resort: return first N comments
+                return comments[:limit]
+    
     async def get_comments_as_xml(self, filter_func=None, filter_args=None):
         """Get comments as XML, optionally filtered."""
         try:
@@ -468,12 +755,54 @@ class BatchReportGenerator:
                 else:
                     filtered_comments = [c for c in filtered_comments if filter_func(c)]
             
-            # Limit the number of comments for topic reports to avoid "Too many comments" error
-            if filter_func == self.filter_topics and len(filtered_comments) > 100:
-                logger.info(f"Limiting topic comments from {len(filtered_comments)} to 100")
-                # Sort by votes to include the most significant comments - use safer access for votes
-                filtered_comments.sort(key=lambda c: int(c.get('votes', 0)) if isinstance(c.get('votes'), (int, float)) else 0, reverse=True)
-                filtered_comments = filtered_comments[:100]
+            # Apply dynamic comment limiting with intelligent selection
+            if filter_func == self.filter_topics and len(filtered_comments) > 0:
+                # Get context for dynamic limit calculation
+                total_comment_count = len(data["processed_comments"])
+                
+                # Extract layer and filter information from filter_args
+                layer_id = None
+                total_layers = None
+                filter_type = None
+                
+                if filter_args:
+                    layer_id = filter_args.get('topic_layer_id')
+                    filter_type = filter_args.get('filter_type')
+                    
+                    # Estimate total layers from conversation data (could be improved)
+                    # For now, we'll determine this dynamically or use a reasonable default
+                    if layer_id is not None:
+                        # Try to determine total layers from available cluster data
+                        # This is a heuristic - in practice you might want to pass this explicitly
+                        total_layers = max(layer_id + 1, 3)  # Assume at least 3 layers if we have layer data
+                
+                # Calculate dynamic limit
+                comment_limit = self._get_dynamic_comment_limit(
+                    layer_id=layer_id,
+                    total_layers=total_layers, 
+                    comment_count=total_comment_count,
+                    filter_type=filter_type
+                )
+                
+                # Apply intelligent comment selection if we exceed the limit
+                if len(filtered_comments) > comment_limit:
+                    logger.info(f"Applying dynamic comment limit: {len(filtered_comments)} -> {comment_limit} "
+                               f"(layer_id={layer_id}, filter_type={filter_type}, total_comments={total_comment_count})")
+                    
+                    # Use intelligent selection based on Polis metrics
+                    filtered_comments = self._select_high_quality_comments(
+                        filtered_comments, 
+                        comment_limit, 
+                        filter_type=filter_type
+                    )
+                else:
+                    logger.info(f"No limiting needed: {len(filtered_comments)} comments <= limit of {comment_limit}")
+            else:
+                # For non-topic filtering, use a conservative limit to avoid token issues
+                max_comments = 100
+                if len(filtered_comments) > max_comments:
+                    logger.info(f"Applying conservative limit: {len(filtered_comments)} -> {max_comments}")
+                    filtered_comments = self._select_high_quality_comments(filtered_comments, max_comments)
             
             # Convert to XML
             xml = PolisConverter.convert_to_xml(filtered_comments)
@@ -520,19 +849,43 @@ class BatchReportGenerator:
         # For each topic, prepare a prompt and add it to the batch
         for topic in topics:
             topic_name = topic['name']
-            topic_cluster_id = topic['cluster_id']
             topic_key = topic['topic_key']  # Use the stable topic_key from DynamoDB
             section_name = topic_key  # Use topic_key directly as section name
             
-            # Log the mapping for clarity
-            logger.info(f"Topic mapping - cluster_id: {topic_cluster_id}, topic_name: {topic_name}, topic_key: {topic_key}, section_name: {section_name}")
+            # Check if this is a global section or layer-specific topic
+            is_global_section = topic.get('section_type') == 'global'
             
-            # Create filter for this topic
-            filter_args = {
-                'topic_cluster_id': topic_cluster_id,
-                'topic_citations': topic.get('citations', []),
-                'sample_comments': topic.get('sample_comments', [])
-            }
+            if is_global_section:
+                # Global section - use filter_type and filter_threshold
+                filter_type = topic.get('filter_type')
+                filter_threshold = topic.get('filter_threshold')
+                topic_cluster_id = None
+                topic_layer_id = None
+                
+                # Create filter args for global section
+                filter_args = {
+                    'filter_type': filter_type,
+                    'filter_threshold': filter_threshold
+                }
+                
+                logger.info(f"Global section mapping - name: {topic_name}, filter_type: {filter_type}, "
+                           f"filter_threshold: {filter_threshold}, topic_key: {topic_key}")
+            else:
+                # Layer-specific topic - use cluster_id and layer_id
+                topic_cluster_id = topic['cluster_id']
+                topic_layer_id = topic['layer_id']
+                
+                # Create filter args for layer-specific topic
+                filter_args = {
+                    'topic_cluster_id': topic_cluster_id,
+                    'topic_layer_id': topic_layer_id,
+                    'topic_citations': topic.get('citations', []),
+                    'sample_comments': topic.get('sample_comments', [])
+                }
+                
+                logger.info(f"Topic mapping - cluster_id: {topic_cluster_id}, layer_id: {topic_layer_id}, "
+                           f"topic_name: {topic_name}, topic_key: {topic_key}")
+            
             
             # Get comments as XML
             structured_comments = await self.get_comments_as_xml(self.filter_topics, filter_args)
@@ -1048,6 +1401,8 @@ async def main():
                         help='Ignore cached report data')
     parser.add_argument('--max-batch-size', type=int, default=5,
                         help='Maximum number of topics to include in a single batch (default: 5)')
+    parser.add_argument('--layers', type=int, nargs='+', default=None,
+                        help='Specific layer numbers to process (e.g., --layers 0 1 2). If not specified, all layers will be processed.')
     args = parser.parse_args()
 
     # Get environment variables for job
@@ -1074,6 +1429,10 @@ async def main():
     logger.info(f"- Model: {args.model}")
     logger.info(f"- Cache: {'disabled' if args.no_cache else 'enabled'}")
     logger.info(f"- Max batch size: {args.max_batch_size}")
+    if args.layers:
+        logger.info(f"- Layers to process: {args.layers}")
+    else:
+        logger.info(f"- Layers to process: all available layers")
     if job_id:
         logger.info(f"- Job ID: {job_id}")
     if report_id:
@@ -1085,7 +1444,8 @@ async def main():
         model=args.model,
         no_cache=args.no_cache,
         max_batch_size=args.max_batch_size,
-        job_id=job_id
+        job_id=job_id,
+        layers=args.layers
     )
 
     # Process reports

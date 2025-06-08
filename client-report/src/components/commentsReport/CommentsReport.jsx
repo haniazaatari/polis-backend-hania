@@ -31,6 +31,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   const [batchReportResult, setBatchReportResult] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState(0);
   const [selectedReportSection, setSelectedReportSection] = useState("");
+  const [showGlobalSections, setShowGlobalSections] = useState(false);
 
   useEffect(() => {
     if (!report_id) return;
@@ -305,64 +306,92 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
       return [];
     }
 
-    // Order of sections to display
-    const sectionOrder = ["group_informed_consensus", "groups", "uncertainty"];
-    
-    // Topic sections will have names in format: layer0_0, layer0_1, etc.
-    const topicSections = Object.keys(narrativeReports)
-      .filter((key) => key.match(/^layer\d+_\d+$/))
-      .sort((a, b) => {
-        // Parse layer and topic numbers for proper numeric sorting
-        const [layerA, topicA] = a.match(/layer(\d+)_(\d+)/).slice(1).map(Number);
-        const [layerB, topicB] = b.match(/layer(\d+)_(\d+)/).slice(1).map(Number);
-        
-        // Sort by layer first, then by topic number
-        if (layerA !== layerB) return layerA - layerB;
-        return topicA - topicB;
-      });
+    if (showGlobalSections) {
+      // Show only global sections
+      const globalSections = [
+        "global_groups", 
+        "global_group_informed_consensus", 
+        "global_uncertainty",
+        "group_informed_consensus", 
+        "groups", 
+        "uncertainty"
+      ];
+      
+      const orderedSections = globalSections;
+      
+      return orderedSections
+        .filter(sectionKey => narrativeReports[sectionKey]) // Only include sections that exist
+        .map(sectionKey => {
+          const report = narrativeReports[sectionKey];
+          
+          // Create a human-readable section title
+          let sectionTitle = sectionKey
+            .replace("global_groups", "📊 Divisive Comments (Global)")
+            .replace("global_group_informed_consensus", "🤝 Cross-Group Consensus (Global)")
+            .replace("global_uncertainty", "❓ High Uncertainty Comments (Global)")
+            .replace("group_informed_consensus", "Group Consensus")
+            .replace("groups", "Group Differences")
+            .replace("uncertainty", "Areas of Uncertainty");
 
-    // Combine ordered sections with topic sections
-    const orderedSections = [...sectionOrder, ...topicSections];
+          return {
+            key: sectionKey,
+            title: sectionTitle
+          };
+        });
+    } else {
+      // Show only topic sections for the selected layer
+      const topicSections = Object.keys(narrativeReports)
+        .filter((key) => {
+          const match = key.match(/^layer(\d+)_\d+$/);
+          if (!match) return false;
+          const layerId = parseInt(match[1]);
+          return layerId === selectedLayer; // Only show topics for the currently selected layer
+        })
+        .sort((a, b) => {
+          // Parse layer and topic numbers for proper numeric sorting
+          const [layerA, topicA] = a.match(/layer(\d+)_(\d+)/).slice(1).map(Number);
+          const [layerB, topicB] = b.match(/layer(\d+)_(\d+)/).slice(1).map(Number);
+          
+          // Sort by layer first, then by topic number
+          if (layerA !== layerB) return layerA - layerB;
+          return topicA - topicB;
+        });
 
-    return orderedSections
-      .filter(sectionKey => narrativeReports[sectionKey]) // Only include sections that exist
-      .map(sectionKey => {
-        const report = narrativeReports[sectionKey];
-        
-        // Create a human-readable section title
-        let sectionTitle = sectionKey
-          .replace("group_informed_consensus", "Group Consensus")
-          .replace("groups", "Group Differences")
-          .replace("uncertainty", "Areas of Uncertainty");
+      return topicSections
+        .filter(sectionKey => narrativeReports[sectionKey]) // Only include sections that exist
+        .map(sectionKey => {
+          const report = narrativeReports[sectionKey];
+          
+          // For topic sections in new format: layer0_0, layer0_1, etc.
+          let sectionTitle = sectionKey;
+          if (sectionKey.match(/^layer\d+_\d+$/)) {
+            const match = sectionKey.match(/^layer(\d+)_(\d+)$/);
+            const layerId = match[1];
+            const clusterId = match[2];
 
-        // For topic sections in new format: layer0_0, layer0_1, etc.
-        if (sectionKey.match(/^layer\d+_\d+$/)) {
-          const match = sectionKey.match(/^layer(\d+)_(\d+)$/);
-          const layerId = match[1];
-          const clusterId = match[2];
-
-          // Check metadata first
-          if (report.metadata && report.metadata.topic_name) {
-            sectionTitle = report.metadata.topic_name;
-          } else if (
-            selectedRun &&
-            selectedRun.topics_by_layer &&
-            selectedRun.topics_by_layer[layerId] &&
-            selectedRun.topics_by_layer[layerId][clusterId]
-          ) {
-            // Try to find the topic name from selectedRun data
-            sectionTitle = selectedRun.topics_by_layer[layerId][clusterId].topic_name;
-          } else {
-            // Fallback to a generic title
-            sectionTitle = `Layer ${layerId}, Topic ${clusterId}`;
+            // Check metadata first
+            if (report.metadata && report.metadata.topic_name) {
+              sectionTitle = report.metadata.topic_name;
+            } else if (
+              selectedRun &&
+              selectedRun.topics_by_layer &&
+              selectedRun.topics_by_layer[layerId] &&
+              selectedRun.topics_by_layer[layerId][clusterId]
+            ) {
+              // Try to find the topic name from selectedRun data
+              sectionTitle = selectedRun.topics_by_layer[layerId][clusterId].topic_name;
+            } else {
+              // Fallback to a generic title
+              sectionTitle = `Layer ${layerId}, Topic ${clusterId}`;
+            }
           }
-        }
 
-        return {
-          key: sectionKey,
-          title: sectionTitle
-        };
-      });
+          return {
+            key: sectionKey,
+            title: sectionTitle
+          };
+        });
+    }
   };
 
   const availableReportSections = getAvailableReportSections();
@@ -374,22 +403,35 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
   // Render layer switching buttons
   const renderLayerSwitcher = () => {
-    if (availableLayers.length <= 1) {
-      return null; // Don't show switcher if only one layer
-    }
-
     return (
       <div className="layer-switcher">
-        <h3>Layer Selection</h3>
+        <h3>Report Type Selection</h3>
         <p className="switcher-description">
-          Choose visualization granularity: Layer 0 shows finest-grained topics, higher layers show broader groupings.
+          Choose between global insights (cross-cutting themes) or layer-specific topics (granular analysis).
         </p>
         <div className="layer-buttons">
+          {/* Global sections button */}
+          <button
+            className={`layer-button ${showGlobalSections ? 'active' : ''}`}
+            onClick={() => {
+              setShowGlobalSections(true);
+              setSelectedReportSection(""); // Clear selected section when switching
+            }}
+          >
+            🌍 Global Insights
+            <span className="layer-description"> (Cross-cutting themes)</span>
+          </button>
+          
+          {/* Layer-specific topic buttons */}
           {availableLayers.map((layer) => (
             <button
               key={layer.layerId}
-              className={`layer-button ${selectedLayer === layer.layerId ? 'active' : ''}`}
-              onClick={() => setSelectedLayer(layer.layerId)}
+              className={`layer-button ${!showGlobalSections && selectedLayer === layer.layerId ? 'active' : ''}`}
+              onClick={() => {
+                setShowGlobalSections(false);
+                setSelectedLayer(layer.layerId);
+                setSelectedReportSection(""); // Clear selected section when switching
+              }}
             >
               Layer {layer.layerId}: {layer.topicCount} Topic{layer.topicCount !== 1 ? 's' : ''}
               <span className="layer-description">
