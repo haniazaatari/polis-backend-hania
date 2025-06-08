@@ -20,6 +20,11 @@ import server from "./src/server";
 import logger from "./src/utils/logger";
 import { handle_GET_conversationUuid } from "./src/routes/conversationUuid";
 import { handle_GET_xidReport } from "./src/routes/export";
+import { handle_GET_delphi } from "./src/routes/delphi";
+import { handle_GET_delphi_visualizations } from "./src/routes/delphi/visualizations";
+import { handle_POST_delphi_jobs } from "./src/routes/delphi/jobs";
+import { handle_GET_delphi_reports } from "./src/routes/delphi/reports";
+import { handle_POST_delphi_batch_reports } from "./src/routes/delphi/batchReports";
 
 const app = express();
 
@@ -779,6 +784,62 @@ helpersInitialized.then(
 
     app.get("/api/v3/testDatabase", moveToBody, handle_GET_testDatabase);
 
+    app.get("/api/v3/delphi", moveToBody, handle_GET_delphi);
+
+    // Add POST endpoint for creating Delphi jobs
+    app.post("/api/v3/delphi/jobs", moveToBody, function (req, res) {
+      try {
+        handle_POST_delphi_jobs(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in job creation endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
+    // Add GET endpoint for Delphi reports
+    app.get("/api/v3/delphi/reports", moveToBody, function (req, res) {
+      try {
+        handle_GET_delphi_reports(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in reports endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
+    // Use the directly imported handler from the top of the file
+
+    // Add error handling wrapper for async route handler
+    app.get("/api/v3/delphi/visualizations", moveToBody, function (req, res) {
+      try {
+        handle_GET_delphi_visualizations(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in visualizations endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
+    // Add POST endpoint for batch report generation
+    app.post("/api/v3/delphi/batchReports", moveToBody, function (req, res) {
+      try {
+        handle_POST_delphi_batch_reports(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in batch reports endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
     app.get("/robots.txt", function (req, res) {
       res.send("User-agent: *\n" + "Disallow: /api/");
     });
@@ -1521,6 +1582,28 @@ helpersInitialized.then(
       /^\/stats\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       fetchIndexForReportPage
     );
+    // Report route for LLM-generated group topics
+    app.get(
+      /^\/commentsReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      function (req, res, next) {
+        return fetchIndexForReportPage(req, res, next);
+      }
+    );
+    // Topic Report route for individual topic reports with dropdown
+    app.get(
+      /^\/topicReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      function (req, res, next) {
+        return fetchIndexForReportPage(req, res, next);
+      }
+    );
+    app.get(/^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/, fetchIndexForReportPage);
+    // Export Report route for data export interface
+    app.get(
+      /^\/exportReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      function (req, res, next) {
+        return fetchIndexForReportPage(req, res, next);
+      }
+    );
 
     app.get(/^\/thirdPartyCookieTestPt1\.html$/, fetchThirdPartyCookieTestPt1);
     app.get(/^\/thirdPartyCookieTestPt2\.html$/, fetchThirdPartyCookieTestPt2);
@@ -1586,6 +1669,8 @@ helpersInitialized.then(
     app.get(/^\/cached\/.*/, proxy);
     app.get(/^\/font\/.*/, proxy);
     app.get(/^\/.*embed.*js\/.*/, proxy);
+    app.get(/^\/report_bundle.*\.js$/, proxy);
+    app.get(/^\/report_style.*\.css$/, proxy);
 
     // ends in slash? redirect to non-slash version
     app.get(/.*\//, function (req, res) {

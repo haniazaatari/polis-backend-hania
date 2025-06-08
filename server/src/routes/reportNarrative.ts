@@ -111,11 +111,15 @@ export class PolisConverter {
   }
 }
 
-const anthropic = config.anthropicApiKey ? new Anthropic({
-  apiKey: config.anthropicApiKey,
-}) : null;
+const anthropic = config.anthropicApiKey
+  ? new Anthropic({
+      apiKey: config.anthropicApiKey,
+    })
+  : null;
 
-const genAI = config.geminiApiKey ? new GoogleGenerativeAI(config.geminiApiKey) : null;
+const genAI = config.geminiApiKey
+  ? new GoogleGenerativeAI(config.geminiApiKey)
+  : null;
 
 const getCommentsAsXML = async (
   id: number,
@@ -230,9 +234,11 @@ const getModelResponse = async (
       ],
       systemInstruction: system_lore,
     };
-    const openai = config.openaiApiKey ? new OpenAI({
-      apiKey: config.openaiApiKey,
-    }) : null;
+    const openai = config.openaiApiKey
+      ? new OpenAI({
+          apiKey: config.openaiApiKey,
+        })
+      : null;
 
     switch (model) {
       case "gemini": {
@@ -339,7 +345,10 @@ export async function handle_GET_groupInformedConsensus(
     `${rid}#${section.name}#${model}`
   );
   // Use type assertion for filter function with different parameter shape but compatible runtime behavior
-  const structured_comments = await getCommentsAsXML(zid, section.filter as any);
+  const structured_comments = await getCommentsAsXML(
+    zid,
+    section.filter as any
+  );
   // send cached response first if avalable
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
@@ -376,6 +385,7 @@ export async function handle_GET_groupInformedConsensus(
     const reportItem = {
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
+      report_id: rid,
       report_data: resp,
       model,
       errors:
@@ -423,7 +433,10 @@ export async function handle_GET_uncertainty(
     `${rid}#${section.name}#${model}`
   );
   // Use type assertion for filter function with different parameter shape but compatible runtime behavior
-  const structured_comments = await getCommentsAsXML(zid, section.filter as any);
+  const structured_comments = await getCommentsAsXML(
+    zid,
+    section.filter as any
+  );
   // send cached response first if avalable
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
@@ -461,6 +474,7 @@ export async function handle_GET_uncertainty(
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
       report_data: resp,
+      report_id: rid,
       model,
       errors:
         structured_comments?.trim().length === 0
@@ -508,7 +522,10 @@ export async function handle_GET_groups(
     `${rid}#${section.name}#${model}`
   );
   // Use type assertion for filter function with different parameter shape but compatible runtime behavior
-  const structured_comments = await getCommentsAsXML(zid, section.filter as any);
+  const structured_comments = await getCommentsAsXML(
+    zid,
+    section.filter as any
+  );
   // send cached response first if avalable
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
@@ -546,6 +563,7 @@ export async function handle_GET_groups(
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
       report_data: resp,
+      report_id: rid,
       model,
       errors:
         structured_comments?.trim().length === 0
@@ -593,6 +611,7 @@ export async function handle_GET_topics(
     const reportItemTopics = {
       rid_section_model: `${rid}#topics`,
       model,
+      report_id: rid,
       timestamp: new Date().toISOString(),
       report_data: topics,
     };
@@ -666,6 +685,7 @@ export async function handle_GET_topics(
               const reportItem = {
                 rid_section_model: `${rid}#${section.name}#${model}`,
                 timestamp: new Date().toISOString(),
+                report_id: rid,
                 model,
                 report_data: resp,
                 errors:
