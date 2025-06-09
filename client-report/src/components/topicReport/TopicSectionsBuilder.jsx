@@ -128,10 +128,16 @@ const TopicSectionsBuilder = ({ topicData, narrativeData, children }) => {
 
   console.log("Final sections:", allSections.length);
   
+  // Find the cross-group consensus section for default selection
+  const defaultSection = allSections.find(section => 
+    section.isGlobal && section.name.includes('Cross-Group Consensus')
+  );
+  
   return children({ 
     sections: allSections, 
     runInfo, 
-    error: null 
+    error: null,
+    defaultSectionKey: defaultSection?.key || null
   });
 };
 

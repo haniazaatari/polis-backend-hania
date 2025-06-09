@@ -10,16 +10,13 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
   const [topicContent, setTopicContent] = useState(null);
   const [contentLoading, setContentLoading] = useState(false);
 
-  const handleTopicChange = (event) => {
-    const topicKey = event.target.value;
-    setSelectedTopic(topicKey);
-    
+  // Extract content fetching logic for reuse
+  const fetchTopicContent = (topicKey) => {
     if (!topicKey) {
       setTopicContent(null);
       return;
     }
 
-    // Fetch the specific topic report
     setContentLoading(true);
     net
       .polisGet("/api/v3/delphi/reports", {
@@ -56,6 +53,12 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
         console.error("Error fetching topic report:", error);
         setContentLoading(false);
       });
+  };
+
+  const handleTopicChange = (event) => {
+    const topicKey = event.target.value;
+    setSelectedTopic(topicKey);
+    fetchTopicContent(topicKey);
   };
 
   // Extract citation IDs from the topic content
@@ -155,7 +158,17 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
     <TopicDataProvider report_id={report_id}>
       {({ topicData, narrativeData }) => (
         <TopicSectionsBuilder topicData={topicData} narrativeData={narrativeData}>
-          {({ sections, runInfo, error }) => (
+          {({ sections, runInfo, error, defaultSectionKey }) => {
+            // Auto-select cross-group consensus if not already selected
+            React.useEffect(() => {
+              if (defaultSectionKey && !selectedTopic) {
+                setSelectedTopic(defaultSectionKey);
+                // Trigger content loading for the auto-selected topic
+                fetchTopicContent(defaultSectionKey);
+              }
+            }, [defaultSectionKey]);
+
+            return (
             <div className="topic-report-container">
       <style>{`
         .topic-report-container {
@@ -287,7 +300,8 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
 
       {!contentLoading && renderContent()}
             </div>
-          )}
+            );
+          }}
         </TopicSectionsBuilder>
       )}
     </TopicDataProvider>

@@ -417,6 +417,18 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
   const availableReportSections = getAvailableReportSections();
 
+  // Auto-select cross-group consensus when available
+  React.useEffect(() => {
+    if (!selectedReportSection && availableReportSections.length > 0) {
+      const crossGroupSection = availableReportSections.find(section => 
+        section.title.includes('Cross-Group Consensus')
+      );
+      if (crossGroupSection) {
+        setSelectedReportSection(crossGroupSection.key);
+      }
+    }
+  }, [availableReportSections, selectedReportSection]);
+
   // Handle report section selection change
   const handleReportSectionChange = (event) => {
     setSelectedReportSection(event.target.value);
