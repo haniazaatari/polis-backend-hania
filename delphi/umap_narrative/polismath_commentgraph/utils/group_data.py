@@ -427,8 +427,26 @@ class GroupDataProcessor:
                     
                     if diffs:
                         avg_diff = sum(diffs) / len(diffs)
-                        data['group_aware_consensus'] = 1 - avg_diff
                         data['comment_extremity'] = avg_diff
+                        
+                        # Calculate proper group-aware consensus using Laplace-smoothed probability multiplication
+                        # This matches the Node.js implementation
+                        consensus_value = 1.0
+                        valid_groups = [gid for gid in group_ids if gid != -1]
+                        
+                        if valid_groups:
+                            for group_id in valid_groups:
+                                group_data = groups_data[group_id]
+                                agrees = group_data['agrees']
+                                total_votes = group_data['votes']
+                                
+                                # Laplace smoothing: (agrees + 1) / (total + 2)
+                                prob = (agrees + 1.0) / (total_votes + 2.0)
+                                consensus_value *= prob
+                                
+                            data['group_aware_consensus'] = consensus_value
+                        else:
+                            data['group_aware_consensus'] = 0
                         
                         # Store extremity values in DynamoDB
                         try:

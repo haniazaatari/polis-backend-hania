@@ -16,6 +16,8 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   const [narrativeReports, setNarrativeReports] = useState({});
   const [narrativeLoading, setNarrativeLoading] = useState(true);
   const [narrativeRunInfo, setNarrativeRunInfo] = useState(null);
+  const [topicData, setTopicData] = useState(null);
+  const [topicDataLoading, setTopicDataLoading] = useState(true);
   const [jobFormOpen, setJobFormOpen] = useState(false);
   const [jobFormData, setJobFormData] = useState({
     job_type: "FULL_PIPELINE",
@@ -31,6 +33,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   const [batchReportResult, setBatchReportResult] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState(0);
   const [selectedReportSection, setSelectedReportSection] = useState("");
+  const [showGlobalSections, setShowGlobalSections] = useState(false);
 
   useEffect(() => {
     if (!report_id) return;
@@ -91,6 +94,26 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
       .catch((err) => {
         console.error("Error fetching visualizations:", err);
         setVisualizationsLoading(false);
+      });
+
+    // Fetch topic data from Delphi (same endpoint as TopicReport)
+    setTopicDataLoading(true);
+    net
+      .polisGet("/api/v3/delphi", {
+        report_id: report_id,
+      })
+      .then((response) => {
+        console.log("Topic data response:", response);
+
+        if (response && response.status === "success") {
+          setTopicData(response);
+        }
+
+        setTopicDataLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching topic data:", err);
+        setTopicDataLoading(false);
       });
 
     // Fetch narrative reports from Delphi
@@ -299,73 +322,112 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
   const availableLayers = getAvailableLayers();
 
-  // Get available report sections for dropdown
+  // Get available report sections for dropdown - combines topic data and narrative reports  
   const getAvailableReportSections = () => {
-    if (!narrativeReports || Object.keys(narrativeReports).length === 0) {
-      return [];
-    }
-
-    // Order of sections to display
-    const sectionOrder = ["group_informed_consensus", "groups", "uncertainty"];
+    const sections = [];
     
-    // Topic sections will have names in format: layer0_0, layer0_1, etc.
-    const topicSections = Object.keys(narrativeReports)
-      .filter((key) => key.match(/^layer\d+_\d+$/))
-      .sort((a, b) => {
-        // Parse layer and topic numbers for proper numeric sorting
-        const [layerA, topicA] = a.match(/layer(\d+)_(\d+)/).slice(1).map(Number);
-        const [layerB, topicB] = b.match(/layer(\d+)_(\d+)/).slice(1).map(Number);
+    // If we have topic data, always show sections (with status indicators)
+    // This ensures consistent dropdown behavior like TopicReport
+    if (topicData && topicData.runs && Object.keys(topicData.runs).length > 0) {
+      const latestRun = Object.values(topicData.runs).reduce((latest, run) => {
+        return !latest || new Date(run.created_at) > new Date(latest.created_at) ? run : latest;
+      }, null);
+      
+      const jobUuid = latestRun?.job_uuid;
+
+      if (showGlobalSections) {
+        // Show global sections - combine topic data with narrative report status
+        const globalSectionTypes = [
+          { key: 'groups', title: 'Divisive Comments (Global)' },
+          { key: 'group_informed_consensus', title: 'Cross-Group Consensus (Global)' },
+          { key: 'uncertainty', title: 'High Uncertainty Comments (Global)' }
+        ];
         
-        // Sort by layer first, then by topic number
-        if (layerA !== layerB) return layerA - layerB;
-        return topicA - topicB;
-      });
-
-    // Combine ordered sections with topic sections
-    const orderedSections = [...sectionOrder, ...topicSections];
-
-    return orderedSections
-      .filter(sectionKey => narrativeReports[sectionKey]) // Only include sections that exist
-      .map(sectionKey => {
-        const report = narrativeReports[sectionKey];
-        
-        // Create a human-readable section title
-        let sectionTitle = sectionKey
-          .replace("group_informed_consensus", "Group Consensus")
-          .replace("groups", "Group Differences")
-          .replace("uncertainty", "Areas of Uncertainty");
-
-        // For topic sections in new format: layer0_0, layer0_1, etc.
-        if (sectionKey.match(/^layer\d+_\d+$/)) {
-          const match = sectionKey.match(/^layer(\d+)_(\d+)$/);
-          const layerId = match[1];
-          const clusterId = match[2];
-
-          // Check metadata first
-          if (report.metadata && report.metadata.topic_name) {
-            sectionTitle = report.metadata.topic_name;
-          } else if (
-            selectedRun &&
-            selectedRun.topics_by_layer &&
-            selectedRun.topics_by_layer[layerId] &&
-            selectedRun.topics_by_layer[layerId][clusterId]
-          ) {
-            // Try to find the topic name from selectedRun data
-            sectionTitle = selectedRun.topics_by_layer[layerId][clusterId].topic_name;
+        globalSectionTypes.forEach(({ key, title }) => {
+          // Check what keys actually exist in the narrative reports (same logic as TopicSectionsBuilder)
+          const longFormatKey = narrativeRunInfo?.current_job_id ? `${narrativeRunInfo.current_job_id}_global_${key}` : null;
+          const shortFormatKey = `global_${key}`;
+          
+          let sectionKey;
+          if (narrativeReports && Object.keys(narrativeReports).length > 0) {
+            // Check which format exists in the data
+            if (longFormatKey && narrativeReports[longFormatKey]) {
+              sectionKey = longFormatKey;
+              console.log(`CommentsReport global section ${key}: found long format - ${sectionKey}`);
+            } else if (narrativeReports[shortFormatKey]) {
+              sectionKey = shortFormatKey;
+              console.log(`CommentsReport global section ${key}: found short format - ${sectionKey}`);
+            } else if (narrativeReports[key]) {
+              sectionKey = key;
+              console.log(`CommentsReport global section ${key}: found bare format - ${sectionKey}`);
+            } else {
+              // Default to short format if no data found
+              sectionKey = shortFormatKey;
+              console.log(`CommentsReport global section ${key}: no data found, using default - ${sectionKey}`);
+            }
           } else {
-            // Fallback to a generic title
-            sectionTitle = `Layer ${layerId}, Topic ${clusterId}`;
+            sectionKey = shortFormatKey;
+            console.log(`CommentsReport global section ${key}: no reports data, using fallback - ${sectionKey}`);
           }
+          
+          // Check if narrative report exists
+          const hasNarrative = !!narrativeReports[sectionKey];
+          
+          sections.push({
+            key: sectionKey,
+            title: title + (hasNarrative ? '' : ' (pending narrative)'),
+            hasNarrative: !!hasNarrative,
+            hasTopicData: true // We know this exists from topic data
+          });
+        });
+      } else {
+        // Show topic sections for the selected layer
+        if (latestRun.topics_by_layer && latestRun.topics_by_layer[selectedLayer]) {
+          const layerTopics = latestRun.topics_by_layer[selectedLayer];
+          
+          Object.entries(layerTopics).forEach(([clusterId, topic]) => {
+            // Extract section key from topic_key, converting # to _ (same logic as TopicReport)
+            let sectionKey;
+            if (topic.topic_key && topic.topic_key.includes('#')) {
+              // Versioned format: convert uuid#layer#cluster -> uuid_layer_cluster
+              sectionKey = topic.topic_key.replace(/#/g, '_');
+            } else {
+              // Fallback: construct from jobUuid
+              sectionKey = `${jobUuid}_${selectedLayer}_${clusterId}`;
+            }
+            
+            // Check if narrative report exists
+            const hasNarrative = !!narrativeReports[sectionKey];
+            
+            sections.push({
+              key: sectionKey,
+              title: topic.topic_name + (hasNarrative ? '' : ' (pending narrative)'),
+              hasNarrative: !!hasNarrative,
+              hasTopicData: true,
+              topicMetadata: topic
+            });
+          });
         }
-
-        return {
-          key: sectionKey,
-          title: sectionTitle
-        };
-      });
+      }
+    }
+    // No fallback needed - we require topic data for consistent behavior
+    
+    return sections.sort((a, b) => a.title.localeCompare(b.title));
   };
 
   const availableReportSections = getAvailableReportSections();
+
+  // Auto-select cross-group consensus when available
+  React.useEffect(() => {
+    if (!selectedReportSection && availableReportSections.length > 0) {
+      const crossGroupSection = availableReportSections.find(section => 
+        section.title.includes('Cross-Group Consensus')
+      );
+      if (crossGroupSection) {
+        setSelectedReportSection(crossGroupSection.key);
+      }
+    }
+  }, [availableReportSections, selectedReportSection]);
 
   // Handle report section selection change
   const handleReportSectionChange = (event) => {
@@ -374,22 +436,35 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
   // Render layer switching buttons
   const renderLayerSwitcher = () => {
-    if (availableLayers.length <= 1) {
-      return null; // Don't show switcher if only one layer
-    }
-
     return (
       <div className="layer-switcher">
-        <h3>Layer Selection</h3>
+        <h3>Report Type Selection</h3>
         <p className="switcher-description">
-          Choose visualization granularity: Layer 0 shows finest-grained topics, higher layers show broader groupings.
+          Choose between global insights (cross-cutting themes) or layer-specific topics (granular analysis).
         </p>
         <div className="layer-buttons">
+          {/* Global sections button */}
+          <button
+            className={`layer-button ${showGlobalSections ? 'active' : ''}`}
+            onClick={() => {
+              setShowGlobalSections(true);
+              setSelectedReportSection(""); // Clear selected section when switching
+            }}
+          >
+            Global Insights
+            <span className="layer-description"> (Cross-cutting themes)</span>
+          </button>
+          
+          {/* Layer-specific topic buttons */}
           {availableLayers.map((layer) => (
             <button
               key={layer.layerId}
-              className={`layer-button ${selectedLayer === layer.layerId ? 'active' : ''}`}
-              onClick={() => setSelectedLayer(layer.layerId)}
+              className={`layer-button ${!showGlobalSections && selectedLayer === layer.layerId ? 'active' : ''}`}
+              onClick={() => {
+                setShowGlobalSections(false);
+                setSelectedLayer(layer.layerId);
+                setSelectedReportSection(""); // Clear selected section when switching
+              }}
             >
               Layer {layer.layerId}: {layer.topicCount} Topic{layer.topicCount !== 1 ? 's' : ''}
               <span className="layer-description">
@@ -658,18 +733,18 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
   // Render narrative reports section with dropdown
   const renderNarrativeReports = () => {
-    if (narrativeLoading) {
-      return <div className="loading">Loading narrative reports...</div>;
+    if (narrativeLoading && topicDataLoading) {
+      return <div className="loading">Loading topic and narrative data...</div>;
     }
 
-    const hasReports = Object.keys(narrativeReports).length > 0;
+    const availableSections = getAvailableReportSections();
+    const hasAnyData = availableSections.length > 0;
 
-    if (!hasReports) {
+    if (!hasAnyData) {
       return (
         <div className="info-message">
           <p>
-            No narrative reports available yet. These are generated automatically when you run a
-            Delphi analysis.
+            No topic or narrative data available yet. Run a Delphi analysis to generate topics and narratives.
           </p>
         </div>
       );
@@ -701,19 +776,29 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                 </p>
               </div>
             )}
-        {/* Report section dropdown */}
+        {/* Report section dropdown with enhanced status indicators */}
         <div className="report-selector">
           <select 
             value={selectedReportSection} 
             onChange={handleReportSectionChange}
           >
             <option value="">Select a report section...</option>
-            {availableReportSections.map(section => (
+            {availableSections.map(section => (
               <option key={section.key} value={section.key}>
                 {section.title}
               </option>
             ))}
           </select>
+          
+          {/* Status summary */}
+          <div className="section-status-summary">
+            <span className="status-indicator">
+              {availableSections.filter(s => s.hasTopicData).length} topics identified
+            </span>
+            <span className="status-indicator">
+              {availableSections.filter(s => s.hasNarrative).length} narratives generated
+            </span>
+          </div>
         </div>
 
         {/* Render selected report */}
@@ -724,24 +809,51 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
   // Render the selected report section
   const renderSelectedReport = () => {
-    const report = narrativeReports[selectedReportSection];
-    if (!report) return null;
+    const availableSections = getAvailableReportSections();
+    const selectedSection = availableSections.find(s => s.key === selectedReportSection);
+    
+    if (!selectedSection) return null;
 
-    // Get the display title
-    const selectedSection = availableReportSections.find(s => s.key === selectedReportSection);
-    const sectionTitle = selectedSection ? selectedSection.title : selectedReportSection;
+    const report = narrativeReports[selectedReportSection];
+    const sectionTitle = selectedSection.title;
 
     return (
       <div key={selectedReportSection} className="report-section">
         <h3>{sectionTitle}</h3>
+        
+        {/* Enhanced metadata section showing both topic and narrative info */}
         <div className="report-metadata">
-          <span>Generated: {new Date(report.timestamp).toLocaleString()}</span>
-          <span> | Model: {report.model || "N/A"}</span>
+          <div className="metadata-row">
+            <span className="metadata-label">Topic Status:</span>
+            <span className={`status-badge ${selectedSection.hasTopicData ? 'available' : 'missing'}`}>
+              {selectedSection.hasTopicData ? 'Identified' : 'Not Available'}
+            </span>
+          </div>
+          <div className="metadata-row">
+            <span className="metadata-label">Narrative Status:</span>
+            <span className={`status-badge ${selectedSection.hasNarrative ? 'available' : 'pending'}`}>
+              {selectedSection.hasNarrative ? 'Generated' : 'Pending'}
+            </span>
+          </div>
+          {report && (
+            <div className="metadata-row">
+              <span className="metadata-label">Generated:</span>
+              <span>{new Date(report.timestamp).toLocaleString()}</span>
+              <span> | Model: {report.model || "N/A"}</span>
+            </div>
+          )}
+          {selectedSection.topicMetadata && (
+            <div className="metadata-row">
+              <span className="metadata-label">Topic Info:</span>
+              <span>Generated by {selectedSection.topicMetadata.model_name} on {selectedSection.topicMetadata.created_at?.substring(0, 10)}</span>
+            </div>
+          )}
         </div>
         <div className="report-content">
           {(() => {
-            if (!report.report_data) return null;
-            if (report.errors)
+            // Show narrative content if available
+            if (report && report.report_data) {
+              if (report.errors)
               return (
                 <p>Not enough data has been provided for analysis, please check back later</p>
               );
@@ -851,6 +963,46 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                     {report.report_data}
                   </pre>
                 </article>
+              );
+            }
+            } else if (selectedSection.hasTopicData && !selectedSection.hasNarrative) {
+              // Show topic metadata when narrative is not yet available
+              return (
+                <div className="topic-preview">
+                  <h5>Topic Identified - Narrative Pending</h5>
+                  <p>This topic has been identified and named by Polis, but the detailed narrative report has not yet been generated.</p>
+                  
+                  {selectedSection.topicMetadata && (
+                    <div className="topic-metadata-display">
+                      <h6>Topic Information:</h6>
+                      <p><strong>Name:</strong> {selectedSection.topicMetadata.topic_name}</p>
+                      <p><strong>Generated by:</strong> {selectedSection.topicMetadata.model_name}</p>
+                      <p><strong>Created:</strong> {selectedSection.topicMetadata.created_at}</p>
+                      
+                      {selectedSection.topicMetadata.sample_comments && selectedSection.topicMetadata.sample_comments.length > 0 && (
+                        <div className="sample-comments">
+                          <h6>Sample Comments:</h6>
+                          <ul>
+                            {selectedSection.topicMetadata.sample_comments.slice(0, 3).map((comment, idx) => (
+                              <li key={idx}>{comment}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="action-hint">
+                    <p>To generate the narrative report, use the "Generate Batch Topics" button above.</p>
+                  </div>
+                </div>
+              );
+            } else {
+              // No data available
+              return (
+                <div className="no-data">
+                  <p>No data available for this section.</p>
+                </div>
               );
             }
           })()}
@@ -1192,11 +1344,55 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         }
 
         .report-metadata {
-          display: flex;
-          justify-content: space-between;
-          font-size: 0.85rem;
-          color: #666;
+          background: #f8f9fa;
+          padding: 15px;
+          border-radius: 6px;
           margin-bottom: 20px;
+          border-left: 4px solid #007bff;
+        }
+
+        .metadata-row {
+          display: flex;
+          align-items: center;
+          margin-bottom: 8px;
+          font-size: 0.9rem;
+        }
+
+        .metadata-row:last-child {
+          margin-bottom: 0;
+        }
+
+        .metadata-label {
+          font-weight: 600;
+          color: #495057;
+          min-width: 140px;
+          margin-right: 10px;
+        }
+
+        .status-badge {
+          padding: 3px 8px;
+          border-radius: 12px;
+          font-size: 0.8rem;
+          font-weight: 500;
+          margin-right: 10px;
+        }
+
+        .status-badge.available {
+          background: #d4edda;
+          color: #155724;
+          border: 1px solid #c3e6cb;
+        }
+
+        .status-badge.pending {
+          background: #fff3cd;
+          color: #856404;
+          border: 1px solid #ffeaa7;
+        }
+
+        .status-badge.missing {
+          background: #f8d7da;
+          color: #721c24;
+          border: 1px solid #f5c6cb;
         }
 
         .report-content {
@@ -1521,6 +1717,85 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           border: 1px solid #ccc;
           border-radius: 4px;
           background-color: white;
+          margin-bottom: 10px;
+        }
+
+        .section-status-summary {
+          display: flex;
+          gap: 20px;
+          font-size: 0.9rem;
+          color: #666;
+        }
+
+        .status-indicator {
+          padding: 5px 10px;
+          background: #f8f9fa;
+          border-radius: 4px;
+          border: 1px solid #e9ecef;
+        }
+
+        /* Topic preview styles */
+        .topic-preview {
+          background: #f0f7ff;
+          padding: 20px;
+          border-radius: 8px;
+          border-left: 4px solid #007bff;
+        }
+
+        .topic-metadata-display {
+          background: white;
+          padding: 15px;
+          border-radius: 6px;
+          margin: 15px 0;
+          border: 1px solid #e9ecef;
+        }
+
+        .topic-metadata-display h6 {
+          margin-top: 0;
+          margin-bottom: 10px;
+          color: #495057;
+          font-size: 1rem;
+        }
+
+        .topic-metadata-display p {
+          margin-bottom: 8px;
+          font-size: 0.9rem;
+        }
+
+        .sample-comments {
+          margin-top: 15px;
+        }
+
+        .sample-comments ul {
+          margin: 10px 0;
+          padding-left: 20px;
+        }
+
+        .sample-comments li {
+          margin-bottom: 8px;
+          font-size: 0.9rem;
+          line-height: 1.4;
+        }
+
+        .action-hint {
+          margin-top: 15px;
+          padding: 10px;
+          background: #fff3cd;
+          border-radius: 4px;
+          border-left: 4px solid #ffc107;
+        }
+
+        .action-hint p {
+          margin: 0;
+          font-size: 0.9rem;
+          color: #856404;
+        }
+
+        .no-data {
+          text-align: center;
+          padding: 40px;
+          color: #666;
+          font-style: italic;
         }
       `}</style>
     </div>
