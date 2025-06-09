@@ -9,3 +9,12 @@ prod.env
 xids.csv
 preprod.env 
 .venv
+
+**/CLAUDE.local.md
+delphi/umap_narrative/__init__.py
+
+*.html
+
+*.png
+
+*.svg

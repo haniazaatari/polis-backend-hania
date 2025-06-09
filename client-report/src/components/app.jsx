@@ -22,15 +22,33 @@ import net from "../util/net.js";
 import ConsensusNarrative from "./lists/consensusNarrative.jsx";
 import RawDataExport from "./RawDataExport.jsx";
 import TopicNarrative from "./lists/topicNarrative.jsx";
+import CommentsReport from "./commentsReport/CommentsReport.jsx";
+import TopicReport from "./topicReport/TopicReport.jsx";
+import ExportReport from "./exportReport/ExportReport.jsx";
+import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
 
-const pathname = window.location.pathname; // "/report/2arcefpshi"
+const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi"
+const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", or "exportReport"
 const report_id = pathname.split("/")[2];
+
+// Debug the route
+console.log("ROUTE CHECK:", { pathname, route_type, report_id });
 
 function assertExists(obj, key) {
   if (typeof obj[key] === "undefined") {
     console.error("assertExists failed. Missing: ", key);
   }
 }
+
+const computeVoteTotal = (users) => {
+  let voteTotal = 0;
+
+  for (const count in users) {
+    voteTotal += users[count];
+  }
+
+  return voteTotal;
+};
 
 const App = (props) => {
   const [loading, setLoading] = useState(true);
@@ -43,6 +61,13 @@ const App = (props) => {
   const [model, setModel] = useState("openai");
   const [isNarrativeReport, setIsNarrativeReport] = useState(
     window.location.pathname.split("/")[1] === "narrativeReport"
+  );
+  const [isStatsOnly, setIsStatsOnly] = useState(
+    window.location.pathname.split("/")[1] === "stats"
+  );
+  
+  const [isCommentsReport, setIsCommentsReport] = useState(
+    window.location.pathname.split("/")[1] === "commentsReport"
   );
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth,
@@ -101,6 +126,24 @@ const App = (props) => {
     } else if (isNarrativeReport && window.location.pathname.split("/")[1] !== "narrativeReport") {
       setIsNarrativeReport(false);
     }
+
+    // Handle comments report route
+    // Add debug logs
+    const pathParts = window.location.pathname.split("/");
+    console.log("PATH DEBUG:", {
+      fullPath: window.location.pathname,
+      firstPart: pathParts[1],
+      isCommentsReportRoute: pathParts[1] === "commentsReport",
+      currentState: isCommentsReport,
+    });
+
+    if (pathParts[1] === "commentsReport" && isCommentsReport !== true) {
+      console.log("SETTING isCommentsReport to TRUE");
+      setIsCommentsReport(true);
+    } else if (isCommentsReport && pathParts[1] !== "commentsReport") {
+      console.log("SETTING isCommentsReport to FALSE");
+      setIsCommentsReport(false);
+    }
     const queryString = window.location.search;
     const urlParams = new URLSearchParams(queryString);
     if (urlParams.get("section")) setSearchParamsSection(urlParams.get("section"));
@@ -154,7 +197,7 @@ const App = (props) => {
       conversation_id: conversation_id,
       report_id: report_id,
       moderation: true,
-      mod_gt: isStrictMod ? 0 : -1,
+      mod_gt: -2,
       include_voting_patterns: true,
     });
   };
@@ -176,7 +219,9 @@ const App = (props) => {
       const response = await fetch(
         `${urlPrefix}api/v3/reportNarrative?report_id=${report_id}${
           searchParamsSection ? `&section=${searchParamsSection}` : ``
-        }${searchParamsModel ? `&model=${searchParamsModel}` : ``}${searchParamsCache ? `&noCache=${searchParamsCache}` : ``}`,
+        }${searchParamsModel ? `&model=${searchParamsModel}` : ``}${
+          searchParamsCache ? `&noCache=${searchParamsCache}` : ``
+        }`,
         {
           credentials: "include",
           method: "get",
@@ -516,6 +561,61 @@ const App = (props) => {
   useEffect(() => {
     const init = async () => {
       await getData();
+
+      // Call to the Delphi endpoint to get LLM-generated topic names
+      net
+        .polisGet("/api/v3/delphi", {
+          report_id: report_id,
+        })
+        .then((response) => {
+          console.log("Delphi topics response:", response);
+
+          // Store the topics data for later use
+          if (response && response.status === "success") {
+            // Handle different response scenarios
+            if (response.runs && Object.keys(response.runs).length > 0) {
+              // We have LLM topic data!
+              console.log("LLM topic runs found:", Object.keys(response.runs).length);
+
+              // Get the most recent run (should be first in the sorted object)
+              const runKeys = Object.keys(response.runs);
+              const latestRun = response.runs[runKeys[0]];
+              console.log("Latest LLM topics run:", latestRun);
+
+              // In future, we'll integrate these topics with the visualization
+              // For example, replacing group labels with LLM-generated topic names
+            } else if (response.available_tables) {
+              // This means the DynamoDB connection worked but our table doesn't exist
+              console.log(
+                "DynamoDB connected but table not found. Available tables:",
+                response.available_tables
+              );
+              console.log("Hint:", response.hint);
+
+              // Log that this is expected initially
+              console.log(
+                "NOTE: This is normal until the Delphi pipeline has been run for this conversation."
+              );
+            } else if (response.error) {
+              // Something went wrong with the DynamoDB query
+              console.log("DynamoDB query error:", response.error);
+              console.log("Error type:", response.error_type);
+              if (response.help) {
+                console.log("Help:", response.help);
+              }
+            } else {
+              // Generic case - no topic data yet
+              console.log("No LLM topic data available yet");
+              if (response.message) {
+                console.log("Server message:", response.message);
+              }
+            }
+          }
+        })
+        .catch((error) => {
+          console.error("Error calling Delphi endpoint:", error);
+        });
+
       setInterval(() => {
         if (shouldPoll) {
           getData();
@@ -586,6 +686,105 @@ const App = (props) => {
     );
   }
 
+  if (isStatsOnly) {
+    return (
+      <section style={{ maxWidth: 1200, display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+          <h3>Participants</h3>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{ptptCountTotal}</p>
+        </div>
+        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+          <h3>Comments</h3>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["n-cmts"]}</p>
+        </div>
+        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+          <h3>Votes</h3>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{computeVoteTotal(math["user-vote-counts"])}</p>
+        </div>
+        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+          <h3>Opinion Groups</h3>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["group-clusters"].length}</p>
+        </div>
+      </section>
+    );
+  }
+  // Debug what's going to be rendered
+  console.log("RENDER DECISION:", {
+    route_type,
+    shouldShowCommentsReport: route_type === "commentsReport",
+    shouldShowNarrativeReport: route_type === "narrativeReport",
+    shouldShowTopicReport: route_type === "topicReport",
+    shouldShowExportReport: route_type === "exportReport",
+  });
+
+  // Directly render ExportReport if the URL starts with /exportReport
+  if (route_type === "exportReport") {
+    console.log("RENDERING: ExportReport");
+    return (
+      <ExportReport
+        report_id={report_id}
+        conversation={conversation}
+      />
+    );
+  }
+
+  // Directly render TopicReport if the URL starts with /topicReport
+  if (route_type === "topicReport") {
+    console.log("RENDERING: TopicReport");
+    return (
+      <TopicReport
+        report_id={report_id}
+        math={math}
+        comments={comments}
+        conversation={conversation}
+        ptptCount={ptptCount}
+        formatTid={formatTid}
+        voteColors={voteColors}
+      />
+    );
+  }
+
+  // Directly render CommentsReport if the URL starts with /commentsReport
+  if (route_type === "commentsReport") {
+    console.log("RENDERING: CommentsReport");
+    return (
+      <CommentsReport
+        math={math}
+        comments={comments}
+        conversation={conversation}
+        ptptCount={ptptCount}
+        formatTid={formatTid}
+        voteColors={voteColors}
+      />
+    );
+  }
+
+  // Directly render TopicsVizReport if the URL starts with /topicsVizReport
+  if (route_type === "topicsVizReport") {
+    console.log("RENDERING: TopicsVizReport");
+    return (
+      <TopicsVizReport
+        report_id={report_id}
+      />
+    );
+  }
+
+  // Directly render NarrativeReport if the URL starts with /narrativeReport
+  if (route_type === "narrativeReport") {
+    console.log("RENDERING: NarrativeReport");
+    return (
+      <NarrativeOverview
+        conversation={conversation}
+        ptptCount={ptptCount}
+        ptptCountTotal={ptptCountTotal}
+        math={math}
+        computedStats={computedStats}
+      />
+    );
+  }
+
+  // Otherwise render the standard report
+  console.log("RENDERING: Standard report");
   return (
     <div style={{ margin: "0px 10px" }} data-testid="reports-overview">
       <Heading conversation={conversation} />
@@ -606,30 +805,17 @@ const App = (props) => {
 
         {/* This may eventually need to go back in below */}
         {/* stats={conversationStats} */}
+        <Overview
+          computedStats={computedStats}
+          math={math}
+          comments={comments}
+          ptptCount={ptptCount}
+          ptptCountTotal={ptptCountTotal}
+          conversation={conversation}
+          voteColors={voteColors}
+        />
 
-        {isNarrativeReport && (
-          <NarrativeOverview
-            conversation={conversation}
-            ptptCount={ptptCount}
-            ptptCountTotal={ptptCountTotal}
-            math={math}
-            computedStats={computedStats}
-          />
-        )}
-
-        {!isNarrativeReport && (
-          <Overview
-            computedStats={computedStats}
-            math={math}
-            comments={comments}
-            ptptCount={ptptCount}
-            ptptCountTotal={ptptCountTotal}
-            conversation={conversation}
-            voteColors={voteColors}
-          />
-        )}
-
-        {!isNarrativeReport && <RawDataExport conversation={conversation} report_id={report_id} />}
+        <RawDataExport conversation={conversation} report_id={report_id} />
 
         {isNarrativeReport ? (
           <>

@@ -27,16 +27,17 @@ const RawDataExport = ({ conversation, report_id }) => {
         padding: 10,
         borderRadius: 3,
         width: 960,
+        maxWidth: "100%",
       }}
     >
-      <p style={{ fontFamily: "monospace", fontSize: globals.fontSizes.medium }}>
+      <p style={{ wordBreak: "break-all", fontFamily: "monospace", fontSize: globals.fontSizes.medium }}>
         <strong>Raw Data Export (Anonymous)</strong>
       </p>
-      <p style={{ fontFamily: "monospace", fontStyle: "italic" }}>
+      <p style={{ wordBreak: "break-all", fontFamily: "monospace", fontStyle: "italic" }}>
         {`The following data exports are anonymized. Participants are identifed by an integer representing the order in which they first voted. For a full description of files and columns, please see: `}
         <a href="https://compdemocracy.org/export/"> https://compdemocracy.org/export/ </a>
       </p>
-      <p style={{ fontFamily: "monospace" }}>
+      <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
         {`--------Summary: `}
         <a
           download={getDownloadFilename("summary", conversation)}
@@ -46,7 +47,7 @@ const RawDataExport = ({ conversation, report_id }) => {
           {getDownloadFilename("summary", conversation)}
         </a>
       </p>
-      <p style={{ fontFamily: "monospace" }}>
+      <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
         {`-------Comments: `}
         <a
           download={getDownloadFilename("comments", conversation)}
@@ -57,7 +58,7 @@ const RawDataExport = ({ conversation, report_id }) => {
         </a>
         {` (may take up to several minutes)`}
       </p>
-      <p style={{ fontFamily: "monospace" }}>
+      <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
         {`--Votes history: `}
         <a
           download={getDownloadFilename("votes", conversation)}
@@ -68,7 +69,7 @@ const RawDataExport = ({ conversation, report_id }) => {
         </a>
         {` (as event log)`}
       </p>
-      <p style={{ fontFamily: "monospace" }}>
+      <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
         {`---Votes matrix: `}
         <a
           download={getDownloadFilename("participant-votes", conversation)}
@@ -79,7 +80,7 @@ const RawDataExport = ({ conversation, report_id }) => {
         </a>
         {` (as comments x participants matrix)`}
       </p>
-      <p style={{ fontFamily: "monospace" }}>
+      <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
         {`Comment groups: `}
         <a
           download={getDownloadFilename("comment-groups", conversation)}
@@ -91,43 +92,43 @@ const RawDataExport = ({ conversation, report_id }) => {
       </p>
 
       <div style={{ marginTop: "3em" }}>
-        <p style={{ fontFamily: "monospace" }}>
+        <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
           <strong>Public API endpoints (read only, Jupyter notebook friendly)</strong>
         </p>
-        <p style={{ fontFamily: "monospace" }}>
+        <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
           {`$ curl ${window.location.protocol}//${window.location.hostname}/api/v3/reportExport/${report_id}/summary.csv`}
         </p>
-        <p style={{ fontFamily: "monospace" }}>
+        <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
           {`$ curl ${window.location.protocol}//${window.location.hostname}/api/v3/reportExport/${report_id}/comments.csv`}
         </p>
-        <p style={{ fontFamily: "monospace" }}>
+        <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
           {`$ curl ${window.location.protocol}//${window.location.hostname}/api/v3/reportExport/${report_id}/votes.csv`}
         </p>
-        <p style={{ fontFamily: "monospace" }}>
+        <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
           {`$ curl ${window.location.protocol}//${window.location.hostname}/api/v3/reportExport/${report_id}/participant-votes.csv`}
         </p>
-        <p style={{ fontFamily: "monospace" }}>
+        <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
           {`$ curl ${window.location.protocol}//${window.location.hostname}/api/v3/reportExport/${report_id}/comment-groups.csv`}
         </p>
       </div>
 
       {doShowDataLicenseTerms && (
         <div style={{ marginTop: "3em" }}>
-          <p style={{ fontFamily: "monospace" }}>
+          <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
             <strong>Attribution of Polis Data</strong>
           </p>
-          <p style={{ fontFamily: "monospace" }}>
+          <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
             All Polis data is licensed under a Creative Commons Attribution 4.0 International
             license: https://creativecommons.org/licenses/by/4.0/
           </p>
-          <p style={{ fontFamily: "monospace" }}>--------------- BEGIN STATEMENT ---------------</p>
-          <p style={{ fontFamily: "monospace" }}>
+          <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>--------------- BEGIN STATEMENT ---------------</p>
+          <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
             {`Data was gathered using the Polis software (see: compdemocracy.org/polis and github.com/compdemocracy/polis) and is sub-licensed
           under CC BY 4.0 with Attribution to The Computational Democracy Project. The data and more
           information about how the data was collected can be found at the following link: ${window.location.href}`}
           </p>
-          <p style={{ fontFamily: "monospace" }}>--------------- END STATEMENT---------------</p>
-          <p style={{ fontFamily: "monospace" }}>
+          <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>--------------- END STATEMENT---------------</p>
+          <p style={{ wordBreak: "break-all", fontFamily: "monospace" }}>
             For further information on best practices for Attribution of CC 4.0 licensed content
             Please see:
             https://wiki.creativecommons.org/wiki/Best_practices_for_attribution#Title.2C_Author.2C_Source.2C_License

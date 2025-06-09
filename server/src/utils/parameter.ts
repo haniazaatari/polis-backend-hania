@@ -381,6 +381,35 @@ function getRidFromReportId(report_id: string) {
   );
 }
 
+/**
+ * Get the zid (conversation ID) from a report ID
+ * @param report_id - The report ID string
+ * @returns Promise that resolves to the numeric zid
+ */
+function getZidFromReport(report_id: string): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    pg.query_readOnly(
+      "SELECT zid FROM reports WHERE report_id = ($1);",
+      [report_id],
+      (err: any, results: { rows: any[] }) => {
+        if (err) {
+          logger.error(
+            "polis_err_fetching_zid_for_report_id " + report_id,
+            err
+          );
+          return reject(err);
+        } else if (!results || !results.rows || !results.rows.length) {
+          logger.warn("No zid found for report_id: " + report_id);
+          return resolve(null);
+        } else {
+          const zid = results.rows[0].zid;
+          return resolve(Number(zid));
+        }
+      }
+    );
+  });
+}
+
 // conversation_id is the client/ public API facing string ID
 const parseConversationId = getStringLimitLength(1, 100);
 
@@ -558,6 +587,7 @@ export {
   getReportIdFetchRid,
   getStringLimitLength,
   getUrlLimitLength,
+  getZidFromReport,
   moveToBody,
   need,
   needCookie,
@@ -586,6 +616,7 @@ export default {
   getReportIdFetchRid,
   getStringLimitLength,
   getUrlLimitLength,
+  getZidFromReport,
   moveToBody,
   need,
   needCookie,

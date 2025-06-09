@@ -28,7 +28,7 @@ DETACH ?= false
 DETACH_ARG = $(if $(filter true,$(DETACH)),-d,)
 
 # Default compose file args
-export COMPOSE_FILE_ARGS = -f docker-compose.yml -f docker-compose.dev.yml
+export COMPOSE_FILE_ARGS = -f docker-compose.yml -f docker-compose.dev.yml --profile local-services
 COMPOSE_FILE_ARGS += $(if $(POSTGRES_DOCKER),--profile postgres,)
 
 # Set up environment-specific values

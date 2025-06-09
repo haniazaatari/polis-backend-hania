@@ -111,11 +111,15 @@ export class PolisConverter {
   }
 }
 
-const anthropic = config.anthropicApiKey ? new Anthropic({
-  apiKey: config.anthropicApiKey,
-}) : null;
+const anthropic = config.anthropicApiKey
+  ? new Anthropic({
+      apiKey: config.anthropicApiKey,
+    })
+  : null;
 
-const genAI = config.geminiApiKey ? new GoogleGenerativeAI(config.geminiApiKey) : null;
+const genAI = config.geminiApiKey
+  ? new GoogleGenerativeAI(config.geminiApiKey)
+  : null;
 
 const getCommentsAsXML = async (
   id: number,
@@ -230,9 +234,11 @@ const getModelResponse = async (
       ],
       systemInstruction: system_lore,
     };
-    const openai = config.openaiApiKey ? new OpenAI({
-      apiKey: config.openaiApiKey,
-    }) : null;
+    const openai = config.openaiApiKey
+      ? new OpenAI({
+          apiKey: config.openaiApiKey,
+        })
+      : null;
 
     switch (model) {
       case "gemini": {
@@ -263,8 +269,8 @@ const getModelResponse = async (
             },
           ],
         });
-        // @ts-expect-error claude api
-        return `{${responseClaude?.content[0]?.text}`;
+        // Claude API response structure might change with version updates
+        return `{${(responseClaude as any)?.content[0]?.text}`;
       }
       case "openai": {
         if (!openai) {
@@ -338,8 +344,11 @@ export async function handle_GET_groupInformedConsensus(
   const cachedResponse = await storage?.queryItemsByRidSectionModel(
     `${rid}#${section.name}#${model}`
   );
-  // @ts-expect-error function args ignore temp
-  const structured_comments = await getCommentsAsXML(zid, section.filter);
+  // Use type assertion for filter function with different parameter shape but compatible runtime behavior
+  const structured_comments = await getCommentsAsXML(
+    zid,
+    section.filter as any
+  );
   // send cached response first if avalable
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
@@ -376,6 +385,7 @@ export async function handle_GET_groupInformedConsensus(
     const reportItem = {
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
+      report_id: rid,
       report_data: resp,
       model,
       errors:
@@ -399,8 +409,8 @@ export async function handle_GET_groupInformedConsensus(
       }) + `|||`
     );
   }
-  // @ts-expect-error flush - calling due to use of compression
-  res.flush();
+  // Express response has no flush method, but compression middleware adds it
+  (res as any).flush();
 }
 
 export async function handle_GET_uncertainty(
@@ -422,8 +432,11 @@ export async function handle_GET_uncertainty(
   const cachedResponse = await storage?.queryItemsByRidSectionModel(
     `${rid}#${section.name}#${model}`
   );
-  // @ts-expect-error function args ignore temp
-  const structured_comments = await getCommentsAsXML(zid, section.filter);
+  // Use type assertion for filter function with different parameter shape but compatible runtime behavior
+  const structured_comments = await getCommentsAsXML(
+    zid,
+    section.filter as any
+  );
   // send cached response first if avalable
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
@@ -461,6 +474,7 @@ export async function handle_GET_uncertainty(
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
       report_data: resp,
+      report_id: rid,
       model,
       errors:
         structured_comments?.trim().length === 0
@@ -483,8 +497,8 @@ export async function handle_GET_uncertainty(
       }) + `|||`
     );
   }
-  // @ts-expect-error flush - calling due to use of compression
-  res.flush();
+  // Express response has no flush method, but compression middleware adds it
+  (res as any).flush();
 }
 
 export async function handle_GET_groups(
@@ -507,8 +521,11 @@ export async function handle_GET_groups(
   const cachedResponse = await storage?.queryItemsByRidSectionModel(
     `${rid}#${section.name}#${model}`
   );
-  // @ts-expect-error function args ignore temp
-  const structured_comments = await getCommentsAsXML(zid, section.filter);
+  // Use type assertion for filter function with different parameter shape but compatible runtime behavior
+  const structured_comments = await getCommentsAsXML(
+    zid,
+    section.filter as any
+  );
   // send cached response first if avalable
   if (Array.isArray(cachedResponse) && cachedResponse?.length) {
     res.write(
@@ -546,6 +563,7 @@ export async function handle_GET_groups(
       rid_section_model: `${rid}#${section.name}#${model}`,
       timestamp: new Date().toISOString(),
       report_data: resp,
+      report_id: rid,
       model,
       errors:
         structured_comments?.trim().length === 0
@@ -568,8 +586,8 @@ export async function handle_GET_groups(
       }) + `|||`
     );
   }
-  // @ts-expect-error flush - calling due to use of compression
-  res.flush();
+  // Express response has no flush method, but compression middleware adds it
+  (res as any).flush();
 }
 
 export async function handle_GET_topics(
@@ -593,6 +611,7 @@ export async function handle_GET_topics(
     const reportItemTopics = {
       rid_section_model: `${rid}#topics`,
       model,
+      report_id: rid,
       timestamp: new Date().toISOString(),
       report_data: topics,
     };
@@ -666,6 +685,7 @@ export async function handle_GET_topics(
               const reportItem = {
                 rid_section_model: `${rid}#${section.name}#${model}`,
                 timestamp: new Date().toISOString(),
+                report_id: rid,
                 model,
                 report_data: resp,
                 errors:
@@ -723,8 +743,8 @@ export async function handle_GET_reportNarrative(
 
   res.write(`POLIS-PING: AI bootstrap`);
 
-  // @ts-expect-error flush - calling due to use of compression
-  res.flush();
+  // Express response has no flush method, but compression middleware adds it
+  (res as any).flush();
 
   const zid = await getZidForRid(rid);
   if (!zid) {
@@ -734,8 +754,8 @@ export async function handle_GET_reportNarrative(
 
   res.write(`POLIS-PING: retrieving system lore`);
 
-  // @ts-expect-error flush - calling due to use of compression
-  res.flush();
+  // Express response has no flush method, but compression middleware adds it
+  (res as any).flush();
 
   const system_lore = await fs.readFile(
     "src/report_experimental/system.xml",
@@ -744,8 +764,8 @@ export async function handle_GET_reportNarrative(
 
   res.write(`POLIS-PING: retrieving stream`);
 
-  // @ts-expect-error flush - calling due to use of compression
-  res.flush();
+  // Express response has no flush method, but compression middleware adds it
+  (res as any).flush();
   try {
     const cachedResponse = await storage?.getAllByReportID(rid);
     if (
