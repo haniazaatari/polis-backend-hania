@@ -8,6 +8,7 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
   const [topicContent, setTopicContent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [contentLoading, setContentLoading] = useState(false);
+  const [runInfo, setRunInfo] = useState(null);
 
   useEffect(() => {
     if (!report_id) return;
@@ -29,6 +30,19 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
             }, null);
 
             console.log("Latest run structure:", latestRun);
+            console.log("Topics by layer keys:", Object.keys(latestRun.topics_by_layer || {}));
+            console.log("Topics by layer type check:", typeof latestRun.topics_by_layer);
+            console.log("Topics by layer direct:", latestRun.topics_by_layer);
+            
+            // Store run info for display
+            setRunInfo({
+              model_name: latestRun.model_name,
+              created_date: latestRun.created_date,
+              item_count: latestRun.item_count
+            });
+            
+            // Get job UUID for section key construction
+            const jobUuid = latestRun.job_uuid;
             
             // Check different possible structures for topics
             let topicsData = null;
@@ -37,24 +51,71 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
             if (latestRun.topics_by_layer) {
               // Topics are organized by layer, then by cluster id
               const allTopics = [];
-              Object.entries(latestRun.topics_by_layer).forEach(([layer, clusters]) => {
+              console.log("Processing topics_by_layer:", latestRun.topics_by_layer);
+              
+              // Handle both string and numeric keys
+              const layers = Object.keys(latestRun.topics_by_layer);
+              console.log("Layer keys found:", layers);
+              
+              layers.forEach(layer => {
+                const clusters = latestRun.topics_by_layer[layer];
+                console.log(`Processing layer ${layer}:`, clusters);
+                
                 if (clusters && typeof clusters === 'object') {
                   Object.entries(clusters).forEach(([clusterId, topic]) => {
                     // Create the topic key in format layer_cluster (e.g., "0_1")
                     const topicKey = `${layer}_${clusterId}`;
-                    // Use the topic_key from the data which should be in format "layer0_0"
-                    const dbTopicKey = topic.topic_key || `layer${layer}_${clusterId}`;
+                    
+                    // Extract section key from topic_key, converting # to _
+                    let sectionKey;
+                    if (topic.topic_key && topic.topic_key.includes('#')) {
+                      // Versioned format: convert uuid#layer#cluster -> uuid_layer_cluster
+                      sectionKey = topic.topic_key.replace(/#/g, '_');
+                    } else if (jobUuid) {
+                      // Fallback: construct from jobUuid
+                      sectionKey = `${jobUuid}_${layer}_${clusterId}`;
+                    } else {
+                      // Legacy format
+                      sectionKey = topic.topic_key || `layer${layer}_${clusterId}`;
+                    }
                     console.log(`Topic ${topicKey}:`, topic); // Debug log to see structure
+                    console.log(`Section key: ${sectionKey}`); // Debug the section key
                     allTopics.push({
-                      key: dbTopicKey, // Use the actual topic_key from DB
+                      key: sectionKey, // Use the job UUID based section key
                       displayKey: topicKey, // For display purposes
                       name: topic.topic_name || topicKey, // Access the topic_name property
                       sortKey: parseInt(layer) * 1000 + parseInt(clusterId) // Sort by layer first, then cluster
                     });
                   });
+                } else {
+                  console.log(`No valid clusters found for layer ${layer}`);
                 }
               });
-              topicsData = allTopics;
+              
+              // Add global sections to the topics list
+              const globalSections = [
+                {
+                  key: "global_groups",
+                  name: "Divisive Comments (Global)",
+                  sortKey: -300, // Sort before layer topics
+                  isGlobal: true
+                },
+                {
+                  key: "global_group_informed_consensus", 
+                  name: "Cross-Group Consensus (Global)",
+                  sortKey: -200,
+                  isGlobal: true
+                },
+                {
+                  key: "global_uncertainty",
+                  name: "High Uncertainty Comments (Global)", 
+                  sortKey: -100,
+                  isGlobal: true
+                }
+              ];
+              
+              // Combine global sections with layer topics
+              topicsData = [...globalSections, ...allTopics];
             } else if (latestRun.topics && latestRun.topics.topics) {
               // Original structure
               topicsData = Object.entries(latestRun.topics.topics)
@@ -80,8 +141,15 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
               setTopics(sortedTopics);
             } else {
               console.log("No topics found in the expected structure");
+              console.log("Latest run object:", latestRun);
+              console.log("Latest run keys:", Object.keys(latestRun || {}));
             }
+          } else {
+            console.log("No runs found in response");
+            console.log("Response structure:", response);
           }
+        } else {
+          console.log("Response not successful or missing:", response);
         }
         setLoading(false);
       })
@@ -245,6 +313,27 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
           max-width: 1600px;
           margin: 0 auto;
         }
+        .run-info-header {
+          margin-bottom: 20px;
+          padding: 15px;
+          background: #f5f5f5;
+          border-radius: 6px;
+          border-left: 4px solid #03a9f4;
+        }
+        .run-info-header h3 {
+          margin: 0 0 8px 0;
+          color: #333;
+        }
+        .run-meta {
+          display: flex;
+          gap: 15px;
+          align-items: center;
+          font-size: 14px;
+          color: #666;
+        }
+        .run-date {
+          color: #666;
+        }
         .topic-selector {
           margin-bottom: 30px;
         }
@@ -320,17 +409,57 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
         }
       `}</style>
       
+      {/* Run Information Header */}
+      {runInfo && (
+        <div className="run-info-header">
+          <h3>Topic Analysis Report</h3>
+          <div className="run-meta">
+            <span>Model: {runInfo.model_name}</span>
+            <span className="run-date">
+              Generated: {runInfo.created_date}
+            </span>
+            <span>{runInfo.item_count} topics total</span>
+          </div>
+        </div>
+      )}
+      
       <div className="topic-selector">
         <select 
           value={selectedTopic} 
           onChange={handleTopicChange}
           disabled={contentLoading}
         >
-          <option value="">Select a topic...</option>
-          {topics.map(topic => (
-            <option key={topic.key} value={topic.key}>
-              {topic.name}
-            </option>
+          <option value="">Select a report section...</option>
+          
+          {/* Global sections */}
+          {topics.filter(topic => topic.isGlobal).length > 0 && (
+            <optgroup label="Global Analysis">
+              {topics.filter(topic => topic.isGlobal).map(topic => (
+                <option key={topic.key} value={topic.key}>
+                  {topic.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          
+          {/* Layer topics grouped by layer */}
+          {Object.entries(
+            topics
+              .filter(topic => !topic.isGlobal)
+              .reduce((groups, topic) => {
+                const layer = topic.displayKey ? topic.displayKey.split('_')[0] : '0';
+                if (!groups[layer]) groups[layer] = [];
+                groups[layer].push(topic);
+                return groups;
+              }, {})
+          ).map(([layer, layerTopics]) => (
+            <optgroup key={layer} label={`Layer ${layer} Topics`}>
+              {layerTopics.map(topic => (
+                <option key={topic.key} value={topic.key}>
+                  {topic.name}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>

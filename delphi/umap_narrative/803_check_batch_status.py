@@ -464,7 +464,18 @@ class BatchStatusChecker:
                                 
                                 section_name = parts[1]
 
-                                logger.info(f"Job {job_id}: Extracted section name: {section_name}")
+                                # If this is a shortened section name (from versioned format), reconstruct the full section name
+                                # The shortened format replaces the full job_id with first 8 chars
+                                if len(section_name) < 50 and job_id and len(job_id) > 8:
+                                    # Check if section_name starts with what could be a shortened job_id
+                                    short_job_id = job_id[:8]
+                                    if section_name.startswith(short_job_id):
+                                        # Replace the short job_id with the full job_id to reconstruct original section name
+                                        full_section_name = section_name.replace(short_job_id, job_id, 1)  # Only replace first occurrence
+                                        logger.info(f"Job {job_id}: Reconstructed full section name: {section_name} -> {full_section_name}")
+                                        section_name = full_section_name
+
+                                logger.info(f"Job {job_id}: Final section name for storage: {section_name}")
 
                                 # Get the message from the result
                                 message = entry.get('result', {}).get('message', {})

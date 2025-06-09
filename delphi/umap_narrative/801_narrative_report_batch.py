@@ -239,6 +239,52 @@ class BatchReportGenerator:
         current_dir = Path(__file__).parent
         self.prompt_base_path = current_dir / "report_experimental"
     
+    def _get_math_main_data(self, conversation_id):
+        """
+        Get pre-calculated math data from the Clojure math pipeline stored in math_main table.
+        
+        Args:
+            conversation_id: Conversation ID (zid)
+            
+        Returns:
+            Dictionary containing math results including group_aware_consensus and comment_extremity
+        """
+        try:
+            # Query the math_main table for the conversation's math results
+            sql = """
+            SELECT data 
+            FROM math_main 
+            WHERE zid = :zid AND math_env = :math_env
+            ORDER BY modified DESC 
+            LIMIT 1
+            """
+            
+            # Use 'prod' as the default math_env (matches the server behavior)
+            math_env = os.environ.get('MATH_ENV', 'prod')
+            
+            results = self.postgres_client.query(sql, {"zid": conversation_id, "math_env": math_env})
+            
+            if not results:
+                logger.warning(f"No math_main data found for conversation {conversation_id} with math_env {math_env}")
+                return None
+            
+            # Parse the JSON data
+            math_data = results[0]['data']
+            if isinstance(math_data, str):
+                import json
+                math_data = json.loads(math_data)
+            
+            logger.info(f"Successfully retrieved math_main data for conversation {conversation_id}")
+            logger.debug(f"Math data keys: {list(math_data.keys()) if isinstance(math_data, dict) else 'not a dict'}")
+            
+            return math_data
+            
+        except Exception as e:
+            logger.error(f"Error retrieving math_main data for conversation {conversation_id}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+    
     async def get_conversation_data(self):
         """Get conversation data from PostgreSQL and DynamoDB."""
         try:
@@ -255,19 +301,43 @@ class BatchReportGenerator:
             comments = self.postgres_client.get_comments_by_conversation(int(self.conversation_id))
             logger.info(f"Retrieved {len(comments)} comments from conversation {self.conversation_id}")
             
-            # Get processed group and vote data using the group processor
+            # Get math data from the Clojure math pipeline (stored in math_main table)
+            math_data = self._get_math_main_data(int(self.conversation_id))
+            if not math_data:
+                logger.warning(f"No math data found in math_main for conversation {self.conversation_id}")
+                return None
+            
+            # Extract pre-calculated metrics from Clojure math pipeline
+            tids = math_data.get('tids', [])
+            extremity_array = math_data.get('pca', {}).get('comment-extremity', [])
+            consensus_object = math_data.get('group-aware-consensus', {})
+            
+            logger.info(f"Retrieved {len(tids)} comment IDs with pre-calculated metrics from Clojure math pipeline")
+            
+            # Create lookup maps for the pre-calculated values
+            extremity_map = {}
+            consensus_map = {}
+            
+            for i, tid in enumerate(tids):
+                if i < len(extremity_array):
+                    extremity_map[str(tid)] = extremity_array[i]
+                if str(tid) in consensus_object:
+                    consensus_map[str(tid)] = consensus_object[str(tid)]
+            
+            # Get basic comment and vote data (without recalculating metrics)
             export_data = self.group_processor.get_export_data(int(self.conversation_id))
-            logger.info(f"Retrieved processed vote and group data for conversation {self.conversation_id}")
-            
-            # Get math data with group assignments
-            math_data = export_data.get('math_result', {})
-            if math_data and math_data.get('group_assignments'):
-                logger.info(f"Retrieved math data with {len(math_data.get('group_assignments', {}))} group assignments")
-            else:
-                logger.warning(f"No group assignments found in math data")
-            
-            # Use the processed comments from the export data
             processed_comments = export_data.get('comments', [])
+            
+            # Enrich comments with pre-calculated Clojure metrics
+            for comment in processed_comments:
+                comment_id = str(comment.get('comment_id', ''))
+                # Use pre-calculated values from Clojure math pipeline
+                comment['comment_extremity'] = extremity_map.get(comment_id, 0)
+                comment['group_aware_consensus'] = consensus_map.get(comment_id, 0)
+                # Keep the calculated num_groups from GroupDataProcessor
+                # (this is just a count, not a complex calculation)
+            
+            logger.info(f"Enriched {len(processed_comments)} comments with Clojure-calculated metrics")
             
             # Load cluster assignments from DynamoDB
             cluster_map = self.load_comment_clusters_from_dynamodb(self.conversation_id)
@@ -444,11 +514,17 @@ class BatchReportGenerator:
                         all_topics.append(topic)
             
             # Add global sections (not tied to specific layers)
+            # Ensure we have a job_id for versioned topic_keys
+            if not self.job_id:
+                raise ValueError("job_id is required for versioned topic keys but is missing or empty")
+            
+            global_topic_prefix = f"{self.job_id}_global"
+            
             global_sections = [
                 {
                     "section_type": "global",
                     "name": "groups",
-                    "topic_key": "global_groups",
+                    "topic_key": f"{global_topic_prefix}_groups",
                     "description": "Comments that divide opinion groups",
                     "filter_type": "comment_extremity",
                     "filter_threshold": 1.0,
@@ -458,7 +534,7 @@ class BatchReportGenerator:
                 {
                     "section_type": "global", 
                     "name": "group_informed_consensus",
-                    "topic_key": "global_group_informed_consensus",
+                    "topic_key": f"{global_topic_prefix}_group_informed_consensus",
                     "description": "Comments with broad cross-group agreement",
                     "filter_type": "group_aware_consensus",
                     "filter_threshold": "dynamic",  # Based on group count
@@ -468,7 +544,7 @@ class BatchReportGenerator:
                 {
                     "section_type": "global",
                     "name": "uncertainty", 
-                    "topic_key": "global_uncertainty",
+                    "topic_key": f"{global_topic_prefix}_uncertainty",
                     "description": "Comments with high uncertainty/unsure responses",
                     "filter_type": "uncertainty_ratio",
                     "filter_threshold": 0.2,
@@ -834,14 +910,7 @@ class BatchReportGenerator:
         with open(system_path, 'r') as f:
             system_lore = f.read()
         
-        # Read template file for topics
-        template_path = self.prompt_base_path / "subtaskPrompts/topics.xml"
-        if not template_path.exists():
-            logger.error(f"Template file not found: {template_path}")
-            return []
-        
-        with open(template_path, 'r') as f:
-            template_content = f.read()
+        # Template content will be selected per topic based on section type
         
         # Initialize list for batch requests
         batch_requests = []
@@ -850,7 +919,15 @@ class BatchReportGenerator:
         for topic in topics:
             topic_name = topic['name']
             topic_key = topic['topic_key']  # Use the stable topic_key from DynamoDB
-            section_name = topic_key  # Use topic_key directly as section name
+            
+            # Convert topic_key to section_name format
+            # Topic keys use # delimiters (uuid#layer#cluster) but section names use _ delimiters (uuid_layer_cluster)
+            if '#' in topic_key:
+                # Versioned format: convert uuid#layer#cluster -> uuid_layer_cluster
+                section_name = topic_key.replace('#', '_')
+            else:
+                # Legacy format: use as-is (layer0_0, global_groups, etc.)
+                section_name = topic_key
             
             # Check if this is a global section or layer-specific topic
             is_global_section = topic.get('section_type') == 'global'
@@ -900,6 +977,33 @@ class BatchReportGenerator:
             if not structured_comments.strip():
                 logger.warning(f"No content after filter for topic {topic_name} (cluster_id={topic_cluster_id})")
                 continue
+            
+            # Select appropriate template based on section type
+            if is_global_section:
+                # Map global section names to template files
+                template_mapping = {
+                    "groups": "groups.xml",
+                    "group_informed_consensus": "group_informed_consensus.xml", 
+                    "uncertainty": "uncertainty.xml"
+                }
+                
+                # Extract the base name from global section (e.g., "global_groups" -> "groups")
+                base_name = topic_name.replace("global_", "")
+                template_filename = template_mapping.get(base_name, "topics.xml")
+                template_path = self.prompt_base_path / f"subtaskPrompts/{template_filename}"
+                
+                logger.info(f"Using template {template_filename} for global section {topic_name}")
+            else:
+                # Use topics template for layer-specific topics
+                template_path = self.prompt_base_path / "subtaskPrompts/topics.xml"
+                logger.info(f"Using topics.xml template for topic {topic_name}")
+            
+            if not template_path.exists():
+                logger.error(f"Template file not found: {template_path}")
+                continue
+                
+            with open(template_path, 'r') as f:
+                template_content = f.read()
             
             # Insert structured comments into template
             try:
@@ -1146,9 +1250,20 @@ class BatchReportGenerator:
                     section_name = metadata.get('section_name', 'unknown_section')
 
                     # Create a valid custom_id (only allow a-zA-Z0-9_-)
-                    # Since section_name now contains layer and cluster info (e.g., layer0_0), we don't need cluster_id
-                    custom_id = f"{self.conversation_id}_{section_name}"
+                    # For versioned section names, shorten the job_id portion to avoid long custom_ids
+                    if self.job_id and self.job_id in section_name:
+                        # Replace the full job_id with just the first 8 characters
+                        short_job_id = self.job_id[:8]
+                        shortened_section = section_name.replace(self.job_id, short_job_id)
+                        custom_id = f"{self.conversation_id}_{shortened_section}"
+                    else:
+                        # Legacy format or no job_id in section name
+                        custom_id = f"{self.conversation_id}_{section_name}"
+                    
                     safe_custom_id = re.sub(r'[^a-zA-Z0-9_-]', '_', custom_id)
+                    
+                    # Debug logging to trace the custom_id construction
+                    logger.info(f"Custom ID construction: conversation_id={self.conversation_id}, section_name='{section_name}', custom_id='{custom_id}', safe_custom_id='{safe_custom_id}'")
 
                     # Validate custom_id length (max 64 chars for Anthropic API)
                     if len(safe_custom_id) > 64:

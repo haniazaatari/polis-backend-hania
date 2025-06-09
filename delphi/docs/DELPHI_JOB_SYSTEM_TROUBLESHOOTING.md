@@ -1,5 +1,13 @@
 # Delphi Job System Troubleshooting Guide
 
+## 🚨 CRITICAL UI CONSISTENCY ISSUE
+
+**The two report interfaces use different API endpoints:**
+- **TopicReport.jsx**: `/api/v3/delphi` (LLM topic names from DynamoDB)
+- **CommentsReport.jsx**: `/api/v3/delphi/reports` (narrative reports from NarrativeReports table)
+
+**Result**: TopicReport dropdown always appears if topics exist, but CommentsReport dropdown only appears if narrative reports have been generated. This creates inconsistent UX.
+
 This document provides strategies for diagnosing and resolving common issues in the Delphi job system, based on real-world debugging experiences.
 
 ## Job System Architecture

@@ -56,10 +56,40 @@ export async function handle_GET_delphi(req: Request, res: Response) {
 
     const conversation_id = zid.toString();
     const tableName = "Delphi_CommentClustersLLMTopicNames";
-
+    
     logger.info(
       `Fetching Delphi LLM topics for conversation_id: ${conversation_id}`
     );
+
+    // Also fetch current job UUID from narrative reports for correct section key construction
+    let currentJobUuid = null;
+    try {
+      const narrativeReportsTable = "Delphi_NarrativeReports";
+      const gsiName = "ReportIdTimestampIndex";
+      
+      const narrativeParams: any = {
+        TableName: narrativeReportsTable,
+        IndexName: gsiName,
+        KeyConditionExpression: "report_id = :rid",
+        ExpressionAttributeValues: { ":rid": report_id },
+        Limit: 1, // Just need one to get the job UUID pattern
+      };
+      
+      const narrativeResult = await docClient.send(new QueryCommand(narrativeParams));
+      if (narrativeResult.Items && narrativeResult.Items.length > 0) {
+        const sampleSection = narrativeResult.Items[0].section;
+        // Extract job UUID from section name if it contains UUID pattern
+        if (sampleSection && sampleSection.includes('-') && sampleSection.includes('_')) {
+          const uuidMatch = sampleSection.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/);
+          if (uuidMatch) {
+            currentJobUuid = uuidMatch[1];
+            logger.info(`Found current job UUID: ${currentJobUuid}`);
+          }
+        }
+      }
+    } catch (err) {
+      logger.warn(`Could not fetch job UUID from narrative reports: ${err}`);
+    }
 
     const allItems: any[] = [];
     let lastEvaluatedKey;
@@ -122,6 +152,7 @@ export async function handle_GET_delphi(req: Request, res: Response) {
         created_date: sampleItem.created_at?.substring(0, 10),
         topics_by_layer: topicsByLayer,
         item_count: runItems.length,
+        job_uuid: currentJobUuid, // Include job UUID for section key construction
       };
     });
 
