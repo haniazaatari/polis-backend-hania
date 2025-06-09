@@ -214,6 +214,28 @@ Delphi now includes a distributed job queue system built on DynamoDB:
 > **Note:** All table names now use the `Delphi_` prefix for consistency.
 > For complete documentation on the table renaming, see `/Users/colinmegill/polis/delphi/docs/DATABASE_NAMING_PROPOSAL.md`
 
+## Reset Single Conversation
+
+To completely remove all data for a single conversation from the Delphi system:
+
+```bash
+# Reset by report_id or zid
+./reset_conversation.sh r3p4ryckema3wfitndk6m
+./reset_conversation.sh 12345
+```
+
+Or run the comprehensive cleanup directly:
+```bash
+docker exec polis-dev-delphi-1 python /app/scripts/reset_conversation.py r3p4ryckema3wfitndk6m
+```
+
+This removes data from ALL Delphi DynamoDB tables including:
+- Math/PCA pipeline data (clusters, projections, etc.)
+- UMAP/Topic pipeline data (embeddings, topic names, etc.) 
+- Narrative reports and job queue entries
+
+See [RESET_SINGLE_CONVERSATION.md](docs/RESET_SINGLE_CONVERSATION.md) for detailed documentation.
+
 ## Running Delphi Pipeline
 
 ### Direct Execution
