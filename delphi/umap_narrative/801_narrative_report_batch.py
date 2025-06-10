@@ -60,24 +60,18 @@ class NarrativeReportService:
     """Storage service for narrative reports in DynamoDB."""
 
     def __init__(self, table_name="Delphi_NarrativeReports", dynamodb_resource=None):
-        """Initialize the narrative report service.
-
-        Args:
-            table_name: Name of the DynamoDB table to use
-        """
+        """Initialize the narrative report service."""
         self.table_name = table_name
         if dynamodb_resource:
             self.dynamodb = dynamodb_resource
         else:
+            endpoint_url = os.environ.get('DYNAMODB_ENDPOINT') or None
             self.dynamodb = boto3.resource(
                 'dynamodb',
-                endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
-                region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
-                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+                endpoint_url=endpoint_url,
+                region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
             )
-
-        # Get the table
+        
         self.table = self.dynamodb.Table(self.table_name)
 
     def store_report(self, report_id, section, model, report_data, job_id=None, metadata=None):
@@ -222,16 +216,13 @@ class BatchReportGenerator:
         self.job_id = job_id or os.environ.get('DELPHI_JOB_ID')
         self.report_id = os.environ.get('DELPHI_REPORT_ID')
         self.postgres_client = PostgresClient()
+
+        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT') or None
         self.dynamodb = boto3.resource(
             'dynamodb',
-            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
-            region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
-            # Using setdefault below for credentials makes these optional if already set
+            endpoint_url=endpoint_url,
+            region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
         )
-        # Ensure local credentials are set if using a local endpoint
-        if self.dynamodb.meta.client.meta.endpoint_url:
-            os.environ.setdefault('AWS_ACCESS_KEY_ID', 'fakeMyKeyId')
-            os.environ.setdefault('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
 
         self.report_storage = NarrativeReportService(dynamodb_resource=self.dynamodb)
         self.group_processor = GroupDataProcessor(self.postgres_client)
@@ -1387,17 +1378,7 @@ class BatchReportGenerator:
             if self.job_id:
                 logger.info(f"Updating job {self.job_id} with batch information in DynamoDB...")
                 try:
-                    # Use the existing DynamoDB client for the job queue
-                    dynamodb = boto3.resource(
-                        'dynamodb',
-                        endpoint_url=os.environ.get('DYNAMODB_ENDPOINT', 'http://host.docker.internal:8000'),
-                        region_name=os.environ.get('AWS_REGION', 'us-west-2'),
-                        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-                        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
-                    )
-
-                    # Connect to the job queue table
-                    job_table = dynamodb.Table('Delphi_JobQueue')
+                    job_table = self.dynamodb.Table('Delphi_JobQueue') 
 
                     # Check if the table exists
                     try:
