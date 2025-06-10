@@ -268,13 +268,56 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   // Get the current selected run data
   const selectedRun = selectedRunKey ? runs[selectedRunKey] : null;
 
-  // Helper function to find the best job to display (prioritize completed jobs with visualizations)
+  // Helper function to find the best job to display (prioritize jobs that match topic data)
   const getBestVisualizationJob = () => {
     if (!visualizationJobs || visualizationJobs.length === 0) {
       return null;
     }
 
-    // First, try to find a completed job with visualizations
+    // Try to get the job UUID from the latest topic run
+    let topicJobUuid = null;
+    if (topicData && topicData.runs) {
+      const runKeys = Object.keys(topicData.runs);
+      if (runKeys.length > 0) {
+        const latestRun = topicData.runs[runKeys[0]];
+        // Check if any topic has a topic_key with UUID
+        if (latestRun?.topics_by_layer) {
+          Object.values(latestRun.topics_by_layer).forEach(layer => {
+            Object.values(layer).forEach(topic => {
+              if (topic.topic_key && topic.topic_key.includes('#')) {
+                topicJobUuid = topic.topic_key.split('#')[0];
+              }
+            });
+          });
+        }
+      }
+    }
+
+    // If we have a topic job UUID, try to find a matching visualization job
+    if (topicJobUuid) {
+      const matchingJob = visualizationJobs.find(job => 
+        job.jobId === topicJobUuid && job.status === "COMPLETED"
+      );
+      if (matchingJob) {
+        // For matching jobs, we need to construct the visualization URL even if metadata is missing
+        if (!matchingJob.visualizations || matchingJob.visualizations.length === 0) {
+          // Construct the expected visualization URL
+          const baseUrl = matchingJob.results?.visualization_urls?.interactive;
+          if (baseUrl) {
+            matchingJob.visualizations = [{
+              key: `visualizations/${report_id}/${topicJobUuid}/layer_0_datamapplot.html`,
+              url: baseUrl,
+              layerId: 0,
+              type: "interactive"
+            }];
+          }
+        }
+        console.log(`CommentsReport: Using visualization job ${topicJobUuid} that matches topic data`);
+        return matchingJob;
+      }
+    }
+
+    // Fallback: First, try to find a completed job with visualizations
     const completedJobWithViz = visualizationJobs.find(job => 
       job.status === "COMPLETED" && 
       job.visualizations && 
@@ -283,6 +326,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     );
     
     if (completedJobWithViz) {
+      console.log(`CommentsReport: Using fallback visualization job ${completedJobWithViz.jobId}`);
       return completedJobWithViz;
     }
     
