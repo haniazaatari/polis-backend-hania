@@ -96,6 +96,7 @@ def s3_upload_file(local_file_path: str, s3_key: str) -> str or bool:
         logger.info(f"Uploading '{local_file_path}' to s3://{bucket_name}/{s3_key}")
         
         extra_args = {}
+
         if local_file_path.endswith('.html'):
             extra_args['ContentType'] = 'text/html'
         elif local_file_path.endswith('.png'):
@@ -128,6 +129,7 @@ def s3_upload_file(local_file_path: str, s3_key: str) -> str or bool:
     except Exception as e:
         logger.error(f"An unexpected error occurred during the S3 upload process: {e}", exc_info=True)
         return False
+
 # Configure logging with less verbosity
 logging.basicConfig(
     level=logging.INFO,  # Change to INFO level to reduce verbosity

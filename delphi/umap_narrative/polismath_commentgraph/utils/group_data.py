@@ -62,6 +62,7 @@ class GroupDataProcessor:
             logger.error(f"Failed to initialize DynamoDB connection: {e}")
             self.dynamodb = None
             self.extremity_table = None
+
     def get_math_main_by_conversation(self, zid: int) -> Dict[str, Any]:
         """
         Get math main data (group assignments) for a conversation.
