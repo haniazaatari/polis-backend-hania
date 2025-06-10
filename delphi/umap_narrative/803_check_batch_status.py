@@ -65,12 +65,11 @@ class BatchStatusChecker:
         logger.setLevel(log_level)
 
         # Set up DynamoDB connection
+        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT') or None
         self.dynamodb = boto3.resource(
             'dynamodb',
-            endpoint_url=os.environ.get('DYNAMODB_ENDPOINT'),
-            region_name=os.environ.get('AWS_REGION', 'us-east-1'),
-            aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-            aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+            endpoint_url=endpoint_url,
+            region_name=os.environ.get('AWS_REGION', 'us-east-1')
         )
 
         # Get job queue table
