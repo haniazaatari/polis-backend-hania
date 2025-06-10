@@ -19,185 +19,115 @@ import datamapplot
 from pathlib import Path
 import boto3
 from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
 
 # Import from local modules
 from polismath_commentgraph.utils.storage import PostgresClient, DynamoDBStorage
 
-# Function to interact with S3
-def s3_upload_file(local_file_path, s3_key):
+def s3_upload_file(local_file_path: str, s3_key: str) -> str or bool:
     """
-    Upload a file to S3
-    
+    Uploads a file to an S3-compatible object store, handling both local and
+    AWS environments holistically.
+
+    This function relies on Boto3's default credential provider chain.
+    - In an AWS environment (like EC2 or ECS), it will automatically use the
+      instance's IAM role.
+    - For local development, it will use credentials from environment variables
+      (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) or your ~/.aws/credentials file.
+
+    Bucket Creation:
+    - It checks if the target bucket exists.
+    - If the bucket does not exist AND a custom endpoint_url is provided (indicating
+      a local environment like MinIO), it will attempt to create the bucket.
+    - It will NOT attempt to create a bucket in the default AWS environment,
+      as this is a security risk and production buckets should be managed as
+      infrastructure-as-code.
+
     Args:
-        local_file_path: Path to the local file to upload
-        s3_key: S3 key (path) where the file should be stored
-        
+        local_file_path (str): The local path to the file to upload.
+        s3_key (str): The destination key (path) in the S3 bucket.
+
     Returns:
-        bool: True if successful, False otherwise
+        str: The final URL of the uploaded object if successful.
+        bool: False if the upload fails for any reason.
     """
-    # Get S3 settings from environment
-    endpoint_url = os.environ.get('AWS_S3_ENDPOINT')
-    access_key = os.environ.get('AWS_S3_ACCESS_KEY_ID')
-    secret_key = os.environ.get('AWS_S3_SECRET_ACCESS_KEY')
-    bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
-    region = os.environ.get('AWS_REGION')
-    
-    logger.info(f"S3 Client Configuration for Upload:")
+    endpoint_url = os.environ.get('AWS_S3_ENDPOINT') or None
+    bucket_name = os.environ.get('AWS_S3_BUCKET_NAME', 'polis-delphi')
+    region = os.environ.get('AWS_REGION', 'us-east-1')
+
+    logger.info("Initializing S3 client for upload...")
+    logger.info(f"  Bucket: {bucket_name}, Region: {region}")
     logger.info(f"  Endpoint URL: {endpoint_url if endpoint_url else 'Default AWS S3'}")
-    logger.info(f"  Bucket Name: {bucket_name}")
-    logger.info(f"  Region: {region if region else 'Default (likely us-east-1 or from AWS config)'}")
-    logger.info(f"  Access Key ID: {'********' + access_key[-4:] if access_key else 'Not explicitly set (will use environment/role)'}")
-    # Secret key is intentionally not logged, even obfuscated, beyond the initial check
-    
-    # Debug current environment
-    # logger.info(f"Current AWS_ACCESS_KEY_ID in env: {os.environ.get('AWS_ACCESS_KEY_ID', 'Not set')[:10]}..." if os.environ.get('AWS_ACCESS_KEY_ID') else "AWS_ACCESS_KEY_ID not set")
-    # logger.info(f"Will use access_key: {access_key[:10]}..." if access_key else "No access key")
+    logger.info("  Credentials: Using Boto3's default provider chain (env, ~/.aws, IAM role).")
 
-    if endpoint_url == "":
-        endpoint_url = None
-
-    if access_key == "":
-        access_key = None
-
-    if secret_key == "":
-        secret_key = None
-    
     try:
-        # Create a new session to avoid credential conflicts
-        session = boto3.Session()
-        
-        # Create S3 client with explicit credentials
-        s3_client = session.client(
+        # --- 2. Initialize the Boto3 Client ---
+        # By not passing explicit credentials, we leverage the default credential chain.
+        s3_client = boto3.client(
             's3',
-            endpoint_url=endpoint_url,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
             region_name=region,
-            # For MinIO/local development, these settings help
-            config=boto3.session.Config(
-                signature_version='s3v4',
-                s3={'addressing_style': 'path'}  # Required for MinIO
-            ),
-            # verify=False
+            endpoint_url=endpoint_url
+            # For MinIO, you might need a specific signature version if issues arise.
+            # config=boto3.session.Config(signature_version='s3v4')
         )
-        
-        # Check if bucket exists, create if it doesn't
+
+        # --- 3. Check for Bucket and Create if Local ---
         try:
             s3_client.head_bucket(Bucket=bucket_name)
-            logger.info(f"Bucket {bucket_name} exists")
-        except Exception as e:
-            logger.info(f"Bucket {bucket_name} doesn't exist or not accessible, creating... Error: {e}")
-            
-            try:
-                # Create the bucket - for MinIO local we don't need LocationConstraint
+            logger.info(f"Bucket '{bucket_name}' already exists.")
+        except ClientError as e:
+            # If a 404 (Not Found) or 403 (Forbidden) on non-existent bucket occurs
+            error_code = e.response.get("Error", {}).get("Code")
+            if error_code in ['404', 'NoSuchBucket', '403']:
+                logger.warning(f"Bucket '{bucket_name}' not found or not accessible (Error: {error_code}).")
+                
+                # CRITICAL: Only attempt to create the bucket in a local dev environment.
                 if endpoint_url:
-                    if region == 'us-east-1' or 'localhost' in endpoint_url or 'minio' in endpoint_url:
-                        s3_client.create_bucket(Bucket=bucket_name)
+                    logger.info(f"Local endpoint detected. Attempting to create bucket '{bucket_name}'...")
+                    s3_client.create_bucket(Bucket=bucket_name)
+                    logger.info(f"Bucket '{bucket_name}' created successfully.")
                 else:
-                    s3_client.create_bucket(
-                        Bucket=bucket_name,
-                        # CreateBucketConfiguration={'LocationConstraint': region} - not in us-east-1 - but in other regions
-                    )
-                
-                # Apply bucket policy to make objects public-read
-                bucket_policy = {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "PublicReadGetObject",
-                            "Effect": "Allow",
-                            "Principal": "*",
-                            "Action": ["s3:GetObject"],
-                            "Resource": [f"arn:aws:s3:::{bucket_name}/*"]
-                        }
-                    ]
-                }
-                
-                # Set the bucket policy
-                try:
-                    s3_client.put_bucket_policy(
-                        Bucket=bucket_name,
-                        Policy=json.dumps(bucket_policy)
-                    )
-                    logger.info(f"Set public-read bucket policy for {bucket_name}")
-                except Exception as policy_error:
-                    logger.warning(f"Could not set bucket policy: {policy_error}")
-                    # Continue anyway
-            except Exception as create_error:
-                logger.error(f"Failed to create bucket: {create_error}")
+                    # In production, the bucket must already exist. This is a configuration error.
+                    logger.error("Bucket not found in AWS environment. Please create the S3 bucket via your infrastructure management tools (e.g., CDK, Terraform, CloudFormation).")
+                    raise e
+            else:
+                logger.error(f"Unexpected error while checking for bucket: {e}")
                 raise
+        logger.info(f"Uploading '{local_file_path}' to s3://{bucket_name}/{s3_key}")
         
-        # Upload file
-        logger.info(f"Attempting to upload {local_file_path} to s3://{bucket_name}/{s3_key}")
-        
-        # For HTML files, set content type correctly
-        extra_args = {
-        #     'ACL': 'public-read'  # Make object publicly readable - we don't want this, hence why we have signed urls
-        }
-        
-        # Set the correct content type based on file extension
+        extra_args = {}
         if local_file_path.endswith('.html'):
             extra_args['ContentType'] = 'text/html'
         elif local_file_path.endswith('.png'):
             extra_args['ContentType'] = 'image/png'
         elif local_file_path.endswith('.svg'):
             extra_args['ContentType'] = 'image/svg+xml'
-            
-        try:
-            s3_client.upload_file(
-                local_file_path,
-                bucket_name, 
-                s3_key,
-                ExtraArgs=extra_args
-            )
-            # Verify the upload by checking if the object exists
-            logger.info(f"Verifying upload for s3://{bucket_name}/{s3_key}...")
-            head_response = s3_client.head_object(Bucket=bucket_name, Key=s3_key)
-            logger.info(f"Upload verified: Object exists at s3://{bucket_name}/{s3_key}")
-            logger.info(f"  Object ETag: {head_response.get('ETag')}")
-            logger.info(f"  Object Size: {head_response.get('ContentLength', 'unknown')} bytes")
-            logger.info(f"  Last Modified: {head_response.get('LastModified')}")
-            
-            # Double-check by listing objects - this might be overkill if head_object is reliable
-            # list_response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=s3_key)
-            # logger.debug(f"List objects verification: {list_response.get('KeyCount', 0)} objects found matching prefix.")
-        except Exception as upload_error:
-            logger.error(f"Upload failed for s3://{bucket_name}/{s3_key}: {upload_error}")
-            raise
+
+        s3_client.upload_file(
+            local_file_path,
+            bucket_name,
+            s3_key,
+            ExtraArgs=extra_args
+        )
 
         if endpoint_url:
-        
-            # Generate a URL for the uploaded file
-            if endpoint_url.startswith('http://localhost') or endpoint_url.startswith('http://127.0.0.1'):
-                # For local development with MinIO
-                url = f"{endpoint_url}/{bucket_name}/{s3_key}"
-                # Clean up URL if needed
-                url = url.replace('///', '//')
-            elif 'minio' in endpoint_url:
-                # For Docker container access to MinIO
-                url = f"{endpoint_url}/{bucket_name}/{s3_key}"
-                url = url.replace('///', '//')
-            else:
-                # For AWS S3
-                if endpoint_url.startswith('https://s3.'):
-                    # Standard AWS S3 endpoint
-                    url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
-                else:
-                    # Custom S3 endpoint
-                    url = f"{endpoint_url}/{bucket_name}/{s3_key}"
+            url = f"{endpoint_url.strip('/')}/{bucket_name}/{s3_key}"
         else:
-            # Custom S3 endpoint
-            url = f"{bucket_name}/{s3_key}"
-        
-        logger.info(f"File uploaded successfully. Accessible at: {url}")
-        return url
-        
-    except Exception as e:
-        logger.error(f"Error uploading file to S3: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return False
+            url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
 
+        logger.info(f"File uploaded successfully. URL: {url}")
+        return url
+
+    except ClientError as e:
+        # Catch Boto3-specific errors for more descriptive logging.
+        if e.response.get("Error", {}).get("Code") == 'InvalidAccessKeyId':
+            logger.error("FATAL: The AWS Access Key ID is invalid. Please check your environment variables (AWS_ACCESS_KEY_ID) or your ~/.aws/credentials file.")
+        else:
+            logger.error(f"An S3 client error occurred: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"An unexpected error occurred during the S3 upload process: {e}", exc_info=True)
+        return False
 # Configure logging with less verbosity
 logging.basicConfig(
     level=logging.INFO,  # Change to INFO level to reduce verbosity

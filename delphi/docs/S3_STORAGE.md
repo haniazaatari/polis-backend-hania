@@ -19,8 +19,8 @@ To use S3 storage, the following environment variables must be set:
 
 ```
 AWS_S3_ENDPOINT=http://minio:9000
-AWS_S3_ACCESS_KEY_ID=minioadmin
-AWS_S3_SECRET_ACCESS_KEY=minioadmin
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
 AWS_S3_BUCKET_NAME=polis-delphi
 AWS_REGION=us-east-1
 ```

@@ -37,27 +37,31 @@ class GroupDataProcessor:
     def init_dynamodb(self):
         """Initialize DynamoDB connection for storing extremity values."""
         try:
-            # Get DynamoDB endpoint from environment or use default
-            endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
+            # If DYNAMODB_ENDPOINT is an empty string, treat it as None
+            endpoint_url = os.environ.get('DYNAMODB_ENDPOINT') or None
             region = os.environ.get('AWS_REGION', 'us-east-1')
             
-            # Set up DynamoDB client
+            logger.info("Initializing DynamoDB client...")
+            logger.info(f"  Region: {region}")
+            logger.info(f"  Endpoint URL: {endpoint_url if endpoint_url else 'Default AWS DynamoDB'}")
+
+            # Set up DynamoDB client WITHOUT explicit credentials.
+            # Boto3 will use its default credential provider chain (env vars -> IAM role).
             self.dynamodb = boto3.resource(
                 'dynamodb',
                 endpoint_url=endpoint_url,
-                region_name=region,
-                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', 'fakeMyKeyId'),
-                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'fakeSecretAccessKey')
+                region_name=region
             )
             
-            # Get reference to the extremity table
             self.extremity_table = self.dynamodb.Table('Delphi_CommentExtremity')
-            logger.info("Successfully initialized DynamoDB connection for extremity storage")
+            # This check verifies the connection and table access.
+            self.extremity_table.load() 
+            logger.info(f"Successfully initialized DynamoDB connection and accessed table '{self.extremity_table.name}'")
+
         except Exception as e:
-            logger.error(f"Failed to initialize DynamoDB connection: {str(e)}")
+            logger.error(f"Failed to initialize DynamoDB connection: {e}")
             self.dynamodb = None
             self.extremity_table = None
-    
     def get_math_main_by_conversation(self, zid: int) -> Dict[str, Any]:
         """
         Get math main data (group assignments) for a conversation.

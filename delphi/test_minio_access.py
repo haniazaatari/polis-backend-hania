@@ -17,8 +17,8 @@ def test_s3_access():
     
     # Get S3 settings from environment or use defaults
     endpoint_url = os.environ.get('AWS_S3_ENDPOINT', 'http://localhost:9000')
-    access_key = os.environ.get('AWS_S3_ACCESS_KEY_ID', 'minioadmin')
-    secret_key = os.environ.get('AWS_S3_SECRET_ACCESS_KEY', 'minioadmin')
+    access_key = os.environ.get('AWS_ACCESS_KEY_ID', 'minioadmin')
+    secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY', 'minioadmin')
     bucket_name = os.environ.get('AWS_S3_BUCKET_NAME', 'delphi')
     region = os.environ.get('AWS_REGION', 'us-east-1')
     

@@ -271,8 +271,8 @@ def s3_upload_file(local_file_path, s3_key):
     """
     # Get S3 settings from environment
     endpoint_url = os.environ.get('AWS_S3_ENDPOINT')
-    access_key = os.environ.get('AWS_S3_ACCESS_KEY_ID')
-    secret_key = os.environ.get('AWS_S3_SECRET_ACCESS_KEY')
+    access_key = os.environ.get('AWS_ACCESS_KEY_ID')
+    secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
     bucket_name = os.environ.get('AWS_S3_BUCKET_NAME')
     region = os.environ.get('AWS_REGION')
 

@@ -15,7 +15,7 @@ export default (self: Construct) => {
     ],
   });
   instanceRole.addToPolicy(new iam.PolicyStatement({
-    actions: ['s3:PutObject', 's3:PutObjectAcl', 's3:AbortMultipartUpload'],
+    actions: ['s3:PutObject', 's3:PutObjectAcl', 's3:AbortMultipartUpload', 's3:ListBucket', 's3:GetObject', 's3:DeleteObject'],
     resources: ['arn:aws:s3:::*', 'arn:aws:s3:::*/*'],
   }));
   
