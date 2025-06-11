@@ -421,144 +421,133 @@ class BatchReportGenerator:
         except Exception as e:
             logger.error(f"Error loading cluster assignments from DynamoDB: {e}")
             return {}
-    # (Inside the BatchReportGenerator class)
+
     async def get_topics(self):
-        """Get topics for the conversation from DynamoDB efficiently across all layers."""
+        """
+        Gets all topics for the conversation from DynamoDB, efficiently fetching
+        all necessary data with a minimal number of queries.
+        """
         try:
+            # Fetch all topic names for the conversation
+            logger.info(f"Fetching all topic names for conversation {self.conversation_id}...")
             topic_names_table = self.dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
+            topic_names_items = []
+            last_key = None
+            while True:
+                query_kwargs = {
+                    'KeyConditionExpression': boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id)
+                }
+                if last_key:
+                    query_kwargs['ExclusiveStartKey'] = last_key
+                response = topic_names_table.query(**query_kwargs)
+                topic_names_items.extend(response.get('Items', []))
+                last_key = response.get('LastEvaluatedKey')
+                if not last_key:
+                    break
+            logger.info(f"Fetched {len(topic_names_items)} total topic name entries.")
+
+            # Fetch all cluster structure/keyword data for the conversation at once
+            logger.info(f"Fetching all structure/keyword data for conversation {self.conversation_id}...")
+            keywords_table = self.dynamodb.Table('Delphi_CommentClustersStructureKeywords')
+            keyword_items = []
+            last_key = None
+            while True:
+                query_kwargs = {
+                    'KeyConditionExpression': boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id)
+                }
+                if last_key:
+                    query_kwargs['ExclusiveStartKey'] = last_key
+                response = keywords_table.query(**query_kwargs)
+                keyword_items.extend(response.get('Items', []))
+                last_key = response.get('LastEvaluatedKey')
+                if not last_key:
+                    break
             
-            # Load cluster assignments for all layers
+            # Create a fast, in-memory lookup map for keywords
+            keywords_lookup = {item['cluster_key']: item for item in keyword_items}
+            logger.info(f"Created lookup map for {len(keywords_lookup)} keyword entries.")
+            
+            # Load all cluster assignments for all comments
             all_clusters = await asyncio.to_thread(self.load_comment_clusters_from_dynamodb, self.conversation_id)
             
-            # Determine which layers to process
-            available_layers = set()
-            for comment_clusters in all_clusters.values():
-                available_layers.update(comment_clusters.keys())
+            # --- Step 2: Process the fetched data ---
             
-            layers_to_process = sorted(available_layers)
+            available_layers = set(layer for clusters in all_clusters.values() for layer in clusters.keys())
+            layers_to_process = sorted(list(available_layers))
             if self.layers is not None:
-                # Filter to only requested layers
                 layers_to_process = [layer for layer in layers_to_process if layer in self.layers]
             
-            logger.info(f"Processing layers: {layers_to_process}")
+            logger.info(f"Preparing to process topics for layers: {layers_to_process}")
             
             all_topics = []
-            
             for layer_id in layers_to_process:
                 logger.info(f"Processing layer {layer_id}")
                 
-                # Query topics for this layer
-                topic_names_response = topic_names_table.query(
-                    KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id),
-                    FilterExpression=boto3.dynamodb.conditions.Attr('layer_id').eq(layer_id)
-                )
-                topic_names_items = topic_names_response.get('Items', [])
-                logger.info(f"Found {len(topic_names_items)} topic names for layer {layer_id}")
+                # Filter topic names for the current layer
+                layer_topic_names = [item for item in topic_names_items if int(item.get('layer_id', -1)) == layer_id]
                 
-                # Build topic comments map for this layer
+                # Build a map of {cluster_id: [comment_ids]} for the current layer
                 topic_comments = defaultdict(list)
                 for comment_id, comment_clusters in all_clusters.items():
                     if layer_id in comment_clusters:
                         cluster_id = comment_clusters[layer_id]
                         topic_comments[cluster_id].append(int(comment_id))
-                
-                logger.info(f"Collected comments for {len(topic_comments)} clusters in layer {layer_id}")
 
-                # Process each topic in this layer
-                for topic_item in topic_names_items:
+                # Process each topic within the current layer
+                for topic_item in layer_topic_names:
                     cluster_id = topic_item.get('cluster_id')
-                    topic_name = topic_item.get('topic_name', f"Topic {cluster_id}")
+                    topic_key = topic_item.get('topic_key')
+
+                    if cluster_id is None or not topic_key:
+                        logger.warning(f"Skipping invalid topic item: {topic_item}")
+                        continue
+
+                    # Use the pre-fetched keyword data
+                    cluster_lookup_key = f'layer{layer_id}_{cluster_id}'
+                    cluster_structure_item = keywords_lookup.get(cluster_lookup_key, {})
                     
-                    if cluster_id is not None:
-                        # Get sample comments from structure table
-                        cluster_response = self.dynamodb.Table('Delphi_CommentClustersStructureKeywords').query(
-                            KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id) &
-                                                boto3.dynamodb.conditions.Key('cluster_key').eq(f'layer{layer_id}_{cluster_id}')
-                        )
-                        
-                        sample_comments = []
-                        if cluster_response.get('Items'):
-                            cluster_item = cluster_response.get('Items')[0]
-                            if 'sample_comments' in cluster_item:
-                                if isinstance(cluster_item['sample_comments'], list):
-                                    sample_comments = cluster_item['sample_comments']
-                                elif isinstance(cluster_item['sample_comments'], dict) and 'L' in cluster_item['sample_comments']:
-                                    for comment in cluster_item['sample_comments']['L']:
-                                        if 'S' in comment:
-                                            sample_comments.append(comment['S'])
-                        
-                        # Get topic_key - this is required for stable mapping
-                        topic_key = topic_item.get('topic_key')
-                        if not topic_key:
-                            logger.error(f"Missing topic_key for cluster {cluster_id} in layer {layer_id} of conversation {self.conversation_id}")
-                            raise ValueError(f"topic_key is required but missing for layer {layer_id} cluster {cluster_id}")
-                        
-                        # Create topic entry with layer information
-                        topic = {
-                            "layer_id": layer_id,
-                            "cluster_id": cluster_id,
-                            "name": topic_name,
-                            "topic_key": topic_key,
-                            "citations": topic_comments.get(cluster_id, []),
-                            "sample_comments": sample_comments
-                        }
-                        all_topics.append(topic)
-            
-            # Add global sections (not tied to specific layers)
-            # Ensure we have a job_id for versioned topic_keys
+                    # Extract sample comments safely from the retrieved item
+                    sample_comments = []
+                    raw_samples = cluster_structure_item.get('sample_comments', [])
+                    if isinstance(raw_samples, list):
+                        sample_comments = [str(s) for s in raw_samples]
+
+                    topic = {
+                        "layer_id": layer_id,
+                        "cluster_id": cluster_id,
+                        "name": topic_item.get('topic_name', f"Topic {cluster_id}"),
+                        "topic_key": topic_key,
+                        "citations": topic_comments.get(cluster_id, []),
+                        "sample_comments": sample_comments
+                    }
+                    all_topics.append(topic)
+
+            # --- Step 3: Add global sections ---
             if not self.job_id:
                 raise ValueError("job_id is required for versioned topic keys but is missing or empty")
             
             global_topic_prefix = f"{self.job_id}_global"
-            
             global_sections = [
-                {
-                    "section_type": "global",
-                    "name": "groups",
-                    "topic_key": f"{global_topic_prefix}_groups",
-                    "description": "Comments that divide opinion groups",
-                    "filter_type": "comment_extremity",
-                    "filter_threshold": 1.0,
-                    "citations": [],  # Will be populated by filtering logic
-                    "sample_comments": []
-                },
-                {
-                    "section_type": "global", 
-                    "name": "group_informed_consensus",
-                    "topic_key": f"{global_topic_prefix}_group_informed_consensus",
-                    "description": "Comments with broad cross-group agreement",
-                    "filter_type": "group_aware_consensus",
-                    "filter_threshold": "dynamic",  # Based on group count
-                    "citations": [],  # Will be populated by filtering logic
-                    "sample_comments": []
-                },
-                {
-                    "section_type": "global",
-                    "name": "uncertainty", 
-                    "topic_key": f"{global_topic_prefix}_uncertainty",
-                    "description": "Comments with high uncertainty/unsure responses",
-                    "filter_type": "uncertainty_ratio",
-                    "filter_threshold": 0.2,
-                    "citations": [],  # Will be populated by filtering logic  
-                    "sample_comments": []
-                }
+                {"section_type": "global", "name": "groups", "topic_key": f"{global_topic_prefix}_groups", "filter_type": "comment_extremity", "filter_threshold": 1.0},
+                {"section_type": "global", "name": "group_informed_consensus", "topic_key": f"{global_topic_prefix}_group_informed_consensus", "filter_type": "group_aware_consensus", "filter_threshold": "dynamic"},
+                {"section_type": "global", "name": "uncertainty", "topic_key": f"{global_topic_prefix}_uncertainty", "filter_type": "uncertainty_ratio", "filter_threshold": 0.2}
             ]
-            
+            for section in global_sections: # Ensure placeholder keys exist
+                section.setdefault('citations', [])
+                section.setdefault('sample_comments', [])
+
             all_topics.extend(global_sections)
             logger.info(f"Created {len(all_topics)} sections total: {len(all_topics) - len(global_sections)} layer topics + {len(global_sections)} global sections")
             
-            # Sort: global sections first, then by layer and citation count
-            all_topics.sort(key=lambda x: (
-                0 if x.get('section_type') == 'global' else 1,  # Global sections first
-                x.get('layer_id', -1),  # Then by layer
-                -len(x.get('citations', []))  # Then by citation count descending
-            ))
+            # Sort topics for processing
+            all_topics.sort(key=lambda x: (0 if x.get('section_type') == 'global' else 1, x.get('layer_id', -1), -len(x.get('citations', []))))
+            
             return all_topics
         
         except Exception as e:
-            logger.error(f"Error getting topics: {str(e)}")
-            logger.error(traceback.format_exc())
+            logger.error(f"A critical error occurred in get_topics: {str(e)}", exc_info=True)
             return []
+        
     def filter_topics(self, comment, topic_cluster_id=None, topic_layer_id=None, topic_citations=None, sample_comments=None, filter_type=None, filter_threshold=None):
         """Filter for comments that are part of a specific topic or meet global section criteria."""
         # Get comment ID
