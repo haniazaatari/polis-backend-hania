@@ -167,6 +167,8 @@ def create_job_queue_table(dynamodb, delete_existing=False):
                 {'AttributeName': 'priority', 'AttributeType': 'N'},
                 {'AttributeName': 'worker_id', 'AttributeType': 'S'}
             ],
+            'BillingMode': 'PAY_PER_REQUEST',
+
             'GlobalSecondaryIndexes': [
                 {
                     'IndexName': 'StatusCreatedIndex',
@@ -175,7 +177,6 @@ def create_job_queue_table(dynamodb, delete_existing=False):
                         {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
                     ],
                     'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
                 },
                 {
                     'IndexName': 'ConversationIndex',
@@ -184,7 +185,6 @@ def create_job_queue_table(dynamodb, delete_existing=False):
                         {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
                     ],
                     'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
                 },
                 {
                     'IndexName': 'JobTypeIndex',
@@ -193,7 +193,6 @@ def create_job_queue_table(dynamodb, delete_existing=False):
                         {'AttributeName': 'priority', 'KeyType': 'RANGE'}
                     ],
                     'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
                 },
                 {
                     'IndexName': 'WorkerStatusIndex',
@@ -202,10 +201,8 @@ def create_job_queue_table(dynamodb, delete_existing=False):
                         {'AttributeName': 'status', 'KeyType': 'RANGE'}
                     ],
                     'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
                 }
             ],
-            'ProvisionedThroughput': {'ReadCapacityUnits': 10, 'WriteCapacityUnits': 10}
         }
     }
     
@@ -270,6 +267,7 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                 {'AttributeName': 'timestamp', 'AttributeType': 'S'},
                 {'AttributeName': 'report_id', 'AttributeType': 'S'}
             ],
+            'BillingMode': 'PAY_PER_REQUEST',
             'GlobalSecondaryIndexes': [
                 {
                     'IndexName': 'ReportIdTimestampIndex',
@@ -279,17 +277,9 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                     ],
                     'Projection': {
                         'ProjectionType': 'ALL'
-                    },
-                    'ProvisionedThroughput': {
-                        'ReadCapacityUnits': 5,
-                        'WriteCapacityUnits': 5
                     }
                 }
-            ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            ]
         },
         # Core tables
         'Delphi_UMAPConversationConfig': {
