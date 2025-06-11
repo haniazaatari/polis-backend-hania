@@ -214,7 +214,7 @@ class BatchStatusChecker:
             failed_count = 0
             
             for entry in results_stream:
-                if entry.type == "message.succeeded":
+                if entry.result.type == "succeeded":
                     custom_id = entry.custom_id
                     response_message = entry.result.message
                     model = response_message.model
@@ -243,7 +243,7 @@ class BatchStatusChecker:
                     logger.info(f"Job {job_id}: Successfully stored report for section '{section_name}'.")
                     processed_count += 1
 
-                elif entry.type == "message.failed":
+                elif entry.result.type == "failed":
                     failed_count += 1
                     logger.error(f"Job {job_id}: A request in batch {batch_id} failed. Custom ID: {entry.custom_id}, Error: {entry.result.error}")
 

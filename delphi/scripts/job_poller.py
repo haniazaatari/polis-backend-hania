@@ -65,14 +65,13 @@ class JobProcessor:
         except Exception as e:
             logger.error(f"Failed to connect to Delphi_JobQueue table: {e}")
             raise
-    
+        
     def find_pending_job(self):
         """
-        Finds the highest-priority job that is ready for processing.
-        This version now correctly ignores jobs with active, unexpired locks.
+        Finds the highest-priority actionable job, respecting existing locks.
         """
         try:
-            # 1. Fetch PENDING jobs (highest priority)
+            # 1. Fetch PENDING jobs (highest priority). These are always actionable.
             pending_response = self.table.query(
                 IndexName='StatusCreatedIndex',
                 KeyConditionExpression='#s = :status',
@@ -82,9 +81,10 @@ class JobProcessor:
                 ScanIndexForward=True
             )
             if pending_response.get('Items'):
+                # Return the full item to ensure we have the latest version for claiming.
                 return self.table.get_item(Key={'job_id': pending_response['Items'][0]['job_id']}).get('Item')
 
-            # 2. If no PENDING jobs, find AWAITING_NARRATIVE_BATCH jobs that are not locked
+            # 2. If no PENDING jobs, find AWAITING_NARRATIVE_BATCH jobs that need checking.
             awaiting_response = self.table.query(
                 IndexName='JobTypeIndex',
                 KeyConditionExpression='job_type = :job_type',
@@ -95,13 +95,15 @@ class JobProcessor:
             now_iso = datetime.now(timezone.utc).isoformat()
             
             for job in awaiting_response.get('Items', []):
-                # A job is actionable if its status is not terminal AND it has no lock or the lock has expired.
+                # A job is actionable only if its status is not yet terminal...
                 if job.get('status') not in ['COMPLETED', 'FAILED']:
                     lock_expires = job.get('lock_expires_at')
+                    # ...AND it either has no lock, OR its lock has expired.
                     if not lock_expires or lock_expires < now_iso:
                         actionable_batch_jobs.append(job)
 
             if actionable_batch_jobs:
+                # Sort by creation date to process the oldest check job first.
                 actionable_batch_jobs.sort(key=lambda x: x.get('created_at', ''))
                 logger.info(f"Found {len(actionable_batch_jobs)} actionable batch check job(s). Picking oldest: {actionable_batch_jobs[0]['job_id']}")
                 return actionable_batch_jobs[0]
@@ -110,7 +112,7 @@ class JobProcessor:
         except Exception as e:
             logger.error(f"Error finding pending job: {e}", exc_info=True)
             return None
-
+    
     def claim_job(self, job):
         """
         Atomically claims a job by setting its status to PROCESSING
@@ -120,25 +122,22 @@ class JobProcessor:
         current_version = job.get('version', 1)
         now = datetime.now(timezone.utc)
         new_expiry_iso = (now + timedelta(minutes=15)).isoformat()
-
-        # This single conditional update can claim a PENDING job or an expired job
-        # It ensures that only one worker can acquire the lock.
-        condition_expr = "(#s = :pending OR (attribute_exists(lock_expires_at) AND lock_expires_at < :now)) AND #v = :current_version"
         
         try:
+            # This single conditional update can claim a job found by find_pending_job.
+            # It relies on optimistic locking with the version number to prevent race conditions.
             response = self.table.update_item(
                 Key={'job_id': job_id},
                 UpdateExpression='SET #s = :processing, started_at = :now, lock_expires_at = :expiry, #v = :new_version, #w = :worker_id',
-                ConditionExpression=condition_expr,
+                ConditionExpression="#v = :current_version", # The version check is the ultimate lock guard
                 ExpressionAttributeNames={
                     '#s': 'status',
                     '#v': 'version',
                     '#w': 'worker_id'
                 },
                 ExpressionAttributeValues={
-                    ':pending': 'PENDING',
                     ':now': now.isoformat(),
-                    ':processing': 'PROCESSING',
+                    ':processing': 'PROCESSING', # Always set to a consistent "locked" state
                     ':expiry': new_expiry_iso,
                     ':current_version': current_version,
                     ':new_version': current_version + 1,
@@ -158,7 +157,7 @@ class JobProcessor:
         except Exception as e:
             logger.error(f"Unexpected error claiming job {job_id}: {e}", exc_info=True)
             return None
-        
+    
     def update_job_logs(self, job, log_entry, mirror_to_console=True):
         """
         Add a log entry to the job logs with optimistic locking.
@@ -732,25 +731,13 @@ class JobProcessor:
             # Specific handling for AWAITING_NARRATIVE_BATCH jobs based on new exit codes
             if job_type == 'AWAITING_NARRATIVE_BATCH':
                 if return_code == EXIT_CODE_PROCESSING_CONTINUES:
-                    # Update job's last checked time or similar, but don't complete it.
-                    # The job remains in PROCESSING status. Update 'updated_at' and 'version'.
-                    try:
-                        current_job_details = self.table.get_item(Key={'job_id': job_id}).get('Item', {})
-                        current_version = current_job_details.get('version', job.get('version', 1)) # Use latest known version
-
-                        self.table.update_item(
-                            Key={'job_id': job_id},
-                            UpdateExpression='SET updated_at = :now, version = :new_version, batch_check_script_exit_code = :exit_code',
-                            ConditionExpression='attribute_exists(job_id)', # Ensure job still exists
-                            ExpressionAttributeValues={
-                                ':now': datetime.now().isoformat(),
-                                ':new_version': current_version + 1,
-                                ':exit_code': return_code
-                            }
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to update timestamp for job {job_id} after script exit code 3: {e}")
-                    return True # Indicate poller handled this, job processing for this cycle is "done" but job itself is not final
+                    logger.info(f"Job {job_id}: Batch check shows still in progress. Releasing lock for next poll.")
+                    # We just remove the lock, the status remains PROCESSING.
+                    self.table.update_item(
+                        Key={'job_id': job_id},
+                        UpdateExpression="REMOVE lock_expires_at"
+                    )
+                    return True # Job handled for this cycle
 
                 elif return_code == 0: # Script 803 indicated terminal state (completed/failed) and handled it
                     logger.info(f"Job {job_id} (AWAITING_NARRATIVE_BATCH): Script 803 indicated terminal state for batch (exit code 0). Marking check job COMPLETED.")
