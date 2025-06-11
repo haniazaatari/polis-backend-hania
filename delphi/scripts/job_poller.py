@@ -46,12 +46,11 @@ class JobProcessor:
     
     def __init__(self, endpoint_url=None, region='us-east-1'):
         """Initialize the job processor."""
-        self.endpoint_url = endpoint_url or os.environ.get('DYNAMODB_ENDPOINT')
         self.region = region
         self.worker_id = str(uuid.uuid4())
         
-        if self.endpoint_url and self.endpoint_url.strip() == "":
-            self.endpoint_url = None
+        raw_endpoint = endpoint_url or os.environ.get('DYNAMODB_ENDPOINT')
+        self.endpoint_url = raw_endpoint if raw_endpoint and raw_endpoint.strip() else None
         
         logger.info(f"Connecting to DynamoDB at {self.endpoint_url or 'default AWS endpoint'}")
         self.dynamodb = boto3.resource('dynamodb', 
