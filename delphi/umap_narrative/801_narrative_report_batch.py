@@ -803,14 +803,14 @@ class BatchReportGenerator:
                 # Last resort: return first N comments
                 return comments[:limit]
     
-    async def get_comments_as_xml(self, filter_func=None, filter_args=None):
-        """Get comments as XML, optionally filtered."""
+    async def get_comments_as_xml(self, conversation_data: dict, filter_func=None, filter_args=None):
+        """Get comments as XML from pre-fetched data."""
         try:
-            # Get conversation data
-            data = await self.get_conversation_data()
+            # Use the data passed as an argument
+            data = conversation_data
             
             if not data:
-                logger.error("Failed to get conversation data.")
+                logger.error("Received empty conversation data.")
                 return ""
             
             # Apply filter if provided
@@ -883,12 +883,13 @@ class BatchReportGenerator:
     
     async def prepare_batch_requests(self):
         """Prepare batch requests for all topics."""
-        # Get topics
-        topics = await self.get_topics()
-        
-        if not topics:
-            logger.warning("No topics found")
+        logger.info("Fetching all conversation data ONCE...")
+        conversation_data = await self.get_conversation_data()
+        if not conversation_data:
+            logger.error("Failed to fetch conversation data. Cannot prepare batch requests.")
             return []
+        
+        topics = await self.get_topics()
         
         logger.info(f"Preparing batch requests for {len(topics)} topics")
         
@@ -956,7 +957,7 @@ class BatchReportGenerator:
             
             
             # Get comments as XML
-            structured_comments = await self.get_comments_as_xml(self.filter_topics, filter_args)
+            structured_comments = await self.get_comments_as_xml(conversation_data, self.filter_topics, filter_args)
             
             # Debug logging for topic 0
             if topic_cluster_id == 0 or str(topic_cluster_id) == "0":
