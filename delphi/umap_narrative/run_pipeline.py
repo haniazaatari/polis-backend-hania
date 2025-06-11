@@ -71,19 +71,7 @@ def setup_environment(db_host=None, db_port=None, db_name=None, db_user=None, db
     logger.info(f"- DATABASE: {os.environ.get('DATABASE_NAME')}")
     logger.info(f"- USER: {os.environ.get('DATABASE_USER')}")
     
-    # DynamoDB settings (for local DynamoDB)
-    # Don't override if already set in environment
-    dynamo_endpoint = os.environ.get('DYNAMODB_ENDPOINT')
-    
-    # Always set these credentials for local development if not already set
-    if not os.environ.get('AWS_ACCESS_KEY_ID'):
-        os.environ['AWS_ACCESS_KEY_ID'] = 'fakeMyKeyId'
-    
-    if not os.environ.get('AWS_SECRET_ACCESS_KEY'):
-        os.environ['AWS_SECRET_ACCESS_KEY'] = 'fakeSecretAccessKey'
-    
-    if not os.environ.get('AWS_DEFAULT_REGION') and not os.environ.get('AWS_REGION'):
-        os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
+    os.environ.setdefault('AWS_DEFAULT_REGION', 'us-east-1')
 
 def fetch_conversation_data(zid):
     """
