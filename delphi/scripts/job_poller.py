@@ -67,10 +67,10 @@ class JobProcessor:
         
     def find_pending_job(self):
         """
-        Finds the highest-priority actionable job, respecting existing locks.
+        Finds the highest-priority actionable job, respecting existing locks to prevent race conditions.
         """
         try:
-            # 1. Fetch PENDING jobs (highest priority). These are always actionable.
+            # 1. Fetch PENDING jobs first, as they are always the highest priority.
             pending_response = self.table.query(
                 IndexName='StatusCreatedIndex',
                 KeyConditionExpression='#s = :status',
@@ -80,7 +80,7 @@ class JobProcessor:
                 ScanIndexForward=True
             )
             if pending_response.get('Items'):
-                # Return the full item to ensure we have the latest version for claiming.
+                # Return the full item to ensure we have the latest version for claiming
                 return self.table.get_item(Key={'job_id': pending_response['Items'][0]['job_id']}).get('Item')
 
             # 2. If no PENDING jobs, find AWAITING_NARRATIVE_BATCH jobs that need checking.
@@ -102,7 +102,7 @@ class JobProcessor:
                         actionable_batch_jobs.append(job)
 
             if actionable_batch_jobs:
-                # Sort by creation date to process the oldest check job first.
+                # Sort by creation date to process the oldest check job first
                 actionable_batch_jobs.sort(key=lambda x: x.get('created_at', ''))
                 logger.info(f"Found {len(actionable_batch_jobs)} actionable batch check job(s). Picking oldest: {actionable_batch_jobs[0]['job_id']}")
                 return actionable_batch_jobs[0]
@@ -122,9 +122,9 @@ class JobProcessor:
         now = datetime.now(timezone.utc)
         new_expiry_iso = (now + timedelta(minutes=15)).isoformat()
 
-        # This single conditional update can now claim a PENDING job, a job
-        # awaiting re-check, OR an expired job.
-        condition_expr = "(#s IN (:pending, :awaiting_recheck) OR (attribute_exists(lock_expires_at) AND lock_expires_at < :now)) AND #v = :current_version"
+        # This single conditional update can claim a PENDING job or an expired job
+        # It ensures that only one worker can acquire the lock.
+        condition_expr = "(#s = :pending OR (attribute_exists(lock_expires_at) AND lock_expires_at < :now) OR attribute_not_exists(lock_expires_at)) AND #v = :current_version"
         
         try:
             response = self.table.update_item(
@@ -138,7 +138,6 @@ class JobProcessor:
                 },
                 ExpressionAttributeValues={
                     ':pending': 'PENDING',
-                    ':awaiting_recheck': 'AWAITING_RECHECK', # Added the new status
                     ':now': now.isoformat(),
                     ':processing': 'PROCESSING',
                     ':expiry': new_expiry_iso,
