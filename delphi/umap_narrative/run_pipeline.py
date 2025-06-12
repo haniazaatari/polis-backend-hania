@@ -1180,7 +1180,8 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False):
     dynamo_storage = None
     if export_dynamo:
         # Use endpoint from environment if available
-        endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
+        raw_endpoint = os.environ.get('DYNAMODB_ENDPOINT')
+        endpoint_url = raw_endpoint if raw_endpoint and raw_endpoint.strip() else None
         logger.info(f"Using DynamoDB endpoint from environment: {endpoint_url}")
         
         dynamo_storage = DynamoDBStorage(
