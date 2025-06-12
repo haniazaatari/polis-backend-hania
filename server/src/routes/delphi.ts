@@ -56,7 +56,7 @@ export async function handle_GET_delphi(req: Request, res: Response) {
 
     const conversation_id = zid.toString();
     const tableName = "Delphi_CommentClustersLLMTopicNames";
-    
+
     logger.info(
       `Fetching Delphi LLM topics for conversation_id: ${conversation_id}`
     );
@@ -66,7 +66,7 @@ export async function handle_GET_delphi(req: Request, res: Response) {
     try {
       const narrativeReportsTable = "Delphi_NarrativeReports";
       const gsiName = "ReportIdTimestampIndex";
-      
+
       const narrativeParams: any = {
         TableName: narrativeReportsTable,
         IndexName: gsiName,
@@ -74,13 +74,21 @@ export async function handle_GET_delphi(req: Request, res: Response) {
         ExpressionAttributeValues: { ":rid": report_id },
         Limit: 1, // Just need one to get the job UUID pattern
       };
-      
-      const narrativeResult = await docClient.send(new QueryCommand(narrativeParams));
+
+      const narrativeResult = await docClient.send(
+        new QueryCommand(narrativeParams)
+      );
       if (narrativeResult.Items && narrativeResult.Items.length > 0) {
         const sampleSection = narrativeResult.Items[0].section;
         // Extract job UUID from section name if it contains UUID pattern
-        if (sampleSection && sampleSection.includes('-') && sampleSection.includes('_')) {
-          const uuidMatch = sampleSection.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/);
+        if (
+          sampleSection &&
+          sampleSection.includes("-") &&
+          sampleSection.includes("_")
+        ) {
+          const uuidMatch = sampleSection.match(
+            /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/
+          );
           if (uuidMatch) {
             currentJobUuid = uuidMatch[1];
             logger.info(`Found current job UUID: ${currentJobUuid}`);
@@ -149,7 +157,7 @@ export async function handle_GET_delphi(req: Request, res: Response) {
       const sampleItem = runItems[0];
       allRuns[runKey] = {
         model_name: sampleItem.model_name,
-        created_date: sampleItem.created_at?.substring(0, 10),
+        created_date: sampleItem.created_at,
         topics_by_layer: topicsByLayer,
         item_count: runItems.length,
         job_uuid: currentJobUuid, // Include job UUID for section key construction
@@ -157,9 +165,11 @@ export async function handle_GET_delphi(req: Request, res: Response) {
     });
 
     const sortedRuns = Object.entries(allRuns)
-      .sort(([, runA], [, runB]) =>
-        (runB.created_date || "").localeCompare(runA.created_date || "")
-      )
+      .sort(([, runA], [, runB]) => {
+        const dateA = new Date(runA.created_date || 0);
+        const dateB = new Date(runB.created_date || 0);
+        return dateB.getTime() - dateA.getTime();
+      })
       .reduce((acc, [key, value]) => {
         acc[key] = value;
         return acc;
