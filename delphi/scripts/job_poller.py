@@ -121,22 +121,26 @@ class JobProcessor:
         current_version = job.get('version', 1)
         now = datetime.now(timezone.utc)
         new_expiry_iso = (now + timedelta(minutes=15)).isoformat()
+
+        # This single conditional update can now claim a PENDING job, a job
+        # awaiting re-check, OR an expired job.
+        condition_expr = "(#s IN (:pending, :awaiting_recheck) OR (attribute_exists(lock_expires_at) AND lock_expires_at < :now)) AND #v = :current_version"
         
         try:
-            # This single conditional update can claim a job found by find_pending_job.
-            # It relies on optimistic locking with the version number to prevent race conditions.
             response = self.table.update_item(
                 Key={'job_id': job_id},
                 UpdateExpression='SET #s = :processing, started_at = :now, lock_expires_at = :expiry, #v = :new_version, #w = :worker_id',
-                ConditionExpression="#v = :current_version", # The version check is the ultimate lock guard
+                ConditionExpression=condition_expr,
                 ExpressionAttributeNames={
                     '#s': 'status',
                     '#v': 'version',
                     '#w': 'worker_id'
                 },
                 ExpressionAttributeValues={
+                    ':pending': 'PENDING',
+                    ':awaiting_recheck': 'AWAITING_RECHECK', # Added the new status
                     ':now': now.isoformat(),
-                    ':processing': 'PROCESSING', # Always set to a consistent "locked" state
+                    ':processing': 'PROCESSING',
                     ':expiry': new_expiry_iso,
                     ':current_version': current_version,
                     ':new_version': current_version + 1,
