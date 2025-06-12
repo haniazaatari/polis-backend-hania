@@ -58,7 +58,7 @@ def main():
     os.environ["PYTHONPATH"] = f"/app:{os.environ.get('PYTHONPATH', '')}"
     os.environ["OLLAMA_HOST"] = os.environ.get("OLLAMA_HOST", "http://ollama:11434")
     # OLLAMA_MODEL is already set and checked
-    os.environ["DYNAMODB_ENDPOINT"] = os.environ.get("DYNAMODB_ENDPOINT", "http://dynamodb:8000")
+    os.environ["DYNAMODB_ENDPOINT"] = os.environ.get("DYNAMODB_ENDPOINT", None)
 
     max_votes = os.environ.get("MAX_VOTES")
     max_votes_arg = f"--max-votes={max_votes}" if max_votes else ""
@@ -135,26 +135,46 @@ def main():
             import boto3
             from boto3.dynamodb.conditions import Key
             
-            endpoint_url = os.environ.get('DYNAMODB_ENDPOINT', 'http://dynamodb:8000')
-            dynamodb = boto3.resource('dynamodb', endpoint_url=endpoint_url, region_name='us-east-1')
+            raw_endpoint = os.environ.get('DYNAMODB_ENDPOINT')
+            endpoint_url = raw_endpoint if raw_endpoint and raw_endpoint.strip() else None
+            
+            dynamodb = boto3.resource('dynamodb', 
+                                     endpoint_url=endpoint_url, 
+                                     region_name='us-east-1')
+
             table = dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
             
-            response = table.query(
-                KeyConditionExpression=Key('conversation_id').eq(str(zid)),
-                Limit=10  # Just need a few records to determine layers
-            )
-            
-            # Extract available layers from field names
             available_layers = set()
-            for item in response['Items']:
-                for key in item.keys():
-                    if key.startswith('layer') and key.endswith('_cluster_id'):
-                        layer_num = int(key.replace('layer', '').replace('_cluster_id', ''))
-                        if item[key] is not None:
-                            available_layers.add(layer_num)
+            last_key = None
+
+            print(f"{YELLOW}Querying all items to discover available layers...{NC}")
+            while True:
+                query_kwargs = {
+                    'KeyConditionExpression': Key('conversation_id').eq(str(zid))
+                }
+                if last_key:
+                    query_kwargs['ExclusiveStartKey'] = last_key
+                
+                response = table.query(**query_kwargs)
+
+                for item in response.get('Items', []):
+                    for key, value in item.items():
+                        if key.startswith('layer') and key.endswith('_cluster_id') and value is not None:
+                            try:
+                                layer_num = int(key.replace('layer', '').replace('_cluster_id', ''))
+                                available_layers.add(layer_num)
+                            except ValueError:
+                                continue 
+                
+                last_key = response.get('LastEvaluatedKey')
+                if not last_key:
+                    break
             
-            available_layers = sorted(available_layers)
-            print(f"{YELLOW}Found layers: {available_layers}{NC}")
+            available_layers = sorted(list(available_layers))
+            if not available_layers:
+                 raise ValueError("No valid layers found for this conversation.")
+                 
+            print(f"{YELLOW}Discovered layers: {available_layers}{NC}")
             
         except Exception as e:
             print(f"{RED}Warning: Could not determine layers from DynamoDB: {e}{NC}")
