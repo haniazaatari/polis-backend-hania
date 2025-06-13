@@ -285,81 +285,68 @@ class JobProcessor:
             logger.error(f"Error completing job {job_id}: {e}")
 
     def process_job(self, job):
-        """Processes a claimed job by executing the correct script."""
+        """Processes a claimed job by executing the correct script with real-time log handling."""
         job_id = job['job_id']
         job_type = job.get('job_type')
         conversation_id = job.get('conversation_id')
-        raw_timeout = job.get('timeout_seconds', 3600)
-        # Explicitly cast it to an integer to ensure compatibility with subprocess
-        timeout_seconds = int(raw_timeout)
-        
+        timeout_seconds = int(job.get('timeout_seconds', 3600))
+
         self.update_job_logs(job, {'level': 'INFO', 'message': f'Worker {self.worker_id} starting job {job_id}'})
         
         try:
-            # Build command based on job type
+            # 1. Build the command
             job_config = json.loads(job.get('job_config', '{}'))
-            
             if job_type == 'CREATE_NARRATIVE_BATCH':
                 model = os.environ.get("ANTHROPIC_MODEL")
                 if not model: raise ValueError("ANTHROPIC_MODEL must be set")
                 max_batch_size = job_config.get('max_batch_size', 20)
                 cmd = ['python', '/app/umap_narrative/801_narrative_report_batch.py', f'--conversation_id={conversation_id}', f'--model={model}', f'--max-batch-size={str(max_batch_size)}']
                 if job_config.get('no_cache'): cmd.append('--no-cache')
-
             elif job_type == 'AWAITING_NARRATIVE_BATCH':
-                # --- START OF FIX ---
-                # The 803 script needs the ID of the ORIGINAL job, which is stored in `batch_job_id`.
-                cmd_job_id = job.get('batch_job_id', job_id) 
+                cmd_job_id = job.get('batch_job_id', job_id)
                 cmd = ['python', '/app/umap_narrative/803_check_batch_status.py', f'--job-id={cmd_job_id}']
-                # --- END OF FIX ---
-            
-            elif job_type == 'FULL_PIPELINE':
+            else: # FULL_PIPELINE
                 cmd = ['python', '/app/run_delphi.py', f'--zid={conversation_id}']
-            
-            else:
-                raise ValueError(f"Unrecognized job_type: '{job_type}'")
 
-            # Execute the subprocess (the rest of the function is correct)
+            # 2. Execute the command and stream logs to prevent deadlocks
+            self.update_job_logs(job, {'level': 'INFO', 'message': f'Executing command: {" ".join(cmd)}'})
+            
             env = os.environ.copy()
             env['DELPHI_JOB_ID'] = job_id
             env['DELPHI_REPORT_ID'] = str(job.get('report_id', conversation_id))
             
-            self.update_job_logs(job, {'level': 'INFO', 'message': f'Executing command: {" ".join(cmd)}'})
-            
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-            
-            try:
-                stdout, stderr = process.communicate(timeout=timeout_seconds)
-            except subprocess.TimeoutExpired:
-                logger.error(f"Job {job_id} timed out after {timeout_seconds} seconds.")
-                process.kill()
-                stdout, stderr = process.communicate()
-                self.complete_job(job, False, error=f"Job process timed out after {timeout_seconds}s.")
-                return
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True, env=env)
 
-            if stdout: self.update_job_logs(job, {'level': 'INFO', 'message': f"stdout: {stdout.strip()}"})
-            if stderr: self.update_job_logs(job, {'level': 'ERROR', 'message': f"stderr: {stderr.strip()}"})
-
-            success = (process.returncode == 0)
-            result = {'return_code': process.returncode}
+            start_time = time.time()
+            for line in iter(process.stdout.readline, ''):
+                # Log each line of output as it arrives
+                self.update_job_logs(job, {'level': 'INFO', 'message': f"[stdout] {line.strip()}"})
+                if time.time() - start_time > timeout_seconds:
+                    raise subprocess.TimeoutExpired(cmd, timeout_seconds)
             
-            # State Machine Logic
+            process.stdout.close()
+            return_code = process.wait()
+            
+            # 3. Handle the results
+            success = (return_code == 0)
             if job_type == 'AWAITING_NARRATIVE_BATCH':
-                if process.returncode == EXIT_CODE_PROCESSING_CONTINUES:
-                    logger.info(f"Job {job_id}: Batch check in progress. Releasing lock for next poll.")
+                if return_code == EXIT_CODE_PROCESSING_CONTINUES:
                     self.release_lock(job, is_still_processing=True)
                 else:
-                    self.complete_job(job, success, result=result, error=stderr if not success else None)
+                    self.complete_job(job, success, error=f"Script failed with exit code {return_code}" if not success else None)
             
             elif job_type == 'CREATE_NARRATIVE_BATCH':
                 if success:
                     logger.info(f"Job {job_id}: Async trigger successful. Status remains 'PROCESSING'.")
                 else:
-                    self.complete_job(job, False, result=result, error=f"CREATE_NARRATIVE_BATCH script failed: {stderr}")
+                    self.complete_job(job, False, error=f"CREATE_NARRATIVE_BATCH script failed with exit code {return_code}")
 
-            else: # Handle other synchronous job types
-                self.complete_job(job, success, result=result, error=stderr if not success else None)
-        
+            else: # Handle all other synchronous job types
+                self.complete_job(job, success, error=f"Process exited with code {return_code}" if not success else None)
+
+        except subprocess.TimeoutExpired:
+            logger.error(f"Job {job_id} timed out after {timeout_seconds} seconds.")
+            self.complete_job(job, False, error=f"Job process timed out after {timeout_seconds}s.")
         except Exception as e:
             logger.error(f"Critical error processing job {job_id}: {e}", exc_info=True)
             self.complete_job(job, False, error=f"Critical poller error: {str(e)}")
