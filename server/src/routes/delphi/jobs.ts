@@ -141,7 +141,7 @@ export async function handle_POST_delphi_jobs(
       report_id: report_id, // Include report_id for proper S3 paths
       retry_count: 0,
       max_retries: 3,
-      timeout_seconds: 7200, // 2 hours default timeout
+      timeout_seconds: 14400, // 4 hours default timeout
       job_config: JSON.stringify(jobConfig),
       job_results: JSON.stringify({}),
       logs: JSON.stringify({
@@ -207,8 +207,7 @@ export async function handle_POST_delphi_jobs(
         error instanceof Error && "code" in error
           ? (error as any).code
           : undefined,
-      details:
-        Config.nodeEnv === "development" ? String(error) : undefined,
+      details: Config.nodeEnv === "development" ? String(error) : undefined,
     });
   }
 }
