@@ -212,43 +212,86 @@ export async function handle_GET_consensus_feed(req: Request, res: Response) {
     // Sort by timestamp (most recent first)
     consensusItems.sort((a, b) => (b.timestamp || "").localeCompare(a.timestamp || ""));
 
-    // Build RSS items
+    // Build rich RSS items with full narrative structure
     const rssItems = consensusItems.slice(0, 10).map(item => {
       const ridSectionModel = item.rid_section_model || "";
       const parts = ridSectionModel.split("#");
       const section = parts.length >= 2 ? parts[1] : "unknown";
       const model = parts.length > 2 ? parts[2] : "unknown";
       
-      const title = `New Consensus Update: ${section.replace(/_/g, ' ')}`;
+      const title = `Cross-Group Consensus Analysis`;
       const pubDate = item.timestamp ? new Date(item.timestamp).toUTCString() : new Date().toUTCString();
       const guid = `${requestReportId}-${section}-${item.timestamp}`;
       const link = `https://pol.is/report/${requestReportId}#consensus-${section}`;
       
-      // Parse report data for description
-      let description = "Consensus analysis available";
+      // Parse and reconstruct the full narrative structure
+      let contentHtml = "<p>Consensus analysis available</p>";
+      let citationIds: number[] = [];
+      
       try {
         if (item.report_data && typeof item.report_data === "string") {
           const data = JSON.parse(item.report_data);
-          if (data.paragraphs && data.paragraphs[0] && data.paragraphs[0].sentences) {
-            // Extract first sentence of first paragraph for description
-            const firstSentence = data.paragraphs[0].sentences[0];
-            if (firstSentence && firstSentence.clauses) {
-              description = firstSentence.clauses.map((c: any) => c.text).join(' ');
-              // Limit description length
-              if (description.length > 200) {
-                description = description.substring(0, 200) + "...";
+          
+          if (data.paragraphs && Array.isArray(data.paragraphs)) {
+            // Build HTML content from structured narrative
+            let htmlSections: string[] = [];
+            
+            data.paragraphs.forEach((paragraph: any) => {
+              if (paragraph.title) {
+                htmlSections.push(`<h3>${paragraph.title}</h3>`);
               }
-            }
+              
+              if (paragraph.sentences && Array.isArray(paragraph.sentences)) {
+                paragraph.sentences.forEach((sentence: any) => {
+                  let sentenceText = "";
+                  let sentenceCitations: number[] = [];
+                  
+                  if (sentence.clauses && Array.isArray(sentence.clauses)) {
+                    sentence.clauses.forEach((clause: any) => {
+                      sentenceText += clause.text || "";
+                      
+                      if (clause.citations && Array.isArray(clause.citations)) {
+                        clause.citations.forEach((citation: any) => {
+                          if (typeof citation === "number") {
+                            sentenceCitations.push(citation);
+                            citationIds.push(citation);
+                          }
+                        });
+                      }
+                    });
+                  }
+                  
+                  // Add citations as superscript
+                  if (sentenceCitations.length > 0) {
+                    sentenceText += `<sup>[${sentenceCitations.join(', ')}]</sup>`;
+                  }
+                  
+                  htmlSections.push(`<p>${sentenceText}</p>`);
+                });
+              }
+            });
+            
+            contentHtml = htmlSections.join('\n');
           }
         }
       } catch (e) {
-        // Use fallback description
+        logger.warn(`Error parsing consensus report data: ${e}`);
+      }
+
+      // Remove duplicates from citations
+      citationIds = [...new Set(citationIds)];
+      
+      // Add citation references to content
+      if (citationIds.length > 0) {
+        contentHtml += `\n<h4>Referenced Comments</h4>`;
+        contentHtml += `<p>This analysis references ${citationIds.length} comments: [${citationIds.join(', ')}]</p>`;
+        contentHtml += `<p><em>Full comment details and voting patterns available at: <a href="${link}">View Full Report</a></em></p>`;
       }
 
       return `
         <item>
           <title><![CDATA[${title}]]></title>
-          <description><![CDATA[${description}]]></description>
+          <description><![CDATA[${contentHtml}]]></description>
           <link>${link}</link>
           <guid>${guid}</guid>
           <pubDate>${pubDate}</pubDate>
@@ -264,7 +307,7 @@ export async function handle_GET_consensus_feed(req: Request, res: Response) {
     <description>Cross-group consensus changes and updates for conversation ${requestReportId}</description>
     <link>https://pol.is/report/${requestReportId}</link>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
-    <generator>Pol.is Delphi RSS Generator</generator>
+    <generator>Pol.is RSS Generator</generator>
     <language>en-us</language>
     ${rssItems}
   </channel>
