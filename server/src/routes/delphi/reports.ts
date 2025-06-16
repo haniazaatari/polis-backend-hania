@@ -259,7 +259,12 @@ export async function handle_GET_delphi_reports(req: Request, res: Response) {
       }
     } else if (sectionFilter) {
       filteredReports = {
-        [sectionFilter]: reportsBySection[sectionFilter] || {},
+        [sectionFilter]:
+          reportsBySection[sectionFilter] ||
+          reportsBySection[
+            Object.keys(reportsBySection).find((k) => k.includes(sectionFilter))
+          ] ||
+          {},
       };
     }
 
