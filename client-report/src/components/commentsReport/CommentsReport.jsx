@@ -338,9 +338,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
       if (showGlobalSections) {
         // Show global sections - combine topic data with narrative report status
         const globalSectionTypes = [
-          { key: 'groups', title: 'Divisive Comments (Global)' },
-          { key: 'group_informed_consensus', title: 'Cross-Group Consensus (Global)' },
-          { key: 'uncertainty', title: 'High Uncertainty Comments (Global)' }
+          { key: 'batch_re_global_groups', title: 'Divisive Comments (Global)' },
+          { key: 'batch_re_global_group_informed_consensus', title: 'Cross-Group Consensus (Global)' },
+          { key: 'batch_re_global_uncertainty', title: 'High Uncertainty Comments (Global)' }
         ];
         
         globalSectionTypes.forEach(({ key, title }) => {
