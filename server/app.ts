@@ -25,6 +25,11 @@ import { handle_GET_delphi_visualizations } from "./src/routes/delphi/visualizat
 import { handle_POST_delphi_jobs } from "./src/routes/delphi/jobs";
 import { handle_GET_delphi_reports } from "./src/routes/delphi/reports";
 import { handle_POST_delphi_batch_reports } from "./src/routes/delphi/batchReports";
+import { 
+  handle_GET_feeds_directory,
+  handle_GET_consensus_feed,
+  handle_GET_topics_feed
+} from "./src/routes/api/v3/feeds";
 
 const app = express();
 
@@ -837,6 +842,52 @@ helpersInitialized.then(
           message: "Internal server error in batch reports endpoint",
           error: err.message || "Unknown error",
         });
+      }
+    });
+
+    // RSS Feeds routes
+    app.get("/feeds/:reportId", function (req, res) {
+      try {
+        handle_GET_feeds_directory(req, res);
+      } catch (err) {
+        res.status(500).send(`
+          <html><head><title>Error</title></head><body>
+            <h1>Error</h1>
+            <p>Internal server error: ${err.message || "Unknown error"}</p>
+          </body></html>
+        `);
+      }
+    });
+
+    app.get("/feeds/:reportId/consensus", function (req, res) {
+      try {
+        handle_GET_consensus_feed(req, res);
+      } catch (err) {
+        res.status(500).set('Content-Type', 'application/rss+xml').send(`
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0">
+            <channel>
+              <title>Error</title>
+              <description>Internal server error: ${err.message || "Unknown error"}</description>
+            </channel>
+          </rss>
+        `);
+      }
+    });
+
+    app.get("/feeds/:reportId/topics", function (req, res) {
+      try {
+        handle_GET_topics_feed(req, res);
+      } catch (err) {
+        res.status(500).set('Content-Type', 'application/rss+xml').send(`
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0">
+            <channel>
+              <title>Error</title>
+              <description>Internal server error: ${err.message || "Unknown error"}</description>
+            </channel>
+          </rss>
+        `);
       }
     });
 
