@@ -42,67 +42,67 @@ const TopicsVizReport = ({ report_id }) => {
 
   // Helper function to find the best job to display (prioritize jobs that match topic data)
   const getBestVisualizationJob = () => {
-    if (!visualizationJobs || visualizationJobs.length === 0) {
-      return null;
-    }
+    // if (!visualizationJobs || visualizationJobs.length === 0) {
+    //   return null;
+    // }
 
-    // Try to get the job UUID from the latest topic run
-    let topicJobUuid = null;
-    if (delphiTopics) {
-      const runKeys = Object.keys(delphiTopics);
-      if (runKeys.length > 0) {
-        const latestRun = delphiTopics[runKeys[0]];
-        // Check if any topic has a topic_key with UUID
-        if (latestRun?.topics_by_layer) {
-          Object.values(latestRun.topics_by_layer).forEach(layer => {
-            Object.values(layer).forEach(topic => {
-              if (topic.topic_key && topic.topic_key.includes('#')) {
-                topicJobUuid = topic.topic_key.split('#')[0];
-              }
-            });
-          });
-        }
-      }
-    }
+    // // Try to get the job UUID from the latest topic run
+    // let topicJobUuid = null;
+    // if (delphiTopics) {
+    //   const runKeys = Object.keys(delphiTopics);
+    //   if (runKeys.length > 0) {
+    //     const latestRun = delphiTopics[runKeys[0]];
+    //     // Check if any topic has a topic_key with UUID
+    //     if (latestRun?.topics_by_layer) {
+    //       Object.values(latestRun.topics_by_layer).forEach(layer => {
+    //         Object.values(layer).forEach(topic => {
+    //           if (topic.topic_key && topic.topic_key.includes('#')) {
+    //             topicJobUuid = topic.topic_key.split('#')[0];
+    //           }
+    //         });
+    //       });
+    //     }
+    //   }
+    // }
 
-    // If we have a topic job UUID, try to find a matching visualization job
-    if (topicJobUuid) {
-      const matchingJob = visualizationJobs.find(job => 
-        job.jobId === topicJobUuid && job.status === "COMPLETED"
-      );
-      if (matchingJob) {
-        // For matching jobs, we need to construct the visualization URL even if metadata is missing
-        if (!matchingJob.visualizations || matchingJob.visualizations.length === 0) {
-          // Construct the expected visualization URL
-          const baseUrl = matchingJob.results?.visualization_urls?.interactive;
-          if (baseUrl) {
-            matchingJob.visualizations = [{
-              key: `visualizations/${report_id}/${topicJobUuid}/layer_0_datamapplot.html`,
-              url: baseUrl,
-              layerId: 0,
-              type: "interactive"
-            }];
-          }
-        }
-        console.log(`Using visualization job ${topicJobUuid} that matches topic data`);
-        return matchingJob;
-      }
-    }
+    // // If we have a topic job UUID, try to find a matching visualization job
+    // if (topicJobUuid) {
+    //   const matchingJob = visualizationJobs.find(job => 
+    //     job.jobId === topicJobUuid && job.status === "COMPLETED"
+    //   );
+    //   if (matchingJob) {
+    //     // For matching jobs, we need to construct the visualization URL even if metadata is missing
+    //     if (!matchingJob.visualizations || matchingJob.visualizations.length === 0) {
+    //       // Construct the expected visualization URL
+    //       const baseUrl = matchingJob.results?.visualization_urls?.interactive;
+    //       if (baseUrl) {
+    //         matchingJob.visualizations = [{
+    //           key: `visualizations/${report_id}/${topicJobUuid}/layer_0_datamapplot.html`,
+    //           url: baseUrl,
+    //           layerId: 0,
+    //           type: "interactive"
+    //         }];
+    //       }
+    //     }
+    //     console.log(`Using visualization job ${topicJobUuid} that matches topic data`);
+    //     return matchingJob;
+    //   }
+    // }
 
-    // Fallback: First, try to find a completed job with visualizations
-    const completedJobWithViz = visualizationJobs.find(job => 
-      job.status === "COMPLETED" && 
-      job.visualizations && 
-      Array.isArray(job.visualizations) && 
-      job.visualizations.length > 0
-    );
+    // // Fallback: First, try to find a completed job with visualizations
+    // const completedJobWithViz = visualizationJobs.find(job => 
+    //   job.status === "COMPLETED" && 
+    //   job.visualizations && 
+    //   Array.isArray(job.visualizations) && 
+    //   job.visualizations.length > 0
+    // );
     
-    if (completedJobWithViz) {
-      console.log(`Using fallback visualization job ${completedJobWithViz.jobId}`);
-      return completedJobWithViz;
-    }
+    // if (completedJobWithViz) {
+    //   console.log(`Using fallback visualization job ${completedJobWithViz.jobId}`);
+    //   return completedJobWithViz;
+    // }
     
-    // If no completed job with visualizations, return the first job
+    // // If no completed job with visualizations, return the first job
     return visualizationJobs[0];
   };
 

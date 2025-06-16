@@ -27,7 +27,7 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
         
         if (response && response.status === "success" && response.reports) {
           // The response contains reports object with the section as key
-          const sectionData = response.reports[topicKey];
+          const sectionData = response.reports[topicKey] || response.reports[Object.keys(response.reports).map(key => key.includes(topicKey))];
           if (sectionData && sectionData.report_data) {
             // Parse the report_data if it's a string
             const reportData = typeof sectionData.report_data === 'string' 
