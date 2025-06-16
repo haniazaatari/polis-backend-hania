@@ -103,7 +103,7 @@ const TopicsVizReport = ({ report_id }) => {
     // }
     
     // // If no completed job with visualizations, return the first job
-    return visualizationJobs[0];
+    return visualizationJobs.filter(job => job.visualizations?.length > 0)[0];
   };
 
   // Get friendly names for different topic granularity levels
