@@ -61,9 +61,9 @@ export default (
   const asgDelphiSmall = new autoscaling.AutoScalingGroup(self, 'AsgDelphiSmall', {
     vpc,
     launchTemplate: delphiSmallLaunchTemplate,
-    minCapacity: 1,
-    desiredCapacity: 1,
-    maxCapacity: 5,
+    minCapacity: 2,
+    desiredCapacity: 2,
+    maxCapacity: 7,
     vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
     healthCheck: autoscaling.HealthCheck.ec2({ grace: cdk.Duration.minutes(5) }),
   });
