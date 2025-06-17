@@ -373,13 +373,10 @@ class BatchReportGenerator:
         Returns a nested structure: {comment_id: {layer_id: cluster_id, ...}}
         """
         try:
-            # Use the shared dynamodb resource
             clusters_table = self.dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
             cluster_map = {}
             
             logger.info(f"Querying for cluster assignments for conversation_id: {conversation_id}")
-
-            # --- OPTIMIZATION: Replace Scan with Query and handle pagination ---
             last_evaluated_key = None
             available_layers = set()
             
@@ -1471,7 +1468,6 @@ class BatchReportGenerator:
             # Try to update job status in DynamoDB
             if self.job_id:
                 try:
-                    # --- FIX: Reuse the existing self.dynamodb client ---
                     job_table = self.dynamodb.Table('Delphi_JobQueue')
                     job_table.update_item(
                         Key={'job_id': self.job_id},

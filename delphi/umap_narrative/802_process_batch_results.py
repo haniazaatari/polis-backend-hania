@@ -112,7 +112,6 @@ class BatchReportStorageService:
                 update_expression += f"{key} = :{key.replace('.', '_')}, "
                 expression_attribute_values[f":{key.replace('.', '_')}"] = value
             
-            # Remove trailing comma and space
             update_expression = update_expression[:-2]
             
             response = self.table.update_item(

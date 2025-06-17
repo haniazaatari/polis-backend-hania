@@ -647,14 +647,6 @@ def update_visualization_with_llm_names(conversation_id, layer_id, topic_names, 
         layer_figure.save(layer_file)
         logger.info(f"Saved visualization with LLM topic names to {layer_file}")
         
-        # # Try to open in browser
-        # try:
-        #     import webbrowser
-        #     webbrowser.open(f"file://{layer_file}")
-        #     logger.info(f"Opened visualization in browser")
-        # except:
-        #     logger.info(f"Visualization available at: file://{layer_file}")
-        
         return layer_file
     except Exception as e:
         logger.error(f"Error creating visualization: {e}")
