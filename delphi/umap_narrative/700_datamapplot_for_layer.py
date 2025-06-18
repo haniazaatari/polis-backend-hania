@@ -61,17 +61,13 @@ def s3_upload_file(local_file_path: str, s3_key: str) -> str or bool:
     logger.info("  Credentials: Using Boto3's default provider chain (env, ~/.aws, IAM role).")
 
     try:
-        # --- 2. Initialize the Boto3 Client ---
-        # By not passing explicit credentials, we leverage the default credential chain.
         s3_client = boto3.client(
             's3',
             region_name=region,
             endpoint_url=endpoint_url
-            # For MinIO, you might need a specific signature version if issues arise.
-            # config=boto3.session.Config(signature_version='s3v4')
         )
 
-        # --- 3. Check for Bucket and Create if Local ---
+        # Check for Bucket and Create if Local ---
         try:
             s3_client.head_bucket(Bucket=bucket_name)
             logger.info(f"Bucket '{bucket_name}' already exists.")
@@ -132,7 +128,7 @@ def s3_upload_file(local_file_path: str, s3_key: str) -> str or bool:
 
 # Configure logging with less verbosity
 logging.basicConfig(
-    level=logging.INFO,  # Change to INFO level to reduce verbosity
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -427,9 +423,6 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
                     edges.extend(response.get('Items', []))
                 
                 logger.info(f"Retrieved {len(edges)} edges from UMAPGraph")
-                
-                # No need to log edge details
-                # - intentionally blank
                 
                 # Check how many edges have position data
                 edges_with_position = [e for e in edges if 'position' in e and isinstance(e['position'], dict)]
@@ -763,15 +756,6 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
                 logger.error(f"Error uploading to S3: {s3_error}")
                 import traceback
                 logger.error(f"S3 upload traceback: {traceback.format_exc()}")
-            
-            # Try to open in browser
-            # try:
-            #     import webbrowser
-            #     webbrowser.open(f"file://{viz_file}")
-            #     logger.info(f"Opened visualization in browser")
-            # except Exception as browse_error:
-            #     logger.debug(f"Could not open browser: {browse_error}")
-            #     logger.info(f"Visualization available at: file://{viz_file}")
             
             return viz_file
         except Exception as e:

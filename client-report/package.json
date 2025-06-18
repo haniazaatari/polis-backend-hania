@@ -46,6 +46,7 @@
     "d3-scale-chromatic": "~1.1.1",
     "hull.js": "~0.2.11",
     "jquery": "~3.6.3",
+    "jsonrepair": "^3.12.0",
     "lodash": "~4.17.21",
     "prop-types": "~15.8.1",
     "react": "^18.3.1",

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { jsonrepair } from "jsonrepair";
 import net from "../../util/net";
 import { useReportId } from "../framework/useReportId";
 import getNarrativeJSON from "../../util/getNarrativeJSON";
@@ -874,7 +875,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             }
 
             try {
-              const respData = JSON.parse(report.report_data);
+              const respData = JSON.parse(jsonrepair(report.report_data));
 
               const extractCitationsForThisSection = (data) => {
                 const collectedCitations = [];
