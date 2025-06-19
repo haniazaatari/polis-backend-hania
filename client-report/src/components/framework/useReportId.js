@@ -8,7 +8,7 @@ export function useReportId() {
     const pathname = window.location.pathname;
     
     // Match patterns like /report/rid or /narrativeReport/rid or /commentsReport/rid
-    const match = pathname.match(/^\/(report|narrativeReport|commentsReport)\/([a-zA-Z0-9]+)/);
+    const match = pathname.match(/^\/(report|narrativeReport|commentsReport|topicMapNarrativeReport)\/([a-zA-Z0-9]+)/);
     
     if (match && match[2]) {
       setReportId(match[2]);
