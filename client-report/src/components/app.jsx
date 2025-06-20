@@ -26,9 +26,10 @@ import CommentsReport from "./commentsReport/CommentsReport.jsx";
 import TopicReport from "./topicReport/TopicReport.jsx";
 import ExportReport from "./exportReport/ExportReport.jsx";
 import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
+import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
 
 const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi"
-const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", or "exportReport"
+const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", or "exportReport", or "topicMapNarrativeReport"
 const report_id = pathname.split("/")[2];
 
 // Debug the route
@@ -781,6 +782,23 @@ const App = (props) => {
         computedStats={computedStats}
       />
     );
+  }
+
+  if (route_type === "topicMapNarrativeReport") {
+    console.log("RENDERING: TopicMapNarrativeReport");
+    return (
+      <TopicMapNarrativeReport
+        conversation={conversation}
+        report_id={report_id}
+        ptptCountTotal={ptptCountTotal}
+        math={math}
+        computeVoteTotal={computeVoteTotal}
+        globals={globals}
+        comments={comments}
+        formatTid={formatTid}
+        voteColors={voteColors}
+      />
+    )
   }
 
   // Otherwise render the standard report

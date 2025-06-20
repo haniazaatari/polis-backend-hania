@@ -5,7 +5,7 @@ import { useReportId } from "../framework/useReportId";
 import getNarrativeJSON from "../../util/getNarrativeJSON";
 import CommentList from "../lists/commentList.jsx";
 
-const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, voteColors }) => {
+const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, voteColors, showControls = true }) => {
   const { report_id } = useReportId();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1014,7 +1014,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
   return (
     <div className="comments-report">
-      {/* Use a simple h1 instead of the Heading component */}
       <div
         style={{
           display: "flex",
@@ -1045,43 +1044,45 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             </button>
           </div>
 
-          {jobFormOpen && renderJobCreationForm()}
+          {jobFormOpen && showControls && renderJobCreationForm()}
         </div>
       ) : (
         <div className="report-content">
           {/* Action buttons at the top */}
-          <div className="section">
-            <h2>Analysis Actions</h2>
-            <div className="action-buttons-grid">
-              <div className="action-button-group">
-                <h3>Data Processing</h3>
-                <div className="section-header-actions">
-                  <button className="create-job-button" onClick={toggleJobForm}>
-                    {jobFormOpen ? "Cancel" : "Run New Delphi Analysis"}
-                  </button>
-                </div>
-                {jobFormOpen && renderJobCreationForm()}
-              </div>
-              
-              <div className="action-button-group">
-                <h3>Narrative Generation</h3>
-                <div className="section-header-actions">
-                  <button
-                    className="batch-report-button"
-                    onClick={handleGenerateNarrativeReport}
-                    disabled={batchReportLoading}
-                  >
-                    {batchReportLoading ? "Generating..." : "Generate Batch Topics"}
-                  </button>
-                </div>
-                {batchReportResult && (
-                  <div className={`result-message ${batchReportResult.success ? "success" : "error"}`}>
-                    {batchReportResult.message}
+          {showControls && (
+            <div className="section">
+              <h2>Analysis Actions</h2>
+              <div className="action-buttons-grid">
+                <div className="action-button-group">
+                  <h3>Data Processing</h3>
+                  <div className="section-header-actions">
+                    <button className="create-job-button" onClick={toggleJobForm}>
+                      {jobFormOpen ? "Cancel" : "Run New Delphi Analysis"}
+                    </button>
                   </div>
-                )}
+                  {jobFormOpen && renderJobCreationForm()}
+                </div>
+                
+                <div className="action-button-group">
+                  <h3>Narrative Generation</h3>
+                  <div className="section-header-actions">
+                    <button
+                      className="batch-report-button"
+                      onClick={handleGenerateNarrativeReport}
+                      disabled={batchReportLoading}
+                    >
+                      {batchReportLoading ? "Generating..." : "Generate Batch Topics"}
+                    </button>
+                  </div>
+                  {batchReportResult && (
+                    <div className={`result-message ${batchReportResult.success ? "success" : "error"}`}>
+                      {batchReportResult.message}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="section">
             <h2>Topic Visualizations</h2>
