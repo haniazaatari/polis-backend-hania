@@ -28,8 +28,6 @@ const TopicHierarchy = ({ conversation }) => {
       const topicsResponse = await fetch(`/api/v3/topicMod/topics?conversation_id=${conversationId}`);
       const topicsData = await topicsResponse.json();
       
-      console.log("Hierarchy response:", hierarchyData);
-      console.log("Topics response:", topicsData);
       
       if (hierarchyData.status === "success" && hierarchyData.hierarchy && topicsData.status === "success" && topicsData.topics_by_layer) {
         // Create topic name lookup map from topics_by_layer
@@ -37,11 +35,9 @@ const TopicHierarchy = ({ conversation }) => {
         Object.entries(topicsData.topics_by_layer).forEach(([layer, topics]) => {
           topics.forEach(topic => {
             const key = `layer${layer}_${topic.cluster_id}`;
-            console.log("Adding to map:", key, "=>", topic.topic_name);
             topicNameMap.set(key, topic.topic_name);
           });
         });
-        console.log("Final topic name map size:", topicNameMap.size);
         
         // Add topic names to hierarchy
         const addTopicNames = (node) => {
@@ -57,7 +53,6 @@ const TopicHierarchy = ({ conversation }) => {
         addTopicNames(hierarchyData.hierarchy);
         
         setHierarchyData(hierarchyData);
-        console.log("Hierarchy data with topic names loaded:", hierarchyData);
       } else {
         console.log("Failed to load hierarchy or topics data");
         setError("Failed to load hierarchy or topics data");
@@ -113,15 +108,7 @@ const TopicHierarchy = ({ conversation }) => {
       
       hierarchyData.hierarchy.children.forEach(flattenClusters);
       
-      console.log("Clusters by layer:", Object.keys(clustersByLayer).map(l => `Layer ${l}: ${clustersByLayer[l].length}`));
-      
-      // DEBUG: Check sample cluster structure
-      console.log("Sample Layer 0 cluster:", clustersByLayer[0]?.[0]);
-      console.log("Sample Layer 1 cluster:", clustersByLayer[1]?.[0]);
-      console.log("Sample Layer 2 cluster:", clustersByLayer[2]?.[0]);
-      const layer3Sample = clustersByLayer[3]?.[0];
-      console.log("Sample Layer 3 cluster with topic_name:", layer3Sample);
-      console.log("Layer 3 sample topic_name field:", layer3Sample?.topic_name);
+      console.log("WHY NO CHILDREN? Layer counts:", Object.keys(clustersByLayer).map(l => `Layer ${l}: ${clustersByLayer[l].length}`));
       
       // Build containment map: higher layers contain all lower layers that eventually merge into them
       const containmentMap = {};
@@ -195,6 +182,10 @@ const TopicHierarchy = ({ conversation }) => {
         const layerMap = containmentMap[layer];
         const keysWithChildren = Object.keys(layerMap).filter(key => layerMap[key].length > 0);
         console.log(`Layer ${layer} containers with children: ${keysWithChildren.length}/${Object.keys(layerMap).length}`);
+        if (layer === 3 && keysWithChildren.length > 0) {
+          console.log(`Sample Layer 3 container:`, keysWithChildren[0], "contains", layerMap[keysWithChildren[0]].length, "children");
+          console.log(`First few children:`, layerMap[keysWithChildren[0]].slice(0, 2).map(c => `L${c.layer}C${c.clusterId}`));
+        }
         if (keysWithChildren.length > 0) {
           console.log(`Sample Layer ${layer} container:`, keysWithChildren[0], "contains", layerMap[keysWithChildren[0]].length, "children");
         }
@@ -205,7 +196,6 @@ const TopicHierarchy = ({ conversation }) => {
       
       const buildNode = (cluster) => {
         const nodeKey = `L${cluster.layer}C${cluster.clusterId}`;
-        console.log("BUILDNODE CALLED FOR:", cluster.clusterId, "topic_name:", cluster.topic_name);
         const node = {
           name: cluster.topic_name ? `${cluster.layer}_${cluster.clusterId}: ${cluster.topic_name}` : `L${cluster.layer}C${cluster.clusterId}`,
           layer: cluster.layer,
@@ -222,17 +212,13 @@ const TopicHierarchy = ({ conversation }) => {
           // Get only children from the immediate layer below
           const directChildren = allChildren.filter(child => child.layer === childLayer);
           
-          console.log(`Building node ${nodeKey}: found ${allChildren.length} total children, ${directChildren.length} direct children from layer ${childLayer}`);
-          console.log(`Direct children for ${nodeKey}:`, directChildren.map(c => `L${c.layer}C${c.clusterId}`));
           
           if (directChildren.length > 0) {
             node.children = directChildren.map(buildNode);
             // Parent nodes don't get size (only leaves do)
             delete node.size;
-            console.log(`Node ${nodeKey} built with ${node.children.length} children`);
           }
         } else {
-          console.log(`No children found for ${nodeKey} (childLayer: ${childLayer})`);
         }
         
         return node;
@@ -247,7 +233,8 @@ const TopicHierarchy = ({ conversation }) => {
       };
     };
 
-    const nestedData = buildContainmentHierarchy();
+    // Use server hierarchy directly instead of broken containment logic
+    const nestedData = hierarchyData.hierarchy;
     console.log("Containment hierarchy structure:", nestedData);
     console.log("First child topic_name:", nestedData.children?.[0]?.topic_name);
 
@@ -338,7 +325,6 @@ const TopicHierarchy = ({ conversation }) => {
           return `Layer ${d.data.layer}`;
         } else {
           // Leaf nodes: show topic name or cluster ID
-          console.log("D3 text rendering for:", d.data.clusterId, "topic_name:", d.data.topic_name);
           return d.data.topic_name || `L${d.data.layer}C${d.data.clusterId}`;
         }
       });
