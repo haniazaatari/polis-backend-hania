@@ -7,8 +7,8 @@ export function useReportId() {
     // Parse the URL to extract the report ID
     const pathname = window.location.pathname;
     
-    // Match patterns like /report/rid or /narrativeReport/rid or /commentsReport/rid
-    const match = pathname.match(/^\/(report|narrativeReport|commentsReport)\/([a-zA-Z0-9]+)/);
+    // Match patterns like /report/rid or /narrativeReport/rid or /commentsReport/rid or /topicPrioritize/rid
+    const match = pathname.match(/^\/(report|narrativeReport|commentsReport|topicPrioritize|topicReport|topicsVizReport|exportReport)\/([a-zA-Z0-9]+)/);
     
     if (match && match[2]) {
       setReportId(match[2]);
