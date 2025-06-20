@@ -30,6 +30,7 @@ import {
   handle_GET_topicMod_comments,
   handle_POST_topicMod_moderate,
   handle_GET_topicMod_proximity,
+  handle_GET_topicMod_hierarchy,
   handle_GET_topicMod_stats
 } from "./src/routes/delphi/topicMod";
 import { 
@@ -929,6 +930,18 @@ helpersInitialized.then(
       }
     });
 
+    app.get("/api/v3/topicMod/hierarchy", moveToBody, function (req, res) {
+      try {
+        handle_GET_topicMod_hierarchy(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in topicMod hierarchy endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
     // RSS Feeds routes
     app.get("/feeds/:reportId", function (req, res) {
       try {
@@ -1745,6 +1758,13 @@ helpersInitialized.then(
         return fetchIndexForReportPage(req, res, next);
       }
 >>>>>>> 3845d2ad (admin mod, prio stub)
+    );
+    // Topic Hierarchy route for circle pack visualization
+    app.get(
+      /^\/topicHierarchy\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      function (req, res, next) {
+        return fetchIndexForReportPage(req, res, next);
+      }
     );
     // Export Report route for data export interface
     app.get(
