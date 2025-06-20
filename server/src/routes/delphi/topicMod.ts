@@ -451,6 +451,141 @@ export async function handle_GET_topicMod_proximity(req: Request, res: Response)
 }
 
 /**
+ * GET /api/v3/topicMod/hierarchy
+ * Retrieves hierarchical cluster structure for circle pack visualization
+ */
+export async function handle_GET_topicMod_hierarchy(req: Request, res: Response) {
+  try {
+    const conversation_id = req.query.conversation_id as string;
+    
+    if (!conversation_id) {
+      return res.json({
+        status: "error",
+        message: "conversation_id is required",
+      });
+    }
+
+    const zid = await Conversation.getZidFromConversationId(conversation_id);
+    if (!zid) {
+      return res.json({
+        status: "error",
+        message: "Could not find conversation for conversation_id",
+      });
+    }
+
+    const hierarchy_conversation_id = zid.toString();
+    logger.info(`Fetching hierarchy data for conversation ${hierarchy_conversation_id}`);
+
+    // Query cluster structure from DynamoDB
+    const params = {
+      TableName: "Delphi_CommentClustersStructureKeywords",
+      KeyConditionExpression: "conversation_id = :cid",
+      ExpressionAttributeValues: {
+        ":cid": hierarchy_conversation_id,
+      },
+    };
+
+    const data = await docClient.send(new QueryCommand(params));
+    
+    if (!data.Items || data.Items.length === 0) {
+      return res.json({
+        status: "success",
+        message: "No hierarchy data found",
+        hierarchy: null,
+      });
+    }
+
+    // Process and structure the hierarchy data
+    const clusters = data.Items;
+    const hierarchyMap = new Map();
+    const layers = new Map();
+
+    // First pass: create all nodes
+    clusters.forEach((cluster) => {
+      const key = cluster.cluster_key;
+      const layerId = cluster.layer_id;
+      const clusterId = cluster.cluster_id;
+      
+      if (!layers.has(layerId)) {
+        layers.set(layerId, []);
+      }
+      
+      const node = {
+        id: key,
+        name: `Layer ${layerId} Cluster ${clusterId}`,
+        layer: layerId,
+        clusterId: clusterId,
+        size: cluster.size || 0,
+        children: [],
+        parentId: null,
+        data: cluster
+      };
+      
+      hierarchyMap.set(key, node);
+      layers.get(layerId).push(node);
+    });
+
+    // Second pass: establish parent-child relationships
+    clusters.forEach((cluster) => {
+      const key = cluster.cluster_key;
+      const node = hierarchyMap.get(key);
+      
+      // Set parent relationships
+      if (cluster.parent_cluster) {
+        const parentKey = `layer${cluster.parent_cluster.layer_id}_${cluster.parent_cluster.cluster_id}`;
+        const parentNode = hierarchyMap.get(parentKey);
+        if (parentNode) {
+          // Store parent ID instead of reference to avoid circular JSON
+          node.parentId = parentKey;
+          parentNode.children.push(node);
+        }
+      }
+    });
+
+    // Find root nodes (nodes without parents)
+    const roots = Array.from(hierarchyMap.values()).filter(node => !node.parentId);
+
+    // Remove parent references to avoid circular JSON and clean up for D3
+    const cleanNode = (node) => {
+      const cleaned = {
+        id: node.id,
+        name: node.name,
+        layer: node.layer,
+        clusterId: node.clusterId,
+        size: node.size,
+        children: node.children.map(cleanNode)
+      };
+      return cleaned;
+    };
+
+    // Create the hierarchy structure for D3
+    const hierarchy = {
+      name: "Topics Hierarchy",
+      children: roots.map(cleanNode),
+      totalClusters: clusters.length,
+      layerCounts: Object.fromEntries(
+        Array.from(layers.entries()).map(([layerId, nodes]) => [layerId, nodes.length])
+      )
+    };
+
+    return res.json({
+      status: "success",
+      message: "Hierarchy data retrieved successfully",
+      hierarchy: hierarchy,
+      totalClusters: clusters.length,
+      layers: Array.from(layers.keys()).sort(),
+    });
+  } catch (err: any) {
+    logger.error(`Error in handle_GET_topicMod_hierarchy: ${err.message}`);
+    return res.json({
+      status: "error",
+      message: "Error retrieving hierarchy data",
+      error: err.message,
+    });
+  }
+}
+
+/**
  * GET /api/v3/topicMod/stats
  * Retrieves moderation statistics
  */

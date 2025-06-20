@@ -28,9 +28,10 @@ import TopicReport from "./topicReport/TopicReport.jsx";
 import ExportReport from "./exportReport/ExportReport.jsx";
 import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
 import TopicPrioritize from "./topicPrioritize/TopicPrioritize.jsx";
+import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
 
-const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicPrioritize/2arcefpshi"
-const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", or "topicPrioritize"
+const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicPrioritize/2arcefpshi" or "/topicHierarchy/2arcefpshi"
+const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicPrioritize", or "topicHierarchy"
 const report_id = pathname.split("/")[2];
 
 // Debug the route
@@ -744,6 +745,7 @@ const App = (props) => {
     shouldShowTopicReport: route_type === "topicReport",
     shouldShowExportReport: route_type === "exportReport",
     shouldShowTopicPrioritize: route_type === "topicPrioritize",
+    shouldShowTopicHierarchy: route_type === "topicHierarchy",
   });
 
   // Directly render ExportReport if the URL starts with /exportReport
@@ -769,6 +771,17 @@ const App = (props) => {
         ptptCount={ptptCount}
         formatTid={formatTid}
         voteColors={voteColors}
+      />
+    );
+  }
+
+  // Directly render TopicHierarchy if the URL starts with /topicHierarchy
+  if (route_type === "topicHierarchy") {
+    console.log("RENDERING: TopicHierarchy");
+    return (
+      <TopicHierarchy
+        report_id={report_id}
+        conversation={conversation}
       />
     );
   }
