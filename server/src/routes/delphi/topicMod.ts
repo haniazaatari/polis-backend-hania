@@ -497,6 +497,35 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
 
     // Process and structure the hierarchy data
     const clusters = data.Items;
+    logger.info(`Found ${clusters.length} clusters in DynamoDB`);
+    
+    // Debug: log layer distribution
+    const layerCounts = {};
+    clusters.forEach(cluster => {
+      const layer = cluster.layer_id;
+      layerCounts[layer] = (layerCounts[layer] || 0) + 1;
+    });
+    logger.info(`Layer distribution:`, layerCounts);
+    
+    // Debug: log sample clusters from each layer
+    Object.keys(layerCounts).forEach(layer => {
+      const sampleCluster = clusters.find(c => c.layer_id.toString() === layer.toString());
+      if (sampleCluster) {
+        logger.info(`Sample Layer ${layer} cluster:`, {
+          cluster_key: sampleCluster.cluster_key,
+          layer_id: sampleCluster.layer_id,
+          cluster_id: sampleCluster.cluster_id,
+          size: sampleCluster.size,
+          has_parent: !!sampleCluster.parent_cluster,
+          has_children: !!(sampleCluster.child_clusters && sampleCluster.child_clusters.length > 0),
+          parent_cluster: sampleCluster.parent_cluster,
+          child_clusters: sampleCluster.child_clusters
+        });
+      } else {
+        logger.error(`No sample cluster found for layer ${layer}`);
+      }
+    });
+    
     const hierarchyMap = new Map();
     const layers = new Map();
 
@@ -516,6 +545,7 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
         layer: layerId,
         clusterId: clusterId,
         size: cluster.size || 0,
+        topic_name: cluster.topic_name || cluster.llm_topic_name || cluster.keywords_string,
         children: [],
         parentId: null,
         data: cluster
@@ -531,19 +561,41 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
       const node = hierarchyMap.get(key);
       
       // Set parent relationships
-      if (cluster.parent_cluster) {
+      if (cluster.parent_cluster && cluster.parent_cluster.layer_id !== undefined && cluster.parent_cluster.cluster_id !== undefined) {
         const parentKey = `layer${cluster.parent_cluster.layer_id}_${cluster.parent_cluster.cluster_id}`;
         const parentNode = hierarchyMap.get(parentKey);
         if (parentNode) {
           // Store parent ID instead of reference to avoid circular JSON
           node.parentId = parentKey;
           parentNode.children.push(node);
+          logger.info(`Linked child ${key} to parent ${parentKey}`);
+        } else {
+          logger.warn(`Parent node ${parentKey} not found for child ${key}`);
         }
+      } else {
+        logger.info(`No parent found for cluster ${key} - treating as root`);
       }
     });
 
-    // Find root nodes (nodes without parents)
-    const roots = Array.from(hierarchyMap.values()).filter(node => !node.parentId);
+    // For circle pack visualization, we need containment hierarchy (Layer 3 as roots)
+    // Instead of merge hierarchy (Layer 0 as roots)
+    const maxLayer = Math.max(...Array.from(hierarchyMap.values()).map(node => node.layer));
+    const roots = Array.from(hierarchyMap.values()).filter(node => node.layer === maxLayer);
+    
+    logger.info(`Hierarchy building results:`);
+    logger.info(`Total nodes created: ${hierarchyMap.size}`);
+    logger.info(`Root nodes found: ${roots.length}`);
+    logger.info(`Root nodes by layer:`, roots.reduce((acc, root) => {
+      acc[root.layer] = (acc[root.layer] || 0) + 1;
+      return acc;
+    }, {}));
+    
+    // Debug: Check parent-child relationships
+    let totalChildRelationships = 0;
+    hierarchyMap.forEach(node => {
+      totalChildRelationships += node.children.length;
+    });
+    logger.info(`Total parent-child relationships: ${totalChildRelationships}`);
 
     // Remove parent references to avoid circular JSON and clean up for D3
     const cleanNode = (node) => {
