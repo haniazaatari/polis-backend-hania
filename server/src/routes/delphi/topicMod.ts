@@ -555,20 +555,22 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
       layers.get(layerId).push(node);
     });
 
-    // Second pass: establish parent-child relationships
+    // Second pass: INVERT DynamoDB parent-child relationships for circle pack
+    // DynamoDB: Layer 3 has parent Layer 2 (Layer 3 merges INTO Layer 2)
+    // Circle pack needs: Layer 2 CONTAINS Layer 3 (Layer 2 is bigger circle containing Layer 3)
     clusters.forEach((cluster) => {
       const key = cluster.cluster_key;
       const node = hierarchyMap.get(key);
       
-      // Set parent relationships
+      // If this cluster HAS a parent in DynamoDB, make that parent contain THIS cluster as a child
       if (cluster.parent_cluster && cluster.parent_cluster.layer_id !== undefined && cluster.parent_cluster.cluster_id !== undefined) {
         const parentKey = `layer${cluster.parent_cluster.layer_id}_${cluster.parent_cluster.cluster_id}`;
         const parentNode = hierarchyMap.get(parentKey);
         if (parentNode) {
-          // Store parent ID instead of reference to avoid circular JSON
-          node.parentId = parentKey;
+          // INVERTED: The "parent" in DynamoDB becomes the container in circle pack
           parentNode.children.push(node);
-          logger.info(`Linked child ${key} to parent ${parentKey}`);
+          node.parentId = parentKey;
+          logger.info(`Circle pack: ${parentKey} contains ${key}`);
         } else {
           logger.warn(`Parent node ${parentKey} not found for child ${key}`);
         }
@@ -577,10 +579,10 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
       }
     });
 
-    // For circle pack visualization, we need containment hierarchy (Layer 3 as roots)
-    // Instead of merge hierarchy (Layer 0 as roots)
-    const maxLayer = Math.max(...Array.from(hierarchyMap.values()).map(node => node.layer));
-    const roots = Array.from(hierarchyMap.values()).filter(node => node.layer === maxLayer);
+    // For circle pack: Layer 3 = BIGGEST OUTERMOST containers, Layer 0 = SMALLEST INNERMOST  
+    // We want Layer 3 clusters as the roots (big outer circles)
+    const layer3Nodes = Array.from(hierarchyMap.values()).filter(node => node.layer === 3);
+    const roots = layer3Nodes;
     
     logger.info(`Hierarchy building results:`);
     logger.info(`Total nodes created: ${hierarchyMap.size}`);
@@ -592,10 +594,25 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
     
     // Debug: Check parent-child relationships
     let totalChildRelationships = 0;
+    const nodesWithChildren = [];
     hierarchyMap.forEach(node => {
       totalChildRelationships += node.children.length;
+      if (node.children.length > 0) {
+        nodesWithChildren.push(`${node.id}(${node.children.length})`);
+      }
     });
     logger.info(`Total parent-child relationships: ${totalChildRelationships}`);
+    logger.info(`Nodes with children: ${nodesWithChildren.slice(0, 5).join(', ')}`);
+    logger.info(`Layer 3 nodes with children: ${nodesWithChildren.filter(n => n.includes('layer3_')).length}`);
+    
+    // Debug specific Layer 3 nodes
+    roots.forEach(root => {
+      if (root.children.length > 0) {
+        logger.info(`Layer 3 root ${root.id} has ${root.children.length} children: ${root.children.map(c => c.id).slice(0, 3).join(', ')}`);
+      } else {
+        logger.info(`Layer 3 root ${root.id} has NO children`);
+      }
+    });
 
     // Remove parent references to avoid circular JSON and clean up for D3
     const cleanNode = (node) => {
@@ -605,8 +622,12 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
         layer: node.layer,
         clusterId: node.clusterId,
         size: node.size,
+        topic_name: node.topic_name,
         children: node.children.map(cleanNode)
       };
+      if (node.children.length > 0) {
+        logger.info(`Cleaning node ${node.id} with ${node.children.length} children`);
+      }
       return cleaned;
     };
 
