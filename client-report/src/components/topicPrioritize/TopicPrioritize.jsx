@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import net from "../../util/net";
 import { useReportId } from "../framework/useReportId";
 import CommentList from "../lists/commentList.jsx";
+import * as d3 from "d3";
 
 const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, voteColors }) => {
   const { report_id } = useReportId();
@@ -10,8 +11,11 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
   const [topicData, setTopicData] = useState(null);
   const [selectedComments, setSelectedComments] = useState(new Set());
   const [hierarchyAnalysis, setHierarchyAnalysis] = useState(null);
+  const [hierarchyData, setHierarchyData] = useState(null);
   const [showAllLayers, setShowAllLayers] = useState(true);
   const [selectedLayer, setSelectedLayer] = useState(0);
+  const [showCirclePack, setShowCirclePack] = useState(true);
+  const circlePackRef = useRef(null);
 
   useEffect(() => {
     if (!report_id) return;
@@ -29,6 +33,8 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
           if (response.runs && Object.keys(response.runs).length > 0) {
             setTopicData(response);
             analyzeHierarchy(response);
+            // Also fetch the hierarchical cluster structure for circle pack
+            fetchHierarchyData();
           } else {
             setError("No LLM topic data available yet. Run Delphi analysis first.");
           }
@@ -44,6 +50,25 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
         setLoading(false);
       });
   }, [report_id]);
+
+  // Fetch hierarchical cluster structure from DynamoDB
+  const fetchHierarchyData = async () => {
+    try {
+      // Use the zinvite from conversation data instead of report_id
+      const conversationId = conversation?.conversation_id || report_id;
+      const response = await fetch(`/api/v3/topicMod/hierarchy?conversation_id=${conversationId}`);
+      const data = await response.json();
+      
+      if (data.status === "success" && data.hierarchy) {
+        setHierarchyData(data);
+        console.log("Hierarchy data loaded:", data);
+      } else {
+        console.log("No hierarchy data available:", data.message);
+      }
+    } catch (err) {
+      console.error("Error fetching hierarchy data:", err);
+    }
+  };
 
   // Analyze if topics actually contain each other hierarchically
   const analyzeHierarchy = (data) => {
@@ -129,6 +154,131 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
     console.log("Would select all comments in topic:", topicKey);
   };
 
+  // Create D3.js circle pack visualization
+  const createCirclePack = () => {
+    if (!hierarchyData || !circlePackRef.current) return;
+
+    // Clear previous visualization
+    d3.select(circlePackRef.current).selectAll("*").remove();
+
+    const width = 800;
+    const height = 600;
+
+    // Create SVG
+    const svg = d3.select(circlePackRef.current)
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height)
+      .attr("style", "border: 1px solid #ccc; border-radius: 8px;");
+
+    // Create hierarchy from data
+    const hierarchy = d3.hierarchy(hierarchyData.hierarchy)
+      .sum(d => d.size || 1)  // Use cluster size for circle size
+      .sort((a, b) => b.value - a.value);
+
+    // Create pack layout
+    const pack = d3.pack()
+      .size([width - 20, height - 20])
+      .padding(3);
+
+    const nodes = pack(hierarchy);
+
+    // Color scale by layer
+    const colorScale = d3.scaleOrdinal()
+      .domain([0, 1, 2, 3])
+      .range(["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4"]);
+
+    // Create groups for each node
+    const nodeGroups = svg.selectAll("g")
+      .data(nodes.descendants())
+      .enter()
+      .append("g")
+      .attr("transform", d => `translate(${d.x + 10},${d.y + 10})`);
+
+    // Add circles
+    nodeGroups.append("circle")
+      .attr("r", d => d.r)
+      .attr("fill", d => {
+        if (d.depth === 0) return "#f8f9fa"; // Root
+        return colorScale(d.data.layer);
+      })
+      .attr("stroke", d => d.depth === 0 ? "#dee2e6" : "#343a40")
+      .attr("stroke-width", d => d.depth === 0 ? 2 : 1)
+      .attr("fill-opacity", d => d.depth === 0 ? 0.1 : 0.7)
+      .style("cursor", "pointer")
+      .on("click", function(event, d) {
+        if (d.data.layer !== undefined) {
+          console.log("Clicked cluster:", d.data);
+          setSelectedLayer(d.data.layer);
+        }
+      });
+
+    // Add text labels for larger circles
+    nodeGroups.append("text")
+      .attr("text-anchor", "middle")
+      .attr("dy", "0.3em")
+      .attr("font-size", d => Math.min(d.r / 4, 12))
+      .attr("fill", "#343a40")
+      .attr("font-weight", "bold")
+      .style("pointer-events", "none")
+      .text(d => {
+        if (d.depth === 0) return "Topics";
+        if (d.r < 20) return ""; // Hide text for very small circles
+        return `L${d.data.layer} C${d.data.clusterId}`;
+      });
+
+    // Add size labels for larger circles
+    nodeGroups.append("text")
+      .attr("text-anchor", "middle")
+      .attr("dy", "1.5em")
+      .attr("font-size", d => Math.min(d.r / 6, 10))
+      .attr("fill", "#6c757d")
+      .style("pointer-events", "none")
+      .text(d => {
+        if (d.depth === 0 || d.r < 25) return "";
+        return `${d.data.size} comments`;
+      });
+
+    // Add legend
+    const legend = svg.append("g")
+      .attr("transform", `translate(${width - 150}, 20)`);
+
+    legend.append("text")
+      .attr("font-weight", "bold")
+      .attr("font-size", "14")
+      .text("Layers");
+
+    const legendItems = legend.selectAll(".legend-item")
+      .data([
+        { layer: 0, label: "Layer 0 (Finest)", color: "#ff6b6b" },
+        { layer: 1, label: "Layer 1", color: "#4ecdc4" },
+        { layer: 2, label: "Layer 2", color: "#45b7d1" },
+        { layer: 3, label: "Layer 3 (Coarsest)", color: "#96ceb4" }
+      ])
+      .enter()
+      .append("g")
+      .attr("class", "legend-item")
+      .attr("transform", (d, i) => `translate(0, ${20 + i * 20})`);
+
+    legendItems.append("circle")
+      .attr("r", 8)
+      .attr("fill", d => d.color)
+      .attr("fill-opacity", 0.7);
+
+    legendItems.append("text")
+      .attr("x", 15)
+      .attr("dy", "0.3em")
+      .attr("font-size", "12")
+      .text(d => d.label);
+  };
+
+  // Effect to create circle pack when hierarchy data is available
+  useEffect(() => {
+    if (showCirclePack && hierarchyData) {
+      createCirclePack();
+    }
+  }, [showCirclePack, hierarchyData]);
+
   // Render dense comment list for a layer
   const renderCommentsForLayer = (layerId) => {
     if (!topicData || !topicData.runs) {
@@ -196,16 +346,32 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
           
           {hierarchyAnalysis.hasHierarchy && (
             <div className="circle-pack-suggestion">
-              <h5>🎯 Circle Pack Visualization Opportunity!</h5>
+              <h5>🎯 Circle Pack Visualization Available!</h5>
               <p>
-                Since we have hierarchical structure, this could be visualized as a circle pack where:
+                We have confirmed hierarchical structure! This IS visualized as an interactive circle pack where:
               </p>
               <ul>
                 <li>Larger circles represent coarser layers (layer {Math.max(...hierarchyAnalysis.layers)})</li>
                 <li>Smaller circles nested inside represent finer layers (layer {Math.min(...hierarchyAnalysis.layers)})</li>
-                <li>Circle size could represent comment count or engagement</li>
-                <li>Color could represent moderation status or sentiment</li>
+                <li>Circle size represents comment count for each cluster</li>
+                <li>Colors distinguish different layers</li>
+                <li>Click circles to select layers for detailed view</li>
               </ul>
+              
+              
+              {showCirclePack && hierarchyData && (
+                <div className="circle-pack-container">
+                  <h4>Interactive Topic Hierarchy</h4>
+                  <p>{hierarchyData.totalClusters} clusters across {hierarchyAnalysis.layers.length} layers</p>
+                  <div ref={circlePackRef} className="circle-pack-viz"></div>
+                </div>
+              )}
+              
+              {showCirclePack && !hierarchyData && (
+                <div className="loading-hierarchy">
+                  <p>Loading hierarchy data for visualization...</p>
+                </div>
+              )}
             </div>
           )}
           
