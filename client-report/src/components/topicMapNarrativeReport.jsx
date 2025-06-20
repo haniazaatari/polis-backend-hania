@@ -2,19 +2,19 @@ import React from "react";
 import Heading from "./framework/heading.jsx";
 import Footer from "./framework/Footer.jsx";
 import RawDataExport from "./RawDataExport.jsx";
-import CommentsReport from "./commentsReport/CommentsReport.jsx";
+import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
+import TopicReport from "./topicReport/TopicReport.jsx";
 
 export default ({ conversation, report_id, ptptCountTotal, math, computeVoteTotal, globals, comments, formatTid, voteColors }) => (
-  <div style={{ margin: "0px 10px" }} data-testid="reports-overview">
+  <div style={{ margin: "0px 10px", maxWidth: "1200px", padding: "20px" }} data-testid="reports-overview">
     <Heading conversation={conversation} />
     <div
       style={{
-        marginLeft: 20,
         marginTop: 40,
       }}
     >
       
-      <div>
+      <div style={{ marginBottom: 20}}>
         <div>
           <p style={globals.primaryHeading}>Overview</p>
           <p style={globals.paragraph}>
@@ -46,7 +46,9 @@ export default ({ conversation, report_id, ptptCountTotal, math, computeVoteTota
           </p>
         </div>
       </div>
-      <RawDataExport conversation={conversation} report_id={report_id} />
+      <div style={{ marginBottom: 20 }}>
+        <RawDataExport conversation={conversation} report_id={report_id} />
+      </div>
       <section style={{ maxWidth: 1200, display: "flex", justifyContent: "space-between", gap: "1rem" }}>
         <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
           <h3>Participants</h3>
@@ -65,7 +67,8 @@ export default ({ conversation, report_id, ptptCountTotal, math, computeVoteTota
           <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["group-clusters"].length}</p>
         </div>
       </section>
-      <CommentsReport math={math} comments={comments} conversation={conversation} ptptCount={ptptCountTotal} formatTid={formatTid} voteColors={voteColors} showControls={false} />
+      <TopicsVizReport report_id={report_id} />
+      <TopicReport report_id={report_id} math={math} comments={comments} conversation={conversation} ptptCount={ptptCountTotal} formatTid={formatTid} voteColors={voteColors} />
       <Footer />
     </div>
   </div>
