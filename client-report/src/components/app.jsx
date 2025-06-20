@@ -27,10 +27,10 @@ import CommentsReport from "./commentsReport/CommentsReport.jsx";
 import TopicReport from "./topicReport/TopicReport.jsx";
 import ExportReport from "./exportReport/ExportReport.jsx";
 import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
-import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
+import TopicPrioritize from "./topicPrioritize/TopicPrioritize.jsx";
 
-const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi"
-const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", or "exportReport", or "topicMapNarrativeReport"
+const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicPrioritize/2arcefpshi"
+const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", or "topicPrioritize"
 const report_id = pathname.split("/")[2];
 
 // Debug the route
@@ -743,6 +743,7 @@ const App = (props) => {
     shouldShowNarrativeReport: route_type === "narrativeReport",
     shouldShowTopicReport: route_type === "topicReport",
     shouldShowExportReport: route_type === "exportReport",
+    shouldShowTopicPrioritize: route_type === "topicPrioritize",
   });
 
   // Directly render ExportReport if the URL starts with /exportReport
@@ -752,6 +753,22 @@ const App = (props) => {
       <ExportReport
         report_id={report_id}
         conversation={conversation}
+      />
+    );
+  }
+
+  // Directly render TopicPrioritize if the URL starts with /topicPrioritize
+  if (route_type === "topicPrioritize") {
+    console.log("RENDERING: TopicPrioritize");
+    return (
+      <TopicPrioritize
+        report_id={report_id}
+        math={math}
+        comments={comments}
+        conversation={conversation}
+        ptptCount={ptptCount}
+        formatTid={formatTid}
+        voteColors={voteColors}
       />
     );
   }
