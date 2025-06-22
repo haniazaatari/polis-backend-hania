@@ -7,7 +7,24 @@ const TopicHierarchy = ({ conversation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [hierarchyData, setHierarchyData] = useState(null);
+  const [umapData, setUmapData] = useState(null);
+  const [layerVisibility, setLayerVisibility] = useState({
+    0: true,
+    1: true,
+    2: true,
+    3: true
+  });
+  const [visualizationType, setVisualizationType] = useState('hulls'); // 'density' or 'hulls'
+  const [densityLayerVisibility, setDensityLayerVisibility] = useState({
+    0: false,
+    1: false,
+    2: false,
+    3: true  // Only layer 3 by default
+  });
+  const [topicNames, setTopicNames] = useState(new Map());
   const circlePackRef = useRef(null);
+  const umapRef = useRef(null);
+  const densityRef = useRef(null);
 
   useEffect(() => {
     if (!report_id) return;
@@ -39,6 +56,9 @@ const TopicHierarchy = ({ conversation }) => {
           });
         });
         
+        // Store topic names in state for density visualization
+        setTopicNames(topicNameMap);
+        
         // Add topic names to hierarchy
         const addTopicNames = (node) => {
           const key = `layer${node.layer}_${node.clusterId}`;
@@ -53,6 +73,9 @@ const TopicHierarchy = ({ conversation }) => {
         addTopicNames(hierarchyData.hierarchy);
         
         setHierarchyData(hierarchyData);
+        
+        // Fetch UMAP data for all clusters
+        await fetchUMAPData(conversationId);
       } else {
         console.log("Failed to load hierarchy or topics data");
         setError("Failed to load hierarchy or topics data");
@@ -63,6 +86,750 @@ const TopicHierarchy = ({ conversation }) => {
       setError("Failed to load hierarchy data");
       setLoading(false);
     }
+  };
+
+  // Fetch UMAP coordinates for ALL comments
+  const fetchUMAPData = async (conversationId) => {
+    try {
+      console.log("Fetching ALL UMAP coordinates...");
+      const response = await fetch(`/api/v3/topicMod/proximity?conversation_id=${conversationId}&layer_id=all`);
+      const data = await response.json();
+      
+      console.log("CLIENT DEBUG: UMAP response received with", data.proximity_data?.length, "items");
+      console.log("CLIENT DEBUG: Response status:", data.status);
+      console.log("CLIENT DEBUG: Response message:", data.message);
+      
+      // Log first few items in detail
+      if (data.proximity_data && data.proximity_data.length > 0) {
+        console.log("CLIENT DEBUG: First 3 data points:", data.proximity_data.slice(0, 3));
+        
+        // Check structure of first item
+        const firstItem = data.proximity_data[0];
+        console.log("CLIENT DEBUG: First item structure:");
+        console.log("  - comment_id:", firstItem.comment_id);
+        console.log("  - umap_x:", firstItem.umap_x);
+        console.log("  - umap_y:", firstItem.umap_y);
+        console.log("  - clusters:", firstItem.clusters);
+        console.log("  - clusters type:", typeof firstItem.clusters);
+        console.log("  - clusters keys:", Object.keys(firstItem.clusters || {}));
+      }
+      
+      if (data.status === "success" && data.proximity_data) {
+        // Debug: Check cluster assignments
+        const samplePoints = data.proximity_data.slice(0, 5);
+        console.log("Sample points with clusters:", samplePoints.map(p => ({
+          comment_id: p.comment_id,
+          clusters: p.clusters,
+          cluster_keys: Object.keys(p.clusters || {}),
+          cluster_count: Object.keys(p.clusters || {}).length,
+          raw_point: p // Show the whole point structure
+        })));
+        
+        // Count how many points have cluster assignments
+        const pointsWithClusters = data.proximity_data.filter(p => Object.keys(p.clusters || {}).length > 0);
+        console.log(`Points with cluster assignments: ${pointsWithClusters.length} / ${data.proximity_data.length}`);
+        
+        if (pointsWithClusters.length === 0) {
+          console.log("No cluster assignments found! Using raw coordinates and assigning all to layer 0");
+          // Fallback: show all points as layer 0 if no cluster assignments
+          const fallbackData = data.proximity_data.map(point => ({
+            comment_id: point.comment_id,
+            cluster_id: 0,
+            layer: 0,
+            umap_x: point.umap_x,
+            umap_y: point.umap_y,
+            weight: point.weight
+          }));
+          console.log("Fallback data:", fallbackData.length, "points");
+          console.log("Sample fallback point:", fallbackData[0]);
+          setUmapData(fallbackData);
+          return;
+        }
+        
+        // Process the data to create points for each layer based on cluster assignments
+        const processedData = [];
+        
+        data.proximity_data.forEach(point => {
+          // Create a point for each layer where this comment has a cluster assignment
+          Object.entries(point.clusters || {}).forEach(([layerId, clusterId]) => {
+            processedData.push({
+              comment_id: point.comment_id,
+              cluster_id: clusterId,
+              layer: parseInt(layerId),
+              umap_x: point.umap_x,
+              umap_y: point.umap_y,
+              weight: point.weight
+            });
+          });
+        });
+        
+        console.log("UMAP data loaded:", processedData.length, "layer-comment assignments");
+        console.log("Raw comments:", data.proximity_data.length);
+        console.log("Sample processed point:", processedData[0]);
+        setUmapData(processedData);
+      } else {
+        console.log("No UMAP data:", data.message);
+        setUmapData([]);
+      }
+    } catch (err) {
+      console.error("Error fetching UMAP data:", err);
+    }
+  };
+
+  // Toggle layer visibility
+  const toggleLayerVisibility = (layerId) => {
+    setLayerVisibility(prev => ({
+      ...prev,
+      [layerId]: !prev[layerId]
+    }));
+  };
+
+  // Toggle density layer visibility
+  const toggleDensityLayerVisibility = (layerId) => {
+    setDensityLayerVisibility(prev => ({
+      ...prev,
+      [layerId]: !prev[layerId]
+    }));
+  };
+
+  // Create UMAP spatial visualization with Canvas for performance
+  const createUMAPVisualization = () => {
+    if (!umapData || !umapRef.current) return;
+    
+    if (umapData.length === 0) {
+      console.log("No UMAP data to visualize");
+      return;
+    }
+
+    console.log("Creating Canvas UMAP visualization with", umapData.length, "points");
+
+    // Generate colors similar to datamapplot's approach
+    const generateClusterColor = (clusterId, layer) => {
+      // Use a color palette similar to datamapplot
+      const baseColors = [
+        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', 
+        '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#ff9999', '#66b3ff',
+        '#99ff99', '#ffcc99', '#ff99cc', '#c2c2f0', '#ffb3e6', '#c2f0c2',
+        '#ffd9b3', '#b3b3ff', '#ffb3b3', '#b3ffb3', '#ffccb3', '#ccb3ff'
+      ];
+      
+      // Ensure we have valid inputs
+      if (typeof clusterId !== 'number' || typeof layer !== 'number') {
+        return '#999999'; // Default gray color
+      }
+      
+      // Create a deterministic color based on cluster ID
+      const colorIndex = (clusterId * 7 + layer * 3) % baseColors.length;
+      return baseColors[colorIndex];
+    };
+
+    // Clear previous visualization
+    umapRef.current.innerHTML = '';
+
+    const size = 800; // Square canvas
+    const width = size;
+    const height = size;
+    const margin = { top: 20, right: 20, bottom: 20, left: 20 };
+
+    // Create canvas
+    const canvas = d3.select(umapRef.current)
+      .append("canvas")
+      .attr("width", width)
+      .attr("height", height)
+      .style("width", "100%")
+      .style("height", "auto")
+      .style("border", "1px solid #ddd");
+
+    const context = canvas.node().getContext("2d");
+    
+    // Enable high DPI
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    canvas.attr("width", width * devicePixelRatio)
+          .attr("height", height * devicePixelRatio);
+    context.scale(devicePixelRatio, devicePixelRatio);
+
+    // Create scales
+    const xExtent = d3.extent(umapData, d => d.umap_x);
+    const yExtent = d3.extent(umapData, d => d.umap_y);
+    
+    console.log("UMAP data extents:", { xExtent, yExtent });
+    
+    const xScale = d3.scaleLinear()
+      .domain(xExtent)
+      .range([margin.left, width - margin.right]);
+    
+    const yScale = d3.scaleLinear()
+      .domain(yExtent)
+      .range([height - margin.bottom, margin.top]);
+
+    // Clear canvas
+    context.clearRect(0, 0, width, height);
+
+    // Get unique raw comment coordinates (without layer duplicates)
+    const uniqueComments = new Map();
+    umapData.forEach(point => {
+      const key = `${point.comment_id}`;
+      if (!uniqueComments.has(key)) {
+        uniqueComments.set(key, {
+          comment_id: point.comment_id,
+          umap_x: point.umap_x,
+          umap_y: point.umap_y,
+          clusters_by_layer: {}
+        });
+      }
+      uniqueComments.get(key).clusters_by_layer[point.layer] = point.cluster_id;
+    });
+
+    const uniquePoints = Array.from(uniqueComments.values());
+    console.log(`Drawing ${uniquePoints.length} unique comments with cluster assignments for each layer`);
+
+    // Group points by cluster for each layer to draw hulls
+    const clusterGroups = {};
+    for (let layer = 0; layer <= 3; layer++) {
+      clusterGroups[layer] = new Map();
+      
+      uniquePoints.forEach(point => {
+        const clusterId = point.clusters_by_layer[layer];
+        if (clusterId !== undefined) {
+          const key = `L${layer}C${clusterId}`;
+          if (!clusterGroups[layer].has(key)) {
+            clusterGroups[layer].set(key, []);
+          }
+          clusterGroups[layer].get(key).push(point);
+        }
+      });
+    }
+    
+    // Debug: Show cluster distribution
+    for (let layer = 0; layer <= 3; layer++) {
+      const clusters = clusterGroups[layer];
+      console.log(`Layer ${layer}: ${clusters.size} clusters`);
+      
+      // Show first few clusters and their sizes
+      let count = 0;
+      clusters.forEach((points, clusterKey) => {
+        if (count < 3) {
+          console.log(`  ${clusterKey}: ${points.length} points`);
+          count++;
+        }
+      });
+    }
+
+    // Draw convex hulls for each individual cluster in each layer
+    const layerColors = ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4"];
+    const layerAlphas = [0.1, 0.15, 0.2, 0.25]; // Different opacities to show containment
+    const layerLineWidths = [0.5, 1, 1.5, 2]; // Different line weights
+
+    // Draw hulls from coarsest to finest (3 → 0) so finer hulls appear on top
+    for (let layer = 3; layer >= 0; layer--) {
+      // Skip this layer if it's not visible
+      if (!layerVisibility[layer]) continue;
+      
+      const clusters = clusterGroups[layer];
+      
+      console.log(`Drawing ${clusters.size} individual cluster hulls for Layer ${layer}`);
+      
+      clusters.forEach((points, clusterKey) => {
+        if (points.length < 3) return; // Need at least 3 points for hull
+        
+        const hullPoints = points.map(p => [xScale(p.umap_x), yScale(p.umap_y)]);
+        const hull = d3.polygonHull(hullPoints);
+        
+        if (hull && hull.length > 2) {
+          context.beginPath();
+          context.moveTo(hull[0][0], hull[0][1]);
+          for (let i = 1; i < hull.length; i++) {
+            context.lineTo(hull[i][0], hull[i][1]);
+          }
+          context.closePath();
+          
+          // Fill hull with layer color and alpha
+          context.fillStyle = layerColors[layer];
+          context.globalAlpha = layerAlphas[layer];
+          context.fill();
+          
+          // Stroke hull with layer color and line width
+          context.strokeStyle = layerColors[layer];
+          context.globalAlpha = 0.7;
+          context.lineWidth = layerLineWidths[layer];
+          context.stroke();
+        }
+      });
+    }
+
+    // Reset alpha for points
+    context.globalAlpha = 1.0;
+
+    // Draw all points in neutral color since they belong to multiple clusters
+    uniquePoints.forEach(point => {
+      const x = xScale(point.umap_x);
+      const y = yScale(point.umap_y);
+      
+      context.beginPath();
+      context.arc(x, y, 1.5, 0, 2 * Math.PI);
+      context.fillStyle = "#333";
+      context.globalAlpha = 0.7;
+      context.fill();
+    });
+
+    // Add legend with toggle controls outside the canvas
+    const containerDiv = d3.select(umapRef.current);
+    const legendDiv = containerDiv
+      .append("div")
+      .style("margin-top", "20px")
+      .style("background", "rgba(255,255,255,0.95)")
+      .style("padding", "15px")
+      .style("border-radius", "8px")
+      .style("box-shadow", "0 4px 8px rgba(0,0,0,0.2)")
+      .style("font-size", "13px")
+      .style("border", "1px solid #ddd")
+      .style("max-width", "300px");
+
+    legendDiv.append("div")
+      .style("font-weight", "bold")
+      .style("margin-bottom", "10px")
+      .style("font-size", "14px")
+      .style("color", "#333")
+      .text("Hull Layer Controls");
+
+    [3, 2, 1, 0].forEach((layer, i) => { // Show from coarsest to finest
+      const item = legendDiv.append("div")
+        .style("display", "flex")
+        .style("align-items", "center")
+        .style("margin", "6px 0")
+        .style("padding", "3px")
+        .style("border-radius", "4px")
+        .style("background", layerVisibility[layer] ? "rgba(0,0,0,0.02)" : "rgba(0,0,0,0.05)")
+        .style("cursor", "pointer")
+        .on("click", () => {
+          toggleLayerVisibility(layer);
+        });
+      
+      // Checkbox indicator
+      const layerColors = ["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4"];
+      const checkbox = item.append("div")
+        .style("width", "16px")
+        .style("height", "16px")
+        .style("border", "2px solid #ccc")
+        .style("border-radius", "3px")
+        .style("margin-right", "8px")
+        .style("display", "flex")
+        .style("align-items", "center")
+        .style("justify-content", "center")
+        .style("background", layerVisibility[layer] ? layerColors[layer] : "white")
+        .style("border-color", layerColors[layer]);
+      
+      if (layerVisibility[layer]) {
+        checkbox.append("div")
+          .style("width", "8px")
+          .style("height", "8px")
+          .style("background", "white")
+          .style("border-radius", "1px");
+      }
+      
+      // Color indicator showing colors for this layer
+      const colorBox = item.append("div")
+        .style("width", "20px")
+        .style("height", "12px")
+        .style("background", layerColors[layer])
+        .style("opacity", layerVisibility[layer] ? "0.8" : "0.3")
+        .style("border", "1px solid #ccc")
+        .style("margin-right", "8px")
+        .style("border-radius", "2px");
+      
+      // Label
+      item.append("span")
+        .style("color", layerVisibility[layer] ? "#333" : "#999")
+        .style("font-weight", layerVisibility[layer] ? "500" : "normal")
+        .text(`Layer ${layer} ${layer === 0 ? '(Finest)' : layer === 3 ? '(Coarsest)' : ''}`);
+    });
+
+    // Add basic interactivity with mouse tracking
+    canvas.on("mousemove", function() {
+      const mouse = d3.mouse(this);
+      const x = mouse[0];
+      const y = mouse[1];
+      
+      // Convert back to data coordinates
+      const dataX = xScale.invert(x);
+      const dataY = yScale.invert(y);
+      
+      // Find closest point (simple implementation)
+      let closestPoint = null;
+      let minDistance = Infinity;
+      
+      umapData.forEach(point => {
+        const distance = Math.sqrt(
+          Math.pow(point.umap_x - dataX, 2) + 
+          Math.pow(point.umap_y - dataY, 2)
+        );
+        if (distance < minDistance && distance < 1.0) { // Within reasonable distance
+          minDistance = distance;
+          closestPoint = point;
+        }
+      });
+      
+      // Update cursor
+      canvas.style("cursor", closestPoint ? "pointer" : "default");
+    });
+
+    console.log("Canvas UMAP visualization rendered successfully");
+  };
+
+  // Create separate density visualization
+  const createDensityVisualization = () => {
+    if (!umapData || !densityRef.current) return;
+    
+    if (umapData.length === 0) {
+      console.log("No UMAP data to visualize");
+      return;
+    }
+
+    console.log("Creating Canvas density visualization with", umapData.length, "points");
+
+    // Generate colors similar to datamapplot's approach
+    const generateClusterColor = (clusterId, layer) => {
+      const baseColors = [
+        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', 
+        '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#ff9999', '#66b3ff',
+        '#99ff99', '#ffcc99', '#ff99cc', '#c2c2f0', '#ffb3e6', '#c2f0c2',
+        '#ffd9b3', '#b3b3ff', '#ffb3b3', '#b3ffb3', '#ffccb3', '#ccb3ff'
+      ];
+      
+      if (typeof clusterId !== 'number' || typeof layer !== 'number') {
+        return '#999999';
+      }
+      
+      const colorIndex = (clusterId * 7 + layer * 3) % baseColors.length;
+      return baseColors[colorIndex];
+    };
+
+    // Clear previous visualization
+    densityRef.current.innerHTML = '';
+
+    const size = 800;
+    const width = size;
+    const height = size;
+    const margin = { top: 20, right: 20, bottom: 20, left: 20 };
+
+    // Create canvas
+    const canvas = d3.select(densityRef.current)
+      .append("canvas")
+      .attr("width", width)
+      .attr("height", height)
+      .style("width", "100%")
+      .style("height", "auto")
+      .style("border", "1px solid #ddd");
+
+    const context = canvas.node().getContext("2d");
+    
+    // Enable high DPI
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    canvas.attr("width", width * devicePixelRatio)
+          .attr("height", height * devicePixelRatio);
+    context.scale(devicePixelRatio, devicePixelRatio);
+
+    // Create scales
+    const xExtent = d3.extent(umapData, d => d.umap_x);
+    const yExtent = d3.extent(umapData, d => d.umap_y);
+    
+    const xScale = d3.scaleLinear()
+      .domain(xExtent)
+      .range([margin.left, width - margin.right]);
+    
+    const yScale = d3.scaleLinear()
+      .domain(yExtent)
+      .range([height - margin.bottom, margin.top]);
+
+    // Clear canvas
+    context.clearRect(0, 0, width, height);
+
+    // Get unique raw comment coordinates
+    const uniqueComments = new Map();
+    umapData.forEach(point => {
+      const key = `${point.comment_id}`;
+      if (!uniqueComments.has(key)) {
+        uniqueComments.set(key, {
+          comment_id: point.comment_id,
+          umap_x: point.umap_x,
+          umap_y: point.umap_y,
+          clusters_by_layer: {}
+        });
+      }
+      uniqueComments.get(key).clusters_by_layer[point.layer] = point.cluster_id;
+    });
+
+    const uniquePoints = Array.from(uniqueComments.values());
+
+    // Group points by cluster for each layer
+    const clusterGroups = {};
+    for (let layer = 0; layer <= 3; layer++) {
+      clusterGroups[layer] = new Map();
+      
+      uniquePoints.forEach(point => {
+        const clusterId = point.clusters_by_layer[layer];
+        if (clusterId !== undefined) {
+          const key = `L${layer}C${clusterId}`;
+          if (!clusterGroups[layer].has(key)) {
+            clusterGroups[layer].set(key, []);
+          }
+          clusterGroups[layer].get(key).push(point);
+        }
+      });
+    }
+
+    // Create 2D density plots only for visible layers
+    const densityRadius = 25;
+    const gridSize = 4;
+    
+    // Draw density from coarsest to finest (3 → 0) so finer densities appear on top
+    for (let layer = 3; layer >= 0; layer--) {
+      // Skip this layer if it's not visible
+      if (!densityLayerVisibility[layer]) continue;
+      
+      const clusters = clusterGroups[layer];
+      
+      console.log(`Drawing density plots for ${clusters.size} clusters in Layer ${layer}`);
+      
+      clusters.forEach((points, clusterKey) => {
+        if (points.length < 2) return;
+        
+        const clusterIdMatch = clusterKey.match(/C(\d+)/);
+        const clusterId = clusterIdMatch ? parseInt(clusterIdMatch[1]) : 0;
+        const clusterColor = generateClusterColor(clusterId, layer);
+        
+        if (!clusterColor || typeof clusterColor !== 'string') {
+          console.warn(`Invalid color generated for cluster ${clusterKey}`);
+          return;
+        }
+        
+        // Create density map for this cluster
+        const densityMap = new Map();
+        
+        // Calculate density at grid points
+        for (let x = margin.left; x < width - margin.right; x += gridSize) {
+          for (let y = margin.top; y < height - margin.bottom; y += gridSize) {
+            let density = 0;
+            const gridKey = `${x},${y}`;
+            
+            points.forEach(point => {
+              const px = xScale(point.umap_x);
+              const py = yScale(point.umap_y);
+              const distance = Math.sqrt((x - px) ** 2 + (y - py) ** 2);
+              
+              if (distance <= densityRadius) {
+                density += Math.exp(-(distance ** 2) / (2 * (densityRadius / 3) ** 2));
+              }
+            });
+            
+            if (density > 0.1) {
+              densityMap.set(gridKey, density);
+            }
+          }
+        }
+        
+        // Draw contour lines instead of filled density
+        const maxDensity = Math.max(...densityMap.values());
+        if (maxDensity > 0) {
+          // Create contour levels (like topographic lines)
+          const contourLevels = [0.2, 0.4, 0.6, 0.8].map(level => level * maxDensity);
+          
+          contourLevels.forEach((level, levelIndex) => {
+            // Find grid points at this density level
+            const contourPoints = [];
+            densityMap.forEach((density, gridKey) => {
+              if (Math.abs(density - level) < maxDensity * 0.1) { // Within 10% of level
+                const [x, y] = gridKey.split(',').map(Number);
+                contourPoints.push([x, y]);
+              }
+            });
+            
+            // Draw contour lines
+            if (contourPoints.length > 2) {
+              try {
+                const hull = d3.polygonHull(contourPoints);
+                if (hull && hull.length > 2) {
+                  context.beginPath();
+                  context.moveTo(hull[0][0], hull[0][1]);
+                  for (let i = 1; i < hull.length; i++) {
+                    context.lineTo(hull[i][0], hull[i][1]);
+                  }
+                  context.closePath();
+                  
+                  // Draw contour line
+                  context.strokeStyle = clusterColor;
+                  context.lineWidth = 2 - (levelIndex * 0.3); // Thicker lines for higher density
+                  context.globalAlpha = 0.6;
+                  context.stroke();
+                  
+                  // Light fill for the innermost contour
+                  if (levelIndex === contourLevels.length - 1) {
+                    const hex = clusterColor.replace('#', '');
+                    const r = parseInt(hex.substr(0, 2), 16);
+                    const g = parseInt(hex.substr(2, 2), 16);
+                    const b = parseInt(hex.substr(4, 2), 16);
+                    context.fillStyle = `rgba(${r}, ${g}, ${b}, 0.1)`;
+                    context.fill();
+                  }
+                }
+              } catch (error) {
+                console.error(`Error drawing contour for ${clusterKey}:`, error);
+              }
+            }
+          });
+        }
+      });
+    }
+
+    // Reset alpha for points
+    context.globalAlpha = 1.0;
+
+    // Draw all points with lighter color
+    uniquePoints.forEach(point => {
+      const x = xScale(point.umap_x);
+      const y = yScale(point.umap_y);
+      
+      context.beginPath();
+      context.arc(x, y, 1, 0, 2 * Math.PI);
+      context.fillStyle = "#ccc"; // Much lighter gray
+      context.globalAlpha = 0.5; // More transparent
+      context.fill();
+    });
+
+    // Get topic name from the stored topic names map
+    const getTopicName = (layer, clusterId) => {
+      const key = `layer${layer}_${clusterId}`;
+      return topicNames.get(key) || null;
+    };
+
+    // Draw topic names at cluster centroids
+    context.globalAlpha = 1.0;
+    context.font = "12px Arial";
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    
+    for (let layer = 3; layer >= 0; layer--) {
+      if (!densityLayerVisibility[layer]) continue;
+      
+      const clusters = clusterGroups[layer];
+      
+      clusters.forEach((points, clusterKey) => {
+        if (points.length < 2) return;
+        
+        // Calculate centroid
+        const centroidX = points.reduce((sum, p) => sum + xScale(p.umap_x), 0) / points.length;
+        const centroidY = points.reduce((sum, p) => sum + yScale(p.umap_y), 0) / points.length;
+        
+        // Get cluster ID and topic name
+        const clusterIdMatch = clusterKey.match(/C(\d+)/);
+        const clusterId = clusterIdMatch ? parseInt(clusterIdMatch[1]) : 0;
+        const topicName = getTopicName(layer, clusterId);
+        
+        // Format: "3_7: Transportation"
+        const label = topicName ? `${layer}_${clusterId}: ${topicName}` : `${layer}_${clusterId}`;
+        
+        // Draw text with white background for readability
+        const textMetrics = context.measureText(label);
+        const padding = 4;
+        const bgWidth = textMetrics.width + (padding * 2);
+        const bgHeight = 16;
+        
+        // Draw background
+        context.fillStyle = "rgba(255, 255, 255, 0.9)";
+        context.fillRect(
+          centroidX - bgWidth/2, 
+          centroidY - bgHeight/2, 
+          bgWidth, 
+          bgHeight
+        );
+        
+        // Draw border
+        context.strokeStyle = "#ccc";
+        context.lineWidth = 1;
+        context.strokeRect(
+          centroidX - bgWidth/2, 
+          centroidY - bgHeight/2, 
+          bgWidth, 
+          bgHeight
+        );
+        
+        // Draw text
+        context.fillStyle = "#333";
+        context.fillText(label, centroidX, centroidY);
+      });
+    }
+
+    // Add legend for density visualization
+    const legendDiv = d3.select(densityRef.current)
+      .append("div")
+      .style("margin-top", "20px")
+      .style("background", "rgba(255,255,255,0.95)")
+      .style("padding", "15px")
+      .style("border-radius", "8px")
+      .style("box-shadow", "0 4px 8px rgba(0,0,0,0.2)")
+      .style("font-size", "13px")
+      .style("border", "1px solid #ddd")
+      .style("max-width", "300px");
+
+    legendDiv.append("div")
+      .style("font-weight", "bold")
+      .style("margin-bottom", "10px")
+      .style("font-size", "14px")
+      .style("color", "#333")
+      .text("Density Layer Controls");
+
+    [3, 2, 1, 0].forEach((layer, i) => {
+      const item = legendDiv.append("div")
+        .style("display", "flex")
+        .style("align-items", "center")
+        .style("margin", "6px 0")
+        .style("padding", "3px")
+        .style("border-radius", "4px")
+        .style("background", densityLayerVisibility[layer] ? "rgba(0,0,0,0.02)" : "rgba(0,0,0,0.05)")
+        .style("cursor", "pointer")
+        .on("click", () => {
+          toggleDensityLayerVisibility(layer);
+        });
+      
+      // Checkbox indicator
+      const checkbox = item.append("div")
+        .style("width", "16px")
+        .style("height", "16px")
+        .style("border", "2px solid #ccc")
+        .style("border-radius", "3px")
+        .style("margin-right", "8px")
+        .style("display", "flex")
+        .style("align-items", "center")
+        .style("justify-content", "center")
+        .style("background", densityLayerVisibility[layer] ? generateClusterColor(0, layer) : "white")
+        .style("border-color", generateClusterColor(0, layer));
+      
+      if (densityLayerVisibility[layer]) {
+        checkbox.append("div")
+          .style("width", "8px")
+          .style("height", "8px")
+          .style("background", "white")
+          .style("border-radius", "1px");
+      }
+      
+      // Color indicator
+      const colorBox = item.append("div")
+        .style("width", "20px")
+        .style("height", "12px")
+        .style("background", `linear-gradient(45deg, ${generateClusterColor(0, layer)}, ${generateClusterColor(1, layer)}, ${generateClusterColor(2, layer)})`)
+        .style("opacity", densityLayerVisibility[layer] ? "0.8" : "0.3")
+        .style("border", "1px solid #ccc")
+        .style("margin-right", "8px")
+        .style("border-radius", "2px");
+      
+      // Label
+      item.append("span")
+        .style("color", densityLayerVisibility[layer] ? "#333" : "#999")
+        .style("font-weight", densityLayerVisibility[layer] ? "500" : "normal")
+        .text(`Layer ${layer} ${layer === 0 ? '(Finest)' : layer === 3 ? '(Coarsest)' : ''}`);
+    });
+
+    console.log("Canvas density visualization rendered successfully");
   };
 
   // Create D3.js circle pack visualization following https://d3js.org/d3-hierarchy/pack
@@ -410,6 +1177,34 @@ const TopicHierarchy = ({ conversation }) => {
     }
   }, [hierarchyData]);
 
+  // Effect to create UMAP visualization when data is available
+  useEffect(() => {
+    if (umapData) {
+      createUMAPVisualization();
+    }
+  }, [umapData]);
+
+  // Effect to re-render UMAP visualization when layer visibility changes
+  useEffect(() => {
+    if (umapData) {
+      createUMAPVisualization();
+    }
+  }, [layerVisibility]);
+
+  // Effect to create density visualization when data is available
+  useEffect(() => {
+    if (umapData) {
+      createDensityVisualization();
+    }
+  }, [umapData, topicNames]);
+
+  // Effect to re-render density visualization when density layer visibility changes
+  useEffect(() => {
+    if (umapData) {
+      createDensityVisualization();
+    }
+  }, [densityLayerVisibility]);
+
   if (loading) {
     return (
       <div className="topic-hierarchy">
@@ -442,10 +1237,29 @@ const TopicHierarchy = ({ conversation }) => {
       </div>
 
       <div className="visualization-container">
-        <div ref={circlePackRef} className="circle-pack-visualization"></div>
+        {/* UMAP Spatial Visualization */}
+        <div className="umap-card">
+          <h3>Topic Spatial Distribution - Hulls</h3>
+          <p>UMAP projection showing semantic neighborhoods with convex hulls around clusters</p>
+          <div ref={umapRef} className="umap-visualization"></div>
+        </div>
+        
+        {/* Density Visualization */}
+        <div className="density-card">
+          <h3>Topic Spatial Distribution - Density</h3>
+          <p>UMAP projection with 2D density plots showing cluster distributions (Layer 3 coarsest by default)</p>
+          <div ref={densityRef} className="density-visualization"></div>
+        </div>
+        
+        {/* Circle Pack Visualization */}
+        <div className="circle-pack-card">
+          <h3>Topic Hierarchy</h3>
+          <p>Nested circle pack showing hierarchical topic containment relationships</p>
+          <div ref={circlePackRef} className="circle-pack-visualization"></div>
+        </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .topic-hierarchy {
           padding: 20px;
           max-width: 100%;
@@ -483,6 +1297,12 @@ const TopicHierarchy = ({ conversation }) => {
         }
 
         .visualization-container {
+          display: flex;
+          flex-direction: column;
+          gap: 30px;
+        }
+
+        .umap-card, .density-card, .circle-pack-card {
           background: white;
           border-radius: 12px;
           box-shadow: 0 4px 12px rgba(0,0,0,0.1);
@@ -490,10 +1310,23 @@ const TopicHierarchy = ({ conversation }) => {
           overflow: hidden;
         }
 
-        .circle-pack-visualization {
+        .umap-card h3, .density-card h3, .circle-pack-card h3 {
+          margin: 0 0 10px 0;
+          color: #1e7dff;
+          font-size: 1.5rem;
+        }
+
+        .umap-card p, .density-card p, .circle-pack-card p {
+          margin: 0 0 20px 0;
+          color: #666;
+          font-size: 1rem;
+        }
+
+        .umap-visualization, .density-visualization, .circle-pack-visualization {
           width: 100%;
           height: auto;
           min-height: 600px;
+          position: relative;
         }
 
         .loading, .error-message {

@@ -383,7 +383,7 @@ export async function handle_POST_topicMod_moderate(req: Request, res: Response)
 export async function handle_GET_topicMod_proximity(req: Request, res: Response) {
   try {
     const conversation_id = req.query.conversation_id as string;
-    const layer_id = req.query.layer_id as string || "0";
+    const layer_id = req.query.layer_id as string || "all";
     
     if (!conversation_id) {
       return res.json({
@@ -403,36 +403,196 @@ export async function handle_GET_topicMod_proximity(req: Request, res: Response)
     const proximity_conversation_id = zid.toString();
     logger.info(`Fetching proximity data for conversation ${proximity_conversation_id}, layer ${layer_id}`);
 
-    // Query UMAP coordinates from comment clusters
-    const params = {
-      TableName: "Delphi_CommentClusters",
+    // Get ALL UMAP coordinates from Delphi_UMAPGraph
+    // Node positions are stored where source_id = target_id
+    const umapParams = {
+      TableName: "Delphi_UMAPGraph",
       KeyConditionExpression: "conversation_id = :cid",
-      FilterExpression: "layer_id = :lid",
+      FilterExpression: "source_id = target_id", // Only nodes, not edges
       ExpressionAttributeValues: {
         ":cid": proximity_conversation_id,
-        ":lid": layer_id,
       },
     };
 
-    const data = await docClient.send(new QueryCommand(params));
-    
-    if (!data.Items || data.Items.length === 0) {
+    const umapData = await docClient.send(new QueryCommand(umapParams));
+
+    if (!umapData.Items || umapData.Items.length === 0) {
       return res.json({
-        status: "success",
-        message: "No proximity data found",
+        status: "success", 
+        message: "No UMAP coordinates found",
         proximity_data: [],
       });
     }
 
-    // Format proximity data for visualization
-    const proximityData = data.Items.map((item) => ({
-      comment_id: item.comment_id,
-      umap_x: item.umap_x,
-      umap_y: item.umap_y,
-      cluster_id: item.cluster_id,
-      comment_text: item.comment_text,
-      moderation_status: item.moderation_status || "pending",
-    }));
+    logger.info(`Found ${umapData.Items.length} UMAP coordinate points`);
+
+    // If layer_id is "all", return all coordinates with cluster info from all layers
+    if (layer_id === "all") {
+      // Get ALL cluster assignments for all layers
+      const clusterParams = {
+        TableName: "Delphi_CommentHierarchicalClusterAssignments",
+        KeyConditionExpression: "conversation_id = :cid",
+        ExpressionAttributeValues: {
+          ":cid": proximity_conversation_id,
+        },
+      };
+
+      let clusterData;
+      try {
+        clusterData = await docClient.send(new QueryCommand(clusterParams));
+        logger.info(`Found ${clusterData.Items?.length || 0} cluster assignments`);
+      } catch (err: any) {
+        logger.error(`Error fetching cluster assignments: ${err.message}`);
+        clusterData = { Items: [] };
+      }
+
+      // Create a map of comment_id to cluster assignments for all layers
+      const commentToClustersByLayer = new Map();
+      if (clusterData.Items && clusterData.Items.length > 0) {
+        logger.info(`CLUSTER DEBUG: Processing ${clusterData.Items.length} cluster assignment items`);
+        
+        // Debug: Show structure of first few cluster items
+        clusterData.Items.slice(0, 3).forEach((item, i) => {
+          logger.info(`CLUSTER DEBUG: Item ${i} full structure:`, JSON.stringify(item, null, 2));
+          logger.info(`CLUSTER DEBUG: Item ${i} keys:`, Object.keys(item));
+        });
+        
+        clusterData.Items.forEach((item, index) => {
+          const commentId = item.comment_id;
+          
+          if (index < 5) {
+            logger.info(`CLUSTER DEBUG: Processing item ${index}: comment_id=${commentId}, layer0=${item.layer0_cluster_id}, layer1=${item.layer1_cluster_id}, layer2=${item.layer2_cluster_id}, layer3=${item.layer3_cluster_id}`);
+          }
+          
+          if (!commentToClustersByLayer.has(commentId)) {
+            commentToClustersByLayer.set(commentId, {});
+          }
+          
+          // Add cluster assignments for each layer that has a value
+          const clustersByLayer = commentToClustersByLayer.get(commentId);
+          if (item.layer0_cluster_id !== null && item.layer0_cluster_id !== undefined) {
+            clustersByLayer['0'] = item.layer0_cluster_id;
+          }
+          if (item.layer1_cluster_id !== null && item.layer1_cluster_id !== undefined) {
+            clustersByLayer['1'] = item.layer1_cluster_id;
+          }
+          if (item.layer2_cluster_id !== null && item.layer2_cluster_id !== undefined) {
+            clustersByLayer['2'] = item.layer2_cluster_id;
+          }
+          if (item.layer3_cluster_id !== null && item.layer3_cluster_id !== undefined) {
+            clustersByLayer['3'] = item.layer3_cluster_id;
+          }
+        });
+        
+        logger.info(`CLUSTER DEBUG: Created cluster assignments for ${commentToClustersByLayer.size} comments`);
+        
+        // Debug: Show sample assignments for first few comments
+        const firstFewCommentIds = Array.from(commentToClustersByLayer.keys()).slice(0, 3);
+        firstFewCommentIds.forEach(commentId => {
+          const assignments = commentToClustersByLayer.get(commentId);
+          logger.info(`CLUSTER DEBUG: Comment ${commentId} assignments:`, JSON.stringify(assignments));
+        });
+      } else {
+        logger.warn("CLUSTER DEBUG: No cluster assignment data found in Delphi_CommentHierarchicalClusterAssignments");
+      }
+
+      // Return ALL comment coordinates with cluster info for all layers
+      logger.info(`RESPONSE DEBUG: Starting to process ${umapData.Items.length} UMAP items`);
+      
+      const validUmapItems = umapData.Items.filter(item => {
+        // Filter out items with invalid positions
+        const x = item.position?.x;
+        const y = item.position?.y;
+        const isValid = x !== null && x !== undefined && !isNaN(x) && 
+                       y !== null && y !== undefined && !isNaN(y) &&
+                       isFinite(x) && isFinite(y);
+        return isValid;
+      });
+      
+      logger.info(`RESPONSE DEBUG: ${validUmapItems.length} items have valid UMAP coordinates`);
+      
+      const proximityData = validUmapItems.map((item, index) => {
+        const commentId = item.source_id;
+        const clusterInfo = commentToClustersByLayer.get(commentId) || {};
+        
+        if (index < 5) {
+          logger.info(`RESPONSE DEBUG: Processing UMAP item ${index}: comment_id=${commentId}, clusters=${JSON.stringify(clusterInfo)}`);
+        }
+        
+        const responseItem = {
+          comment_id: commentId,
+          umap_x: item.position.x,
+          umap_y: item.position.y,
+          weight: item.weight || 1,
+          clusters: clusterInfo, // cluster_id for each layer
+        };
+        
+        if (index < 3) {
+          logger.info(`RESPONSE DEBUG: Response item ${index}:`, JSON.stringify(responseItem));
+        }
+        
+        return responseItem;
+      });
+      
+      // Count how many items actually have cluster assignments
+      const itemsWithClusters = proximityData.filter(item => Object.keys(item.clusters).length > 0);
+      logger.info(`RESPONSE DEBUG: ${itemsWithClusters.length} out of ${proximityData.length} response items have cluster assignments`);
+
+      return res.json({
+        status: "success",
+        message: "All proximity data retrieved successfully",
+        proximity_data: proximityData,
+        total_points: proximityData.length,
+      });
+    }
+
+    // If specific layer is requested, filter by that layer
+    const clusterParams = {
+      TableName: "Delphi_CommentHierarchicalClusterAssignments",
+      KeyConditionExpression: "conversation_id = :cid",
+      FilterExpression: "layer_id = :lid",
+      ExpressionAttributeValues: {
+        ":cid": proximity_conversation_id,
+        ":lid": parseInt(layer_id),
+      },
+    };
+
+    const clusterData = await docClient.send(new QueryCommand(clusterParams));
+
+    // Create a map of comment_id to cluster_id for the specified layer
+    const commentToCluster = new Map();
+    if (clusterData.Items) {
+      clusterData.Items.forEach(item => {
+        commentToCluster.set(item.comment_id, item.cluster_id);
+      });
+    }
+
+    // Filter UMAP coordinates to only include comments in the specified layer
+    const proximityData = umapData.Items
+      .filter(item => {
+        const commentId = item.source_id; // For nodes, source_id = target_id = comment_id
+        // Check for valid position data
+        const x = item.position?.x;
+        const y = item.position?.y;
+        const hasValidPosition = x !== null && x !== undefined && !isNaN(x) && 
+                                y !== null && y !== undefined && !isNaN(y) &&
+                                isFinite(x) && isFinite(y);
+        
+        return commentToCluster.has(commentId) && hasValidPosition;
+      })
+      .map((item) => {
+        const commentId = item.source_id;
+        const clusterId = commentToCluster.get(commentId);
+        
+        return {
+          comment_id: commentId,
+          cluster_id: clusterId,
+          layer_id: parseInt(layer_id),
+          umap_x: item.position.x,
+          umap_y: item.position.y,
+          weight: item.weight || 1,
+        };
+      });
 
     return res.json({
       status: "success",
@@ -570,12 +730,9 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
           // INVERTED: The "parent" in DynamoDB becomes the container in circle pack
           parentNode.children.push(node);
           node.parentId = parentKey;
-          logger.info(`Circle pack: ${parentKey} contains ${key}`);
         } else {
           logger.warn(`Parent node ${parentKey} not found for child ${key}`);
         }
-      } else {
-        logger.info(`No parent found for cluster ${key} - treating as root`);
       }
     });
 
@@ -585,35 +742,8 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
     // For visualization: we want mixed-level roots showing the true hierarchy
     const roots = Array.from(hierarchyMap.values()).filter(node => !node.parentId);
     
-    logger.info(`Hierarchy building results:`);
-    logger.info(`Total nodes created: ${hierarchyMap.size}`);
-    logger.info(`Root nodes found: ${roots.length}`);
-    logger.info(`Root nodes by layer:`, roots.reduce((acc, root) => {
-      acc[root.layer] = (acc[root.layer] || 0) + 1;
-      return acc;
-    }, {}));
     
-    // Debug: Check parent-child relationships
-    let totalChildRelationships = 0;
-    const nodesWithChildren = [];
-    hierarchyMap.forEach(node => {
-      totalChildRelationships += node.children.length;
-      if (node.children.length > 0) {
-        nodesWithChildren.push(`${node.id}(${node.children.length})`);
-      }
-    });
-    logger.info(`Total parent-child relationships: ${totalChildRelationships}`);
-    logger.info(`Nodes with children: ${nodesWithChildren.slice(0, 5).join(', ')}`);
-    logger.info(`Layer 3 nodes with children: ${nodesWithChildren.filter(n => n.includes('layer3_')).length}`);
     
-    // Debug specific Layer 3 nodes
-    roots.forEach(root => {
-      if (root.children.length > 0) {
-        logger.info(`Layer 3 root ${root.id} has ${root.children.length} children: ${root.children.map(c => c.id).slice(0, 3).join(', ')}`);
-      } else {
-        logger.info(`Layer 3 root ${root.id} has NO children`);
-      }
-    });
 
     // Remove parent references to avoid circular JSON and clean up for D3
     const cleanNode = (node) => {
@@ -626,9 +756,6 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
         topic_name: node.topic_name,
         children: node.children.map(cleanNode)
       };
-      if (node.children.length > 0) {
-        logger.info(`Cleaning node ${node.id} with ${node.children.length} children`);
-      }
       return cleaned;
     };
 
