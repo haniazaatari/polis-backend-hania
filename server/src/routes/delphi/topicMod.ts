@@ -579,10 +579,11 @@ export async function handle_GET_topicMod_hierarchy(req: Request, res: Response)
       }
     });
 
-    // For circle pack: Layer 3 = BIGGEST OUTERMOST containers, Layer 0 = SMALLEST INNERMOST  
-    // We want Layer 3 clusters as the roots (big outer circles)
-    const layer3Nodes = Array.from(hierarchyMap.values()).filter(node => node.layer === 3);
-    const roots = layer3Nodes;
+    // For circle pack: find ALL clusters that have no parents (roots at any level)
+    // Some Layer 3, some Layer 2, some Layer 1, and some Layer 0 clusters may be top-level
+    // In EVōC: smaller clusters are "parents" of larger (they merge into larger ones)
+    // For visualization: we want mixed-level roots showing the true hierarchy
+    const roots = Array.from(hierarchyMap.values()).filter(node => !node.parentId);
     
     logger.info(`Hierarchy building results:`);
     logger.info(`Total nodes created: ${hierarchyMap.size}`);
