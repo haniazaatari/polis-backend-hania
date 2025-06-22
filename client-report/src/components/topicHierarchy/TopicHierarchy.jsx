@@ -704,7 +704,7 @@ const TopicHierarchy = ({ conversation }) => {
 
     // Draw topic names at cluster centroids
     context.globalAlpha = 1.0;
-    context.font = "12px Arial";
+    context.font = "5px Arial"; // Even smaller font
     context.textAlign = "center";
     context.textBaseline = "middle";
     
@@ -725,17 +725,28 @@ const TopicHierarchy = ({ conversation }) => {
         const clusterId = clusterIdMatch ? parseInt(clusterIdMatch[1]) : 0;
         const topicName = getTopicName(layer, clusterId);
         
-        // Format: "3_7: Transportation"
-        const label = topicName ? `${layer}_${clusterId}: ${topicName}` : `${layer}_${clusterId}`;
+        // Format: "3_7: Transportation" or just the topic name if it doesn't already include the layer_cluster
+        let label;
+        if (topicName) {
+          // Check if topic name already includes the layer_cluster format
+          const layerClusterPrefix = `${layer}_${clusterId}`;
+          if (topicName.startsWith(layerClusterPrefix)) {
+            label = topicName; // Already formatted
+          } else {
+            label = `${layerClusterPrefix}: ${topicName}`;
+          }
+        } else {
+          label = `${layer}_${clusterId}`;
+        }
         
-        // Draw text with white background for readability
+        // Draw text with subtle background for readability
         const textMetrics = context.measureText(label);
-        const padding = 4;
+        const padding = 1; // Much smaller padding
         const bgWidth = textMetrics.width + (padding * 2);
-        const bgHeight = 16;
+        const bgHeight = 6; // Much smaller height for tiny font
         
-        // Draw background
-        context.fillStyle = "rgba(255, 255, 255, 0.9)";
+        // Draw very subtle background
+        context.fillStyle = "rgba(255, 255, 255, 0.1)"; // Much more transparent
         context.fillRect(
           centroidX - bgWidth/2, 
           centroidY - bgHeight/2, 
@@ -743,17 +754,12 @@ const TopicHierarchy = ({ conversation }) => {
           bgHeight
         );
         
-        // Draw border
-        context.strokeStyle = "#ccc";
-        context.lineWidth = 1;
-        context.strokeRect(
-          centroidX - bgWidth/2, 
-          centroidY - bgHeight/2, 
-          bgWidth, 
-          bgHeight
-        );
+        // Draw text with white stroke outline
+        context.lineWidth = 1; // Thinner stroke for tiny text
+        context.strokeStyle = "white";
+        context.strokeText(label, centroidX, centroidY);
         
-        // Draw text
+        // Draw text fill
         context.fillStyle = "#333";
         context.fillText(label, centroidX, centroidY);
       });
@@ -1237,18 +1243,18 @@ const TopicHierarchy = ({ conversation }) => {
       </div>
 
       <div className="visualization-container">
+        {/* Density Visualization - First */}
+        <div className="density-card">
+          <h3>Topic Spatial Distribution - Contours</h3>
+          <p>UMAP projection with topographic contour lines showing cluster density (Layer 3 coarsest by default)</p>
+          <div ref={densityRef} className="density-visualization"></div>
+        </div>
+        
         {/* UMAP Spatial Visualization */}
         <div className="umap-card">
           <h3>Topic Spatial Distribution - Hulls</h3>
           <p>UMAP projection showing semantic neighborhoods with convex hulls around clusters</p>
           <div ref={umapRef} className="umap-visualization"></div>
-        </div>
-        
-        {/* Density Visualization */}
-        <div className="density-card">
-          <h3>Topic Spatial Distribution - Density</h3>
-          <p>UMAP projection with 2D density plots showing cluster distributions (Layer 3 coarsest by default)</p>
-          <div ref={densityRef} className="density-visualization"></div>
         </div>
         
         {/* Circle Pack Visualization */}
