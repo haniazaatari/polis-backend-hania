@@ -9,13 +9,10 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [topicData, setTopicData] = useState(null);
-  const [selectedComments, setSelectedComments] = useState(new Set());
   const [hierarchyAnalysis, setHierarchyAnalysis] = useState(null);
-  const [hierarchyData, setHierarchyData] = useState(null);
-  const [showAllLayers, setShowAllLayers] = useState(true);
-  const [selectedLayer, setSelectedLayer] = useState(0);
-  const [showCirclePack, setShowCirclePack] = useState(true);
-  const circlePackRef = useRef(null);
+  const [currentLayer, setCurrentLayer] = useState(3); // Start with coarsest layer
+  const [topicPriorities, setTopicPriorities] = useState(new Map()); // Store topic priorities
+  const [selectedTopics, setSelectedTopics] = useState(new Set()); // Track selected topics for filtering
 
   useEffect(() => {
     if (!report_id) return;
@@ -33,8 +30,6 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
           if (response.runs && Object.keys(response.runs).length > 0) {
             setTopicData(response);
             analyzeHierarchy(response);
-            // Also fetch the hierarchical cluster structure for circle pack
-            fetchHierarchyData();
           } else {
             setError("No LLM topic data available yet. Run Delphi analysis first.");
           }
@@ -51,24 +46,6 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
       });
   }, [report_id]);
 
-  // Fetch hierarchical cluster structure from DynamoDB
-  const fetchHierarchyData = async () => {
-    try {
-      // Use the zinvite from conversation data instead of report_id
-      const conversationId = conversation?.conversation_id || report_id;
-      const response = await fetch(`/api/v3/topicMod/hierarchy?conversation_id=${conversationId}`);
-      const data = await response.json();
-      
-      if (data.status === "success" && data.hierarchy) {
-        setHierarchyData(data);
-        console.log("Hierarchy data loaded:", data);
-      } else {
-        console.log("No hierarchy data available:", data.message);
-      }
-    } catch (err) {
-      console.error("Error fetching hierarchy data:", err);
-    }
-  };
 
   // Analyze if topics actually contain each other hierarchically
   const analyzeHierarchy = (data) => {
@@ -137,257 +114,182 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
     setHierarchyAnalysis(analysis);
   };
 
-  // Toggle comment selection
-  const toggleCommentSelection = (commentId) => {
-    const newSelected = new Set(selectedComments);
-    if (newSelected.has(commentId)) {
-      newSelected.delete(commentId);
+  // Set topic priority with cycling
+  const cyclePriority = (topicKey) => {
+    const currentPriority = topicPriorities.get(topicKey) || 'low';
+    let nextPriority;
+    
+    switch (currentPriority) {
+      case 'low': nextPriority = 'medium'; break;
+      case 'medium': nextPriority = 'high'; break;
+      case 'high': nextPriority = 'critical'; break; // spam
+      case 'critical': nextPriority = 'low'; break; // back to start
+      default: nextPriority = 'medium';
+    }
+    
+    const newPriorities = new Map(topicPriorities);
+    newPriorities.set(topicKey, nextPriority);
+    setTopicPriorities(newPriorities);
+    console.log(`Topic ${topicKey} cycled to ${nextPriority}`);
+  };
+
+  // Toggle topic selection for filtering
+  const toggleTopicSelection = (topicKey) => {
+    const newSelected = new Set(selectedTopics);
+    if (newSelected.has(topicKey)) {
+      newSelected.delete(topicKey);
     } else {
-      newSelected.add(commentId);
+      newSelected.add(topicKey);
     }
-    setSelectedComments(newSelected);
+    setSelectedTopics(newSelected);
   };
 
-  // Select all comments in a topic/cluster
-  const selectAllInTopic = (topicKey) => {
-    // This would need to fetch comments for the specific topic
-    console.log("Would select all comments in topic:", topicKey);
-  };
-
-  // Create D3.js circle pack visualization
-  const createCirclePack = () => {
-    if (!hierarchyData || !circlePackRef.current) return;
-
-    // Clear previous visualization
-    d3.select(circlePackRef.current).selectAll("*").remove();
-
-    const width = 800;
-    const height = 600;
-
-    // Create SVG
-    const svg = d3.select(circlePackRef.current)
-      .append("svg")
-      .attr("width", width)
-      .attr("height", height)
-      .attr("style", "border: 1px solid #ccc; border-radius: 8px;");
-
-    // Create hierarchy from data
-    const hierarchy = d3.hierarchy(hierarchyData.hierarchy)
-      .sum(d => d.size || 1)  // Use cluster size for circle size
-      .sort((a, b) => b.value - a.value);
-
-    // Create pack layout
-    const pack = d3.pack()
-      .size([width - 20, height - 20])
-      .padding(3);
-
-    const nodes = pack(hierarchy);
-
-    // Color scale by layer
-    const colorScale = d3.scaleOrdinal()
-      .domain([0, 1, 2, 3])
-      .range(["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4"]);
-
-    // Create groups for each node
-    const nodeGroups = svg.selectAll("g")
-      .data(nodes.descendants())
-      .enter()
-      .append("g")
-      .attr("transform", d => `translate(${d.x + 10},${d.y + 10})`);
-
-    // Add circles
-    nodeGroups.append("circle")
-      .attr("r", d => d.r)
-      .attr("fill", d => {
-        if (d.depth === 0) return "#f8f9fa"; // Root
-        return colorScale(d.data.layer);
-      })
-      .attr("stroke", d => d.depth === 0 ? "#dee2e6" : "#343a40")
-      .attr("stroke-width", d => d.depth === 0 ? 2 : 1)
-      .attr("fill-opacity", d => d.depth === 0 ? 0.1 : 0.7)
-      .style("cursor", "pointer")
-      .on("click", function(event, d) {
-        if (d.data.layer !== undefined) {
-          console.log("Clicked cluster:", d.data);
-          setSelectedLayer(d.data.layer);
-        }
-      });
-
-    // Add text labels for larger circles
-    nodeGroups.append("text")
-      .attr("text-anchor", "middle")
-      .attr("dy", "0.3em")
-      .attr("font-size", d => Math.min(d.r / 4, 12))
-      .attr("fill", "#343a40")
-      .attr("font-weight", "bold")
-      .style("pointer-events", "none")
-      .text(d => {
-        if (d.depth === 0) return "Topics";
-        if (d.r < 20) return ""; // Hide text for very small circles
-        return `L${d.data.layer} C${d.data.clusterId}`;
-      });
-
-    // Add size labels for larger circles
-    nodeGroups.append("text")
-      .attr("text-anchor", "middle")
-      .attr("dy", "1.5em")
-      .attr("font-size", d => Math.min(d.r / 6, 10))
-      .attr("fill", "#6c757d")
-      .style("pointer-events", "none")
-      .text(d => {
-        if (d.depth === 0 || d.r < 25) return "";
-        return `${d.data.size} comments`;
-      });
-
-    // Add legend
-    const legend = svg.append("g")
-      .attr("transform", `translate(${width - 150}, 20)`);
-
-    legend.append("text")
-      .attr("font-weight", "bold")
-      .attr("font-size", "14")
-      .text("Layers");
-
-    const legendItems = legend.selectAll(".legend-item")
-      .data([
-        { layer: 0, label: "Layer 0 (Finest)", color: "#ff6b6b" },
-        { layer: 1, label: "Layer 1", color: "#4ecdc4" },
-        { layer: 2, label: "Layer 2", color: "#45b7d1" },
-        { layer: 3, label: "Layer 3 (Coarsest)", color: "#96ceb4" }
-      ])
-      .enter()
-      .append("g")
-      .attr("class", "legend-item")
-      .attr("transform", (d, i) => `translate(0, ${20 + i * 20})`);
-
-    legendItems.append("circle")
-      .attr("r", 8)
-      .attr("fill", d => d.color)
-      .attr("fill-opacity", 0.7);
-
-    legendItems.append("text")
-      .attr("x", 15)
-      .attr("dy", "0.3em")
-      .attr("font-size", "12")
-      .text(d => d.label);
-  };
-
-  // Effect to create circle pack when hierarchy data is available
-  useEffect(() => {
-    if (showCirclePack && hierarchyData) {
-      createCirclePack();
+  // Get priority color
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'low': return '#d6d8db';
+      case 'medium': return '#e2e6ea';
+      case 'high': return '#d1d5db';
+      case 'critical': return '#f0a7ab';
+      default: return '#e9ecef';
     }
-  }, [showCirclePack, hierarchyData]);
+  };
 
-  // Render dense comment list for a layer
-  const renderCommentsForLayer = (layerId) => {
-    if (!topicData || !topicData.runs) {
-      return <p>No data available</p>;
+  // Get priority indicator
+  const getPriorityIndicator = (priority) => {
+    switch (priority) {
+      case 'low': return '· LOW';
+      case 'medium': return '•• MEDIUM';
+      case 'high': return '••• HIGH';
+      case 'critical': return '🗑 SPAM/TRASH';
+      default: return '· LOW';
+    }
+  };
+
+
+  // Render dense priority selection for current layer
+  const renderPriorityLayer = () => {
+    if (!topicData || !topicData.runs || !hierarchyAnalysis) {
+      return <div className="no-data">No topic data available</div>;
     }
 
     const runKeys = Object.keys(topicData.runs);
     const firstRun = topicData.runs[runKeys[0]];
     
-    if (!firstRun.topics_by_layer || !firstRun.topics_by_layer[layerId]) {
-      return <p>No topics found for layer {layerId}</p>;
+    if (!firstRun.topics_by_layer || !firstRun.topics_by_layer[currentLayer]) {
+      return <div className="no-data">No topics found for layer {currentLayer}</div>;
     }
 
-    const topics = firstRun.topics_by_layer[layerId];
+    const topics = firstRun.topics_by_layer[currentLayer];
+    const topicEntries = Object.entries(topics);
     
     return (
-      <div className="layer-section">
-        <h3>Layer {layerId} ({Object.keys(topics).length} topics)</h3>
-        
-        {Object.entries(topics).map(([clusterId, topic]) => (
-          <div key={`${layerId}-${clusterId}`} className="topic-section">
-            <div className="topic-header">
-              <h4>{topic.topic_name}</h4>
-              <div className="topic-controls">
-                <label>
-                  <input
-                    type="checkbox"
-                    onChange={() => selectAllInTopic(topic.topic_key)}
-                  />
-                  Select all in topic
-                </label>
-                <span className="topic-info">
-                  Cluster {clusterId} | Status: {topic.moderation?.status || 'pending'}
-                </span>
-              </div>
-            </div>
-            
-            <div className="topic-comments">
-              <p className="coming-soon">
-                [Dense comment list for this topic would go here]
-                <br />
-                <small>
-                  Topic key: {topic.topic_key}<br />
-                  Model: {topic.model_name}<br />
-                  Comments: {topic.moderation?.comment_count || 'unknown'}
-                </small>
-              </p>
-            </div>
+      <div className="priority-layer">
+        <div className="layer-header">
+          <h2>Layer {currentLayer} Community Impact</h2>
+          <div className="layer-subtitle">
+            {topicEntries.length} topics • Rate community impact and your expertise
           </div>
-        ))}
+        </div>
+        
+        <div className="topics-grid">
+          {topicEntries.map(([clusterId, topic]) => {
+            const topicKey = topic.topic_key;
+            const currentPriority = topicPriorities.get(topicKey) || 'low'; // Default to 'low'
+            const isSelected = selectedTopics.has(topicKey);
+            
+            // Clean topic name
+            let displayName = topic.topic_name;
+            const layerClusterPrefix = `${currentLayer}_${clusterId}`;
+            if (displayName && displayName.startsWith(layerClusterPrefix)) {
+              displayName = displayName.substring(layerClusterPrefix.length).replace(/^:\s*/, '');
+            }
+            
+            return (
+              <div 
+                key={topicKey} 
+                className={`topic-item ${currentPriority}`}
+                onClick={() => cyclePriority(topicKey)}
+              >
+                <div className="topic-content">
+                  <div className="topic-header-row">
+                    <span className="topic-id">{currentLayer}_{clusterId}</span>
+                    <div className="priority-options">
+                      {['low', 'medium', 'high', 'critical'].map(priority => (
+                        <span 
+                          key={priority}
+                          className={`priority-option ${currentPriority === priority ? 'active' : ''}`}
+                        >
+                          {priority === 'low' ? 'LOW' : 
+                           priority === 'medium' ? 'MEDIUM' : 
+                           priority === 'high' ? 'HIGH' : 
+                           'SPAM/TRASH'}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="topic-text">{displayName || `Topic ${clusterId}`}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   };
 
-  // Render circle pack visualization hint
-  const renderCirclePackHint = () => {
+  // Render layer navigation
+  const renderLayerNavigation = () => {
     if (!hierarchyAnalysis) return null;
 
     return (
-      <div className="hierarchy-analysis">
-        <h3>Hierarchy Analysis</h3>
-        <div className={`analysis-result ${hierarchyAnalysis.hasHierarchy ? 'hierarchical' : 'flat'}`}>
-          <h4>Structure: {hierarchyAnalysis.structure}</h4>
-          <p>{hierarchyAnalysis.reason}</p>
-          
-          {hierarchyAnalysis.hasHierarchy && (
-            <div className="circle-pack-suggestion">
-              <h5>🎯 Circle Pack Visualization Available!</h5>
-              <p>
-                We have confirmed hierarchical structure! This IS visualized as an interactive circle pack where:
-              </p>
-              <ul>
-                <li>Larger circles represent coarser layers (layer {Math.max(...hierarchyAnalysis.layers)})</li>
-                <li>Smaller circles nested inside represent finer layers (layer {Math.min(...hierarchyAnalysis.layers)})</li>
-                <li>Circle size represents comment count for each cluster</li>
-                <li>Colors distinguish different layers</li>
-                <li>Click circles to select layers for detailed view</li>
-              </ul>
-              
-              
-              {showCirclePack && hierarchyData && (
-                <div className="circle-pack-container">
-                  <h4>Interactive Topic Hierarchy</h4>
-                  <p>{hierarchyData.totalClusters} clusters across {hierarchyAnalysis.layers.length} layers</p>
-                  <div ref={circlePackRef} className="circle-pack-viz"></div>
-                </div>
-              )}
-              
-              {showCirclePack && !hierarchyData && (
-                <div className="loading-hierarchy">
-                  <p>Loading hierarchy data for visualization...</p>
-                </div>
-              )}
-            </div>
-          )}
-          
-          <div className="layer-summary">
-            <h5>Layer Summary:</h5>
-            {hierarchyAnalysis.layers.map(layerId => (
-              <div key={layerId} className="layer-info">
-                <strong>Layer {layerId}:</strong> {hierarchyAnalysis.layerCounts[layerId]} topics
-                <div className="sample-topics">
-                  {hierarchyAnalysis.sampleTopics[layerId]?.map((topic, idx) => (
-                    <span key={idx} className="topic-sample">"{topic.name}"</span>
-                  ))}
-                </div>
+      <div className="layer-navigation">
+        
+        <div className="layer-tabs">
+          {hierarchyAnalysis.layers.slice().reverse().map(layerId => (
+            <button
+              key={layerId}
+              className={`layer-tab ${currentLayer === layerId ? 'active' : ''}`}
+              onClick={() => setCurrentLayer(layerId)}
+            >
+              <div className="tab-number">L{layerId}</div>
+              <div className="tab-label">
+                {layerId === 3 ? 'Coarsest' : layerId === 0 ? 'Finest' : 'Mid'}
               </div>
-            ))}
+              <div className="tab-count">{hierarchyAnalysis.layerCounts[layerId]}</div>
+            </button>
+          ))}
+        </div>
+        
+        {selectedTopics.size > 0 && (
+          <div className="selection-summary">
+            <div className="selected-count">{selectedTopics.size} topics selected for filtering</div>
+            <button 
+              className="clear-selection"
+              onClick={() => setSelectedTopics(new Set())}
+            >
+              Clear Selection
+            </button>
           </div>
+        )}
+      </div>
+    );
+  };
+
+  // Render compact hierarchy analysis (moved to bottom)
+  const renderCompactAnalysis = () => {
+    if (!hierarchyAnalysis) return null;
+
+    return (
+      <div className="compact-analysis">
+        <h4>Topic Structure Overview</h4>
+        <div className="analysis-summary">
+          <span className="structure-type">{hierarchyAnalysis.structure.toUpperCase()}</span>
+          <span className="layer-breakdown">
+            {hierarchyAnalysis.layers.map(layerId => 
+              `L${layerId}:${hierarchyAnalysis.layerCounts[layerId]}`
+            ).join(' • ')}
+          </span>
         </div>
       </div>
     );
@@ -416,272 +318,279 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
 
   return (
     <div className="topic-prioritize">
-      <div className="header">
-        <h1>Topic Prioritize</h1>
-        <div className="subtitle">
-          Dense view of all comments organized by hierarchical topics
-        </div>
-        <div className="report-info">Report ID: {report_id}</div>
+      {renderLayerNavigation()}
+      
+      <div className="main-content">
+        {renderPriorityLayer()}
       </div>
 
-      {renderCirclePackHint()}
-
-      <div className="controls">
-        <div className="layer-controls">
-          <h3>Layer Selection</h3>
-          <label>
-            <input
-              type="radio"
-              name="layer-selection"
-              checked={showAllLayers}
-              onChange={() => setShowAllLayers(true)}
-            />
-            Show all layers
-          </label>
-          
-          {hierarchyAnalysis?.layers.map(layerId => (
-            <label key={layerId}>
-              <input
-                type="radio"
-                name="layer-selection"
-                checked={!showAllLayers && selectedLayer === layerId}
-                onChange={() => {
-                  setShowAllLayers(false);
-                  setSelectedLayer(layerId);
-                }}
-              />
-              Layer {layerId} only ({hierarchyAnalysis.layerCounts[layerId]} topics)
-            </label>
-          ))}
-        </div>
-
-        <div className="selection-info">
-          <h3>Selection Summary</h3>
-          <p>{selectedComments.size} comments selected</p>
-          <button 
-            onClick={() => setSelectedComments(new Set())}
-            disabled={selectedComments.size === 0}
-          >
-            Clear selection
-          </button>
-        </div>
-      </div>
-
-      <div className="comments-content">
-        {showAllLayers ? (
-          hierarchyAnalysis?.layers.map(layerId => renderCommentsForLayer(layerId))
-        ) : (
-          renderCommentsForLayer(selectedLayer)
-        )}
-      </div>
 
       <style jsx>{`
         .topic-prioritize {
-          padding: 20px;
-          max-width: 1400px;
-          margin: 0 auto;
-        }
-
-        .header {
-          border-bottom: 1px solid #ccc;
-          margin-bottom: 30px;
-          padding-bottom: 15px;
-        }
-
-        .header h1 {
-          margin: 0 0 5px 0;
-          color: #03a9f4;
-        }
-
-        .subtitle {
-          color: #666;
-          margin-bottom: 10px;
-        }
-
-        .report-info {
-          font-size: 0.9em;
-          color: #888;
-        }
-
-        .hierarchy-analysis {
-          background: #f8f9fa;
-          padding: 20px;
-          border-radius: 8px;
-          margin-bottom: 30px;
-          border: 1px solid #e9ecef;
-        }
-
-        .analysis-result.hierarchical {
-          border-left: 4px solid #28a745;
-        }
-
-        .analysis-result.flat {
-          border-left: 4px solid #ffc107;
-        }
-
-        .circle-pack-suggestion {
-          background: #e7f3ff;
-          padding: 15px;
-          border-radius: 6px;
-          margin: 15px 0;
-          border: 1px solid #b8daff;
-        }
-
-        .circle-pack-suggestion h5 {
-          margin-top: 0;
-          color: #0056b3;
-        }
-
-        .circle-pack-suggestion ul {
-          margin: 10px 0;
-          padding-left: 20px;
-        }
-
-        .layer-summary {
-          margin-top: 20px;
-        }
-
-        .layer-info {
-          margin-bottom: 10px;
           padding: 10px;
-          background: white;
-          border-radius: 4px;
-          border: 1px solid #dee2e6;
-        }
-
-        .sample-topics {
-          margin-top: 5px;
-          font-size: 0.85em;
-        }
-
-        .topic-sample {
-          display: inline-block;
-          background: #e9ecef;
-          padding: 2px 6px;
-          border-radius: 3px;
-          margin-right: 5px;
-          margin-top: 3px;
-        }
-
-        .controls {
-          display: grid;
-          grid-template-columns: 2fr 1fr;
-          gap: 30px;
-          margin-bottom: 30px;
-          padding: 20px;
-          background: white;
-          border: 1px solid #e0e0e0;
-          border-radius: 8px;
-        }
-
-        .layer-controls label {
-          display: block;
-          margin-bottom: 8px;
-          cursor: pointer;
-        }
-
-        .layer-controls input[type="radio"] {
-          margin-right: 8px;
-        }
-
-        .selection-info {
-          text-align: right;
-        }
-
-        .selection-info button {
-          background: #dc3545;
-          color: white;
-          border: none;
-          padding: 8px 16px;
-          border-radius: 4px;
-          cursor: pointer;
-          margin-top: 10px;
-        }
-
-        .selection-info button:disabled {
-          background: #ccc;
-          cursor: not-allowed;
-        }
-
-        .layer-section {
-          margin-bottom: 40px;
-          border: 1px solid #e0e0e0;
-          border-radius: 8px;
-          background: white;
-        }
-
-        .layer-section h3 {
-          margin: 0;
-          padding: 15px 20px;
+          max-width: 100%;
+          margin: 0 auto;
           background: #f8f9fa;
-          border-bottom: 1px solid #e0e0e0;
-          border-radius: 8px 8px 0 0;
-          color: #495057;
+          min-height: 100vh;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
-        .topic-section {
-          margin: 20px;
-          border-left: 3px solid #03a9f4;
-          padding-left: 15px;
+
+        .layer-navigation {
+          background: white;
+          border-radius: 8px;
+          padding: 10px;
+          margin-bottom: 8px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
-        .topic-header {
+
+        .layer-tabs {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        .layer-tab {
+          flex: 1;
+          min-width: 80px;
+          background: #f8f9fa;
+          border: 2px solid #e9ecef;
+          border-radius: 8px;
+          padding: 10px 8px;
+          cursor: pointer;
+          text-align: center;
+          transition: all 0.2s ease;
+        }
+
+        .layer-tab.active {
+          background: #6c757d;
+          border-color: #6c757d;
+          color: white;
+        }
+
+        .layer-tab:hover {
+          border-color: #6c757d;
+          background: #f8f9fa;
+        }
+
+        .tab-number {
+          font-weight: 700;
+          font-size: 1.1rem;
+        }
+
+        .tab-label {
+          font-size: 0.75rem;
+          margin: 2px 0;
+        }
+
+        .tab-count {
+          font-size: 0.8rem;
+          opacity: 0.8;
+        }
+
+        .selection-summary {
+          margin-top: 15px;
+          padding: 10px;
+          background: #e3f2fd;
+          border-radius: 6px;
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 10px;
         }
 
-        .topic-header h4 {
-          margin: 0;
-          color: #03a9f4;
+        .selected-count {
+          font-size: 0.9rem;
+          color: #1e7dff;
+          font-weight: 500;
         }
 
-        .topic-controls {
+        .clear-selection {
+          background: #ff4757;
+          color: white;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 0.8rem;
+        }
+
+        .main-content {
+          margin-bottom: 8px;
+        }
+
+        .priority-layer {
+          background: white;
+          border-radius: 8px;
+          padding: 10px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .layer-header h2 {
+          margin: 0 0 3px 0;
+          color: #333;
+          font-size: 1.2rem;
+        }
+
+        .layer-subtitle {
+          color: #666;
+          font-size: 0.85rem;
+          margin-bottom: 12px;
+        }
+
+        .topics-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+
+        .topic-item {
+          background: white;
+          border-left: 6px solid #e9ecef;
+          padding: 8px 12px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          margin-bottom: 2px;
+        }
+
+        .topic-item:hover {
+          background: #f8f9fa;
+        }
+
+        .topic-item.low {
+          border-left-color: #dee2e6;
+        }
+
+        .topic-item.medium {
+          border-left-color: #6c757d;
+        }
+
+        .topic-item.high {
+          border-left-color: #343a40;
+        }
+
+        .topic-item.critical {
+          border-left-color: #dc3545;
+        }
+
+        .topic-content {
+          width: 100%;
+          font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+        }
+
+        .topic-header-row {
           display: flex;
           align-items: center;
-          gap: 15px;
-          font-size: 0.9em;
+          justify-content: space-between;
+          margin-bottom: 4px;
         }
 
-        .topic-controls label {
-          cursor: pointer;
+        .topic-id {
+          color: #6c757d;
+          font-size: 0.8rem;
+          font-weight: 600;
+          letter-spacing: -0.01em;
+          min-width: 40px;
         }
 
-        .topic-info {
-          color: #666;
+        .priority-options {
+          display: flex;
+          gap: 6px;
         }
 
-        .topic-comments {
+        .priority-option {
+          font-size: 0.65rem;
+          color: #dee2e6;
+          font-weight: 500;
+          padding: 1px 3px;
+          border-radius: 2px;
+          transition: all 0.15s ease;
+          letter-spacing: 0.01em;
+        }
+
+        .priority-option.active {
+          font-weight: 700;
+        }
+
+        .priority-option:nth-child(1).active {
           background: #f8f9fa;
-          padding: 15px;
-          border-radius: 4px;
-          border: 1px solid #e9ecef;
+          color: #adb5bd;
         }
 
-        .coming-soon {
+        .priority-option:nth-child(2).active {
+          background: #6c757d;
+          color: white;
+        }
+
+        .priority-option:nth-child(3).active {
+          background: #343a40;
+          color: white;
+        }
+
+        .priority-option:nth-child(4).active {
+          background: #dc3545;
+          color: white;
+        }
+
+        .topic-text {
+          color: #212529;
+          font-size: 1.1rem;
+          line-height: 1.3;
+          font-weight: 500;
+          margin: 0;
+          letter-spacing: -0.01em;
+        }
+
+
+        .no-data {
+          text-align: center;
+          padding: 40px;
           color: #666;
           font-style: italic;
-          margin: 0;
-        }
-
-        .coming-soon small {
-          display: block;
-          margin-top: 10px;
-          color: #888;
-          font-size: 0.8em;
         }
 
         .loading, .error-message {
           text-align: center;
           padding: 40px;
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .error-message {
           background: #f8d7da;
           color: #721c24;
           border: 1px solid #f5c6cb;
-          border-radius: 8px;
+        }
+
+        .loading {
+          font-size: 1.1rem;
+          color: #666;
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+          .topics-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .layer-tabs {
+            justify-content: center;
+          }
+          
+          .layer-tab {
+            min-width: 70px;
+          }
+          
+          .compact-header h1 {
+            font-size: 1.5rem;
+          }
+          
+          .analysis-summary {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+          }
         }
       `}</style>
     </div>
