@@ -31,54 +31,59 @@ const TopicHierarchy = ({ conversation }) => {
     fetchHierarchyData();
   }, [report_id]);
 
-  // Fetch hierarchical cluster structure from DynamoDB
+  // Fetch hierarchical cluster structure from DynamoDB (from TopicPrioritize.jsx - working version)
   const fetchHierarchyData = async () => {
     try {
       // Use the zinvite from conversation data instead of report_id
       const conversationId = conversation?.conversation_id || report_id;
+      const response = await fetch(`/api/v3/topicMod/hierarchy?conversation_id=${conversationId}`);
+      const data = await response.json();
       
-      // Get hierarchy structure
-      const hierarchyResponse = await fetch(`/api/v3/topicMod/hierarchy?conversation_id=${conversationId}`);
-      const hierarchyData = await hierarchyResponse.json();
-      
-      // Get topic names that work
-      const topicsResponse = await fetch(`/api/v3/topicMod/topics?conversation_id=${conversationId}`);
-      const topicsData = await topicsResponse.json();
-      
-      
-      if (hierarchyData.status === "success" && hierarchyData.hierarchy && topicsData.status === "success" && topicsData.topics_by_layer) {
-        // Create topic name lookup map from topics_by_layer
-        const topicNameMap = new Map();
-        Object.entries(topicsData.topics_by_layer).forEach(([layer, topics]) => {
-          topics.forEach(topic => {
-            const key = `layer${layer}_${topic.cluster_id}`;
-            topicNameMap.set(key, topic.topic_name);
-          });
-        });
+      if (data.status === "success" && data.hierarchy) {
+        setHierarchyData(data);
+        console.log("Hierarchy data loaded successfully:", data);
+        console.log("Setting hierarchyData state with:", data);
         
-        // Store topic names in state for density visualization
-        setTopicNames(topicNameMap);
-        
-        // Add topic names to hierarchy
-        const addTopicNames = (node) => {
-          const key = `layer${node.layer}_${node.clusterId}`;
-          if (topicNameMap.has(key)) {
-            node.topic_name = topicNameMap.get(key);
+        // Also fetch topic names for better labeling
+        try {
+          const topicsResponse = await fetch(`/api/v3/topicMod/topics?conversation_id=${conversationId}`);
+          const topicsData = await topicsResponse.json();
+          
+          if (topicsData.status === "success" && topicsData.topics_by_layer) {
+            // Create topic name lookup map from topics_by_layer
+            const topicNameMap = new Map();
+            Object.entries(topicsData.topics_by_layer).forEach(([layer, topics]) => {
+              topics.forEach(topic => {
+                const key = `layer${layer}_${topic.cluster_id}`;
+                topicNameMap.set(key, topic.topic_name);
+              });
+            });
+            
+            // Store topic names in state for density visualization
+            setTopicNames(topicNameMap);
+            
+            // Add topic names to hierarchy
+            const addTopicNames = (node) => {
+              const key = `layer${node.layer}_${node.clusterId}`;
+              if (topicNameMap.has(key)) {
+                node.topic_name = topicNameMap.get(key);
+              }
+              if (node.children) {
+                node.children.forEach(addTopicNames);
+              }
+            };
+            
+            addTopicNames(data.hierarchy);
           }
-          if (node.children) {
-            node.children.forEach(addTopicNames);
-          }
-        };
-        
-        addTopicNames(hierarchyData.hierarchy);
-        
-        setHierarchyData(hierarchyData);
+        } catch (topicErr) {
+          console.log("Could not fetch topic names, proceeding without them:", topicErr);
+        }
         
         // Fetch UMAP data for all clusters
         await fetchUMAPData(conversationId);
       } else {
-        console.log("Failed to load hierarchy or topics data");
-        setError("Failed to load hierarchy or topics data");
+        console.log("No hierarchy data available:", data.message);
+        setError("No hierarchy data available");
       }
       setLoading(false);
     } catch (err) {
@@ -838,348 +843,157 @@ const TopicHierarchy = ({ conversation }) => {
     console.log("Canvas density visualization rendered successfully");
   };
 
-  // Create D3.js circle pack visualization following https://d3js.org/d3-hierarchy/pack
+  // Create D3.js circle pack visualization (from TopicPrioritize.jsx - working version)
   const createCirclePack = () => {
     if (!hierarchyData || !circlePackRef.current) return;
 
     // Clear previous visualization
     d3.select(circlePackRef.current).selectAll("*").remove();
 
-    const width = 1200;
-    const height = 800;
+    const width = 800;
+    const height = 600;
 
     // Create SVG
     const svg = d3.select(circlePackRef.current)
       .append("svg")
       .attr("width", width)
       .attr("height", height)
-      .attr("viewBox", `0 0 ${width} ${height}`)
-      .attr("style", "width: 100%; height: auto; font: 10px sans-serif;");
+      .attr("style", "border: 1px solid #ccc; border-radius: 8px;");
 
-    // Build CONTAINMENT hierarchy by inverting EVōC merge relationships
-    // EVōC stores: Multiple Layer 0 → merge into → Single Layer 1
-    // We need: Single Layer 3 → contains → Multiple Layer 2
-    
-    const buildContainmentHierarchy = () => {
-      // First, organize all clusters by layer
-      const clustersByLayer = {};
-      const allClusters = {};
-      
-      // Flatten all clusters from the hierarchy data
-      const flattenClusters = (node) => {
-        if (node.layer !== undefined) {
-          const key = `L${node.layer}C${node.clusterId}`;
-          allClusters[key] = node;
-          
-          if (!clustersByLayer[node.layer]) clustersByLayer[node.layer] = [];
-          clustersByLayer[node.layer].push(node);
-        }
-        if (node.children) {
-          node.children.forEach(flattenClusters);
-        }
-      };
-      
-      hierarchyData.hierarchy.children.forEach(flattenClusters);
-      
-      console.log("WHY NO CHILDREN? Layer counts:", Object.keys(clustersByLayer).map(l => `Layer ${l}: ${clustersByLayer[l].length}`));
-      
-      // Build containment map: higher layers contain all lower layers that eventually merge into them
-      const containmentMap = {};
-      
-      // Initialize containment map
-      for (let layer = 1; layer <= 3; layer++) {
-        containmentMap[layer] = {};
-        if (clustersByLayer[layer]) {
-          clustersByLayer[layer].forEach(cluster => {
-            const key = `L${layer}C${cluster.clusterId}`;
-            containmentMap[layer][key] = [];
-          });
-        }
-      }
-      
-      // For each lower layer cluster, find all higher layer clusters it eventually merges into
-      for (let sourceLayer = 0; sourceLayer <= 2; sourceLayer++) {
-        for (let targetLayer = sourceLayer + 1; targetLayer <= 3; targetLayer++) {
-          if (clustersByLayer[sourceLayer] && clustersByLayer[targetLayer]) {
-            
-            clustersByLayer[sourceLayer].forEach(sourceCluster => {
-              // Trace this cluster's merge path to see if it reaches targetLayer
-              const visited = new Set();
-              const traceToLayer = (cluster, currentLayer, targetLayer) => {
-                if (currentLayer === targetLayer) {
-                  return [cluster];
-                }
-                if (currentLayer >= targetLayer || !cluster.children || visited.has(`${currentLayer}-${cluster.clusterId}`)) {
-                  return [];
-                }
-                
-                visited.add(`${currentLayer}-${cluster.clusterId}`);
-                
-                const results = [];
-                cluster.children.forEach(child => {
-                  if (child.layer === currentLayer + 1) {
-                    const nextCluster = clustersByLayer[child.layer]?.find(c => c.clusterId === child.clusterId);
-                    if (nextCluster) {
-                      const pathResults = traceToLayer(nextCluster, child.layer, targetLayer);
-                      results.push(...pathResults);
-                    }
-                  }
-                });
-                return results;
-              };
-              
-              const targetClusters = traceToLayer(sourceCluster, sourceLayer, targetLayer);
-              if (targetClusters.length > 0) {
-                console.log(`Layer ${sourceLayer} cluster ${sourceCluster.clusterId} traces to layer ${targetLayer}:`, targetClusters.map(c => c.clusterId));
-              }
-              
-              targetClusters.forEach(targetCluster => {
-                const targetKey = `L${targetLayer}C${targetCluster.clusterId}`;
-                if (containmentMap[targetLayer] && containmentMap[targetLayer][targetKey]) {
-                  // Only add if not already present
-                  if (!containmentMap[targetLayer][targetKey].some(c => c.clusterId === sourceCluster.clusterId && c.layer === sourceCluster.layer)) {
-                    containmentMap[targetLayer][targetKey].push(sourceCluster);
-                    console.log(`Added L${sourceLayer}C${sourceCluster.clusterId} to L${targetLayer}C${targetCluster.clusterId}`);
-                  }
-                }
-              });
-            });
-          }
-        }
-      }
-      
-      console.log("Containment map built:", containmentMap);
-      
-      // DEBUG: Check containment map contents
-      Object.keys(containmentMap).forEach(layer => {
-        const layerMap = containmentMap[layer];
-        const keysWithChildren = Object.keys(layerMap).filter(key => layerMap[key].length > 0);
-        console.log(`Layer ${layer} containers with children: ${keysWithChildren.length}/${Object.keys(layerMap).length}`);
-        if (layer === 3 && keysWithChildren.length > 0) {
-          console.log(`Sample Layer 3 container:`, keysWithChildren[0], "contains", layerMap[keysWithChildren[0]].length, "children");
-          console.log(`First few children:`, layerMap[keysWithChildren[0]].slice(0, 2).map(c => `L${c.layer}C${c.clusterId}`));
-        }
-        if (keysWithChildren.length > 0) {
-          console.log(`Sample Layer ${layer} container:`, keysWithChildren[0], "contains", layerMap[keysWithChildren[0]].length, "children");
-        }
-      });
-      
-      // Build hierarchy starting from highest layer (coarsest)
-      const maxLayer = Math.max(...Object.keys(clustersByLayer).map(Number));
-      
-      const buildNode = (cluster) => {
-        const nodeKey = `L${cluster.layer}C${cluster.clusterId}`;
-        const node = {
-          name: cluster.topic_name ? `${cluster.layer}_${cluster.clusterId}: ${cluster.topic_name}` : `L${cluster.layer}C${cluster.clusterId}`,
-          layer: cluster.layer,
-          clusterId: cluster.clusterId,
-          size: cluster.size || 1,
-          topic_name: cluster.topic_name,
-          children: []
-        };
-        
-        // Find direct children from the immediate layer below
-        const childLayer = cluster.layer - 1;
-        if (childLayer >= 0 && containmentMap[cluster.layer] && containmentMap[cluster.layer][nodeKey]) {
-          const allChildren = containmentMap[cluster.layer][nodeKey];
-          // Get only children from the immediate layer below
-          const directChildren = allChildren.filter(child => child.layer === childLayer);
-          
-          
-          if (directChildren.length > 0) {
-            node.children = directChildren.map(buildNode);
-            // Parent nodes don't get size (only leaves do)
-            delete node.size;
-          }
-        } else {
-        }
-        
-        return node;
-      };
-      
-      // Start with highest layer clusters as roots
-      const rootClusters = clustersByLayer[maxLayer] || [];
-      
-      return {
-        name: "Topic Hierarchy",
-        children: rootClusters.map(buildNode)
-      };
-    };
-
-    // Use server hierarchy directly instead of broken containment logic
-    const nestedData = hierarchyData.hierarchy;
-    console.log("Containment hierarchy structure:", nestedData);
-    console.log("First child topic_name:", nestedData.children?.[0]?.topic_name);
-
-    // Create hierarchy from nested data
-    const root = d3.hierarchy(nestedData)
-      .sum(d => d.size || 0)  // Sum up sizes from leaf nodes
+    // Create hierarchy from data
+    const hierarchy = d3.hierarchy(hierarchyData.hierarchy)
+      .sum(d => d.size || 1)  // Use cluster size for circle size
       .sort((a, b) => b.value - a.value);
 
-    // Create pack layout with better padding for nested circles
+    // Create pack layout
     const pack = d3.pack()
-      .size([width - 40, height - 40])
-      .padding(d => d.depth * 3 + 2);  // More padding for deeper levels
+      .size([width - 20, height - 20])
+      .padding(3);
 
-    // Apply the pack layout
-    pack(root);
+    const nodes = pack(hierarchy);
 
-    // Color scale by depth/layer (lighter for parent nodes, darker for leaf nodes)
+    // Color scale by layer
     const colorScale = d3.scaleOrdinal()
-      .domain([0, 1, 2, 3, 4])
-      .range(["none", "#f0f8ff", "#d6eaff", "#6bb6ff", "#1e7dff"]);
+      .domain([0, 1, 2, 3])
+      .range(["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4"]);
 
     // Create groups for each node
-    const node = svg.selectAll("g")
-      .data(root.descendants())
+    const nodeGroups = svg.selectAll("g")
+      .data(nodes.descendants())
       .enter()
       .append("g")
-      .attr("transform", d => `translate(${d.x + 20},${d.y + 20})`);
+      .attr("transform", d => `translate(${d.x + 10},${d.y + 10})`);
 
     // Add circles
-    node.append("circle")
+    nodeGroups.append("circle")
       .attr("r", d => d.r)
       .attr("fill", d => {
-        if (d.depth === 0) return "none"; // Root is invisible
-        if (d.children) {
-          // Parent nodes: lighter colors, semi-transparent
-          return colorScale(d.depth);
-        } else {
-          // Leaf nodes: solid colors based on layer
-          return colorScale(4); // Darkest blue for leaves
-        }
+        if (d.depth === 0) return "#f8f9fa"; // Root
+        return colorScale(d.data.layer);
       })
-      .attr("stroke", d => {
-        if (d.depth === 0) return "#ccc";
-        if (d.children) return "#999";
-        return "#fff";
-      })
+      .attr("stroke", d => d.depth === 0 ? "#dee2e6" : "#343a40")
       .attr("stroke-width", d => d.depth === 0 ? 2 : 1)
-      .attr("fill-opacity", d => {
-        if (d.depth === 0) return 0;
-        if (d.children) return 0.3; // Parent nodes are translucent
-        return 0.8; // Leaf nodes are more opaque
-      })
+      .attr("fill-opacity", d => d.depth === 0 ? 0.1 : 0.7)
       .style("cursor", "pointer")
-      .on("mouseover", function(event, d) {
-        if (d.depth > 0) {
-          d3.select(this).attr("stroke-width", 3);
-        }
-      })
-      .on("mouseout", function(event, d) {
-        if (d.depth > 0) {
-          d3.select(this).attr("stroke-width", d => d.depth === 0 ? 2 : 1);
-        }
-      })
       .on("click", function(event, d) {
-        console.log("Clicked node:", d.data);
+        if (d.data.layer !== undefined) {
+          console.log("Clicked cluster:", d.data);
+          // setSelectedLayer(d.data.layer); // Comment out if this state doesn't exist in TopicHierarchy
+        }
       });
 
     // Add text labels for larger circles
-    node.append("text")
+    nodeGroups.append("text")
       .attr("text-anchor", "middle")
       .attr("dy", "0.3em")
-      .attr("font-size", d => {
-        if (d.depth === 0) return 16;
-        return Math.min(d.r / 4, 12);
-      })
-      .attr("fill", d => {
-        if (d.depth === 0) return "#333";
-        if (d.children) return "#666";
-        return "#000";
-      })
-      .attr("font-weight", d => d.depth <= 1 ? "bold" : "normal")
+      .attr("font-size", d => Math.min(d.r / 4, 12))
+      .attr("fill", "#343a40")
+      .attr("font-weight", "bold")
       .style("pointer-events", "none")
       .text(d => {
         if (d.depth === 0) return "Topics";
-        if (d.r < 15) return ""; // Hide text for very small circles
-        if (d.children) {
-          // Parent nodes: show layer info
-          return `Layer ${d.data.layer}`;
-        } else {
-          // Leaf nodes: show topic name or cluster ID
-          return d.data.topic_name || `L${d.data.layer}C${d.data.clusterId}`;
-        }
+        if (d.r < 20) return ""; // Hide text for very small circles
+        return `L${d.data.layer} C${d.data.clusterId}`;
       });
 
     // Add size labels for larger circles
-    node.append("text")
+    nodeGroups.append("text")
       .attr("text-anchor", "middle")
       .attr("dy", "1.5em")
       .attr("font-size", d => Math.min(d.r / 6, 10))
-      .attr("fill", "#666")
+      .attr("fill", "#6c757d")
       .style("pointer-events", "none")
       .text(d => {
-        if (d.depth === 0 || d.r < 20) return "";
-        if (d.children) {
-          return `${d.children.length} clusters`;
-        } else {
-          return `${d.data.size || d.value}`;
-        }
+        if (d.depth === 0 || d.r < 25) return "";
+        return `${d.data.size} comments`;
       });
 
     // Add legend
     const legend = svg.append("g")
-      .attr("transform", `translate(20, 20)`);
+      .attr("transform", `translate(${width - 150}, 20)`);
 
     legend.append("text")
       .attr("font-weight", "bold")
-      .attr("font-size", "16")
-      .attr("fill", "#333")
-      .text("Topic Layers");
+      .attr("font-size", "14")
+      .text("Layers");
 
     const legendItems = legend.selectAll(".legend-item")
       .data([
-        { layer: 0, label: "Layer 0 (Finest)", color: "#e8f4fd" },
-        { layer: 1, label: "Layer 1", color: "#b8daff" },
-        { layer: 2, label: "Layer 2", color: "#6bb6ff" },
-        { layer: 3, label: "Layer 3 (Coarsest)", color: "#1e7dff" }
+        { layer: 0, label: "Layer 0 (Finest)", color: "#ff6b6b" },
+        { layer: 1, label: "Layer 1", color: "#4ecdc4" },
+        { layer: 2, label: "Layer 2", color: "#45b7d1" },
+        { layer: 3, label: "Layer 3 (Coarsest)", color: "#96ceb4" }
       ])
       .enter()
       .append("g")
       .attr("class", "legend-item")
-      .attr("transform", (d, i) => `translate(0, ${25 + i * 25})`);
+      .attr("transform", (d, i) => `translate(0, ${20 + i * 20})`);
 
     legendItems.append("circle")
-      .attr("r", 10)
+      .attr("r", 8)
       .attr("fill", d => d.color)
-      .attr("fill-opacity", 0.7)
-      .attr("stroke", "#fff");
+      .attr("fill-opacity", 0.7);
 
     legendItems.append("text")
-      .attr("x", 20)
+      .attr("x", 15)
       .attr("dy", "0.3em")
-      .attr("font-size", "14")
-      .attr("fill", "#333")
+      .attr("font-size", "12")
       .text(d => d.label);
-
-    // Add stats summary
-    const stats = svg.append("g")
-      .attr("transform", `translate(${width - 200}, 20)`);
-
-    stats.append("text")
-      .attr("font-weight", "bold")
-      .attr("font-size", "16")
-      .attr("fill", "#333")
-      .text("Statistics");
-
-    stats.append("text")
-      .attr("y", 25)
-      .attr("font-size", "14")
-      .attr("fill", "#666")
-      .text(`Total clusters: ${hierarchyData.totalClusters}`);
-
-    stats.append("text")
-      .attr("y", 45)
-      .attr("font-size", "14")
-      .attr("fill", "#666")
-      .text(`Layers: ${hierarchyData.layers.length}`);
   };
 
-  // Effect to create circle pack when hierarchy data is available
+  // Effect to create circle pack when hierarchy data is available and DOM is ready
   useEffect(() => {
+    console.log("Circle pack useEffect triggered:", {
+      hierarchyData: !!hierarchyData,
+      hierarchyDataStructure: hierarchyData ? Object.keys(hierarchyData) : null,
+      refCurrent: !!circlePackRef.current
+    });
+    
+    const tryCreateCirclePack = () => {
+      if (hierarchyData && circlePackRef.current) {
+        console.log("Attempting to create circle pack...");
+        createCirclePack();
+        return true;
+      }
+      console.log("Circle pack creation failed:", {
+        hierarchyData: !!hierarchyData,
+        refCurrent: !!circlePackRef.current
+      });
+      return false;
+    };
+
     if (hierarchyData) {
-      createCirclePack();
+      // Try immediately
+      if (!tryCreateCirclePack()) {
+        // If that fails, try with a delay
+        const timer = setTimeout(() => {
+          if (!tryCreateCirclePack()) {
+            console.log("Circle pack: ref still not available after timeout");
+          }
+        }, 300);
+        
+        return () => clearTimeout(timer);
+      }
     }
   }, [hierarchyData]);
 
