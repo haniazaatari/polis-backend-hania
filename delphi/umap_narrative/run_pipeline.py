@@ -303,6 +303,8 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
                     
                     # Clean up various prefixes - extended list from 600_generate_llm_topic_names.py
                     prefixes_to_remove = [
+                        "Here is the list of topic labels:",
+                        "Here is the list of topic labels",
                         "Here are the topic labels:",
                         "Here are the topic labels",
                         "Here is the topic label:",
