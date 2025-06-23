@@ -13,6 +13,9 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
   const [currentLayer, setCurrentLayer] = useState(3); // Start with coarsest layer
   const [topicPriorities, setTopicPriorities] = useState(new Map()); // Store topic priorities
   const [selectedTopics, setSelectedTopics] = useState(new Set()); // Track selected topics for filtering
+  const [umapData, setUmapData] = useState(null); // UMAP coordinates for spatial filtering
+  const [clusterGroups, setClusterGroups] = useState({}); // Points grouped by layer and cluster
+  const [spatialMode, setSpatialMode] = useState('subset'); // 'subset' or 'sort'
 
   useEffect(() => {
     if (!report_id) return;
@@ -30,6 +33,8 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
           if (response.runs && Object.keys(response.runs).length > 0) {
             setTopicData(response);
             analyzeHierarchy(response);
+            // Fetch UMAP data for spatial filtering
+            fetchUMAPData();
           } else {
             setError("No LLM topic data available yet. Run Delphi analysis first.");
           }
@@ -46,6 +51,31 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
       });
   }, [report_id]);
 
+  // Fetch UMAP coordinates for spatial filtering
+  const fetchUMAPData = async () => {
+    try {
+      const conversationId = conversation?.conversation_id || report_id;
+      console.log("Fetching UMAP data for spatial filtering...");
+      
+      const response = await fetch(`/api/v3/topicMod/proximity?conversation_id=${conversationId}&layer_id=all`);
+      const data = await response.json();
+      
+      if (data.status === "success" && data.proximity_data) {
+        console.log(`Loaded ${data.proximity_data.length} UMAP points for spatial filtering`);
+        setUmapData(data.proximity_data);
+        
+        // Group points by layer and cluster
+        const groups = groupPointsByLayer(data.proximity_data);
+        setClusterGroups(groups);
+        
+        console.log("UMAP cluster groups:", groups);
+      } else {
+        console.log("No UMAP data available for spatial filtering");
+      }
+    } catch (err) {
+      console.error("Error fetching UMAP data:", err);
+    }
+  };
 
   // Analyze if topics actually contain each other hierarchically
   const analyzeHierarchy = (data) => {
@@ -130,7 +160,325 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
     const newPriorities = new Map(topicPriorities);
     newPriorities.set(topicKey, nextPriority);
     setTopicPriorities(newPriorities);
-    console.log(`Topic ${topicKey} cycled to ${nextPriority}`);
+    console.log(`Topic ${topicKey} cycled to ${nextPriority} - spatial filtering will update`);
+    
+    // Force re-render of current layer to apply spatial filtering
+    setTimeout(() => {
+      console.log("Priority change complete, spatial filtering active");
+    }, 100);
+  };
+
+  // === SPATIAL MATH FUNCTIONS ===
+  
+  // Calculate cluster centroid in UMAP space
+  const calculateClusterCentroid = (clusterPoints) => {
+    if (!clusterPoints || clusterPoints.length === 0) return null;
+    const centroidX = clusterPoints.reduce((sum, p) => sum + p.umap_x, 0) / clusterPoints.length;
+    const centroidY = clusterPoints.reduce((sum, p) => sum + p.umap_y, 0) / clusterPoints.length;
+    return { x: centroidX, y: centroidY };
+  };
+
+  // Calculate Euclidean distance between two points
+  const calculateDistance = (point1, point2) => {
+    return Math.sqrt(
+      Math.pow(point1.x - point2.x, 2) + 
+      Math.pow(point1.y - point2.y, 2)
+    );
+  };
+
+  // === DENSITY COMPUTATION FUNCTIONS ===
+
+  /**
+   * Calculates Gaussian kernel density at a specific point
+   */
+  const calculateGaussianKernelDensity = (x, y, points, radius = 25, sigma = null) => {
+    if (!sigma) {
+      sigma = radius / 3; // Default sigma is radius/3
+    }
+    
+    let density = 0;
+    
+    points.forEach(point => {
+      const distance = Math.sqrt((x - point.umap_x) ** 2 + (y - point.umap_y) ** 2);
+      
+      if (distance <= radius) {
+        density += Math.exp(-(distance ** 2) / (2 * sigma ** 2));
+      }
+    });
+    
+    return density;
+  };
+
+  /**
+   * Computes density surface over a grid using Gaussian kernels
+   */
+  const computeGridDensitySurface = (points, bounds, gridSize = 4, radius = 25, densityThreshold = 0.1) => {
+    const densityMap = new Map();
+    const sigma = radius / 3;
+    
+    // Calculate density at grid points
+    for (let x = bounds.minX; x < bounds.maxX; x += gridSize) {
+      for (let y = bounds.minY; y < bounds.maxY; y += gridSize) {
+        let density = 0;
+        const gridKey = `${x},${y}`;
+        
+        points.forEach(point => {
+          const distance = Math.sqrt((x - point.umap_x) ** 2 + (y - point.umap_y) ** 2);
+          
+          if (distance <= radius) {
+            density += Math.exp(-(distance ** 2) / (2 * sigma ** 2));
+          }
+        });
+        
+        if (density > densityThreshold) {
+          densityMap.set(gridKey, density);
+        }
+      }
+    }
+    
+    return densityMap;
+  };
+
+  /**
+   * Calculates bounds for a set of points
+   */
+  const calculatePointBounds = (points, margin = 20) => {
+    const xValues = points.map(p => p.umap_x);
+    const yValues = points.map(p => p.umap_y);
+    
+    return {
+      minX: Math.min(...xValues) - margin,
+      maxX: Math.max(...xValues) + margin,
+      minY: Math.min(...yValues) - margin,
+      maxY: Math.max(...yValues) + margin
+    };
+  };
+
+  /**
+   * Finds maximum density value in a density map
+   */
+  const findMaxDensity = (densityMap) => {
+    let maxDensity = 0;
+    densityMap.forEach(density => {
+      if (density > maxDensity) {
+        maxDensity = density;
+      }
+    });
+    return maxDensity;
+  };
+
+  /**
+   * Complete density analysis for a cluster of points
+   */
+  const analyzeDensity = (points, options = {}) => {
+    const {
+      gridSize = 4,
+      radius = 25,
+      densityThreshold = 0.1,
+      margin = 20
+    } = options;
+    
+    if (points.length < 2) {
+      return null;
+    }
+    
+    // Calculate bounds
+    const bounds = calculatePointBounds(points, margin);
+    
+    // Compute density surface
+    const densityMap = computeGridDensitySurface(points, bounds, gridSize, radius, densityThreshold);
+    
+    if (densityMap.size === 0) {
+      return null;
+    }
+    
+    // Find maximum density
+    const maxDensity = findMaxDensity(densityMap);
+    
+    // Calculate centroid
+    const centroid = calculateClusterCentroid(points);
+    
+    return {
+      bounds,
+      densityMap,
+      maxDensity,
+      centroid,
+      pointCount: points.length
+    };
+  };
+
+  // Group UMAP points by layer and cluster
+  const groupPointsByLayer = (data) => {
+    const groups = {};
+    
+    for (let layer = 0; layer <= 3; layer++) {
+      groups[layer] = new Map();
+    }
+    
+    data.forEach(point => {
+      Object.entries(point.clusters || {}).forEach(([layerId, clusterId]) => {
+        const layer = parseInt(layerId);
+        const key = `${layer}_${clusterId}`;
+        
+        if (!groups[layer].has(key)) {
+          groups[layer].set(key, []);
+        }
+        
+        groups[layer].get(key).push({
+          comment_id: point.comment_id,
+          cluster_id: clusterId,
+          layer: layer,
+          umap_x: point.umap_x,
+          umap_y: point.umap_y,
+          weight: point.weight || 1
+        });
+      });
+    });
+    
+    return groups;
+  };
+
+  /**
+   * Calculate density overlap between two clusters
+   */
+  const calculateDensityOverlap = (densityMap1, densityMap2) => {
+    let overlapScore = 0;
+    let commonGridPoints = 0;
+    let totalGridPoints = 0;
+    
+    // Find maximum densities for normalization
+    const maxDensity1 = findMaxDensity(densityMap1);
+    const maxDensity2 = findMaxDensity(densityMap2);
+    const maxDensity = Math.max(maxDensity1, maxDensity2);
+    
+    // Check overlap at each grid point where both clusters have density
+    densityMap1.forEach((density1, gridKey) => {
+      totalGridPoints++;
+      if (densityMap2.has(gridKey)) {
+        const density2 = densityMap2.get(gridKey);
+        // Overlap is the minimum of the two normalized densities
+        const normalizedDensity1 = density1 / maxDensity;
+        const normalizedDensity2 = density2 / maxDensity;
+        overlapScore += Math.min(normalizedDensity1, normalizedDensity2);
+        commonGridPoints++;
+      }
+    });
+    
+    // Also check points that exist in map2 but not map1
+    densityMap2.forEach((density2, gridKey) => {
+      if (!densityMap1.has(gridKey)) {
+        totalGridPoints++;
+      }
+    });
+    
+    // Return overlap as proportion of total possible overlap
+    return commonGridPoints > 0 ? overlapScore / commonGridPoints : 0;
+  };
+
+  /**
+   * Find nearby topics using density-based proximity
+   */
+  const findNearbyTopicsDensity = (sourceClusters, targetLayerGroups, options = {}) => {
+    const {
+      overlapThreshold = 0.1,
+      fallbackDistance = 0.5,
+      useDensity = true
+    } = options;
+    
+    console.log(`🧮 Computing density-based proximity with threshold ${overlapThreshold}`);
+    const startTime = performance.now();
+    
+    const nearbyTopics = new Set();
+    let densityComputations = 0;
+    let fallbackComputations = 0;
+    let logCounter = 0;
+    
+    sourceClusters.forEach((sourcePoints, sourceKey) => {
+      if (!sourcePoints || sourcePoints.length === 0) return;
+      
+      // Compute density surface for source cluster
+      const sourceDensityAnalysis = useDensity ? analyzeDensity(sourcePoints) : null;
+      
+      if (sourceDensityAnalysis) {
+        densityComputations++;
+        
+        // Check overlap with each target cluster
+        targetLayerGroups.forEach((targetPoints, targetKey) => {
+          if (!targetPoints || targetPoints.length === 0) return;
+          
+          const targetDensityAnalysis = analyzeDensity(targetPoints);
+          
+          if (targetDensityAnalysis) {
+            const overlapScore = calculateDensityOverlap(
+              sourceDensityAnalysis.densityMap, 
+              targetDensityAnalysis.densityMap
+            );
+            
+            // Debug: Show density map details for first few comparisons
+            if (logCounter < 3) {
+              console.log(`🔍 DENSITY DEBUG: ${sourceKey} has ${sourceDensityAnalysis.densityMap.size} grid points, ${targetKey} has ${targetDensityAnalysis.densityMap.size} grid points`);
+              console.log(`🔍 DENSITY DEBUG: ${sourceKey} bounds:`, sourceDensityAnalysis.bounds);
+              console.log(`🔍 DENSITY DEBUG: ${targetKey} bounds:`, targetDensityAnalysis.bounds);
+              console.log(`🔍 DENSITY DEBUG: ${sourceKey} max density: ${sourceDensityAnalysis.maxDensity.toFixed(3)}`);
+              console.log(`🔍 DENSITY DEBUG: ${targetKey} max density: ${targetDensityAnalysis.maxDensity.toFixed(3)}`);
+            }
+            
+            if (overlapScore > overlapThreshold) {
+              nearbyTopics.add(targetKey);
+              if (logCounter < 10) {
+                console.log(`✅ Density overlap: ${sourceKey} → ${targetKey} (score: ${overlapScore.toFixed(3)})`);
+              }
+            } else {
+              if (logCounter < 10) {
+                console.log(`❌ Low overlap: ${sourceKey} → ${targetKey} (score: ${overlapScore.toFixed(3)}, threshold: ${overlapThreshold})`);
+              }
+            }
+            logCounter++;
+          }
+        });
+      } else {
+        // Fallback to centroid-based distance
+        fallbackComputations++;
+        const sourceCentroid = calculateClusterCentroid(sourcePoints);
+        
+        if (sourceCentroid) {
+          targetLayerGroups.forEach((targetPoints, targetKey) => {
+            const targetCentroid = calculateClusterCentroid(targetPoints);
+            if (targetCentroid) {
+              const distance = calculateDistance(sourceCentroid, targetCentroid);
+              if (distance <= fallbackDistance) {
+                nearbyTopics.add(targetKey);
+                console.log(`⚡ Fallback distance: ${sourceKey} → ${targetKey} (distance: ${distance.toFixed(3)})`);
+              }
+            }
+          });
+        }
+      }
+    });
+    
+    const elapsed = performance.now() - startTime;
+    console.log(`🧮 Density computation complete: ${elapsed.toFixed(1)}ms, ${densityComputations} density, ${fallbackComputations} fallback`);
+    
+    return nearbyTopics;
+  };
+
+  // Legacy function for backward compatibility
+  const findNearbyTopics = (sourceCentroids, targetLayerGroups, maxDistance = 0.5) => {
+    const nearbyTopics = new Set();
+    
+    sourceCentroids.forEach(sourceCentroid => {
+      targetLayerGroups.forEach((points, clusterKey) => {
+        const targetCentroid = calculateClusterCentroid(points);
+        if (targetCentroid) {
+          const distance = calculateDistance(sourceCentroid, targetCentroid);
+          if (distance <= maxDistance) {
+            nearbyTopics.add(clusterKey);
+          }
+        }
+      });
+    });
+    
+    return nearbyTopics;
   };
 
   // Toggle topic selection for filtering
@@ -167,6 +515,128 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
   };
 
 
+  // Get filtered/sorted topics based on spatial proximity
+  const getFilteredTopics = (allTopics, layerId) => {
+    // For Layer 3 (coarsest), show all topics
+    if (layerId === 3 || !clusterGroups[layerId] || !umapData) {
+      return Object.entries(allTopics).map(([clusterId, topic]) => ({
+        clusterId,
+        topic,
+        proximityScore: null
+      }));
+    }
+
+    // For other layers, filter based on spatial proximity to higher priority topics
+    const higherLayerId = layerId + 1;
+    const higherLayerTopics = topicData?.runs[Object.keys(topicData.runs)[0]]?.topics_by_layer[higherLayerId];
+    
+    if (!higherLayerTopics || !clusterGroups[higherLayerId]) {
+      return Object.entries(allTopics).map(([clusterId, topic]) => ({
+        clusterId,
+        topic,
+        proximityScore: null
+      }));
+    }
+
+    // Find HIGH and MEDIUM priority clusters in the higher layer
+    const priorityClusters = new Map();
+    Object.entries(higherLayerTopics).forEach(([clusterId, topic]) => {
+      const priority = topicPriorities.get(topic.topic_key);
+      if (priority === 'high' || priority === 'medium') {
+        const clusterKey = `${higherLayerId}_${clusterId}`;
+        const points = clusterGroups[higherLayerId].get(clusterKey);
+        if (points && points.length > 0) {
+          priorityClusters.set(clusterKey, points);
+        }
+      }
+    });
+
+    // If no high priority topics, show all
+    if (priorityClusters.size === 0) {
+      return Object.entries(allTopics).map(([clusterId, topic]) => ({
+        clusterId,
+        topic,
+        proximityScore: null
+      }));
+    }
+
+    console.log(`🎯 Layer ${layerId}: Found ${priorityClusters.size} priority clusters in Layer ${higherLayerId}`);
+
+    // Find nearby topics using simple centroid distance with adaptive thresholds
+    const getAdaptiveDistance = (layer) => {
+      switch (layer) {
+        case 0: return 1.5; // Very lenient for finest layer
+        case 1: return 1.2; // Lenient for fine layer  
+        case 2: return 0.8; // Moderate for mid layer
+        default: return 0.5; // Standard for coarse layer
+      }
+    };
+    
+    const adaptiveDistance = getAdaptiveDistance(layerId);
+    console.log(`🔧 Layer ${layerId}: Using adaptive distance ${adaptiveDistance}`);
+    
+    // Calculate centroids of priority clusters
+    const priorityCentroids = [];
+    priorityClusters.forEach((points, clusterKey) => {
+      const centroid = calculateClusterCentroid(points);
+      if (centroid) {
+        priorityCentroids.push(centroid);
+      }
+    });
+    
+    // Calculate proximity scores for all topics
+    const topicsWithProximity = Object.entries(allTopics).map(([clusterId, topic]) => {
+      const clusterKey = `${layerId}_${clusterId}`;
+      const targetPoints = clusterGroups[layerId].get(clusterKey);
+      
+      let minProximity = Infinity;
+      let closestCluster = null;
+      if (targetPoints && targetPoints.length > 0) {
+        const targetCentroid = calculateClusterCentroid(targetPoints);
+        if (targetCentroid) {
+          // Track which priority cluster is closest
+          Array.from(priorityClusters.keys()).forEach(sourceKey => {
+            const sourcePoints = priorityClusters.get(sourceKey);
+            const sourceCentroid = calculateClusterCentroid(sourcePoints);
+            if (sourceCentroid) {
+              const distance = calculateDistance(sourceCentroid, targetCentroid);
+              if (distance < minProximity) {
+                minProximity = distance;
+                closestCluster = sourceKey;
+              }
+            }
+          });
+        }
+      }
+      
+      return {
+        clusterId,
+        topic,
+        proximityScore: minProximity === Infinity ? null : minProximity,
+        closestCluster: closestCluster
+      };
+    });
+
+    if (spatialMode === 'subset') {
+      // Filter mode: only show topics within threshold
+      const filteredTopics = topicsWithProximity.filter(item => 
+        item.proximityScore !== null && item.proximityScore <= adaptiveDistance
+      );
+      console.log(`Layer ${layerId}: Filtered from ${Object.keys(allTopics).length} to ${filteredTopics.length} topics based on spatial proximity`);
+      return filteredTopics;
+    } else {
+      // Sort mode: show all topics sorted by proximity
+      const sortedTopics = topicsWithProximity.sort((a, b) => {
+        if (a.proximityScore === null && b.proximityScore === null) return 0;
+        if (a.proximityScore === null) return 1;
+        if (b.proximityScore === null) return -1;
+        return a.proximityScore - b.proximityScore;
+      });
+      console.log(`Layer ${layerId}: Sorted ${Object.keys(allTopics).length} topics by spatial proximity`);
+      return sortedTopics;
+    }
+  };
+
   // Render dense priority selection for current layer
   const renderPriorityLayer = () => {
     if (!topicData || !topicData.runs || !hierarchyAnalysis) {
@@ -180,20 +650,21 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
       return <div className="no-data">No topics found for layer {currentLayer}</div>;
     }
 
-    const topics = firstRun.topics_by_layer[currentLayer];
-    const topicEntries = Object.entries(topics);
+    const allTopics = firstRun.topics_by_layer[currentLayer];
+    const topicEntries = getFilteredTopics(allTopics, currentLayer);
     
     return (
       <div className="priority-layer">
         <div className="layer-header">
-          <h2>Layer {currentLayer} Community Impact</h2>
+          <h2>Layer {currentLayer} Topic Prioritization</h2>
           <div className="layer-subtitle">
-            {topicEntries.length} topics • Rate community impact and your expertise
+            {topicEntries.length} topics{currentLayer < 3 ? ` (${spatialMode === 'subset' ? 'filtered' : 'sorted'})` : ''} • Click to prioritize: LOW → MEDIUM → HIGH → SPAM/TRASH
           </div>
         </div>
         
         <div className="topics-grid">
-          {topicEntries.map(([clusterId, topic]) => {
+          {topicEntries.map((entry) => {
+            const { clusterId, topic, proximityScore, closestCluster } = entry;
             const topicKey = topic.topic_key;
             const currentPriority = topicPriorities.get(topicKey) || 'low'; // Default to 'low'
             const isSelected = selectedTopics.has(topicKey);
@@ -213,7 +684,12 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
               >
                 <div className="topic-content">
                   <div className="topic-header-row">
-                    <span className="topic-id">{currentLayer}_{clusterId}</span>
+                    <span className="topic-id">
+                      {currentLayer}_{clusterId}
+                      {proximityScore !== null && closestCluster && (
+                        <span className="proximity-score"> (d: {proximityScore.toFixed(2)} from {closestCluster})</span>
+                      )}
+                    </span>
                     <div className="priority-options">
                       {['low', 'medium', 'high', 'critical'].map(priority => (
                         <span 
@@ -244,6 +720,20 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
 
     return (
       <div className="layer-navigation">
+        <div className="filtering-mode-toggle">
+          <button
+            className={`mode-button ${spatialMode === 'sort' ? 'active' : ''}`}
+            onClick={() => setSpatialMode('sort')}
+          >
+            Always show all topics
+          </button>
+          <button
+            className={`mode-button ${spatialMode === 'subset' ? 'active' : ''}`}
+            onClick={() => setSpatialMode('subset')}
+          >
+            Remove less relevant topics as I rank/prioritize
+          </button>
+        </div>
         
         <div className="layer-tabs">
           {hierarchyAnalysis.layers.slice().reverse().map(layerId => (
@@ -342,6 +832,37 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
           padding: 10px;
           margin-bottom: 8px;
           box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .filtering-mode-toggle {
+          margin-bottom: 12px;
+          display: flex;
+          gap: 8px;
+          background: #f8f9fa;
+          padding: 8px;
+          border-radius: 6px;
+          border: 1px solid #e9ecef;
+        }
+
+        .mode-button {
+          padding: 8px 12px;
+          border: 1px solid #dee2e6;
+          border-radius: 4px;
+          background: white;
+          color: #6c757d;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: background 0.2s ease, color 0.2s ease;
+          text-align: center;
+        }
+
+        .mode-button:hover {
+          background: #f8f9fa;
+        }
+
+        .mode-button.active {
+          background: #6c757d;
+          color: white;
         }
 
 
@@ -491,6 +1012,12 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
           font-weight: 600;
           letter-spacing: -0.01em;
           min-width: 40px;
+        }
+
+        .proximity-score {
+          color: #6c757d;
+          font-size: 0.7rem;
+          font-weight: 400;
         }
 
         .priority-options {
