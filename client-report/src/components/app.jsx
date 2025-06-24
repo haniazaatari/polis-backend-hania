@@ -26,12 +26,15 @@ import CommentsReport from "./commentsReport/CommentsReport.jsx";
 import TopicReport from "./topicReport/TopicReport.jsx";
 import ExportReport from "./exportReport/ExportReport.jsx";
 import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
+
 import TopicPrioritize from "./topicPrioritize/TopicPrioritize.jsx";
 import TopicPrioritizeSimple from "./topicPrioritizeSimple/TopicPrioritizeSimple.jsx";
 import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
+import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
 
 const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicPrioritize/2arcefpshi" or "/topicPrioritizeSimple/2arcefpshi" or "/topicHierarchy/2arcefpshi"
 const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicPrioritize", "topicPrioritizeSimple", or "topicHierarchy"
+
 const report_id = pathname.split("/")[2];
 
 // Debug the route
@@ -68,7 +71,7 @@ const App = (props) => {
   const [isStatsOnly, setIsStatsOnly] = useState(
     window.location.pathname.split("/")[1] === "stats"
   );
-  
+
   const [isCommentsReport, setIsCommentsReport] = useState(
     window.location.pathname.split("/")[1] === "commentsReport"
   );
@@ -691,22 +694,64 @@ const App = (props) => {
 
   if (isStatsOnly) {
     return (
-      <section style={{ maxWidth: 1200, display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+      <section
+        style={{ maxWidth: 1200, display: "flex", justifyContent: "space-between", gap: "1rem" }}
+      >
+        <div
+          style={{
+            flex: 1,
+            minWidth: "200px",
+            border: "1px solid #333",
+            padding: "1rem",
+            textAlign: "center",
+          }}
+        >
           <h3>Participants</h3>
-          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{ptptCountTotal}</p>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0 }}>
+            {ptptCountTotal}
+          </p>
         </div>
-        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+        <div
+          style={{
+            flex: 1,
+            minWidth: "200px",
+            border: "1px solid #333",
+            padding: "1rem",
+            textAlign: "center",
+          }}
+        >
           <h3>Comments</h3>
-          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["n-cmts"]}</p>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0 }}>
+            {math["n-cmts"]}
+          </p>
         </div>
-        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+        <div
+          style={{
+            flex: 1,
+            minWidth: "200px",
+            border: "1px solid #333",
+            padding: "1rem",
+            textAlign: "center",
+          }}
+        >
           <h3>Votes</h3>
-          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{computeVoteTotal(math["user-vote-counts"])}</p>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0 }}>
+            {computeVoteTotal(math["user-vote-counts"])}
+          </p>
         </div>
-        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+        <div
+          style={{
+            flex: 1,
+            minWidth: "200px",
+            border: "1px solid #333",
+            padding: "1rem",
+            textAlign: "center",
+          }}
+        >
           <h3>Opinion Groups</h3>
-          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["group-clusters"].length}</p>
+          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0 }}>
+            {math["group-clusters"].length}
+          </p>
         </div>
       </section>
     );
@@ -726,12 +771,7 @@ const App = (props) => {
   // Directly render ExportReport if the URL starts with /exportReport
   if (route_type === "exportReport") {
     console.log("RENDERING: ExportReport");
-    return (
-      <ExportReport
-        report_id={report_id}
-        conversation={conversation}
-      />
-    );
+    return <ExportReport report_id={report_id} conversation={conversation} />;
   }
 
   // Directly render TopicPrioritize if the URL starts with /topicPrioritize
@@ -753,23 +793,13 @@ const App = (props) => {
   // Directly render TopicPrioritizeSimple if the URL starts with /topicPrioritizeSimple
   if (route_type === "topicPrioritizeSimple") {
     console.log("RENDERING: TopicPrioritizeSimple");
-    return (
-      <TopicPrioritizeSimple
-        report_id={report_id}
-        conversation={conversation}
-      />
-    );
+    return <TopicPrioritizeSimple report_id={report_id} conversation={conversation} />;
   }
 
   // Directly render TopicHierarchy if the URL starts with /topicHierarchy
   if (route_type === "topicHierarchy") {
     console.log("RENDERING: TopicHierarchy");
-    return (
-      <TopicHierarchy
-        report_id={report_id}
-        conversation={conversation}
-      />
-    );
+    return <TopicHierarchy report_id={report_id} conversation={conversation} />;
   }
 
   // Directly render TopicReport if the URL starts with /topicReport
@@ -806,11 +836,7 @@ const App = (props) => {
   // Directly render TopicsVizReport if the URL starts with /topicsVizReport
   if (route_type === "topicsVizReport") {
     console.log("RENDERING: TopicsVizReport");
-    return (
-      <TopicsVizReport
-        report_id={report_id}
-      />
-    );
+    return <TopicsVizReport report_id={report_id} />;
   }
 
   // Directly render NarrativeReport if the URL starts with /narrativeReport
@@ -823,6 +849,23 @@ const App = (props) => {
         ptptCountTotal={ptptCountTotal}
         math={math}
         computedStats={computedStats}
+      />
+    );
+  }
+
+  if (route_type === "topicMapNarrativeReport") {
+    console.log("RENDERING: TopicMapNarrativeReport");
+    return (
+      <TopicMapNarrativeReport
+        conversation={conversation}
+        report_id={report_id}
+        ptptCountTotal={ptptCountTotal}
+        math={math}
+        computeVoteTotal={computeVoteTotal}
+        globals={globals}
+        comments={comments}
+        formatTid={formatTid}
+        voteColors={voteColors}
       />
     );
   }

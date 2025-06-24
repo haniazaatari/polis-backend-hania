@@ -25,6 +25,7 @@ import { handle_GET_delphi_visualizations } from "./src/routes/delphi/visualizat
 import { handle_POST_delphi_jobs } from "./src/routes/delphi/jobs";
 import { handle_GET_delphi_reports } from "./src/routes/delphi/reports";
 import { handle_POST_delphi_batch_reports } from "./src/routes/delphi/batchReports";
+<<<<<<< HEAD
 import { 
   handle_GET_topicMod_topics,
   handle_GET_topicMod_comments,
@@ -34,9 +35,12 @@ import {
   handle_GET_topicMod_stats
 } from "./src/routes/delphi/topicMod";
 import { 
+=======
+import {
+>>>>>>> edge
   handle_GET_feeds_directory,
   handle_GET_consensus_feed,
-  handle_GET_topics_feed
+  handle_GET_topics_feed,
 } from "./src/routes/api/v3/feeds";
 
 const app = express();
@@ -944,12 +948,14 @@ helpersInitialized.then(
       try {
         handle_GET_consensus_feed(req, res);
       } catch (err) {
-        res.status(500).set('Content-Type', 'application/rss+xml').send(`
+        res.status(500).set("Content-Type", "application/rss+xml").send(`
           <?xml version="1.0" encoding="UTF-8"?>
           <rss version="2.0">
             <channel>
               <title>Error</title>
-              <description>Internal server error: ${err.message || "Unknown error"}</description>
+              <description>Internal server error: ${
+                err.message || "Unknown error"
+              }</description>
             </channel>
           </rss>
         `);
@@ -960,12 +966,14 @@ helpersInitialized.then(
       try {
         handle_GET_topics_feed(req, res);
       } catch (err) {
-        res.status(500).set('Content-Type', 'application/rss+xml').send(`
+        res.status(500).set("Content-Type", "application/rss+xml").send(`
           <?xml version="1.0" encoding="UTF-8"?>
           <rss version="2.0">
             <channel>
               <title>Error</title>
-              <description>Internal server error: ${err.message || "Unknown error"}</description>
+              <description>Internal server error: ${
+                err.message || "Unknown error"
+              }</description>
             </channel>
           </rss>
         `);
@@ -1710,10 +1718,7 @@ helpersInitialized.then(
       /^\/narrativeReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       fetchIndexForReportPage
     );
-    app.get(
-      /^\/stats\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
-      fetchIndexForReportPage
-    );
+    app.get(/^\/stats\/r?[0-9][0-9A-Za-z]+(\/.*)?/, fetchIndexForReportPage);
     // Report route for LLM-generated group topics
     app.get(
       /^\/commentsReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
@@ -1728,6 +1733,7 @@ helpersInitialized.then(
         return fetchIndexForReportPage(req, res, next);
       }
     );
+<<<<<<< HEAD
     app.get(/^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/, fetchIndexForReportPage);
     // Topic Prioritize route for dense comment view and hierarchy analysis
     app.get(
@@ -1742,10 +1748,21 @@ helpersInitialized.then(
       function (req, res, next) {
         return fetchIndexForReportPage(req, res, next);
       }
+=======
+    app.get(
+      /^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      fetchIndexForReportPage
+>>>>>>> edge
     );
     // Export Report route for data export interface
     app.get(
       /^\/exportReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      function (req, res, next) {
+        return fetchIndexForReportPage(req, res, next);
+      }
+    );
+    app.get(
+      /^\/topicMapNarrativeReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       function (req, res, next) {
         return fetchIndexForReportPage(req, res, next);
       }
