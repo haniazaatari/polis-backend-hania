@@ -1759,6 +1759,12 @@ helpersInitialized.then(
         return fetchIndexForReportPage(req, res, next);
       }
     );
+    app.get(
+      /^\/topicPrioritizeSimple\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      function (req, res, next) {
+        return fetchIndexForReportPage(req, res, next);
+      }
+    );
 
     app.get(
       /^\/embed$/,
