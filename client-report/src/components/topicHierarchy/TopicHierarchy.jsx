@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useReportId } from "../framework/useReportId";
-import * as d3 from "d3";
+import { select, selectAll, mouse as d3Mouse } from "d3-selection";
+import { scaleLinear, scaleOrdinal } from "d3-scale";
+import { extent } from "d3-array";
+import { polygonHull } from "d3-polygon";
+import { hierarchy, pack } from "d3-hierarchy";
 
 const TopicHierarchy = ({ conversation }) => {
   const { report_id } = useReportId();
@@ -237,7 +241,7 @@ const TopicHierarchy = ({ conversation }) => {
     const margin = { top: 20, right: 20, bottom: 20, left: 20 };
 
     // Create canvas
-    const canvas = d3.select(umapRef.current)
+    const canvas = select(umapRef.current)
       .append("canvas")
       .attr("width", width)
       .attr("height", height)
@@ -254,16 +258,16 @@ const TopicHierarchy = ({ conversation }) => {
     context.scale(devicePixelRatio, devicePixelRatio);
 
     // Create scales
-    const xExtent = d3.extent(umapData, d => d.umap_x);
-    const yExtent = d3.extent(umapData, d => d.umap_y);
+    const xExtent = extent(umapData, d => d.umap_x);
+    const yExtent = extent(umapData, d => d.umap_y);
     
     console.log("UMAP data extents:", { xExtent, yExtent });
     
-    const xScale = d3.scaleLinear()
+    const xScale = scaleLinear()
       .domain(xExtent)
       .range([margin.left, width - margin.right]);
     
-    const yScale = d3.scaleLinear()
+    const yScale = scaleLinear()
       .domain(yExtent)
       .range([height - margin.bottom, margin.top]);
 
@@ -338,7 +342,7 @@ const TopicHierarchy = ({ conversation }) => {
         if (points.length < 3) return; // Need at least 3 points for hull
         
         const hullPoints = points.map(p => [xScale(p.umap_x), yScale(p.umap_y)]);
-        const hull = d3.polygonHull(hullPoints);
+        const hull = polygonHull(hullPoints);
         
         if (hull && hull.length > 2) {
           context.beginPath();
@@ -378,7 +382,7 @@ const TopicHierarchy = ({ conversation }) => {
     });
 
     // Add legend with toggle controls outside the canvas
-    const containerDiv = d3.select(umapRef.current);
+    const containerDiv = select(umapRef.current);
     const legendDiv = containerDiv
       .append("div")
       .style("margin-top", "20px")
@@ -451,9 +455,9 @@ const TopicHierarchy = ({ conversation }) => {
 
     // Add basic interactivity with mouse tracking
     canvas.on("mousemove", function() {
-      const mouse = d3.mouse(this);
-      const x = mouse[0];
-      const y = mouse[1];
+      const mousePos = d3Mouse(this);
+      const x = mousePos[0];
+      const y = mousePos[1];
       
       // Convert back to data coordinates
       const dataX = xScale.invert(x);
@@ -518,7 +522,7 @@ const TopicHierarchy = ({ conversation }) => {
     const margin = { top: 20, right: 20, bottom: 20, left: 20 };
 
     // Create canvas
-    const canvas = d3.select(densityRef.current)
+    const canvas = select(densityRef.current)
       .append("canvas")
       .attr("width", width)
       .attr("height", height)
@@ -535,14 +539,14 @@ const TopicHierarchy = ({ conversation }) => {
     context.scale(devicePixelRatio, devicePixelRatio);
 
     // Create scales
-    const xExtent = d3.extent(umapData, d => d.umap_x);
-    const yExtent = d3.extent(umapData, d => d.umap_y);
+    const xExtent = extent(umapData, d => d.umap_x);
+    const yExtent = extent(umapData, d => d.umap_y);
     
-    const xScale = d3.scaleLinear()
+    const xScale = scaleLinear()
       .domain(xExtent)
       .range([margin.left, width - margin.right]);
     
-    const yScale = d3.scaleLinear()
+    const yScale = scaleLinear()
       .domain(yExtent)
       .range([height - margin.bottom, margin.top]);
 
@@ -771,7 +775,7 @@ const TopicHierarchy = ({ conversation }) => {
     }
 
     // Add legend for density visualization
-    const legendDiv = d3.select(densityRef.current)
+    const legendDiv = select(densityRef.current)
       .append("div")
       .style("margin-top", "20px")
       .style("background", "rgba(255,255,255,0.95)")
@@ -848,32 +852,32 @@ const TopicHierarchy = ({ conversation }) => {
     if (!hierarchyData || !circlePackRef.current) return;
 
     // Clear previous visualization
-    d3.select(circlePackRef.current).selectAll("*").remove();
+    select(circlePackRef.current).selectAll("*").remove();
 
     const width = 800;
     const height = 600;
 
     // Create SVG
-    const svg = d3.select(circlePackRef.current)
+    const svg = select(circlePackRef.current)
       .append("svg")
       .attr("width", width)
       .attr("height", height)
       .attr("style", "border: 1px solid #ccc; border-radius: 8px;");
 
     // Create hierarchy from data
-    const hierarchy = d3.hierarchy(hierarchyData.hierarchy)
+    const hierarchyRoot = hierarchy(hierarchyData.hierarchy)
       .sum(d => d.size || 1)  // Use cluster size for circle size
       .sort((a, b) => b.value - a.value);
 
     // Create pack layout
-    const pack = d3.pack()
+    const packLayout = pack()
       .size([width - 20, height - 20])
       .padding(3);
 
-    const nodes = pack(hierarchy);
+    const nodes = packLayout(hierarchyRoot);
 
     // Color scale by layer
-    const colorScale = d3.scaleOrdinal()
+    const colorScale = scaleOrdinal()
       .domain([0, 1, 2, 3])
       .range(["#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4"]);
 
