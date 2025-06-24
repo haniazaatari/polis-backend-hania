@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import net from "../../util/net";
 import { useReportId } from "../framework/useReportId";
 import CommentList from "../lists/commentList.jsx";
-import * as d3 from "d3";
 
 const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, voteColors }) => {
   const { report_id } = useReportId();
