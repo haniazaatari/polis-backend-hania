@@ -36,15 +36,17 @@ import { handle_GET_delphi_visualizations } from "./src/routes/delphi/visualizat
 import { handle_POST_delphi_jobs } from "./src/routes/delphi/jobs";
 import { handle_GET_delphi_reports } from "./src/routes/delphi/reports";
 import { handle_POST_delphi_batch_reports } from "./src/routes/delphi/batchReports";
-import { 
+
+import {
   handle_GET_topicMod_topics,
   handle_GET_topicMod_comments,
   handle_POST_topicMod_moderate,
   handle_GET_topicMod_proximity,
   handle_GET_topicMod_hierarchy,
-  handle_GET_topicMod_stats
+  handle_GET_topicMod_stats,
 } from "./src/routes/delphi/topicMod";
-import { 
+
+import {
   handle_GET_feeds_directory,
   handle_GET_consensus_feed,
   handle_GET_topics_feed,
@@ -857,17 +859,21 @@ helpersInitialized.then(
       }
     });
 
-    app.get("/api/v3/topicMod/topics/:topicKey/comments", moveToBody, function (req, res) {
-      try {
-        handle_GET_topicMod_comments(req, res);
-      } catch (err) {
-        res.json({
-          status: "error",
-          message: "Internal server error in topicMod comments endpoint",
-          error: err.message || "Unknown error",
-        });
+    app.get(
+      "/api/v3/topicMod/topics/:topicKey/comments",
+      moveToBody,
+      function (req, res) {
+        try {
+          handle_GET_topicMod_comments(req, res);
+        } catch (err) {
+          res.json({
+            status: "error",
+            message: "Internal server error in topicMod comments endpoint",
+            error: err.message || "Unknown error",
+          });
+        }
       }
-    });
+    );
 
     app.post("/api/v3/topicMod/moderate", moveToBody, function (req, res) {
       try {
@@ -1713,11 +1719,18 @@ helpersInitialized.then(
       }
     );
 <<<<<<< HEAD
+<<<<<<< HEAD
     app.get(
       /^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       fetchIndexForReportPage
 =======
     app.get(/^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/, fetchIndexForReportPage);
+=======
+    app.get(
+      /^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      fetchIndexForReportPage
+    );
+>>>>>>> d67c30a2 (merge fix)
     // Topic Prioritize route for dense comment view and hierarchy analysis
     app.get(
       /^\/topicPrioritize\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
