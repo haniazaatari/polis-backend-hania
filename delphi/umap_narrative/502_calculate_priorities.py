@@ -2,8 +2,7 @@
 """
 502_calculate_priorities.py
 
-DynamoDB-based priority calculation service that applies priority formulas
-to conversation data and updates the routing table.
+Calculate comment priorities using group-based extremity values.
 
 This script runs after extremity calculation (501_calculate_comment_extremity.py)
 and computes final priority values using the group-based extremity data.
@@ -19,19 +18,16 @@ import time
 from decimal import Decimal
 from typing import Dict, List, Optional, Any
 
-# Import the priority calculation logic
-from polismath.conversation.priority import PriorityCalculator
-
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-class PriorityService:
-    """Service for calculating and updating comment priorities in DynamoDB."""
+class PriorityCalculator:
+    """Calculate comment priorities using group-based extremity values."""
     
     def __init__(self, conversation_id: int, endpoint_url: str = None):
         """
-        Initialize the priority service.
+        Initialize the priority calculator.
         
         Args:
             conversation_id: The conversation ID to process
@@ -53,8 +49,52 @@ class PriorityService:
         self.comment_routing_table = self.dynamodb.Table('Delphi_CommentRouting')
         self.comment_extremity_table = self.dynamodb.Table('Delphi_CommentExtremity')
         
-        logger.info(f"Initialized priority service for conversation {conversation_id}")
+        logger.info(f"Initialized priority calculator for conversation {conversation_id}")
 
+    def _importance_metric(self, A: int, P: int, S: int, E: float) -> float:
+        """
+        Calculate importance metric (matches Clojure implementation).
+        
+        Args:
+            A: Number of agree votes
+            P: Number of pass votes  
+            S: Total number of votes
+            E: Extremity value
+            
+        Returns:
+            Importance metric value
+        """
+        # Laplace smoothing
+        p = (P + 1) / (S + 2)  # Pass rate
+        a = (A + 1) / (S + 2)  # Agree rate
+        
+        # Importance calculation: (1 - p) * (E + 1) * a
+        return (1 - p) * (E + 1) * a
+
+    def _priority_metric(self, is_meta: bool, A: int, P: int, S: int, E: float) -> float:
+        """
+        Calculate priority metric (matches Clojure implementation).
+        
+        Args:
+            is_meta: Whether the comment is a meta comment
+            A: Number of agree votes
+            P: Number of pass votes
+            S: Total number of votes
+            E: Extremity value
+            
+        Returns:
+            Priority metric value
+        """
+        META_PRIORITY = 7.0
+        
+        if is_meta:
+            return META_PRIORITY ** 2  # 49
+        else:
+            # Regular priority calculation
+            importance = self._importance_metric(A, P, S, E)
+            # Scale by a factor which lets new comments bubble up
+            scaling_factor = 1.0 + (8.0 * (2.0 ** (-S / 5.0)))
+            return (importance * scaling_factor) ** 2
 
     def get_comment_extremity(self, comment_id: str) -> float:
         """
@@ -109,7 +149,7 @@ class PriorityService:
 
     def calculate_priorities(self) -> Dict[str, int]:
         """
-        Calculate priorities for all comments using the priority formulas.
+        Calculate priorities for all comments in the conversation.
         
         Returns:
             Dictionary mapping comment_id to priority value
@@ -134,23 +174,25 @@ class PriorityService:
                 if not comment_id or not stats:
                     continue
                 
+                # Extract vote data
+                A = int(stats.get('agree', 0))
+                D = int(stats.get('disagree', 0))
+                S = int(stats.get('total', 0))
+                P = S - (A + D)  # Pass votes = total - (agree + disagree)
+                
                 # Get extremity value from DynamoDB
-                extremity_value = self.get_comment_extremity(comment_id)
+                E = self.get_comment_extremity(comment_id)
                 
                 # Determine if meta comment (for now, assume no meta comments)
-                # TODO: Implement meta comment detection based on comment metadata
                 is_meta = False
                 
-                # Use the priority calculation logic from the priority module
-                priority = PriorityCalculator.calculate_comment_priority(
-                    comment_stats=stats,
-                    extremity_value=extremity_value,
-                    is_meta=is_meta
-                )
+                # Calculate priority
+                priority = self._priority_metric(is_meta, A, P, S, E)
                 
-                priorities[comment_id] = priority
+                # Store as integer (matching existing format)
+                priorities[comment_id] = int(priority)
                 
-                logger.debug(f"Comment {comment_id}: stats={stats}, E={extremity_value:.4f}, priority={priority}")
+                logger.debug(f"Comment {comment_id}: A={A}, D={D}, S={S}, P={P}, E={E:.4f}, priority={int(priority)}")
                 
             except Exception as e:
                 logger.warning(f"Error calculating priority for comment {comment_id}: {e}")
@@ -260,9 +302,9 @@ def main():
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     
-    # Create and run priority service
-    service = PriorityService(args.conversation_id, args.endpoint_url)
-    success = service.run()
+    # Create and run calculator
+    calculator = PriorityCalculator(args.conversation_id, args.endpoint_url)
+    success = calculator.run()
     
     if success:
         logger.info("Priority calculation completed successfully")
