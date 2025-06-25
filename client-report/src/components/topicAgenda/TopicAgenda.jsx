@@ -61,6 +61,7 @@ const TopicAgenda = ({ conversation }) => {
         console.log(`Loaded ${data.proximity_data.length} UMAP points for spatial filtering`);
         setUmapData(data.proximity_data);
         
+        
         // Group points by layer and cluster
         const groups = groupPointsByLayer(data.proximity_data);
         setClusterGroups(groups);
@@ -77,6 +78,7 @@ const TopicAgenda = ({ conversation }) => {
   // Group UMAP points by layer and cluster (reused from TopicPrioritize)
   const groupPointsByLayer = (data) => {
     const groups = {};
+    const allClusterIds = new Set();
     
     for (let layer = 0; layer <= 3; layer++) {
       groups[layer] = new Map();
@@ -86,6 +88,10 @@ const TopicAgenda = ({ conversation }) => {
       Object.entries(point.clusters || {}).forEach(([layerId, clusterId]) => {
         const layer = parseInt(layerId);
         const key = `${layer}_${clusterId}`;
+        
+        if (layer === 0) {
+          allClusterIds.add(clusterId);
+        }
         
         if (!groups[layer].has(key)) {
           groups[layer].set(key, []);
@@ -101,6 +107,7 @@ const TopicAgenda = ({ conversation }) => {
         });
       });
     });
+    
     
     return groups;
   };
@@ -235,6 +242,7 @@ const TopicAgenda = ({ conversation }) => {
     if (nextLayer >= minLayer && hierarchyAnalysis && hierarchyAnalysis.layers.includes(nextLayer)) {
       setCurrentLayer(nextLayer);
       console.log(`Banked ${currentSelections.size} topics from Layer ${currentLayer}, moving to Layer ${nextLayer}`);
+      
     } else {
       // Set currentLayer to null to indicate completion
       setCurrentLayer(null);
@@ -273,8 +281,9 @@ const TopicAgenda = ({ conversation }) => {
 
   // Get filtered topics for current layer based on spatial proximity to banked topics
   const getFilteredTopics = (allTopics, layerId) => {
-    // For the coarsest layer, show all topics
+    
     const maxLayer = hierarchyAnalysis ? Math.max(...hierarchyAnalysis.layers) : layerId;
+    
     if (layerId === maxLayer || bankedTopics.size === 0) {
       return Object.entries(allTopics).map(([clusterId, topic]) => ({
         clusterId,
@@ -300,10 +309,8 @@ const TopicAgenda = ({ conversation }) => {
       }));
     }
 
-    console.log(`🎯 Layer ${layerId}: Filtering based on ${bankedFromHigherLayer.size} banked topics from Layer ${higherLayerId}`);
-
     // Calculate proximity to banked topics
-    const adaptiveDistance = 1.2; // Lenient threshold for prototyping
+    const adaptiveDistance = 4.0;
     
     const topicsWithProximity = Object.entries(allTopics).map(([clusterId, topic]) => {
       const clusterKey = `${layerId}_${clusterId}`;
@@ -317,8 +324,6 @@ const TopicAgenda = ({ conversation }) => {
         if (targetCentroid) {
           // Check distance to each banked topic
           bankedFromHigherLayer.forEach(bankedTopicKey => {
-            console.log(`🔍 DEBUG: Processing banked topic key: ${bankedTopicKey}`);
-            
             // Extract cluster info from topic key - handle complex format like "2_4c5b018b-51ac-4a3e-9d41-6307a73ebf68#2#6"
             // Look for the pattern after the last '#' or the number after the first '_'
             let bankedClusterId;
@@ -332,9 +337,7 @@ const TopicAgenda = ({ conversation }) => {
               bankedClusterId = parts[parts.length - 1];
             }
             
-            console.log(`🔍 DEBUG: Extracted banked cluster ID: ${bankedClusterId}`);
             const bankedClusterKey = `${higherLayerId}_${bankedClusterId}`;
-            console.log(`🔍 DEBUG: Looking for banked cluster key: ${bankedClusterKey}`);
             const bankedPoints = clusterGroups[higherLayerId].get(bankedClusterKey);
             
             if (bankedPoints && bankedPoints.length > 0) {
@@ -351,20 +354,34 @@ const TopicAgenda = ({ conversation }) => {
         }
       }
       
+      const finalScore = minProximity === Infinity ? null : minProximity;
+      
+      // TOFIX: 0_0 and other low-numbered clusters are hidden because there's a data structure mismatch 
+      // between Delphi topics and UMAP spatial data grouping. Topics exist in both systems but
+      // the key lookup in clusterGroups is failing for clusters 0,1,4,6,7,9,10,11,52,65,103,111,119,124
+      
       return {
         clusterId,
         topic,
-        proximityScore: minProximity === Infinity ? null : minProximity,
+        proximityScore: finalScore,
         closestBankedTopic: closestBankedTopic,
         source: (minProximity !== Infinity && minProximity <= adaptiveDistance) ? 'close' : 'far'
       };
     });
 
-    // For prototyping, show topics that are close to banked topics
-    // TODO: Also include topics that are far from ALL banked topics (edge case)
-    const filteredTopics = topicsWithProximity.filter(item => 
-      item.source === 'close' || item.proximityScore === null
-    );
+
+    // For coarsest and second coarsest layers: show all topics, just sort by proximity
+    // For finest layers: apply the proximity filtering and hide nulls
+    let filteredTopics;
+    if (layerId === maxLayer - 1) {
+      // Second coarsest layer: show all topics
+      filteredTopics = topicsWithProximity;
+    } else {
+      // Finest layers: apply proximity filtering and hide topics without distance data
+      filteredTopics = topicsWithProximity.filter(item => 
+        item.source === 'close'
+      );
+    }
     
     // Sort by proximity score (closest first, then nulls at end)
     const sortedTopics = filteredTopics.sort((a, b) => {
@@ -374,14 +391,35 @@ const TopicAgenda = ({ conversation }) => {
       return a.proximityScore - b.proximityScore;
     });
     
-    console.log(`🎯 Layer ${layerId}: Filtered from ${Object.keys(allTopics).length} to ${sortedTopics.length} topics, sorted by proximity to banked topics`);
-    console.log(`🎯 DEBUG: First few sorted topics:`, sortedTopics.slice(0, 3).map(t => ({
-      id: `${layerId}_${t.clusterId}`,
-      proximityScore: t.proximityScore,
-      closestBankedTopic: t.closestBankedTopic
-    })));
     return sortedTopics;
   };
+
+  // Auto-select close topics when layer changes
+  useEffect(() => {
+    if (!topicData || !hierarchyAnalysis || currentLayer === null || bankedTopics.size === 0) {
+      return;
+    }
+
+    const runKeys = Object.keys(topicData.runs);
+    const firstRun = topicData.runs[runKeys[0]];
+    const allTopics = firstRun.topics_by_layer[currentLayer];
+    
+    if (allTopics) {
+      const topicEntries = getFilteredTopics(allTopics, currentLayer);
+      const autoSelectedTopics = new Set();
+      
+      topicEntries.forEach(entry => {
+        if (entry.proximityScore !== null && entry.proximityScore < 1.0) {
+          autoSelectedTopics.add(entry.topic.topic_key);
+        }
+      });
+      
+      if (autoSelectedTopics.size > 0) {
+        setCurrentSelections(autoSelectedTopics);
+        console.log(`Auto-selected ${autoSelectedTopics.size} topics with distance < 1.0 in Layer ${currentLayer}`);
+      }
+    }
+  }, [currentLayer, bankedTopics.size]); // Trigger when layer changes and we have banked topics
 
   // Render current layer topics
   const renderCurrentLayer = () => {
@@ -400,38 +438,51 @@ const TopicAgenda = ({ conversation }) => {
     const topicEntries = getFilteredTopics(allTopics, currentLayer);
     const isCompleted = completedLayers.has(currentLayer);
     const layerBg = getLayerBackgroundShade(currentLayer, isCompleted);
+    const totalTopicsCount = Object.keys(allTopics).length;
     
     return (
       <div className="current-layer">
         <div className="layer-header">
-          <h1>Agenda Setting and Prioritization by Topic</h1>
-          
-          <div className="step-section">
-            <h2>
-              Step {completedLayers.size + 1} of {hierarchyAnalysis.layers.length}: {currentLayer === Math.max(...hierarchyAnalysis.layers) ? 'Coarsest' : 
-               currentLayer === Math.min(...hierarchyAnalysis.layers) ? 'Finest' : 'Mid'} Topics
-            </h2>
-          </div>
+          <h1>Which topics are highest priority?</h1>
           
           <div className="call-to-action">
-            Choose critical topics you want discussed more - topics you think are important, topics you're an expert in. Help drive the overall agenda.
+            Choose critical topics you want discussed more - topics you think are important overall, topics you might think about a lot or even be an expert in! Help drive the overall agenda. You can come back and change these any time, and the options will change as the conversation grows - and as you submit comments yourself!
           </div>
           
-          <div className="selection-status">
-            {currentSelections.size} selected of {topicEntries.length} available {currentLayer === Math.max(...hierarchyAnalysis.layers) ? 'coarsest' : 
-             currentLayer === Math.min(...hierarchyAnalysis.layers) ? 'finest' : 'mid'} topics
+          <div className="button-group">
+            <div className="step-and-button">
+              <h2>
+                Step {completedLayers.size + 1} of {hierarchyAnalysis.layers.length}: {currentLayer === Math.max(...hierarchyAnalysis.layers) ? 'Coarsest' : 
+                 currentLayer === Math.min(...hierarchyAnalysis.layers) ? 'Finest Grain' : 'Mid'} Topics <span className="selection-count">({currentSelections.size} selected of {topicEntries.length} close enough to show{currentLayer === Math.min(...hierarchyAnalysis.layers) ? ` out of ${totalTopicsCount} total finest grain` : ''})</span>
+              </h2>
+              <div className="action-buttons">
+                <button className="reset-button" onClick={resetAgenda}>
+                  Reset
+                </button>
+                <button 
+                  className={`bank-button ${currentSelections.size === 0 ? 'disabled' : ''}`} 
+                  onClick={bankAndClear}
+                  disabled={currentSelections.size === 0}
+                >
+                  {currentSelections.size === 0 ? 
+                    'Select topics to continue' : 
+                    `Bank ${currentSelections.size} Selected Topics & Continue`
+                  }
+                </button>
+              </div>
+            </div>
+            
+            {/* Submit button - only show on final layer */}
+            {currentLayer === Math.min(...hierarchyAnalysis.layers) && (
+              <button 
+                className={`submit-finish-button ${completedLayers.size === 0 ? 'disabled' : ''}`}
+                disabled={completedLayers.size === 0}
+              >
+                Submit & Finish
+              </button>
+            )}
           </div>
           
-          <button 
-            className={`bank-button ${currentSelections.size === 0 ? 'disabled' : ''}`} 
-            onClick={bankAndClear}
-            disabled={currentSelections.size === 0}
-          >
-            {currentSelections.size === 0 ? 
-              'Select topics to continue' : 
-              `Bank ${currentSelections.size} Selected Topics & Continue`
-            }
-          </button>
         </div>
         
         <div className="topics-grid">
@@ -489,17 +540,17 @@ const TopicAgenda = ({ conversation }) => {
                     <span className="proximity-info-hidden"> (d: {proximityScore.toFixed(3)} from {closestBankedTopic.replace('_', '_')})</span>
                   )}
                   <span className="topic-text">{displayName || `Topic ${clusterId}`}</span>
+                  {proximityScore !== null && (
+                    <span className="distance-display" style={{fontSize: '0.8rem', color: '#666', marginLeft: '8px'}}>
+                      d: {proximityScore.toFixed(2)}
+                    </span>
+                  )}
                   <input
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => {}} // onClick on parent handles it
                     className="topic-checkbox"
                   />
-                  {source && !isSelected && (
-                    <span className={`source-indicator ${source}`}>
-                      {source === 'close' ? '📍' : source === 'far' ? '🌟' : ''}
-                    </span>
-                  )}
                 </div>
               </div>
             );
@@ -687,7 +738,7 @@ const TopicAgenda = ({ conversation }) => {
           gap: 10px;
         }
 
-        .reset-button, .export-button {
+        .reset-button, .export-button, .submit-button, .restart-button {
           padding: 10px 20px;
           border: none;
           border-radius: 4px;
@@ -695,14 +746,53 @@ const TopicAgenda = ({ conversation }) => {
           font-weight: 500;
         }
 
-        .reset-button {
+        .reset-button, .restart-button {
           background: #6c757d;
           color: white;
+        }
+
+        .reset-button:disabled {
+          background: #bbb;
+          cursor: not-allowed;
+          opacity: 0.6;
         }
 
         .export-button {
           background: #007bff;
           color: white;
+        }
+
+        .submit-button {
+          background: #28a745;
+          color: white;
+          font-size: 1.1rem;
+          padding: 15px 30px;
+          margin-right: 15px;
+        }
+
+        .completion-screen {
+          text-align: center;
+          padding: 40px 20px;
+        }
+
+        .completion-header h1 {
+          color: #28a745;
+          margin-bottom: 15px;
+        }
+
+        .completion-summary {
+          color: #666;
+          font-size: 1.1rem;
+          margin-bottom: 30px;
+        }
+
+        .completion-actions {
+          margin: 30px 0;
+        }
+
+        .final-agenda-summary {
+          margin-top: 40px;
+          text-align: left;
         }
 
         .banked-topics {
@@ -800,9 +890,34 @@ const TopicAgenda = ({ conversation }) => {
           margin-bottom: 15px;
         }
 
-        .bank-button {
-          background: #03a9f4;
-          color: white;
+        .button-group {
+          display: flex;
+          gap: 15px;
+          align-items: flex-end;
+        }
+
+        .step-and-button {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .step-and-button h2 {
+          margin: 0;
+        }
+
+        .selection-count {
+          font-weight: 300;
+          font-style: italic;
+        }
+
+        .action-buttons {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+        }
+
+        .bank-button, .submit-finish-button {
           border: none;
           padding: 12px 24px;
           border-radius: 6px;
@@ -811,11 +926,31 @@ const TopicAgenda = ({ conversation }) => {
           font-size: 1rem;
         }
 
+        .bank-button {
+          background: #03a9f4;
+          color: white;
+        }
+
         .bank-button:hover:not(.disabled) {
           background: #0288d1;
         }
 
         .bank-button.disabled {
+          background: #bbb;
+          cursor: not-allowed;
+          opacity: 0.6;
+        }
+
+        .submit-finish-button {
+          background: #28a745;
+          color: white;
+        }
+
+        .submit-finish-button:hover:not(.disabled) {
+          background: #218838;
+        }
+
+        .submit-finish-button.disabled {
           background: #bbb;
           cursor: not-allowed;
           opacity: 0.6;
@@ -844,7 +979,6 @@ const TopicAgenda = ({ conversation }) => {
         .topic-item.selected.brick {
           border-color: #03a9f4;
           background: #e1f5fe;
-          transform: scale(0.95);
           opacity: 1;
           transition: all 0.3s ease;
         }
