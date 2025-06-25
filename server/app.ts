@@ -188,6 +188,7 @@ helpersInitialized.then(
       handle_PUT_ptptois,
       handle_PUT_reports,
       handle_PUT_users,
+      handle_POST_comments_bulk,
     } = o;
 
     const {
@@ -736,6 +737,21 @@ helpersInitialized.then(
       want("xid", getStringLimitLength(1, 999), assignToP),
       resolve_pidThing("pid", assignToP, "post:comments"),
       handle_POST_comments
+    );
+
+    // bulk upload csv of seed statements
+    app.post(
+      "/api/v3/comments-bulk",
+      auth(assignToP),
+      need(
+        "conversation_id",
+        getConversationIdFetchZid,
+        assignToPCustom("zid")
+      ),
+      want("is_seed", getBool, assignToP),
+      want("xid", getStringLimitLength(1, 999), assignToP),
+      resolve_pidThing("pid", assignToP, "post:comments"),
+      handle_POST_comments_bulk
     );
 
     app.get(

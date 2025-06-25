@@ -583,6 +583,20 @@ const postSeedComment = (comment) => {
   return PolisNet.polisPost('/api/v3/comments', comment)
 }
 
+const postBulkSeedComments = (commentsCSV) => {
+  return PolisNet.polisPost('/api/v3/comments-bulk', commentsCSV)
+}
+
+export const handleBulkSeedCommentSubmit = (commentsCSV) => {
+  return (dispatch) => {
+    dispatch(submitSeedCommentStart())
+    return postBulkSeedComments(commentsCSV).then(
+      (res) => dispatch(submitSeedCommentPostSuccess(res)),
+      (err) => dispatch(submitSeedCommentPostError(err))
+    )
+  }
+}
+
 export const handleSeedCommentSubmit = (comment) => {
   return (dispatch) => {
     dispatch(submitSeedCommentStart())
@@ -694,9 +708,9 @@ const fetchAllComments = (conversation_id) => {
   const includeSocial = ''
   return $.get(
     '/api/v3/comments?moderation=true&include_voting_patterns=false&' +
-    includeSocial +
-    'conversation_id=' +
-    conversation_id
+      includeSocial +
+      'conversation_id=' +
+      conversation_id
   )
 }
 
@@ -735,9 +749,9 @@ const mathFetchError = (err) => {
 const fetchMath = (conversation_id, math_tick) => {
   return $.get(
     '/api/v3/math/pca2?&math_tick=' +
-    math_tick +
-    '&conversation_id=' +
-    conversation_id
+      math_tick +
+      '&conversation_id=' +
+      conversation_id
   )
 }
 
@@ -779,9 +793,9 @@ const fetchUnmoderatedComments = (conversation_id) => {
   const includeSocial = ''
   return $.get(
     '/api/v3/comments?moderation=true&include_voting_patterns=false&' +
-    includeSocial +
-    'mod=0&conversation_id=' +
-    conversation_id
+      includeSocial +
+      'mod=0&conversation_id=' +
+      conversation_id
   )
 }
 
@@ -822,9 +836,9 @@ const fetchAcceptedComments = (conversation_id) => {
   const includeSocial = ''
   return $.get(
     '/api/v3/comments?moderation=true&include_voting_patterns=false&mod=1&' +
-    includeSocial +
-    'conversation_id=' +
-    conversation_id
+      includeSocial +
+      'conversation_id=' +
+      conversation_id
   )
 }
 
@@ -865,9 +879,9 @@ const fetchRejectedComments = (conversation_id) => {
   const includeSocial = ''
   return $.get(
     '/api/v3/comments?moderation=true&include_voting_patterns=false&' +
-    includeSocial +
-    'mod=-1&conversation_id=' +
-    conversation_id
+      includeSocial +
+      'mod=-1&conversation_id=' +
+      conversation_id
   )
 }
 
@@ -1335,8 +1349,8 @@ const conversationStatsFetchError = (err) => {
 const fetchConversationStats = (conversation_id, until) => {
   return $.get(
     '/api/v3/conversationStats?conversation_id=' +
-    conversation_id +
-    (until ? '&until=' + until : '')
+      conversation_id +
+      (until ? '&until=' + until : '')
   )
 }
 

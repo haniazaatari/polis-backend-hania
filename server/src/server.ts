@@ -18,6 +18,7 @@ import request from "request-promise"; // includes Request, but adds promise met
 import LruCache from "lru-cache";
 import timeout from "connect-timeout";
 import _ from "underscore";
+import { parse } from "csv-parse/sync";
 import pg from "pg";
 import { encode } from "html-entities";
 
@@ -960,7 +961,7 @@ function initializePolisHelpers() {
         }
         if (
           hostWithoutProtocol[
-          hostWithoutProtocol.length - ((w || "").length + 1)
+            hostWithoutProtocol.length - ((w || "").length + 1)
           ] === "."
         ) {
           // separated by a dot, so it's a subdomain.
@@ -1229,7 +1230,7 @@ Feel free to reply to this email if you need help.`;
     }
     logger.info(
       "after clear res set-cookie: " +
-      JSON.stringify(res?._headers?.["set-cookie"])
+        JSON.stringify(res?._headers?.["set-cookie"])
     );
   }
   function doCookieAuth(
@@ -1269,9 +1270,9 @@ Feel free to reply to this email if you need help.`;
         arg0: number
       ) => {
         (): any;
-        new(): any;
-        end: { (): void; new(): any };
-        send: { (arg0: string): void; new(): any };
+        new (): any;
+        end: { (): void; new (): any };
+        send: { (arg0: string): void; new (): any };
       };
       set: (arg0: { "Content-Type": string }) => void;
     }
@@ -1332,7 +1333,7 @@ Feel free to reply to this email if you need help.`;
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): any; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): any; new (): any } };
       json: (arg0: {}) => void;
     }
   ) {
@@ -1364,21 +1365,21 @@ Feel free to reply to this email if you need help.`;
     for (var i = 0; i < len; i++) {
       entries.push(
         "(" +
-        [
-          uid || "null",
-          req.p.types[i],
-          durs[i],
-          hashedPc,
-          timesInTermsOfServerTime[i],
-        ].join(",") +
-        ")"
+          [
+            uid || "null",
+            req.p.types[i],
+            durs[i],
+            hashedPc,
+            timesInTermsOfServerTime[i],
+          ].join(",") +
+          ")"
       );
     }
 
     pgQueryP(
       "insert into metrics (uid, type, dur, hashedPc, created) values " +
-      entries.join(",") +
-      ";",
+        entries.join(",") +
+        ";",
       []
     )
       .then(function (result: any) {
@@ -1398,8 +1399,8 @@ Feel free to reply to this email if you need help.`;
         arg0: number
       ) => {
         (): any;
-        new(): any;
-        json: { (arg0: { codes: any }): void; new(): any };
+        new (): any;
+        json: { (arg0: { codes: any }): void; new (): any };
       };
     }
   ) {
@@ -1489,8 +1490,8 @@ Feel free to reply to this email if you need help.`;
         arg0: number
       ) => {
         (): any;
-        new(): any;
-        json: { (arg0: { zinvite: any }): void; new(): any };
+        new (): any;
+        json: { (arg0: { zinvite: any }): void; new (): any };
       };
     }
   ) {
@@ -1589,7 +1590,7 @@ Feel free to reply to this email if you need help.`;
     res: {
       status: (
         arg0: any
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     },
     o: { url?: string; zid?: any; currentPid?: any },
     dontUseCache?: boolean | undefined,
@@ -1618,7 +1619,7 @@ Feel free to reply to this email if you need help.`;
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     },
     a: any
   ) {
@@ -2463,7 +2464,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     // let pid = req.p.pid;
@@ -2492,7 +2493,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; end: { (): void; new(): any } };
+      ) => { (): any; new (): any; end: { (): void; new (): any } };
     }
   ) {
     let message = req.p.button + " " + req.p.uid;
@@ -2583,7 +2584,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     let zid = req.p.zid;
@@ -2859,8 +2860,8 @@ Email verified! You can close this tab or hit the back button.
               // })
               return pgQueryP(
                 "select uid, subscribe_email from participants_extended where uid in (select uid from participants where pid in (" +
-                pids.join(",") +
-                "));",
+                  pids.join(",") +
+                  "));",
                 []
                 // Argument of type '(rows: any[]) => Promise<{ pid: string | number; remaining: any; }[]>'
                 // is not assignable to parameter of type '(value: unknown) => { pid: string | number; remaining: any; }[]
@@ -3102,8 +3103,8 @@ Email verified! You can close this tab or hit the back button.
         arg0: number
       ) => {
         (): any;
-        new(): any;
-        json: { (arg0: { subscribed: any }): void; new(): any };
+        new (): any;
+        json: { (arg0: { subscribed: any }): void; new (): any };
       };
     }
   ) {
@@ -3250,8 +3251,8 @@ Email verified! You can close this tab or hit the back button.
         arg0: number
       ) => {
         (): any;
-        new(): any;
-        json: { (arg0: { pid: any; uid?: any }): void; new(): any };
+        new (): any;
+        json: { (arg0: { pid: any; uid?: any }): void; new (): any };
       };
     }
   ) {
@@ -3615,8 +3616,8 @@ Email verified! You can close this tab or hit the back button.
   ) {
     return pgQueryP_readOnly(
       "select * from site_domain_whitelist where site_id = " +
-      "(select site_id from users where uid = " +
-      "(select owner from conversations where zid = ($1)));",
+        "(select site_id from users where uid = " +
+        "(select owner from conversations where zid = ($1)));",
       [zid]
       //     Argument of type '(rows: string | any[]) => boolean' is not assignable to parameter of type '(value: unknown) => boolean | PromiseLike<boolean>'.
       // Types of parameters 'rows' and 'value' are incompatible.
@@ -3827,7 +3828,7 @@ Email verified! You can close this tab or hit the back button.
         arg0: number
       ) => {
         (): any;
-        new(): any;
+        new (): any;
         json: {
           (arg0: {
             voteTimes: any;
@@ -3838,7 +3839,7 @@ Email verified! You can close this tab or hit the back button.
             votesHistogram: any;
             burstHistogram: any[];
           }): void;
-          new(): any;
+          new (): any;
         };
       };
     }
@@ -4009,10 +4010,10 @@ Email verified! You can close this tab or hit the back button.
         arg0: number
       ) => {
         (): any;
-        new(): any;
+        new (): any;
         json: {
           (arg0: { zid: any; zinvite: any; url: string }): void;
-          new(): any;
+          new (): any;
         };
       };
     }
@@ -4035,7 +4036,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     let uid = req.p.uid;
@@ -4054,7 +4055,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     let uid = req.p.uid;
@@ -4089,7 +4090,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     let zid = req.p.zid;
@@ -4201,7 +4202,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     const zid = req.p.zid;
@@ -4296,7 +4297,7 @@ Email verified! You can close this tab or hit the back button.
     setHeader: (arg0: string, arg1: number) => void;
     writeHead: (
       arg0: number
-    ) => { (): any; new(): any; send: { (arg0: number): void; new(): any } };
+    ) => { (): any; new (): any; send: { (arg0: number): void; new (): any } };
   }) {
     res.setHeader("Retry-After", 0);
     logger.warn("failWithRetryRequest");
@@ -4500,6 +4501,185 @@ Email verified! You can close this tab or hit the back button.
     };
   }
 
+  async function handle_POST_comments_bulk(
+    req: PolisRequest,
+    res: Response & { json: (data: any) => void }
+  ): Promise<void> {
+    let { zid, xid, uid, pid: initialPid, vote, anon, is_seed } = req.p;
+    // @ts-expect-error body parsing
+    let csv = req.body.csv;
+    let pid = initialPid;
+    let currentPid = pid;
+    const mustBeModerator = anon;
+    if (!csv) {
+      fail(res, 400, "polis_err_param_missing_csv");
+      return;
+    }
+    async function doGetPid(): Promise<number> {
+      if (_.isUndefined(pid) || Number(pid) === -1) {
+        const newPid = await getPidPromise(zid!, uid!, true);
+        if (newPid === -1) {
+          const rows = await addParticipant(zid!, uid!);
+          const ptpt = rows[0];
+          pid = ptpt.pid;
+          currentPid = pid;
+          return Number(pid);
+        } else {
+          return newPid;
+        }
+      }
+      return Number(pid);
+    }
+    try {
+      const [finalPid, is_moderator, conv] = await Promise.all([
+        doGetPid(),
+        isModerator(zid!, uid!),
+        getConversationInfo(zid!),
+      ]);
+
+      if (!is_moderator && mustBeModerator) {
+        fail(res, 403, "polis_err_post_comment_auth");
+        return;
+      }
+
+      if (finalPid < 0) {
+        fail(res, 500, "polis_err_post_comment_bad_pid");
+        return;
+      }
+
+      const records = parse(String(csv), {
+        columns: true,
+        skip_empty_lines: true,
+      });
+      const commentTexts: string[] = records.map(
+        (record: any) => record.comment_text
+      );
+
+      const results = [];
+      let lastInteractionTime = new Date(0);
+
+      for (const txt of commentTexts) {
+        try {
+          if (!txt || txt.trim() === "") {
+            results.push({
+              txt,
+              status: "skipped",
+              reason:
+                "polis_err_param_missing_txt" + commentTexts + String(csv),
+            });
+            continue;
+          }
+
+          const commentExistsAlready = await commentExists(zid!, txt);
+          if (commentExistsAlready) {
+            results.push({
+              txt,
+              status: "skipped",
+              reason: "polis_err_post_comment_duplicate",
+            });
+            continue;
+          }
+
+          const langDetectionPromise = detectLanguage(txt);
+
+          const [detections] = await Promise.all([langDetectionPromise]);
+
+          let active = true;
+
+          let mod = 0;
+          if (is_moderator && is_seed) {
+            mod = polisTypes.mod.ok;
+            active = true;
+          }
+
+          const detection = Array.isArray(detections)
+            ? detections[0]
+            : detections;
+          const lang = detection.language;
+          const lang_confidence = detection.confidence;
+
+          const insertedComment: any = await pgQueryP(
+            `INSERT INTO COMMENTS
+            (pid, zid, txt, velocity, active, mod, uid, anon, is_seed, created, tid, lang, lang_confidence)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, default, null, $10, $11)
+            RETURNING *;`,
+            [
+              finalPid,
+              zid,
+              txt,
+              1,
+              active,
+              mod,
+              uid,
+              anon || false,
+              is_seed || false,
+              lang,
+              lang_confidence,
+            ]
+          );
+
+          const comment = insertedComment[0];
+          const tid = comment.tid;
+          let createdTime = comment.created;
+
+          if (createdTime > lastInteractionTime) {
+            lastInteractionTime = createdTime;
+          }
+          // assume no voting for now
+          // if (typeof vote !== "undefined") {
+          //   try {
+          //     const voteResult = await votesPost(
+          //       uid!,
+          //       finalPid,
+          //       zid!,
+          //       tid,
+          //       xid!,
+          //       vote,
+          //       0,
+          //       false
+          //     );
+          //     if (voteResult?.vote?.created > lastInteractionTime) {
+          //       lastInteractionTime = voteResult.vote.created;
+          //     }
+          //   } catch (err) {
+          //     logger.error("polis_err_vote_on_bulk_create", err);
+          //   }
+          // }
+
+          if (!active) {
+            addNotificationTask(zid!);
+          }
+
+          results.push({ txt, status: "success", tid });
+        } catch (err: any) {
+          logger.error("polis_err_bulk_comment_item", { error: err, txt });
+          let reason = "polis_err_post_comment";
+          if (err.code === "23505" || err.code === 23505) {
+            reason = "polis_err_post_comment_duplicate";
+          }
+          results.push({ txt, status: "error", reason });
+        }
+      }
+
+      setTimeout(() => {
+        if (lastInteractionTime > new Date(0)) {
+          updateConversationModifiedTime(zid!, lastInteractionTime);
+          updateLastInteractionTimeForConversation(zid!, uid!);
+        }
+        // if (typeof vote !== "undefined") {
+        //   updateVoteCount(zid!, finalPid);
+        // }
+      }, 100);
+
+      res.json({
+        results,
+        currentPid: pid,
+      });
+    } catch (err: any) {
+      fail(res, 500, "polis_err_post_comments_bulk", err);
+    }
+  }
+
   async function handle_POST_comments(
     req: PolisRequest,
     res: Response & { json: (data: any) => void }
@@ -4610,7 +4790,7 @@ Email verified! You can close this tab or hit the back button.
         return;
       }
 
-      if (finalPid && typeof finalPid === 'number' && finalPid < 0) {
+      if (finalPid && typeof finalPid === "number" && finalPid < 0) {
         fail(res, 500, "polis_err_post_comment_bad_pid");
         return;
       }
@@ -4952,7 +5132,7 @@ Email verified! You can close this tab or hit the back button.
   function addNoMoreCommentsRecord(zid: any, pid: any) {
     return pgQueryP(
       "insert into event_ptpt_no_more_comments (zid, pid, votes_placed) values ($1, $2, " +
-      "(select count(*) from votes where zid = ($1) and pid = ($2)))",
+        "(select count(*) from votes where zid = ($1) and pid = ($2)))",
       [zid, pid]
     );
   }
@@ -4971,7 +5151,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     if (req.timedout) {
@@ -5042,7 +5222,7 @@ Email verified! You can close this tab or hit the back button.
         arg0: number
       ) => {
         (): any;
-        new(): any;
+        new (): any;
         json: {
           (arg0: {
             user: any;
@@ -5055,7 +5235,7 @@ Email verified! You can close this tab or hit the back button.
             // famous: JSON.parse(arr[6]),
             acceptLanguage: any;
           }): void;
-          new(): any;
+          new (): any;
         };
       };
     }
@@ -5181,7 +5361,7 @@ Email verified! You can close this tab or hit the back button.
       });
   }
 
-  function updateConversationModifiedTime(zid: any, t?: undefined) {
+  function updateConversationModifiedTime(zid: any, t?: undefined | Date) {
     let modified = _.isUndefined(t) ? Date.now() : Number(t);
     let query =
       "update conversations set modified = ($2) where zid = ($1) and modified < ($2);";
@@ -5250,14 +5430,14 @@ Email verified! You can close this tab or hit the back button.
     // PID_FLOW WIP for now assume we have a uid, but need a participant record.
     let pidReadyPromise = _.isUndefined(req.p.pid)
       ? addParticipantAndMetadata(
-        req.p.zid,
-        req.p.uid,
-        req,
-        permanent_cookie
-      ).then(function (rows: any[]) {
-        let ptpt = rows[0];
-        pid = ptpt.pid;
-      })
+          req.p.zid,
+          req.p.uid,
+          req,
+          permanent_cookie
+        ).then(function (rows: any[]) {
+          let ptpt = rows[0];
+          pid = ptpt.pid;
+        })
       : Promise.resolve();
     pidReadyPromise
       .then(function () {
@@ -5267,13 +5447,13 @@ Email verified! You can close this tab or hit the back button.
         // PID_FLOW WIP for now assume we have a uid, but need a participant record.
         let pidReadyPromise = _.isUndefined(pid)
           ? //         Argument of type '(rows: any[]) => void' is not assignable to parameter of type '(value: unknown) => void | PromiseLike<void>'.
-          // Types of parameters 'rows' and 'value' are incompatible.
-          //         Type 'unknown' is not assignable to type 'any[]'.ts(2345)
-          // @ts-ignore
-          addParticipant(zid, uid).then(function (rows: any[]) {
-            let ptpt = rows[0];
-            pid = ptpt.pid;
-          })
+            // Types of parameters 'rows' and 'value' are incompatible.
+            //         Type 'unknown' is not assignable to type 'any[]'.ts(2345)
+            // @ts-ignore
+            addParticipant(zid, uid).then(function (rows: any[]) {
+              let ptpt = rows[0];
+              pid = ptpt.pid;
+            })
           : Promise.resolve();
 
         return pidReadyPromise
@@ -5394,32 +5574,32 @@ Email verified! You can close this tab or hit the back button.
 
     return pgQueryP(
       "insert into crowd_mod (" +
-      "zid, " +
-      "pid, " +
-      "tid, " +
-      "as_abusive, " +
-      "as_factual, " +
-      "as_feeling, " +
-      "as_important, " +
-      "as_notfact, " +
-      "as_notgoodidea, " +
-      "as_notmyfeeling, " +
-      "as_offtopic, " +
-      "as_spam, " +
-      "as_unsure) values (" +
-      "$1, " +
-      "$2, " +
-      "$3, " +
-      "$4, " +
-      "$5, " +
-      "$6, " +
-      "$7, " +
-      "$8, " +
-      "$9, " +
-      "$10, " +
-      "$11, " +
-      "$12, " +
-      "$13);",
+        "zid, " +
+        "pid, " +
+        "tid, " +
+        "as_abusive, " +
+        "as_factual, " +
+        "as_feeling, " +
+        "as_important, " +
+        "as_notfact, " +
+        "as_notgoodidea, " +
+        "as_notmyfeeling, " +
+        "as_offtopic, " +
+        "as_spam, " +
+        "as_unsure) values (" +
+        "$1, " +
+        "$2, " +
+        "$3, " +
+        "$4, " +
+        "$5, " +
+        "$6, " +
+        "$7, " +
+        "$8, " +
+        "$9, " +
+        "$10, " +
+        "$11, " +
+        "$12, " +
+        "$13);",
       [
         req.p.zid,
         req.p.pid,
@@ -5473,7 +5653,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     let uid = req.p.uid;
@@ -5543,7 +5723,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     addStar(req.p.zid, req.p.tid, req.p.pid, req.p.starred)
@@ -5574,7 +5754,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     let query =
@@ -5622,8 +5802,8 @@ Email verified! You can close this tab or hit the back button.
           });
           pgQuery_readOnly(
             "select pmaid, pmqid from participant_metadata_answers where pmqid in (" +
-            pmqids.join(",") +
-            ") and alive = TRUE and zid = ($1);",
+              pmqids.join(",") +
+              ") and alive = TRUE and zid = ($1);",
             [zid],
             function (err: any, results: { rows: any[] }) {
               if (err) {
@@ -5664,7 +5844,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     let uid = req.p.uid;
@@ -5719,7 +5899,7 @@ Email verified! You can close this tab or hit the back button.
         }
         return pgQueryP(
           "insert into report_comment_selections (rid, tid, selection, zid, modified) values ($1, $2, $3, $4, now_as_millis()) " +
-          "on conflict (rid, tid) do update set selection = ($3), zid  = ($4), modified = now_as_millis();",
+            "on conflict (rid, tid) do update set selection = ($3), zid  = ($4), modified = now_as_millis();",
           [rid, tid, selection, zid]
         )
           .then(() => {
@@ -5773,7 +5953,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     var q = "select * from conversations where zid = ($1)";
@@ -5809,7 +5989,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     var q = "select * from conversations where zid = ($1)";
@@ -6041,17 +6221,17 @@ Email verified! You can close this tab or hit the back button.
                           req.p.uid,
                           "Conversation created",
                           "Hi " +
-                          hname +
-                          ",\n" +
-                          "\n" +
-                          "Here's a link to the conversation you just created. Use it to invite participants to the conversation. Share it by whatever network you prefer - Gmail, Facebook, Twitter, etc., or just post it to your website or blog. Try it now! Click this link to go to your conversation:" +
-                          "\n" +
-                          url +
-                          "\n" +
-                          "\n" +
-                          "With gratitude,\n" +
-                          "\n" +
-                          "The team at pol.is\n"
+                            hname +
+                            ",\n" +
+                            "\n" +
+                            "Here's a link to the conversation you just created. Use it to invite participants to the conversation. Share it by whatever network you prefer - Gmail, Facebook, Twitter, etc., or just post it to your website or blog. Try it now! Click this link to go to your conversation:" +
+                            "\n" +
+                            url +
+                            "\n" +
+                            "\n" +
+                            "With gratitude,\n" +
+                            "\n" +
+                            "The team at pol.is\n"
                         ).catch(function (err: any) {
                           logger.error(
                             "polis_err_sending_conversation_created_email",
@@ -6413,10 +6593,10 @@ Email verified! You can close this tab or hit the back button.
         arg0: number
       ) => {
         (): any;
-        new(): any;
+        new (): any;
         json: {
           (arg0: { kvp?: {}; keys?: {}; values?: {} }): void;
-          new(): any;
+          new (): any;
         };
       };
     }
@@ -6652,7 +6832,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     let uid = req.p.uid;
@@ -6782,9 +6962,9 @@ Email verified! You can close this tab or hit the back button.
                 let upvotesPromise =
                   uid && want_upvoted
                     ? pgQueryP_readOnly(
-                      "select zid from upvotes where uid = ($1);",
-                      [uid]
-                    )
+                        "select zid from upvotes where uid = ($1);",
+                        [uid]
+                      )
                     : Promise.resolve();
 
                 return Promise.all([suurlsPromise, upvotesPromise]).then(
@@ -7162,7 +7342,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     pgQueryP_readOnly(
@@ -7187,7 +7367,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     let uid = req.p.uid;
@@ -7359,10 +7539,10 @@ Email verified! You can close this tab or hit the back button.
 
                 const zinvitePromise = req.p.conversation_id
                   ? Conversation.getZidFromConversationId(
-                    req.p.conversation_id
-                  ).then((zid: number) => {
-                    return zid === 0 ? req.p.conversation_id : null;
-                  })
+                      req.p.conversation_id
+                    ).then((zid: number) => {
+                      return zid === 0 ? req.p.conversation_id : null;
+                    })
                   : generateAndRegisterZinvite(zid, generateShortUrl);
 
                 zinvitePromise
@@ -7402,8 +7582,8 @@ Email verified! You can close this tab or hit the back button.
         arg0: number
       ) => {
         (): any;
-        new(): any;
-        json: { (arg0: never[]): void; new(): any };
+        new (): any;
+        json: { (arg0: never[]): void; new (): any };
       };
     }
   ) {
@@ -7421,14 +7601,14 @@ Email verified! You can close this tab or hit the back button.
       pgQuery_readOnly(
         // 3. invert the selection of participants, so we get those who passed the filter.
         "select pid from participants where zid = ($1) and pid not in " +
-        // 2. find the people who chose those answers
-        "(select pid from participant_metadata_choices where alive = TRUE and pmaid in " +
-        // 1. find the unchecked answers
-        "(select pmaid from participant_metadata_answers where alive = TRUE and zid = ($2) and pmaid not in (" +
-        pmaids.join(",") +
-        "))" +
-        ")" +
-        ";",
+          // 2. find the people who chose those answers
+          "(select pid from participant_metadata_choices where alive = TRUE and pmaid in " +
+          // 1. find the unchecked answers
+          "(select pmaid from participant_metadata_answers where alive = TRUE and zid = ($2) and pmaid not in (" +
+          pmaids.join(",") +
+          "))" +
+          ")" +
+          ";",
         [zid, zid],
         function (err: any, results: { rows: any }) {
           if (err) {
@@ -7449,7 +7629,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     pgQuery_readOnly(
@@ -7514,7 +7694,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     if (
@@ -7547,7 +7727,7 @@ Email verified! You can close this tab or hit the back button.
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     if (
@@ -7821,8 +8001,8 @@ Thanks for using Polis!
     return (
       pgQueryP_readOnly(
         "select * from votes where zid = ($1) and pid in (" +
-        pids.join(",") +
-        ") order by pid, tid, created;",
+          pids.join(",") +
+          ") order by pid, tid, created;",
         [zid]
       )
         //     Argument of type '(votesRows: string | any[]) => string | any[]' is not assignable to parameter of type '(value: unknown) => string | any[] | PromiseLike<string | any[]>'.
@@ -7920,9 +8100,9 @@ Thanks for using Polis!
       request
         .get(
           "https://maps.googleapis.com/maps/api/geocode/json?address=" +
-          address +
-          "&key=" +
-          googleApiKey
+            address +
+            "&key=" +
+            googleApiKey
         )
         .then(function (response: any) {
           response = JSON.parse(response);
@@ -7957,7 +8137,7 @@ Thanks for using Polis!
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     let zid = req.p.zid;
@@ -8015,7 +8195,7 @@ Thanks for using Polis!
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     let zid = req.p.zid;
@@ -8044,7 +8224,7 @@ Thanks for using Polis!
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     let zid = req.p.zid;
@@ -8085,7 +8265,7 @@ Thanks for using Polis!
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     doFamousQuery(req.p, req)
@@ -8265,7 +8445,7 @@ Thanks for using Polis!
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: {}): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: {}): void; new (): any } };
     }
   ) {
     let email = req.p.email;
@@ -8283,7 +8463,7 @@ Thanks for using Polis!
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     let einvite = req.p.einvite;
@@ -8326,7 +8506,7 @@ Thanks for using Polis!
 
     pgQueryP(
       "insert into contributor_agreement_signatures (uid, agreement_version, github_id, name, email, company_name) " +
-      "values ($1, $2, $3, $4, $5, $6);",
+        "values ($1, $2, $3, $4, $5, $6);",
       [uid, agreement_version, github_id, name, email, company_name]
     ).then(
       () => {
@@ -8417,8 +8597,8 @@ Thanks for using Polis!
         arg0: number
       ) => {
         (): any;
-        new(): any;
-        json: { (arg0: { status: string }): void; new(): any };
+        new (): any;
+        json: { (arg0: { status: string }): void; new (): any };
       };
     }
   ) {
@@ -8434,8 +8614,8 @@ Thanks for using Polis!
         arg0: number
       ) => {
         (): any;
-        new(): any;
-        json: { (arg0: { status: string }): void; new(): any };
+        new (): any;
+        json: { (arg0: { status: string }): void; new (): any };
       };
     }
   ) {
@@ -8495,8 +8675,8 @@ Thanks for using Polis!
         arg0: number
       ) => {
         (): any;
-        new(): any;
-        json: { (arg0: { status: string }): void; new(): any };
+        new (): any;
+        json: { (arg0: { status: string }): void; new (): any };
       };
     }
   ) {
@@ -8786,7 +8966,7 @@ Thanks for using Polis!
     res: {
       status: (
         arg0: number
-      ) => { (): any; new(): any; json: { (arg0: any): void; new(): any } };
+      ) => { (): any; new (): any; json: { (arg0: any): void; new (): any } };
     }
   ) {
     return doGetConversationPreloadInfo(req.p.conversation_id).then(
@@ -9074,11 +9254,11 @@ Thanks for using Polis!
     res.send(
       Buffer.from(
         "<body>\n" +
-        "<script>\n" +
-        '  document.cookie="thirdparty=yes; Max-Age=3600; SameSite=None; Secure";\n' +
-        '  document.location="thirdPartyCookieTestPt2.html";\n' +
-        "</script>\n" +
-        "</body>"
+          "<script>\n" +
+          '  document.cookie="thirdparty=yes; Max-Age=3600; SameSite=None; Secure";\n' +
+          '  document.location="thirdPartyCookieTestPt2.html";\n' +
+          "</script>\n" +
+          "</body>"
       )
     );
   }
@@ -9093,17 +9273,17 @@ Thanks for using Polis!
     res.send(
       Buffer.from(
         "<body>\n" +
-        "<script>\n" +
-        "  if (window.parent) {\n" +
-        "   if (/thirdparty=yes/.test(document.cookie)) {\n" +
-        "     window.parent.postMessage('MM:3PCsupported', '*');\n" +
-        "   } else {\n" +
-        "     window.parent.postMessage('MM:3PCunsupported', '*');\n" +
-        "   }\n" +
-        "   document.cookie = 'thirdparty=; expires=Thu, 01 Jan 1970 00:00:01 GMT;';\n" +
-        "  }\n" +
-        "</script>\n" +
-        "</body>"
+          "<script>\n" +
+          "  if (window.parent) {\n" +
+          "   if (/thirdparty=yes/.test(document.cookie)) {\n" +
+          "     window.parent.postMessage('MM:3PCsupported', '*');\n" +
+          "   } else {\n" +
+          "     window.parent.postMessage('MM:3PCunsupported', '*');\n" +
+          "   }\n" +
+          "   document.cookie = 'thirdparty=; expires=Thu, 01 Jan 1970 00:00:01 GMT;';\n" +
+          "  }\n" +
+          "</script>\n" +
+          "</body>"
       )
     );
   }
@@ -9328,10 +9508,10 @@ Thanks for using Polis!
     });
     res.send(
       "<a href='https://pol.is/" +
-      conversation_id +
-      "' target='_blank'>" +
-      conversation_id +
-      "</a>"
+        conversation_id +
+        "' target='_blank'>" +
+        conversation_id +
+        "</a>"
     );
   }
   function handle_GET_iim_conversation(
@@ -9351,14 +9531,14 @@ Thanks for using Polis!
         let title = info.topic || info.created;
         res.send(
           "<a href='https://pol.is/" +
-          conversation_id +
-          "' target='_blank'>" +
-          title +
-          "</a>" +
-          "<p><a href='https://pol.is/m" +
-          conversation_id +
-          "' target='_blank'>moderate</a></p>" +
-          (info.description ? "<p>" + info.description + "</p>" : "")
+            conversation_id +
+            "' target='_blank'>" +
+            title +
+            "</a>" +
+            "<p><a href='https://pol.is/m" +
+            conversation_id +
+            "' target='_blank'>moderate</a></p>" +
+            (info.description ? "<p>" + info.description + "</p>" : "")
         );
       })
       .catch(function (err: any) {
@@ -9597,6 +9777,7 @@ Thanks for using Polis!
     handle_PUT_ptptois,
     handle_PUT_reports,
     handle_PUT_users,
+    handle_POST_comments_bulk,
 
     // Debugging
     //getNextPrioritizedComment,
