@@ -1109,18 +1109,6 @@ helpersInitialized.then(
       need("velocity", getNumberInRange(0, 1), assignToP),
       handle_PUT_comments
     );
-    // bulk upload csv of seed statements
-    app.put(
-      "/api/v3/comments-bulk/",
-      moveToBody,
-      auth(assignToP),
-      need(
-        "conversation_id",
-        getConversationIdFetchZid,
-        assignToPCustom("zid")
-      ),
-      handlle_put_comments_bulk // todo - impliment
-    );
 
     app.post(
       "/api/v3/reportCommentSelections",
