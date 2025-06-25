@@ -29,10 +29,12 @@ import ExportReport from "./exportReport/ExportReport.jsx";
 import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
 import TopicPrioritize from "./topicPrioritize/TopicPrioritize.jsx";
 import TopicPrioritizeSimple from "./topicPrioritizeSimple/TopicPrioritizeSimple.jsx";
+import TopicAgenda from "./topicAgenda/TopicAgenda.jsx";
 import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
 
-const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicPrioritize/2arcefpshi" or "/topicPrioritizeSimple/2arcefpshi" or "/topicHierarchy/2arcefpshi"
-const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicPrioritize", "topicPrioritizeSimple", or "topicHierarchy"
+const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicPrioritize/2arcefpshi" or "/topicPrioritizeSimple/2arcefpshi" or "/topicAgenda/2arcefpshi" or "/topicHierarchy/2arcefpshi"
+const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicPrioritize", "topicPrioritizeSimple", "topicAgenda", or "topicHierarchy"
+
 const report_id = pathname.split("/")[2];
 
 // Debug the route
@@ -747,6 +749,7 @@ const App = (props) => {
     shouldShowExportReport: route_type === "exportReport",
     shouldShowTopicPrioritize: route_type === "topicPrioritize",
     shouldShowTopicPrioritizeSimple: route_type === "topicPrioritizeSimple",
+    shouldShowTopicAgenda: route_type === "topicAgenda",
     shouldShowTopicHierarchy: route_type === "topicHierarchy",
   });
 
@@ -786,6 +789,12 @@ const App = (props) => {
         conversation={conversation}
       />
     );
+  }
+
+  // Directly render TopicAgenda if the URL starts with /topicAgenda
+  if (route_type === "topicAgenda") {
+    console.log("RENDERING: TopicAgenda");
+    return <TopicAgenda report_id={report_id} conversation={conversation} />;
   }
 
   // Directly render TopicHierarchy if the URL starts with /topicHierarchy
