@@ -9,7 +9,7 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
   const [error, setError] = useState(null);
   const [topicData, setTopicData] = useState(null);
   const [hierarchyAnalysis, setHierarchyAnalysis] = useState(null);
-  const [currentLayer, setCurrentLayer] = useState(3); // Start with coarsest layer
+  const [currentLayer, setCurrentLayer] = useState(null); // Will be set to highest available layer
   const [topicPriorities, setTopicPriorities] = useState(new Map()); // Store topic priorities
   const [selectedTopics, setSelectedTopics] = useState(new Set()); // Track selected topics for filtering
   const [umapData, setUmapData] = useState(null); // UMAP coordinates for spatial filtering
@@ -93,6 +93,13 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
 
     const layers = Object.keys(firstRun.topics_by_layer).map(k => parseInt(k)).sort((a, b) => a - b);
     console.log("Analyzing layers:", layers);
+    
+    // Set current layer to the highest available layer if not set
+    if (currentLayer === null && layers.length > 0) {
+      const maxLayer = Math.max(...layers);
+      setCurrentLayer(maxLayer);
+      console.log(`Setting current layer to highest available: ${maxLayer}`);
+    }
 
     // For now, let's investigate what the data structure looks like
     const analysis = {
@@ -513,11 +520,19 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
     }
   };
 
+  // Get comment count for a cluster
+  const getCommentCount = (layerId, clusterId) => {
+    const clusterKey = `${layerId}_${clusterId}`;
+    const points = clusterGroups[layerId]?.get(clusterKey);
+    return points ? points.length : 0;
+  };
+
 
   // Get filtered/sorted topics based on spatial proximity
   const getFilteredTopics = (allTopics, layerId) => {
-    // For Layer 3 (coarsest), show all topics
-    if (layerId === 3 || !clusterGroups[layerId] || !umapData) {
+    // For highest layer (coarsest), show all topics
+    const maxLayer = hierarchyAnalysis ? Math.max(...hierarchyAnalysis.layers) : layerId;
+    if (layerId === maxLayer || !clusterGroups[layerId] || !umapData) {
       return Object.entries(allTopics).map(([clusterId, topic]) => ({
         clusterId,
         topic,
@@ -657,7 +672,7 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
         <div className="layer-header">
           <h2>Layer {currentLayer} Topic Prioritization</h2>
           <div className="layer-subtitle">
-            {topicEntries.length} topics{currentLayer < 3 ? ` (${spatialMode === 'subset' ? 'filtered' : 'sorted'})` : ''} • Click to prioritize: LOW → MEDIUM → HIGH → SPAM/TRASH
+            {topicEntries.length} topics{currentLayer < Math.max(...hierarchyAnalysis.layers) ? ` (${spatialMode === 'subset' ? 'filtered' : 'sorted'})` : ''} • Click to prioritize: LOW → MEDIUM → HIGH → SPAM/TRASH
           </div>
         </div>
         
@@ -688,6 +703,7 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
                       {proximityScore !== null && closestCluster && (
                         <span className="proximity-score"> (d: {proximityScore.toFixed(2)} from {closestCluster})</span>
                       )}
+                      <span className="comment-count"> ({getCommentCount(currentLayer, clusterId)} comments)</span>
                     </span>
                     <div className="priority-options">
                       {['low', 'medium', 'high', 'critical'].map(priority => (
@@ -743,7 +759,7 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
             >
               <div className="tab-number">L{layerId}</div>
               <div className="tab-label">
-                {layerId === 3 ? 'Coarsest' : layerId === 0 ? 'Finest' : 'Mid'}
+                {layerId === Math.max(...hierarchyAnalysis.layers) ? 'Coarsest' : layerId === Math.min(...hierarchyAnalysis.layers) ? 'Finest' : 'Mid'}
               </div>
               <div className="tab-count">{hierarchyAnalysis.layerCounts[layerId]}</div>
             </button>
@@ -964,6 +980,14 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
           gap: 3px;
         }
 
+        @media (min-width: 1200px) {
+          .topics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 8px;
+          }
+        }
+
         .topic-item {
           background: white;
           border-left: 6px solid #e9ecef;
@@ -1014,6 +1038,12 @@ const TopicPrioritize = ({ math, comments, conversation, ptptCount, formatTid, v
         }
 
         .proximity-score {
+          color: #6c757d;
+          font-size: 0.7rem;
+          font-weight: 400;
+        }
+
+        .comment-count {
           color: #6c757d;
           font-size: 0.7rem;
           font-weight: 400;

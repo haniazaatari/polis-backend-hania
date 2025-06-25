@@ -1751,26 +1751,16 @@ helpersInitialized.then(
         return fetchIndexForReportPage(req, res, next);
       }
     );
-<<<<<<< HEAD
-<<<<<<< HEAD
-    app.get(
-      /^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
-      fetchIndexForReportPage
-=======
-    app.get(/^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/, fetchIndexForReportPage);
-=======
     app.get(
       /^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       fetchIndexForReportPage
     );
->>>>>>> d67c30a2 (merge fix)
     // Topic Prioritize route for dense comment view and hierarchy analysis
     app.get(
       /^\/topicPrioritize\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       function (req, res, next) {
         return fetchIndexForReportPage(req, res, next);
       }
->>>>>>> 3845d2ad (admin mod, prio stub)
     );
     // Topic Hierarchy route for circle pack visualization
     app.get(
@@ -1794,6 +1784,12 @@ helpersInitialized.then(
     );
     app.get(
       /^\/topicPrioritizeSimple\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      function (req, res, next) {
+        return fetchIndexForReportPage(req, res, next);
+      }
+    );
+    app.get(
+      /^\/topicAgenda\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       function (req, res, next) {
         return fetchIndexForReportPage(req, res, next);
       }
