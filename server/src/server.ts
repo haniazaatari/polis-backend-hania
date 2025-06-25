@@ -18,6 +18,7 @@ import request from "request-promise"; // includes Request, but adds promise met
 import LruCache from "lru-cache";
 import timeout from "connect-timeout";
 import _ from "underscore";
+import { parse } from "csv-parse/sync";
 import pg from "pg";
 import { encode } from "html-entities";
 
@@ -4500,11 +4501,183 @@ Email verified! You can close this tab or hit the back button.
     };
   }
 
-  async function handle_post_comments_bulk(
+  async function handle_POST_comments_bulk(
     req: PolisRequest,
     res: Response & { json: (data: any) => void }
   ): Promise<void> {
-    // take in csv, parse and store
+    let { zid, xid, uid, pid: initialPid, vote, anon, is_seed } = req.p;
+    // @ts-expect-error body parsing
+    let csv = req.body.csv;
+    let pid = initialPid;
+    let currentPid = pid;
+    const mustBeModerator = anon;
+    if (!csv) {
+      fail(res, 400, "polis_err_param_missing_csv");
+      return;
+    }
+    async function doGetPid(): Promise<number> {
+      if (_.isUndefined(pid) || Number(pid) === -1) {
+        const newPid = await getPidPromise(zid!, uid!, true);
+        if (newPid === -1) {
+          const rows = await addParticipant(zid!, uid!);
+          const ptpt = rows[0];
+          pid = ptpt.pid;
+          currentPid = pid;
+          return Number(pid);
+        } else {
+          return newPid;
+        }
+      }
+      return Number(pid);
+    }
+    try {
+      const [finalPid, is_moderator, conv] = await Promise.all([
+        doGetPid(),
+        isModerator(zid!, uid!),
+        getConversationInfo(zid!),
+      ]);
+
+      if (!is_moderator && mustBeModerator) {
+        fail(res, 403, "polis_err_post_comment_auth");
+        return;
+      }
+
+      if (finalPid < 0) {
+        fail(res, 500, "polis_err_post_comment_bad_pid");
+        return;
+      }
+
+      const records = parse(String(csv), {
+        columns: true,
+        skip_empty_lines: true,
+      });
+      const commentTexts: string[] = records.map(
+        (record: any) => record.comment_text
+      );
+
+      const results = [];
+      let lastInteractionTime = new Date(0);
+
+      for (const txt of commentTexts) {
+        try {
+          if (!txt || txt.trim() === "") {
+            results.push({
+              txt,
+              status: "skipped",
+              reason:
+                "polis_err_param_missing_txt" + commentTexts + String(csv),
+            });
+            continue;
+          }
+
+          const commentExistsAlready = await commentExists(zid!, txt);
+          if (commentExistsAlready) {
+            results.push({
+              txt,
+              status: "skipped",
+              reason: "polis_err_post_comment_duplicate",
+            });
+            continue;
+          }
+
+          const langDetectionPromise = detectLanguage(txt);
+
+          const [detections] = await Promise.all([langDetectionPromise]);
+
+          let active = true;
+
+          let mod = 0;
+          if (is_moderator && is_seed) {
+            mod = polisTypes.mod.ok;
+            active = true;
+          }
+
+          const detection = Array.isArray(detections)
+            ? detections[0]
+            : detections;
+          const lang = detection.language;
+          const lang_confidence = detection.confidence;
+
+          const insertedComment: any = await pgQueryP(
+            `INSERT INTO COMMENTS
+            (pid, zid, txt, velocity, active, mod, uid, anon, is_seed, created, tid, lang, lang_confidence)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, default, null, $10, $11)
+            RETURNING *;`,
+            [
+              finalPid,
+              zid,
+              txt,
+              1,
+              active,
+              mod,
+              uid,
+              anon || false,
+              is_seed || false,
+              lang,
+              lang_confidence,
+            ]
+          );
+
+          const comment = insertedComment[0];
+          const tid = comment.tid;
+          let createdTime = comment.created;
+
+          if (createdTime > lastInteractionTime) {
+            lastInteractionTime = createdTime;
+          }
+          // assume no voting for now
+          // if (typeof vote !== "undefined") {
+          //   try {
+          //     const voteResult = await votesPost(
+          //       uid!,
+          //       finalPid,
+          //       zid!,
+          //       tid,
+          //       xid!,
+          //       vote,
+          //       0,
+          //       false
+          //     );
+          //     if (voteResult?.vote?.created > lastInteractionTime) {
+          //       lastInteractionTime = voteResult.vote.created;
+          //     }
+          //   } catch (err) {
+          //     logger.error("polis_err_vote_on_bulk_create", err);
+          //   }
+          // }
+
+          if (!active) {
+            addNotificationTask(zid!);
+          }
+
+          results.push({ txt, status: "success", tid });
+        } catch (err: any) {
+          logger.error("polis_err_bulk_comment_item", { error: err, txt });
+          let reason = "polis_err_post_comment";
+          if (err.code === "23505" || err.code === 23505) {
+            reason = "polis_err_post_comment_duplicate";
+          }
+          results.push({ txt, status: "error", reason });
+        }
+      }
+
+      setTimeout(() => {
+        if (lastInteractionTime > new Date(0)) {
+          updateConversationModifiedTime(zid!, lastInteractionTime);
+          updateLastInteractionTimeForConversation(zid!, uid!);
+        }
+        // if (typeof vote !== "undefined") {
+        //   updateVoteCount(zid!, finalPid);
+        // }
+      }, 100);
+
+      res.json({
+        results,
+        currentPid: pid,
+      });
+    } catch (err: any) {
+      fail(res, 500, "polis_err_post_comments_bulk", err);
+    }
   }
 
   async function handle_POST_comments(
@@ -5188,7 +5361,7 @@ Email verified! You can close this tab or hit the back button.
       });
   }
 
-  function updateConversationModifiedTime(zid: any, t?: undefined) {
+  function updateConversationModifiedTime(zid: any, t?: undefined | Date) {
     let modified = _.isUndefined(t) ? Date.now() : Number(t);
     let query =
       "update conversations set modified = ($2) where zid = ($1) and modified < ($2);";
@@ -9596,6 +9769,7 @@ Thanks for using Polis!
     handle_PUT_ptptois,
     handle_PUT_reports,
     handle_PUT_users,
+    handle_POST_comments_bulk,
 
     // Debugging
     //getNextPrioritizedComment,
