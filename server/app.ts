@@ -728,6 +728,21 @@ helpersInitialized.then(
       handle_POST_comments
     );
 
+    // bulk upload csv of seed statements
+    app.post(
+      "/api/v3/comments-bulk/",
+      auth(assignToP),
+      need(
+        "conversation_id",
+        getConversationIdFetchZid,
+        assignToPCustom("zid")
+      ),
+      want("is_seed", getBool, assignToP),
+      want("xid", getStringLimitLength(1, 999), assignToP),
+      resolve_pidThing("pid", assignToP, "post:comments"),
+      handle_post_comments_bulk // todo - impliment
+    );
+
     app.get(
       "/api/v3/comments/translations",
       auth(assignToP),
@@ -1031,18 +1046,6 @@ helpersInitialized.then(
       need("is_meta", getBool, assignToP),
       need("velocity", getNumberInRange(0, 1), assignToP),
       handle_PUT_comments
-    );
-    // bulk upload csv of seed statements
-    app.put(
-      "/api/v3/comments-bulk/",
-      moveToBody,
-      auth(assignToP),
-      need(
-        "conversation_id",
-        getConversationIdFetchZid,
-        assignToPCustom("zid")
-      ),
-      handlle_put_comments_bulk // todo - impliment
     );
 
     app.post(
