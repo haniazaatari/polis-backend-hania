@@ -394,7 +394,7 @@ const TopicAgenda = ({ conversation }) => {
     return sortedTopics;
   };
 
-  // Auto-select close topics when layer changes
+  // Auto-select close topics when layer changes (ALWAYS when we have banked topics)
   useEffect(() => {
     if (!topicData || !hierarchyAnalysis || currentLayer === null || bankedTopics.size === 0) {
       return;
@@ -514,47 +514,176 @@ const TopicAgenda = ({ conversation }) => {
             });
           })}
           
-          {/* Show current layer topics */}
-          {topicEntries.map((entry) => {
-            const { clusterId, topic, proximityScore, closestBankedTopic, source } = entry;
-            const topicKey = topic.topic_key;
-            const isSelected = currentSelections.has(topicKey);
-            const commentCount = getCommentCount(currentLayer, clusterId);
+          {/* Show current layer topics - split by distance for finest layers */}
+          {(() => {
+            const maxLayer = hierarchyAnalysis ? Math.max(...hierarchyAnalysis.layers) : currentLayer;
+            const isFinestLayers = currentLayer < maxLayer - 1; // Not coarsest or second coarsest
+            console.log(`🔍 Layer ${currentLayer}: maxLayer=${maxLayer}, isFinestLayers=${isFinestLayers}`);
             
-            // Clean topic name
-            let displayName = topic.topic_name;
-            const layerClusterPrefix = `${currentLayer}_${clusterId}`;
-            if (displayName && displayName.startsWith(layerClusterPrefix)) {
-              displayName = displayName.substring(layerClusterPrefix.length).replace(/^:\s*/, '');
+            if (!isFinestLayers) {
+              // Coarsest and second coarsest: show all topics normally
+              return topicEntries.map((entry) => {
+                const { clusterId, topic, proximityScore, closestBankedTopic, source } = entry;
+                const topicKey = topic.topic_key;
+                const isSelected = currentSelections.has(topicKey);
+                const commentCount = getCommentCount(currentLayer, clusterId);
+                
+                // Clean topic name
+                let displayName = topic.topic_name;
+                const layerClusterPrefix = `${currentLayer}_${clusterId}`;
+                if (displayName && displayName.startsWith(layerClusterPrefix)) {
+                  displayName = displayName.substring(layerClusterPrefix.length).replace(/^:\s*/, '');
+                }
+                
+                return (
+                  <div 
+                    key={topicKey} 
+                    className={`topic-item ${isSelected ? 'selected brick' : 'unselected'}`}
+                    onClick={() => toggleTopicSelection(topicKey)}
+                  >
+                    <div className="topic-content">
+                      <span className="topic-id-hidden">{currentLayer}_{clusterId} ({commentCount} comments)</span>
+                      {proximityScore !== null && closestBankedTopic && (
+                        <span className="proximity-info-hidden"> (d: {proximityScore.toFixed(3)} from {closestBankedTopic.replace('_', '_')})</span>
+                      )}
+                      <span className="topic-text">{displayName || `Topic ${clusterId}`}</span>
+                      {proximityScore !== null && (
+                        <span className="distance-display" style={{fontSize: '0.8rem', color: '#666', marginLeft: '8px'}}>
+                          d: {proximityScore.toFixed(2)}
+                        </span>
+                      )}
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}} // onClick on parent handles it
+                        className="topic-checkbox"
+                      />
+                    </div>
+                  </div>
+                );
+              });
+            } else {
+              // Finest layers: check if we need to split by distance
+              const topicsAboveDistance1 = topicEntries.filter(entry => 
+                entry.proximityScore !== null && entry.proximityScore >= 1.0
+              );
+              
+              const shouldSplit = topicsAboveDistance1.length > 15;
+              console.log(`🔍 Layer ${currentLayer}: ${topicsAboveDistance1.length} topics >= distance 1.0, shouldSplit=${shouldSplit}`);
+              
+              if (!shouldSplit) {
+                // Not too many topics, show all normally
+                return topicEntries.map((entry) => {
+                  const { clusterId, topic, proximityScore, closestBankedTopic, source } = entry;
+                  const topicKey = topic.topic_key;
+                  const isSelected = currentSelections.has(topicKey);
+                  const commentCount = getCommentCount(currentLayer, clusterId);
+                  
+                  // Clean topic name
+                  let displayName = topic.topic_name;
+                  const layerClusterPrefix = `${currentLayer}_${clusterId}`;
+                  if (displayName && displayName.startsWith(layerClusterPrefix)) {
+                    displayName = displayName.substring(layerClusterPrefix.length).replace(/^:\s*/, '');
+                  }
+                  
+                  return (
+                    <div 
+                      key={topicKey} 
+                      className={`topic-item ${isSelected ? 'selected brick' : 'unselected'}`}
+                      onClick={() => toggleTopicSelection(topicKey)}
+                    >
+                      <div className="topic-content">
+                        <span className="topic-id-hidden">{currentLayer}_{clusterId} ({commentCount} comments)</span>
+                        {proximityScore !== null && closestBankedTopic && (
+                          <span className="proximity-info-hidden"> (d: {proximityScore.toFixed(3)} from {closestBankedTopic.replace('_', '_')})</span>
+                        )}
+                        <span className="topic-text">{displayName || `Topic ${clusterId}`}</span>
+                        {proximityScore !== null && (
+                          <span className="distance-display" style={{fontSize: '0.8rem', color: '#666', marginLeft: '8px'}}>
+                            d: {proximityScore.toFixed(2)}
+                          </span>
+                        )}
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}} // onClick on parent handles it
+                          className="topic-checkbox"
+                        />
+                      </div>
+                    </div>
+                  );
+                });
+              }
+              
+              // Too many topics: split topics by distance
+              const closeTopics = topicEntries.filter(entry => 
+                entry.proximityScore === null || entry.proximityScore <= 4.0
+              );
+              const distantTopics = topicEntries.filter(entry => 
+                entry.proximityScore !== null && entry.proximityScore > 4.0
+              );
+              
+              console.log(`🔍 Layer ${currentLayer} split: ${closeTopics.length} close topics, ${distantTopics.length} distant topics`);
+              
+              const renderTopic = (entry) => {
+                const { clusterId, topic, proximityScore, closestBankedTopic, source } = entry;
+                const topicKey = topic.topic_key;
+                const isSelected = currentSelections.has(topicKey);
+                const commentCount = getCommentCount(currentLayer, clusterId);
+                
+                // Clean topic name
+                let displayName = topic.topic_name;
+                const layerClusterPrefix = `${currentLayer}_${clusterId}`;
+                if (displayName && displayName.startsWith(layerClusterPrefix)) {
+                  displayName = displayName.substring(layerClusterPrefix.length).replace(/^:\s*/, '');
+                }
+                
+                return (
+                  <div 
+                    key={topicKey} 
+                    className={`topic-item ${isSelected ? 'selected brick' : 'unselected'}`}
+                    onClick={() => toggleTopicSelection(topicKey)}
+                  >
+                    <div className="topic-content">
+                      <span className="topic-id-hidden">{currentLayer}_{clusterId} ({commentCount} comments)</span>
+                      {proximityScore !== null && closestBankedTopic && (
+                        <span className="proximity-info-hidden"> (d: {proximityScore.toFixed(3)} from {closestBankedTopic.replace('_', '_')})</span>
+                      )}
+                      <span className="topic-text">{displayName || `Topic ${clusterId}`}</span>
+                      {proximityScore !== null && (
+                        <span className="distance-display" style={{fontSize: '0.8rem', color: '#666', marginLeft: '8px'}}>
+                          d: {proximityScore.toFixed(2)}
+                        </span>
+                      )}
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}} // onClick on parent handles it
+                        className="topic-checkbox"
+                      />
+                    </div>
+                  </div>
+                );
+              };
+              
+              return (
+                <>
+                  {/* Close topics (distance <= 4.0) */}
+                  {closeTopics.map(renderTopic)}
+                  
+                  {/* Distant topics section */}
+                  {distantTopics.length > 0 && (
+                    <>
+                      <div className="distant-topics-divider">
+                        <h3>More distant from your selections ({distantTopics.length} topics)</h3>
+                      </div>
+                      {distantTopics.map(renderTopic)}
+                    </>
+                  )}
+                </>
+              );
             }
-            
-            return (
-              <div 
-                key={topicKey} 
-                className={`topic-item ${isSelected ? 'selected brick' : 'unselected'}`}
-                onClick={() => toggleTopicSelection(topicKey)}
-              >
-                <div className="topic-content">
-                  <span className="topic-id-hidden">{currentLayer}_{clusterId} ({commentCount} comments)</span>
-                  {proximityScore !== null && closestBankedTopic && (
-                    <span className="proximity-info-hidden"> (d: {proximityScore.toFixed(3)} from {closestBankedTopic.replace('_', '_')})</span>
-                  )}
-                  <span className="topic-text">{displayName || `Topic ${clusterId}`}</span>
-                  {proximityScore !== null && (
-                    <span className="distance-display" style={{fontSize: '0.8rem', color: '#666', marginLeft: '8px'}}>
-                      d: {proximityScore.toFixed(2)}
-                    </span>
-                  )}
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => {}} // onClick on parent handles it
-                    className="topic-checkbox"
-                  />
-                </div>
-              </div>
-            );
-          })}
+          })()}
         </div>
       </div>
     );
@@ -793,6 +922,22 @@ const TopicAgenda = ({ conversation }) => {
         .final-agenda-summary {
           margin-top: 40px;
           text-align: left;
+        }
+
+        .distant-topics-divider {
+          grid-column: 1 / -1;
+          margin: 30px 0 20px 0;
+          padding: 15px;
+          background: #f8f9fa;
+          border-radius: 6px;
+          border-left: 4px solid #6c757d;
+        }
+
+        .distant-topics-divider h3 {
+          margin: 0;
+          color: #6c757d;
+          font-size: 1.1rem;
+          font-weight: 500;
         }
 
         .banked-topics {
