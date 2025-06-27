@@ -4,9 +4,13 @@
 
 import React from 'react'
 import { connect } from 'react-redux'
-import { handleSeedCommentSubmit, seedCommentChanged } from '../../actions'
+import {
+  handleSeedCommentSubmit,
+  seedCommentChanged,
+  handleBulkSeedCommentSubmit
+} from '../../actions'
 import strings from '../../strings/strings'
-import { Box, Text, Button, jsx, Link } from 'theme-ui'
+import { Box, Text, Button, jsx, Link, Heading } from 'theme-ui'
 
 @connect((state) => state.seed_comments)
 class ModerateCommentsSeed extends React.Component {
@@ -14,7 +18,8 @@ class ModerateCommentsSeed extends React.Component {
     super(props)
     this.state = {
       showErrorDialogue: false,
-      showSuccessDialogue: false
+      showSuccessDialogue: false,
+      csv: undefined
     }
   }
 
@@ -27,6 +32,32 @@ class ModerateCommentsSeed extends React.Component {
       is_seed: true
     }
     this.props.dispatch(handleSeedCommentSubmit(comment))
+  }
+
+  handleSubmitSeedBulk() {
+    this.props.dispatch(
+      handleBulkSeedCommentSubmit({
+        csv: this.state.csvText,
+        pid: 'mypid',
+        conversation_id: this.props.params.conversation_id,
+        // vote: 0,
+        is_seed: true
+      })
+    )
+  }
+
+  handleFileChange(e) {
+    const file = e.target.files[0]
+    if (!file) {
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const text = event.target.result
+      this.setState({ csvText: text })
+    }
+    reader.readAsText(file)
   }
 
   handleTextareaChange(e) {
@@ -53,8 +84,8 @@ class ModerateCommentsSeed extends React.Component {
       <Box sx={{ mb: [4] }}>
         <Text sx={{ mb: [2] }}>
           Add{' '}
-          <Link target="_blank" href="https://compdemocracy.org/seed-comments">
-            seed comments
+          <Link target='_blank' href='https://compdemocracy.org/seed-comments'>
+            seed comments or bulk upload as csv
           </Link>{' '}
           for participants to vote on:
         </Text>
@@ -72,8 +103,8 @@ class ModerateCommentsSeed extends React.Component {
               borderColor: 'mediumGray'
             }}
             onChange={this.handleTextareaChange.bind(this)}
-            maxLength="400"
-            data-test-id="seed_form"
+            maxLength='400'
+            data-test-id='seed_form'
             value={seedText}
             ref={(c) => (this.seed_form = c)}
           />
@@ -83,6 +114,27 @@ class ModerateCommentsSeed extends React.Component {
             {this.getButtonText()}
           </Button>
           {this.props.error ? <Text>{strings(this.props.error)}</Text> : null}
+        </Box>
+        <Box sx={{ mt: 2, display: 'block' }}>
+          <Heading
+            as='h6'
+            sx={{
+              fontSize: [1, null, 2],
+              lineHeight: 'body',
+              my: [3, null, 4]
+            }}
+          >
+            Upload a CSV of seed comments
+          </Heading>
+          <input
+            onChange={this.handleFileChange.bind(this)}
+            type='file'
+            id='csvFile'
+            accept='.csv'
+          ></input>
+          <Button onClick={this.handleSubmitSeedBulk.bind(this)}>
+            {this.getButtonText()}
+          </Button>
         </Box>
       </Box>
     )
