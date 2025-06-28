@@ -3,188 +3,41 @@ import React from "react";
 const TopicAgendaStyles = () => (
   <style jsx>{`
     .topic-agenda {
-      padding: 20px;
-      max-width: 1200px;
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-
-    .header h1 {
-      margin: 0 0 10px 0;
-      color: #333;
-      font-size: 2.2rem;
-    }
-
-    .subtitle {
-      color: #666;
-      font-size: 1.1rem;
-      margin: 0;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-
-    .controls {
-      background: white;
-      border-radius: 8px;
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    .progress h3 {
-      margin: 0 0 10px 0;
-      color: #333;
-    }
-
-    .progress-text {
-      color: #666;
-      margin-bottom: 15px;
-      font-size: 1rem;
-    }
-
-    .progress-bar {
-      width: 100%;
-      height: 8px;
-      background: #e9ecef;
-      border-radius: 4px;
-      overflow: hidden;
-      margin-bottom: 20px;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: #03a9f4;
-      transition: width 0.3s ease;
-    }
-
-    .control-buttons {
       display: flex;
-      gap: 10px;
-    }
-
-    .reset-button, .export-button, .submit-button, .restart-button {
-      padding: 10px 20px;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: 500;
-    }
-
-    .reset-button, .restart-button {
-      background: #6c757d;
-      color: white;
-    }
-
-    .reset-button:disabled {
-      background: #bbb;
-      cursor: not-allowed;
-      opacity: 0.6;
-    }
-
-    .export-button {
-      background: #007bff;
-      color: white;
-    }
-
-    .submit-button {
-      background: #28a745;
-      color: white;
-      font-size: 1.1rem;
-      padding: 15px 30px;
-      margin-right: 15px;
-    }
-
-    .completion-screen {
-      text-align: center;
-      padding: 40px 20px;
-    }
-
-    .completion-header h1 {
-      color: #28a745;
-      margin-bottom: 15px;
-    }
-
-    .completion-summary {
-      color: #666;
-      font-size: 1.1rem;
-      margin-bottom: 30px;
-    }
-
-    .completion-actions {
-      margin: 30px 0;
-    }
-
-    .final-agenda-summary {
-      margin-top: 40px;
-      text-align: left;
-    }
-
-    .distant-topics-divider {
-      grid-column: 1 / -1;
-      margin: 30px 0 20px 0;
-      padding: 15px;
-      background: #f8f9fa;
-      border-radius: 6px;
-      border-left: 4px solid #6c757d;
-    }
-
-    .distant-topics-divider h3 {
-      margin: 0;
-      color: #6c757d;
-      font-size: 1.1rem;
-      font-weight: 500;
-    }
-
-    .banked-topics {
-      margin-bottom: 20px;
-    }
-
-    .banked-topics h3 {
-      margin: 0 0 15px 0;
-      color: #333;
-    }
-
-    .banked-layer {
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 10px;
-      border: 1px solid #dee2e6;
-    }
-
-    .banked-layer h4 {
-      margin: 0 0 10px 0;
-      color: #495057;
-      font-size: 1rem;
-    }
-
-    .banked-topics-list {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 8px;
-    }
-
-    .banked-topic {
-      display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 10px;
-      padding: 8px;
-      background: rgba(255,255,255,0.7);
-      border-radius: 4px;
-      font-size: 0.9rem;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #f5f5f5;
     }
+    
+    .topic-agenda-widget {
+      width: 90%;
+      max-width: 360px;
+      height: 600px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+
 
     .current-layer {
-      padding: 20px;
-      margin-bottom: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
     .layer-header {
-      margin-bottom: 20px;
+      padding: 20px;
+      border-bottom: 1px solid #e9ecef;
+      flex-shrink: 0;
     }
 
     .step-section {
@@ -203,10 +56,11 @@ const TopicAgendaStyles = () => (
     }
 
     .call-to-action {
-      color: #555;
-      font-size: 1rem;
-      margin: 10px 0 15px 0;
+      color: #666;
+      font-size: 0.9rem;
+      margin: 0 0 12px 0;
       line-height: 1.4;
+      text-align: center;
     }
 
     .selection-status {
@@ -217,10 +71,11 @@ const TopicAgendaStyles = () => (
     }
 
     .layer-header h1 {
-      margin: 0 0 12px 0;
+      margin: 0 0 8px 0;
       color: #333;
-      font-size: 1.5rem;
+      font-size: 1.25rem;
       font-weight: 600;
+      text-align: center;
     }
 
     .layer-header h2 {
@@ -235,10 +90,32 @@ const TopicAgendaStyles = () => (
       margin-bottom: 15px;
     }
 
-    .button-group {
-      display: flex;
-      gap: 15px;
-      align-items: flex-end;
+    .done-button-container {
+      padding: 16px 20px;
+      border-top: 1px solid #e9ecef;
+      background: white;
+    }
+    
+    .done-button {
+      width: 100%;
+      padding: 14px;
+      background: #03a9f4;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    
+    .done-button:hover {
+      background: #0288d1;
+    }
+    
+    .done-button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
     }
 
     .step-and-button {
@@ -301,46 +178,54 @@ const TopicAgendaStyles = () => (
       opacity: 0.6;
     }
 
+    .topics-scroll-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      -webkit-overflow-scrolling: touch;
+    }
+    
     .topics-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-      gap: 10px;
+      display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: flex-start;
     }
 
     .topic-item {
       background: white;
       border: 2px solid #e9ecef;
-      border-radius: 6px;
-      padding: 12px;
+      border-radius: 12px;
+      padding: 10px 14px;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      max-width: 100%;
     }
 
     .topic-item:hover {
-      border-color: #adb5bd;
-      background: #f8f9fa;
+      border-color: #03a9f4;
+      box-shadow: 0 3px 8px rgba(3, 169, 244, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .topic-item:active {
+      transform: translateY(0);
     }
 
     .topic-item.selected.brick {
       border-color: #03a9f4;
-      background: #e1f5fe;
-      opacity: 1;
-      transition: all 0.3s ease;
-    }
-
-    .topic-item.banked-brick {
-      border-color: #03a9f4;
-      background: #e1f5fe;
-      opacity: 1;
-      cursor: default;
+      background: #e3f2fd;
+      box-shadow: inset 0 0 0 1px #03a9f4;
     }
 
     .topic-content {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      width: 100%;
+      gap: 12px;
     }
 
     .topic-id {
@@ -350,42 +235,23 @@ const TopicAgendaStyles = () => (
       font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
     }
 
-    .topic-id-hidden {
-      visibility: hidden;
-      position: absolute;
-      left: -9999px;
-      color: #6c757d;
-      font-size: 0.7rem;
-      font-weight: 400;
-      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    }
-
-    .proximity-info-hidden {
-      visibility: hidden;
-      position: absolute;
-      left: -9999px;
-      color: #6c757d;
-      font-size: 0.7rem;
-      font-weight: 400;
-      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
-    }
 
     .source-indicator {
       margin-left: 5px;
       font-size: 0.8rem;
     }
 
-    .topic-checkbox {
-      transform: scale(1.2);
-      cursor: pointer;
-    }
 
     .topic-text {
       color: #212529;
-      font-size: 1rem;
-      line-height: 1.3;
+      font-size: 0.95rem;
+      line-height: 1.4;
       font-weight: 500;
-      flex: 1;
+    }
+    
+    .topic-checkmark {
+      flex-shrink: 0;
+      margin-left: auto;
     }
 
     .no-data, .loading, .error-message {
@@ -402,28 +268,49 @@ const TopicAgendaStyles = () => (
       border: 1px solid #f5c6cb;
     }
 
+    .layer-divider {
+      width: 100%;
+      margin: 16px 0 12px 0;
+      padding: 8px 12px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #6c757d;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    /* Special styling for SUPER SPECIFIC TOPICS */
+    .topics-grid .layer-divider:nth-of-type(2) {
+      background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+      color: #1976d2;
+      font-weight: 700;
+      animation: pulse-subtle 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse-subtle {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.9;
+        transform: scale(0.98);
+      }
+    }
+    
     /* Mobile responsiveness */
-    @media (max-width: 768px) {
+    @media (max-width: 480px) {
       .topic-agenda {
-        padding: 15px;
+        padding: 0;
       }
       
-      .topics-grid, .banked-topics-list {
-        grid-template-columns: 1fr;
-      }
-      
-      .header h1 {
-        font-size: 1.8rem;
-      }
-      
-      .control-buttons {
-        flex-direction: column;
-      }
-      
-      .topic-header-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 5px;
+      .topic-agenda-widget {
+        max-width: 100%;
+        height: 100vh;
+        border-radius: 0;
       }
     }
   `}</style>
