@@ -6,7 +6,7 @@ import LayerHeader from "./components/LayerHeader";
 import ScrollableTopicsGrid from "./components/ScrollableTopicsGrid";
 import TopicAgendaStyles from "./components/TopicAgendaStyles";
 
-const TopicAgenda = ({ conversation }) => {
+const TopicAgenda = ({ conversation, comments }) => {
   const { report_id } = useReportId();
   const {
     loading,
@@ -18,6 +18,21 @@ const TopicAgenda = ({ conversation }) => {
   } = useTopicData(report_id);
   
   const [selections, setSelections] = useState(new Set());
+  const [commentMap, setCommentMap] = useState(new Map());
+
+  // Build comment map for easy lookup
+  useEffect(() => {
+    if (comments && comments.length > 0) {
+      const map = new Map();
+      comments.forEach(comment => {
+        // Store by both tid (as number) and as string for flexibility
+        map.set(comment.tid, comment.txt);
+        map.set(String(comment.tid), comment.txt);
+      });
+      setCommentMap(map);
+      console.log(`Built comment map with ${map.size / 2} comments`);
+    }
+  }, [comments]);
 
   // Fetch UMAP data when topic data is loaded
   useEffect(() => {
@@ -40,12 +55,12 @@ const TopicAgenda = ({ conversation }) => {
     // Convert topic selections to archetypal comments
     // Each topic selection represents a cluster of comments in UMAP space
     // We need to identify representative comments from each selected topic
-    // to use as stable anchor points for comment routing
+    // to use as stable anchor points
     
     console.log("Selected topics:", Array.from(selections));
     
     // Extract archetypal comments from selections
-    const archetypes = extractArchetypalComments(selections, topicData, clusterGroups);
+    const archetypes = extractArchetypalComments(selections, topicData, clusterGroups, commentMap);
     console.log("Extracted archetypes:", archetypes);
     
     // Serialize for storage
@@ -54,17 +69,25 @@ const TopicAgenda = ({ conversation }) => {
     // Fetch comment texts for debugging
     // TODO: This should ideally come from the UMAP data or a dedicated endpoint
     const commentIds = stableAnchors.anchors.map(a => a.commentId);
-    console.log("Fetching texts for comment IDs:", commentIds);
+    console.log("Comment IDs for selected archetypes:", commentIds);
     
     // For now, log what we have
-    console.log("Stable anchor points for routing:", stableAnchors);
+    console.log("Stable anchor points:", stableAnchors);
     console.log("Detailed archetype info:", archetypes);
     
-    // TODO: Send to backend or store locally
-    // These comment IDs + coordinates will be used for distance-based routing
-    // instead of relying on topic centroids that change between runs
+    // Log in a more readable format
+    console.log("\n=== SELECTED ARCHETYPAL COMMENTS ===");
+    archetypes.forEach(group => {
+      console.log(`\nTopic: Layer ${group.layerId}, Cluster ${group.clusterId}`);
+      group.archetypes.forEach((archetype, i) => {
+        console.log(`  ${i + 1}. "${archetype.text}" (ID: ${archetype.commentId})`);
+      });
+    });
+    console.log("=====================================\n");
     
-    alert(`Selected ${stableAnchors.anchors.length} archetypal comments from ${selections.size} topics\n\nCheck console for details including comment IDs.`);
+    // TODO: Send to backend or store locally
+    // These comment IDs + coordinates will be used as persistent references
+    // instead of relying on topic centroids that change between runs
   };
 
   if (loading) {

@@ -801,7 +801,7 @@ const App = (props) => {
   // Directly render TopicAgenda if the URL starts with /topicAgenda
   if (route_type === "topicAgenda") {
     console.log("RENDERING: TopicAgenda");
-    return <TopicAgenda report_id={report_id} conversation={conversation} />;
+    return <TopicAgenda report_id={report_id} conversation={conversation} comments={comments} />;
   }
 
   // Directly render TopicHierarchy if the URL starts with /topicHierarchy
