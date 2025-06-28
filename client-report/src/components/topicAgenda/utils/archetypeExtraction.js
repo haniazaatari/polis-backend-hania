@@ -2,12 +2,12 @@ import { calculateClusterCentroid, calculateDistance } from './topicUtils';
 
 /**
  * Extract archetypal comments from topic selections
- * These serve as stable anchor points for comment routing across Delphi runs
+ * These serve as stable anchor points across Delphi runs
  * 
  * STRATEGY:
  * 1. For each selected topic, find its cluster in UMAP space
  * 2. Identify the most representative comments (archetypes)
- * 3. Return comment IDs that can be used for distance-based routing
+ * 3. Return comment IDs that persist across topic model updates
  * 
  * WHY THIS MATTERS:
  * - Topic names/clusters change between Delphi runs
@@ -15,17 +15,34 @@ import { calculateClusterCentroid, calculateDistance } from './topicUtils';
  * - By storing comment IDs instead of topic IDs, we maintain consistency
  * - These archetypal comments represent what users actually care about
  */
-export const extractArchetypalComments = (selections, topicData, clusterGroups) => {
+export const extractArchetypalComments = (selections, topicData, clusterGroups, commentMap = new Map()) => {
   const archetypeComments = [];
   
   // Parse selections to extract layer and cluster info
   selections.forEach(topicKey => {
-    // Topic key format: "4c5b018b-51ac-4a3e-9d41-6307a73ebf68#2#3"
-    // Extract layer and cluster ID
-    const parts = topicKey.split('#');
-    if (parts.length >= 3) {
-      const layerId = parseInt(parts[parts.length - 2]);
-      const clusterId = parts[parts.length - 1];
+    // Topic key formats:
+    // Old: "4c5b018b-51ac-4a3e-9d41-6307a73ebf68#2#3"
+    // New: "layer3_9"
+    
+    let layerId, clusterId;
+    
+    if (topicKey.startsWith('layer')) {
+      // New format: "layer3_9"
+      const match = topicKey.match(/layer(\d+)_(\d+)/);
+      if (match) {
+        layerId = parseInt(match[1]);
+        clusterId = match[2];
+      }
+    } else {
+      // Old format with # separators
+      const parts = topicKey.split('#');
+      if (parts.length >= 3) {
+        layerId = parseInt(parts[parts.length - 2]);
+        clusterId = parts[parts.length - 1];
+      }
+    }
+    
+    if (layerId !== undefined && clusterId !== undefined) {
       
       // Find the cluster in clusterGroups
       const clusterKey = `${layerId}_${clusterId}`;
@@ -55,14 +72,27 @@ export const extractArchetypalComments = (selections, topicData, clusterGroups) 
             topicKey,
             layerId,
             clusterId,
-            archetypes: archetypes.map(a => ({
-              commentId: a.comment_id,
-              text: a.comment_text || `[Comment ${a.comment_id}]`, // Include text if available
-              distance: a.distanceToCentroid,
-              coordinates: { x: a.umap_x, y: a.umap_y }
-            }))
+            archetypes: archetypes.map(a => {
+              // Try to get comment text from the map (comment_id might be string or number)
+              const commentText = commentMap.get(a.comment_id) || 
+                                commentMap.get(parseInt(a.comment_id)) ||
+                                commentMap.get(String(a.comment_id)) ||
+                                a.comment_text || 
+                                `[Comment ${a.comment_id}]`;
+              console.log(`Archetype comment ${a.comment_id}: "${commentText}"`);
+              return {
+                commentId: a.comment_id,
+                text: commentText,
+                distance: a.distanceToCentroid,
+                coordinates: { x: a.umap_x, y: a.umap_y }
+              };
+            })
           });
+        } else {
+          console.log(`No cluster points found for ${clusterKey}`);
         }
+      } else {
+        console.log(`No cluster points found for layer ${layerId}, cluster ${clusterId}`);
       }
     }
   });
