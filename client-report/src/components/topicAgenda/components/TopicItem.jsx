@@ -23,27 +23,13 @@ const TopicItem = ({
       onClick={isBanked ? undefined : () => onToggleSelection(topicKey)}
     >
       <div className="topic-content">
-        <span className="topic-id-hidden">
-          {layerId}_{clusterId} ({commentCount} comments)
-        </span>
-        {proximityScore !== null && closestBankedTopic && (
-          <span className="proximity-info-hidden">
-            {' '}(d: {proximityScore.toFixed(3)} from {closestBankedTopic.replace('_', '_')})
-          </span>
-        )}
         <span className="topic-text">{displayName}</span>
-        {proximityScore !== null && (
-          <span className="distance-display" style={{fontSize: '0.8rem', color: '#666', marginLeft: '8px'}}>
-            d: {proximityScore.toFixed(2)}
-          </span>
+        {isSelected && (
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" className="topic-checkmark">
+            <circle cx="10" cy="10" r="10" fill="#03a9f4"/>
+            <path d="M6 10L9 13L14 7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
         )}
-        <input
-          type="checkbox"
-          checked={isSelected || isBanked}
-          disabled={isBanked}
-          onChange={() => {}} // onClick on parent handles it
-          className="topic-checkbox"
-        />
       </div>
     </div>
   );
