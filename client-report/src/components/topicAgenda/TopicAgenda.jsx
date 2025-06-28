@@ -1,10 +1,8 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useReportId } from "../framework/useReportId";
 import { useTopicData } from "./hooks/useTopicData";
-import { useAgendaBuilder } from "./hooks/useAgendaBuilder";
-import { getFilteredTopics } from "./utils/topicFiltering";
 import LayerHeader from "./components/LayerHeader";
-import TopicsGrid from "./components/TopicsGrid";
+import ScrollableTopicsGrid from "./components/ScrollableTopicsGrid";
 import TopicAgendaStyles from "./components/TopicAgendaStyles";
 
 const TopicAgenda = ({ conversation }) => {
@@ -18,16 +16,7 @@ const TopicAgenda = ({ conversation }) => {
     fetchUMAPData
   } = useTopicData(report_id);
   
-  const {
-    currentLayer,
-    bankedTopics,
-    currentSelections,
-    completedLayers,
-    setCurrentSelections,
-    toggleTopicSelection,
-    bankAndClear,
-    resetAgenda
-  } = useAgendaBuilder(hierarchyAnalysis);
+  const [selections, setSelections] = useState(new Set());
 
   // Fetch UMAP data when topic data is loaded
   useEffect(() => {
@@ -36,82 +25,27 @@ const TopicAgenda = ({ conversation }) => {
     }
   }, [topicData, conversation, fetchUMAPData]);
 
-  // Auto-select close topics when layer changes
-  useEffect(() => {
-    if (!topicData || !hierarchyAnalysis || currentLayer === null || bankedTopics.size === 0) {
-      return;
+  const toggleTopicSelection = (topicKey) => {
+    const newSelections = new Set(selections);
+    if (newSelections.has(topicKey)) {
+      newSelections.delete(topicKey);
+    } else {
+      newSelections.add(topicKey);
     }
+    setSelections(newSelections);
+  };
 
-    const runKeys = Object.keys(topicData.runs);
-    const firstRun = topicData.runs[runKeys[0]];
-    const allTopics = firstRun.topics_by_layer[currentLayer];
-    
-    if (allTopics) {
-      const topicEntries = getFilteredTopics(allTopics, currentLayer, hierarchyAnalysis, bankedTopics, clusterGroups);
-      const autoSelectedTopics = new Set();
-      
-      topicEntries.forEach(entry => {
-        if (entry.proximityScore !== null && entry.proximityScore < 1.0) {
-          autoSelectedTopics.add(entry.topic.topic_key);
-        }
-      });
-      
-      if (autoSelectedTopics.size > 0) {
-        setCurrentSelections(autoSelectedTopics);
-        console.log(`Auto-selected ${autoSelectedTopics.size} topics with distance < 1.0 in Layer ${currentLayer}`);
-      }
-    }
-  }, [currentLayer, bankedTopics.size, topicData, hierarchyAnalysis, clusterGroups, setCurrentSelections]);
-
-  // Render current layer
-  const renderCurrentLayer = () => {
-    if (!topicData || !hierarchyAnalysis || currentLayer === null) {
-      return <div className="no-data">No topic data available</div>;
-    }
-
-    const runKeys = Object.keys(topicData.runs);
-    const firstRun = topicData.runs[runKeys[0]];
-    
-    if (!firstRun.topics_by_layer || !firstRun.topics_by_layer[currentLayer]) {
-      return <div className="no-data">No topics found for layer {currentLayer}</div>;
-    }
-
-    const allTopics = firstRun.topics_by_layer[currentLayer];
-    const topicEntries = getFilteredTopics(allTopics, currentLayer, hierarchyAnalysis, bankedTopics, clusterGroups);
-    const totalTopicsCount = Object.keys(allTopics).length;
-    
-    return (
-      <div className="current-layer">
-        <LayerHeader
-          hierarchyAnalysis={hierarchyAnalysis}
-          completedLayers={completedLayers}
-          currentLayer={currentLayer}
-          currentSelections={currentSelections}
-          topicEntries={topicEntries}
-          totalTopicsCount={totalTopicsCount}
-          onBankAndClear={bankAndClear}
-          onReset={resetAgenda}
-        />
-        
-        <TopicsGrid
-          topicEntries={topicEntries}
-          bankedTopics={bankedTopics}
-          firstRun={firstRun}
-          currentLayer={currentLayer}
-          currentSelections={currentSelections}
-          onToggleSelection={toggleTopicSelection}
-          clusterGroups={clusterGroups}
-          hierarchyAnalysis={hierarchyAnalysis}
-        />
-      </div>
-    );
+  const handleDone = () => {
+    // TODO: Submit selections
+    console.log("Selected topics:", Array.from(selections));
   };
 
   if (loading) {
     return (
       <div className="topic-agenda">
-        <h1>Topic Agenda Builder</h1>
-        <div className="loading">Loading topic data...</div>
+        <div className="topic-agenda-widget">
+          <div className="loading">Loading topic data...</div>
+        </div>
         <TopicAgendaStyles />
       </div>
     );
@@ -120,10 +54,11 @@ const TopicAgenda = ({ conversation }) => {
   if (error) {
     return (
       <div className="topic-agenda">
-        <h1>Topic Agenda Builder</h1>
-        <div className="error-message">
-          <h3>Error</h3>
-          <p>{error}</p>
+        <div className="topic-agenda-widget">
+          <div className="error-message">
+            <h3>Error</h3>
+            <p>{error}</p>
+          </div>
         </div>
         <TopicAgendaStyles />
       </div>
@@ -132,7 +67,29 @@ const TopicAgenda = ({ conversation }) => {
 
   return (
     <div className="topic-agenda">
-      {renderCurrentLayer()}
+      <div className="topic-agenda-widget">
+        <div className="current-layer">
+          <LayerHeader />
+          
+          <ScrollableTopicsGrid
+            topicData={topicData}
+            selections={selections}
+            onToggleSelection={toggleTopicSelection}
+            clusterGroups={clusterGroups}
+            hierarchyAnalysis={hierarchyAnalysis}
+          />
+          
+          <div className="done-button-container">
+            <button 
+              className="done-button"
+              onClick={handleDone}
+              disabled={selections.size === 0}
+            >
+              Done ({selections.size} selected)
+            </button>
+          </div>
+        </div>
+      </div>
       <TopicAgendaStyles />
     </div>
   );
