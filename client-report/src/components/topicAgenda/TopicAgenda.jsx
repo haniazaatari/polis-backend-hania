@@ -41,6 +41,36 @@ const TopicAgenda = ({ conversation, comments }) => {
     }
   }, [topicData, conversation, fetchUMAPData]);
 
+  // Load previous selections when component mounts
+  useEffect(() => {
+    if (conversation && conversation.conversation_id) {
+      loadPreviousSelections();
+    }
+  }, [conversation]);
+
+  const loadPreviousSelections = async () => {
+    try {
+      const response = await fetch(`/api/v3/topicAgenda/selections?conversation_id=${conversation.conversation_id}`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+      
+      const result = await response.json();
+      
+      if (result.status === 'success' && result.data) {
+        // Convert stored selections back to topic keys
+        const storedSelections = new Set();
+        result.data.archetypal_selections.forEach(selection => {
+          storedSelections.add(selection.topic_key);
+        });
+        setSelections(storedSelections);
+        console.log('Loaded previous selections:', Array.from(storedSelections));
+      }
+    } catch (error) {
+      console.error('Error loading previous selections:', error);
+    }
+  };
+
   const toggleTopicSelection = (topicKey) => {
     const newSelections = new Set(selections);
     if (newSelections.has(topicKey)) {
@@ -52,42 +82,64 @@ const TopicAgenda = ({ conversation, comments }) => {
   };
 
   const handleDone = async () => {
-    // Convert topic selections to archetypal comments
-    // Each topic selection represents a cluster of comments in UMAP space
-    // We need to identify representative comments from each selected topic
-    // to use as stable anchor points
-    
-    console.log("Selected topics:", Array.from(selections));
-    
-    // Extract archetypal comments from selections
-    const archetypes = extractArchetypalComments(selections, topicData, clusterGroups, commentMap);
-    console.log("Extracted archetypes:", archetypes);
-    
-    // Serialize for storage
-    const stableAnchors = serializeArchetypes(archetypes);
-    
-    // Fetch comment texts for debugging
-    // TODO: This should ideally come from the UMAP data or a dedicated endpoint
-    const commentIds = stableAnchors.anchors.map(a => a.commentId);
-    console.log("Comment IDs for selected archetypes:", commentIds);
-    
-    // For now, log what we have
-    console.log("Stable anchor points:", stableAnchors);
-    console.log("Detailed archetype info:", archetypes);
-    
-    // Log in a more readable format
-    console.log("\n=== SELECTED ARCHETYPAL COMMENTS ===");
-    archetypes.forEach(group => {
-      console.log(`\nTopic: Layer ${group.layerId}, Cluster ${group.clusterId}`);
-      group.archetypes.forEach((archetype, i) => {
-        console.log(`  ${i + 1}. "${archetype.text}" (ID: ${archetype.commentId})`);
+    try {
+      // Convert topic selections to archetypal comments
+      console.log("Selected topics:", Array.from(selections));
+      
+      // Extract archetypal comments from selections
+      const archetypes = extractArchetypalComments(selections, topicData, clusterGroups, commentMap);
+      console.log("Extracted archetypes:", archetypes);
+      
+      // Log in a more readable format
+      console.log("\n=== SELECTED ARCHETYPAL COMMENTS ===");
+      archetypes.forEach(group => {
+        console.log(`\nTopic: Layer ${group.layerId}, Cluster ${group.clusterId}`);
+        group.archetypes.forEach((archetype, i) => {
+          console.log(`  ${i + 1}. "${archetype.text}" (ID: ${archetype.commentId})`);
+        });
       });
-    });
-    console.log("=====================================\n");
-    
-    // TODO: Send to backend or store locally
-    // These comment IDs + coordinates will be used as persistent references
-    // instead of relying on topic centroids that change between runs
+      console.log("=====================================\n");
+      
+      // Transform to API format
+      const apiSelections = archetypes.map(group => ({
+        layer_id: group.layerId,
+        cluster_id: group.clusterId,
+        topic_key: group.topicKey,
+        archetypal_comments: group.archetypes.map(a => ({
+          comment_id: a.commentId,
+          comment_text: a.text,
+          coordinates: a.coordinates,
+          distance_to_centroid: a.distance
+        }))
+      }));
+      
+      // Send to API
+      const response = await fetch('/api/v3/topicAgenda/selections', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversation_id: conversation.conversation_id,
+          selections: apiSelections
+        }),
+        credentials: 'include'
+      });
+      
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        console.log('Topic agenda selections saved successfully:', result.data);
+        // TODO: Show success UI feedback
+      } else {
+        console.error('Failed to save selections:', result.message);
+        // TODO: Show error UI feedback
+      }
+      
+    } catch (error) {
+      console.error('Error saving topic agenda selections:', error);
+      // TODO: Show error UI feedback
+    }
   };
 
   if (loading) {
