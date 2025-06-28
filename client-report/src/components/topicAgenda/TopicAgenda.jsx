@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useReportId } from "../framework/useReportId";
 import { useTopicData } from "./hooks/useTopicData";
+import { extractArchetypalComments, serializeArchetypes } from "./utils/archetypeExtraction";
 import LayerHeader from "./components/LayerHeader";
 import ScrollableTopicsGrid from "./components/ScrollableTopicsGrid";
 import TopicAgendaStyles from "./components/TopicAgendaStyles";
@@ -35,9 +36,35 @@ const TopicAgenda = ({ conversation }) => {
     setSelections(newSelections);
   };
 
-  const handleDone = () => {
-    // TODO: Submit selections
+  const handleDone = async () => {
+    // Convert topic selections to archetypal comments
+    // Each topic selection represents a cluster of comments in UMAP space
+    // We need to identify representative comments from each selected topic
+    // to use as stable anchor points for comment routing
+    
     console.log("Selected topics:", Array.from(selections));
+    
+    // Extract archetypal comments from selections
+    const archetypes = extractArchetypalComments(selections, topicData, clusterGroups);
+    console.log("Extracted archetypes:", archetypes);
+    
+    // Serialize for storage
+    const stableAnchors = serializeArchetypes(archetypes);
+    
+    // Fetch comment texts for debugging
+    // TODO: This should ideally come from the UMAP data or a dedicated endpoint
+    const commentIds = stableAnchors.anchors.map(a => a.commentId);
+    console.log("Fetching texts for comment IDs:", commentIds);
+    
+    // For now, log what we have
+    console.log("Stable anchor points for routing:", stableAnchors);
+    console.log("Detailed archetype info:", archetypes);
+    
+    // TODO: Send to backend or store locally
+    // These comment IDs + coordinates will be used for distance-based routing
+    // instead of relying on topic centroids that change between runs
+    
+    alert(`Selected ${stableAnchors.anchors.length} archetypal comments from ${selections.size} topics\n\nCheck console for details including comment IDs.`);
   };
 
   if (loading) {
