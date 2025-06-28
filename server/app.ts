@@ -36,6 +36,13 @@ import {
 } from "./src/routes/delphi/topicMod";
 
 import {
+  handle_POST_topicAgenda_selections,
+  handle_GET_topicAgenda_selections,
+  handle_PUT_topicAgenda_selections,
+  handle_DELETE_topicAgenda_selections,
+} from "./src/routes/delphi/topicAgenda";
+
+import {
   handle_GET_feeds_directory,
   handle_GET_consensus_feed,
   handle_GET_topics_feed,
@@ -947,6 +954,71 @@ helpersInitialized.then(
         });
       }
     });
+
+    // Topic Agenda routes
+    app.post("/api/v3/topicAgenda/selections", 
+      auth(assignToP), 
+      moveToBody, 
+      function (req, res) {
+        try {
+          handle_POST_topicAgenda_selections(req, res);
+        } catch (err) {
+          res.json({
+            status: "error",
+            message: "Internal server error in topicAgenda selections endpoint",
+            error: err.message || "Unknown error",
+          });
+        }
+      }
+    );
+
+    app.get("/api/v3/topicAgenda/selections", 
+      auth(assignToP), 
+      moveToBody, 
+      function (req, res) {
+        try {
+          handle_GET_topicAgenda_selections(req, res);
+        } catch (err) {
+          res.json({
+            status: "error",
+            message: "Internal server error in topicAgenda selections endpoint",
+            error: err.message || "Unknown error",
+          });
+        }
+      }
+    );
+
+    app.put("/api/v3/topicAgenda/selections", 
+      auth(assignToP), 
+      moveToBody, 
+      function (req, res) {
+        try {
+          handle_PUT_topicAgenda_selections(req, res);
+        } catch (err) {
+          res.json({
+            status: "error",
+            message: "Internal server error in topicAgenda selections endpoint",
+            error: err.message || "Unknown error",
+          });
+        }
+      }
+    );
+
+    app.delete("/api/v3/topicAgenda/selections", 
+      auth(assignToP), 
+      moveToBody, 
+      function (req, res) {
+        try {
+          handle_DELETE_topicAgenda_selections(req, res);
+        } catch (err) {
+          res.json({
+            status: "error",
+            message: "Internal server error in topicAgenda selections endpoint",
+            error: err.message || "Unknown error",
+          });
+        }
+      }
+    );
 
     // RSS Feeds routes
     app.get("/feeds/:reportId", function (req, res) {
