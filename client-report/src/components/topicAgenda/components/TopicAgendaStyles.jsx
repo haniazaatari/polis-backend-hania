@@ -1,7 +1,7 @@
 import React from "react";
 
 const TopicAgendaStyles = () => (
-  <style jsx>{`
+  <style>{`
     .topic-agenda {
       display: flex;
       flex-direction: column;
@@ -24,6 +24,13 @@ const TopicAgendaStyles = () => (
       flex-direction: column;
       overflow: hidden;
     }
+    
+    /* Desktop: double width */
+    @media (min-width: 768px) {
+      .topic-agenda-widget {
+        max-width: 720px;
+      }
+    }
 
 
 
@@ -35,7 +42,7 @@ const TopicAgendaStyles = () => (
     }
 
     .layer-header {
-      padding: 20px;
+      padding: 16px;
       border-bottom: 1px solid #e9ecef;
       flex-shrink: 0;
     }
@@ -91,7 +98,7 @@ const TopicAgendaStyles = () => (
     }
 
     .done-button-container {
-      padding: 16px 20px;
+      padding: 12px 16px;
       border-top: 1px solid #e9ecef;
       background: white;
     }
@@ -180,9 +187,29 @@ const TopicAgendaStyles = () => (
 
     .topics-scroll-container {
       flex: 1;
-      overflow-y: auto;
-      padding: 16px;
+      overflow-y: scroll; /* Always show scrollbar */
+      padding: 12px;
       -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Always show scrollbar on webkit browsers */
+    .topics-scroll-container::-webkit-scrollbar {
+      width: 8px;
+      background-color: transparent;
+    }
+    
+    .topics-scroll-container::-webkit-scrollbar-track {
+      background-color: #f1f1f1;
+      border-radius: 4px;
+    }
+    
+    .topics-scroll-container::-webkit-scrollbar-thumb {
+      background-color: #c1c1c1;
+      border-radius: 4px;
+    }
+    
+    .topics-scroll-container::-webkit-scrollbar-thumb:hover {
+      background-color: #a8a8a8;
     }
     
     .topics-grid {
@@ -244,7 +271,7 @@ const TopicAgendaStyles = () => (
 
     .topic-text {
       color: #212529;
-      font-size: 0.95rem;
+      font-size: 1.05rem;
       line-height: 1.4;
       font-weight: 500;
     }
@@ -270,8 +297,8 @@ const TopicAgendaStyles = () => (
 
     .layer-divider {
       width: 100%;
-      margin: 16px 0 12px 0;
-      padding: 8px 12px;
+      margin: 12px 0 8px 0;
+      padding: 6px 10px;
       background: #f8f9fa;
       border-radius: 8px;
       text-align: center;
