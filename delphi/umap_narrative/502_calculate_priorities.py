@@ -161,7 +161,8 @@ class PriorityCalculator:
         comment_data = self.get_comment_routing_data()
         
         if not comment_data:
-            logger.warning("No comment data found")
+            logger.warning("No comment routing data found - conversation likely has no votes yet")
+            logger.info("This is normal for newly created conversations before voting begins")
             return {}
         
         priorities = {}
@@ -262,8 +263,9 @@ class PriorityCalculator:
             priorities = self.calculate_priorities()
             
             if not priorities:
-                logger.error("No priorities calculated")
-                return False
+                logger.warning("No priorities calculated - conversation may have no votes yet")
+                logger.info(f"Priority calculation completed for conversation {self.conversation_id} (zero-vote scenario)")
+                return True  # Return success for zero-vote scenario
             
             # Update DynamoDB
             success = self.update_priorities_in_dynamodb(priorities)
