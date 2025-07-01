@@ -324,9 +324,18 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
                         "Label"
                     ]
                     
+                    # First, check if there's already a layer_cluster prefix (like "1_2:") and remove it
+                    import re
+                    layer_prefix_match = re.match(r'^\d+_\d+:\s*', raw_response)
+                    if layer_prefix_match:
+                        raw_response = raw_response[layer_prefix_match.end():]
+                    
                     for prefix in prefixes_to_remove:
                         if raw_response.startswith(prefix):
-                            raw_response = raw_response.replace(prefix, "", 1).strip()
+                            raw_response = raw_response.replace(prefix, "", 1)
+                    
+                    # Strip all whitespace including newlines BEFORE splitting
+                    raw_response = raw_response.strip()
                     
                     # Get just the first line, as we only want the label
                     topic = raw_response.split('\n')[0].strip()
@@ -350,7 +359,7 @@ def generate_cluster_topic_labels(cluster_characteristics, comment_texts=None, l
                     return topic
                 except Exception as e:
                     logger.error(f"Error generating topic with Ollama: {e}")
-                    return f"Topic {cluster_id}"
+                    return f"Topic {len(comments)}"
             
             # Generate labels using Ollama
             for cluster_id in cluster_characteristics.keys():
