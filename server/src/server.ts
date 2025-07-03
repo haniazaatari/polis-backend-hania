@@ -84,6 +84,8 @@ import {
   handle_POST_auth_pwresettoken,
 } from "./routes/password";
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 AWS.config.update({ region: Config.awsRegion });
 const devMode = Config.isDevMode;
 const s3Client = new AWS.S3({ apiVersion: "2006-03-01" });
@@ -113,6 +115,7 @@ import logger from "./utils/logger";
 
 // # notifications
 import emailSenders from "./email/senders";
+import analyzeComment from "./utils/moderation";
 const sendTextEmail = emailSenders.sendTextEmail;
 const sendTextEmailWithBackupOnly = emailSenders.sendTextEmailWithBackupOnly;
 
@@ -4448,34 +4451,6 @@ Email verified! You can close this tab or hit the back button.
     });
   }
 
-  const GOOGLE_DISCOVERY_URL =
-    "https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1";
-
-  async function analyzeComment(txt: string) {
-    try {
-      const client = await google.discoverAPI(GOOGLE_DISCOVERY_URL);
-
-      const analyzeRequest = {
-        comment: {
-          text: txt,
-        },
-        requestedAttributes: {
-          TOXICITY: {},
-        },
-      };
-
-      // @ts-ignore
-      const response = await client.comments.analyze({
-        key: Config.googleJigsawPerspectiveApiKey,
-        resource: analyzeRequest,
-      });
-
-      return response.data;
-    } catch (err) {
-      logger.error("analyzeComment error", err);
-    }
-  }
-
   /* this is a concept and can be generalized to other handlers */
   interface PolisRequestParams {
     zid?: string;
@@ -4734,16 +4709,6 @@ Email verified! You can close this tab or hit the back button.
         logger.error("isSpam failed", err);
         return false;
       });
-
-      logger.debug(5471);
-
-      // Only analyze comments if we have a Jigsaw API key
-      const jigsawModerationPromise = Config.googleJigsawPerspectiveApiKey
-        ? analyzeComment(txt)
-        : Promise.resolve(null);
-
-      logger.debug(5478);
-
       const isModeratorPromise = isModerator(zid!, uid!);
       const conversationInfoPromise = getConversationInfo(zid!);
 
@@ -4775,14 +4740,12 @@ Email verified! You can close this tab or hit the back button.
         is_moderator,
         commentExistsAlready,
         spammy,
-        jigsawResponse,
       ] = await Promise.all([
         pidPromise,
         conversationInfoPromise,
         isModeratorPromise,
         commentExistsPromise,
         isSpamPromise,
-        jigsawModerationPromise,
       ]);
 
       if (!is_moderator && mustBeModerator) {
@@ -4805,31 +4768,35 @@ Email verified! You can close this tab or hit the back button.
         return;
       }
 
-      logger.debug(5541);
+      const polisModResponse = is_moderator
+        ? 0
+        : await analyzeComment(txt, conv.topic, ip);
 
       const bad = hasBadWords(txt);
 
       const velocity = 1;
-      const jigsawToxicityThreshold = 0.8;
+      const commentToxicityThreshold = 100;
       let active = true;
       const classifications = [];
 
-      const toxicityScore =
-        jigsawResponse?.attributeScores?.TOXICITY?.summaryScore?.value;
+      const toxicityScore = Number(polisModResponse);
 
       if (typeof toxicityScore === "number" && !isNaN(toxicityScore)) {
         logger.debug(
-          `Jigsaw toxicity Score for comment "${txt}": ${toxicityScore}`
+          `Polismod toxicity Score for comment "${txt}": ${toxicityScore}`
         );
 
-        if (toxicityScore > jigsawToxicityThreshold && conv.profanity_filter) {
+        if (
+          toxicityScore >= commentToxicityThreshold &&
+          conv.profanity_filter
+        ) {
           active = false;
           classifications.push("bad");
           logger.info(
-            "active=false because (jigsawToxicity && conv.profanity_filter)"
+            "active=false because (Toxicity && conv.profanity_filter)"
           );
         }
-        // Fall back to bad words filter if Jigsaw API is not available or fails to return a numeric value
+        // Fall back to bad words filter if filter API is not available or fails to return a numeric value
       } else if (bad && conv.profanity_filter) {
         active = false;
         classifications.push("bad");
