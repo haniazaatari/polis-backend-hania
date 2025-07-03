@@ -59,7 +59,19 @@ class PriorityCalculator:
         return (1 - p) * (E + 1) * a
 
     def _priority_metric(self, is_meta: bool, A: int, P: int, S: int, E: float) -> float:
-        """Calculate priority metric (matches Clojure implementation)."""
+        """
+        Calculate priority metric (matches Clojure implementation).
+        
+        Args:
+            is_meta: Whether the comment is a meta comment
+            A: Number of agree votes
+            P: Number of pass votes
+            S: Total number of votes
+            E: Extremity value
+            
+        Returns:
+            Priority metric value
+        """
         META_PRIORITY = 7.0
         if is_meta:
             return META_PRIORITY ** 2
@@ -69,7 +81,15 @@ class PriorityCalculator:
             return (importance * scaling_factor) ** 2
 
     def get_comment_extremity(self, comment_id: str) -> float:
-        """Get extremity value for a comment from DynamoDB."""
+        """
+        Get extremity value for a comment from DynamoDB.
+        
+        Args:
+            comment_id: The comment ID
+            
+        Returns:
+            Extremity value (0.0 to 1.0) or 0.0 if not found
+        """
         try:
             response = self.comment_extremity_table.get_item(
                 Key={
