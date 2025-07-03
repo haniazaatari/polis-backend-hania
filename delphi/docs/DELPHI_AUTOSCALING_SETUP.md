@@ -197,7 +197,7 @@ delphi:
   build:
     context: ./delphi
   environment:
-    - DELPHI_INSTANCE_TYPE=${DELPHI_INSTANCE_TYPE:-default}
+    - INSTANCE_SIZE=${INSTANCE_SIZE:-default}
     - DELPHI_MAX_WORKERS=${DELPHI_MAX_WORKERS:-2}
     - DELPHI_WORKER_MEMORY=${DELPHI_WORKER_MEMORY:-1g}
   deploy:
@@ -223,14 +223,14 @@ elif [ "$SERVICE_FROM_FILE" == "delphi" ]; then
     # Set environment variables based on instance size
     if [ "$INSTANCE_SIZE" == "small" ]; then
       echo "Configuring delphi for small instance"
-      export DELPHI_INSTANCE_TYPE="small"
+      export INSTANCE_SIZE="small"
       export DELPHI_MAX_WORKERS=3
       export DELPHI_WORKER_MEMORY="2g"
       export DELPHI_CONTAINER_MEMORY="8g"
       export DELPHI_CONTAINER_CPUS="2"
     elif [ "$INSTANCE_SIZE" == "large" ]; then
       echo "Configuring delphi for large instance"
-      export DELPHI_INSTANCE_TYPE="large"
+      export INSTANCE_SIZE="large"
       export DELPHI_MAX_WORKERS=8
       export DELPHI_WORKER_MEMORY="8g"
       export DELPHI_CONTAINER_MEMORY="32g"
@@ -238,7 +238,7 @@ elif [ "$SERVICE_FROM_FILE" == "delphi" ]; then
     fi
     
     # Add environment variables to .env file
-    echo "DELPHI_INSTANCE_TYPE=$DELPHI_INSTANCE_TYPE" >> .env
+    echo "INSTANCE_SIZE=$INSTANCE_SIZE" >> .env
     echo "DELPHI_MAX_WORKERS=$DELPHI_MAX_WORKERS" >> .env
     echo "DELPHI_WORKER_MEMORY=$DELPHI_WORKER_MEMORY" >> .env
     echo "DELPHI_CONTAINER_MEMORY=$DELPHI_CONTAINER_MEMORY" >> .env
@@ -252,13 +252,13 @@ fi
 
 ## Required Application Changes
 
-The Delphi application should check the `DELPHI_INSTANCE_TYPE` environment variable and adjust its internal settings accordingly:
+The Delphi application should check the `INSTANCE_SIZE` environment variable and adjust its internal settings accordingly:
 
 ```python
 import os
 
 # Get instance type from environment
-instance_type = os.environ.get('DELPHI_INSTANCE_TYPE', 'default')
+instance_type = os.environ.get('INSTANCE_SIZE', 'default')
 max_workers = int(os.environ.get('DELPHI_MAX_WORKERS', 2))
 worker_memory = os.environ.get('DELPHI_WORKER_MEMORY', '1g')
 
