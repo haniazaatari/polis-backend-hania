@@ -53,7 +53,18 @@ class PriorityCalculator:
         logger.info(f"Initialized priority calculator for conversation {conversation_id}")
 
     def _importance_metric(self, A: int, P: int, S: int, E: float) -> float:
-        """Calculate importance metric (matches Clojure implementation)."""
+        """
+        Calculate importance metric (matches Clojure implementation).
+        
+        Args:
+            A: Number of agree votes
+            P: Number of pass votes  
+            S: Total number of votes
+            E: Extremity value
+            
+        Returns:
+            Importance metric value
+        """
         p = (P + 1) / (S + 2)
         a = (A + 1) / (S + 2)
         return (1 - p) * (E + 1) * a
@@ -108,8 +119,10 @@ class PriorityCalculator:
 
     def get_comment_routing_data(self) -> List[Dict[str, Any]]:
         """
-        REFACTOR: Get all comment routing data for the conversation using a GSI query.
-        This is much more efficient than a table scan.
+        Get all comment routing data for the conversation.
+        
+        Returns:
+            List of comment routing items
         """
         logger.info(f"Querying GSI 'zid-index' for conversation {self.conversation_id}...")
         all_items = []
@@ -140,7 +153,7 @@ class PriorityCalculator:
 
     def calculate_comment_updates(self, comment_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        REFACTOR: Calculate priorities and return a list of items to be updated,
+        Calculate priorities and return a list of items to be updated,
         including their primary keys.
         """
         updates = []
@@ -183,7 +196,13 @@ class PriorityCalculator:
 
     def update_priorities_in_dynamodb(self, updates: List[Dict[str, Any]]) -> bool:
         """
-        REFACTOR: Update priority values in batch. This eliminates the N+1 scan problem.
+        Update priority values in the comment routing table.
+        
+        Args:
+            priorities: Dictionary mapping comment_id to priority value
+            
+        Returns:
+            True if successful, False otherwise
         """
         logger.info(f"Updating {len(updates)} priority values in DynamoDB")
         try:
@@ -263,10 +282,10 @@ def main():
     success = calculator.run()
     
     if success:
-        logger.info("Process finished successfully.")
+        logger.info("Priority calculation completed successfully.")
         sys.exit(0)
     else:
-        logger.error("Process failed.")
+        logger.error("Priority calculation failed.")
         sys.exit(1)
 
 if __name__ == '__main__':
