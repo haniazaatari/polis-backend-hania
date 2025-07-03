@@ -121,41 +121,41 @@ elif [ "$SERVICE_FROM_FILE" == "delphi" ]; then
 
     if [ "$INSTANCE_SIZE" == "small" ]; then
       echo "Configuring delphi for small instance"
-      export DELPHI_INSTANCE_TYPE="small"
+      export INSTANCE_SIZE="small"
       export DELPHI_MAX_WORKERS=3
       export DELPHI_WORKER_MEMORY="2g"
       export DELPHI_CONTAINER_MEMORY="8g"
       export DELPHI_CONTAINER_CPUS="2"
     elif [ "$INSTANCE_SIZE" == "large" ]; then
       echo "Configuring delphi for large instance"
-      export DELPHI_INSTANCE_TYPE="large"
+      export INSTANCE_SIZE="large"
       export DELPHI_MAX_WORKERS=8
       export DELPHI_WORKER_MEMORY="8g"
       export DELPHI_CONTAINER_MEMORY="32g"
       export DELPHI_CONTAINER_CPUS="8"
     else
       echo "Unknown instance size: $INSTANCE_SIZE, using default configuration"
-      export DELPHI_INSTANCE_TYPE="default"
+      export INSTANCE_SIZE="default"
       export DELPHI_MAX_WORKERS=2
       export DELPHI_WORKER_MEMORY="1g"
       export DELPHI_CONTAINER_MEMORY="4g"
       export DELPHI_CONTAINER_CPUS="1"
     fi
 
-    printf "\nDELPHI_INSTANCE_TYPE=%s\n" "$DELPHI_INSTANCE_TYPE" | sudo tee -a .env > /dev/null
+    printf "\nDELPHI_INSTANCE_TYPE=%s\n" "$INSTANCE_SIZE" | sudo tee -a .env > /dev/null
     printf "DELPHI_MAX_WORKERS=%s\n" "$DELPHI_MAX_WORKERS" | sudo tee -a .env > /dev/null
     printf "DELPHI_WORKER_MEMORY=%s\n" "$DELPHI_WORKER_MEMORY" | sudo tee -a .env > /dev/null
     printf "DELPHI_CONTAINER_MEMORY=%s\n" "$DELPHI_CONTAINER_MEMORY" | sudo tee -a .env > /dev/null
     printf "DELPHI_CONTAINER_CPUS=%s\n" "$DELPHI_CONTAINER_CPUS" | sudo tee -a .env > /dev/null
   else
     echo "Instance size file not found, using default configuration"
-    export DELPHI_INSTANCE_TYPE="default"
+    export INSTANCE_SIZE="default"
     export DELPHI_MAX_WORKERS=2
     export DELPHI_WORKER_MEMORY="1g"
     export DELPHI_CONTAINER_MEMORY="4g"
     export DELPHI_CONTAINER_CPUS="1"
 
-    printf "\nDELPHI_INSTANCE_TYPE=%s\n" "$DELPHI_INSTANCE_TYPE" | sudo tee -a .env > /dev/null
+    printf "\nDELPHI_INSTANCE_TYPE=%s\n" "$INSTANCE_SIZE" | sudo tee -a .env > /dev/null
     printf "DELPHI_MAX_WORKERS=%s\n" "$DELPHI_MAX_WORKERS" | sudo tee -a .env > /dev/null
     printf "DELPHI_WORKER_MEMORY=%s\n" "$DELPHI_WORKER_MEMORY" | sudo tee -a .env > /dev/null
     printf "DELPHI_CONTAINER_MEMORY=%s\n" "$DELPHI_CONTAINER_MEMORY" | sudo tee -a .env > /dev/null
