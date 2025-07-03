@@ -116,7 +116,7 @@ INSTANCE_CONFIGS = {
 # Detect instance type from file or environment variables
 def detect_instance_type():
     # First check environment variable
-    instance_type = os.environ.get('DELPHI_INSTANCE_TYPE')
+    instance_type = os.environ.get('INSTANCE_SIZE')
     if instance_type in INSTANCE_CONFIGS:
         return instance_type
         

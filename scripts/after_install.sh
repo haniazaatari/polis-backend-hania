@@ -142,7 +142,7 @@ elif [ "$SERVICE_FROM_FILE" == "delphi" ]; then
       export DELPHI_CONTAINER_CPUS="1"
     fi
 
-    printf "\nDELPHI_INSTANCE_TYPE=%s\n" "$INSTANCE_SIZE" | sudo tee -a .env > /dev/null
+    printf "\nINSTANCE_SIZE=%s\n" "$INSTANCE_SIZE" | sudo tee -a .env > /dev/null
     printf "DELPHI_MAX_WORKERS=%s\n" "$DELPHI_MAX_WORKERS" | sudo tee -a .env > /dev/null
     printf "DELPHI_WORKER_MEMORY=%s\n" "$DELPHI_WORKER_MEMORY" | sudo tee -a .env > /dev/null
     printf "DELPHI_CONTAINER_MEMORY=%s\n" "$DELPHI_CONTAINER_MEMORY" | sudo tee -a .env > /dev/null
@@ -155,7 +155,7 @@ elif [ "$SERVICE_FROM_FILE" == "delphi" ]; then
     export DELPHI_CONTAINER_MEMORY="4g"
     export DELPHI_CONTAINER_CPUS="1"
 
-    printf "\nDELPHI_INSTANCE_TYPE=%s\n" "$INSTANCE_SIZE" | sudo tee -a .env > /dev/null
+    printf "\nINSTANCE_SIZE=%s\n" "$INSTANCE_SIZE" | sudo tee -a .env > /dev/null
     printf "DELPHI_MAX_WORKERS=%s\n" "$DELPHI_MAX_WORKERS" | sudo tee -a .env > /dev/null
     printf "DELPHI_WORKER_MEMORY=%s\n" "$DELPHI_WORKER_MEMORY" | sudo tee -a .env > /dev/null
     printf "DELPHI_CONTAINER_MEMORY=%s\n" "$DELPHI_CONTAINER_MEMORY" | sudo tee -a .env > /dev/null

@@ -53,7 +53,7 @@ def detect_instance_type():
         str: Instance type (small, large, or default)
     """
     # First check environment variable
-    instance_type = os.environ.get('DELPHI_INSTANCE_TYPE')
+    instance_type = os.environ.get('INSTANCE_SIZE')
     if instance_type in INSTANCE_CONFIGS:
         logger.info(f"Using instance type from environment variable: {instance_type}")
         return instance_type
@@ -89,7 +89,7 @@ def configure_resources(instance_type):
     config = INSTANCE_CONFIGS.get(instance_type, INSTANCE_CONFIGS["default"])
     
     # Set environment variables
-    os.environ['DELPHI_INSTANCE_TYPE'] = instance_type
+    os.environ['INSTANCE_SIZE'] = instance_type
     os.environ['DELPHI_MAX_WORKERS'] = str(config['max_workers'])
     os.environ['DELPHI_WORKER_MEMORY'] = config['worker_memory']
     os.environ['DELPHI_CONTAINER_MEMORY'] = config['container_memory'] 
@@ -112,7 +112,7 @@ def main():
     config = configure_resources(instance_type)
     
     # Print configuration (so it can be captured by the shell script)
-    print(f"DELPHI_INSTANCE_TYPE={instance_type}")
+    print(f"INSTANCE_SIZE={instance_type}")
     print(f"DELPHI_MAX_WORKERS={config['max_workers']}")
     print(f"DELPHI_WORKER_MEMORY={config['worker_memory']}")
     print(f"DELPHI_CONTAINER_MEMORY={config['container_memory']}")
