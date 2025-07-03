@@ -383,7 +383,7 @@ class JobProcessor:
         self.endpoint_url = raw_endpoint if raw_endpoint and raw_endpoint.strip() else None
 
         # Determine instance type from environment variable set by configure_instance.py
-        self.instance_type = os.environ.get('DELPHI_INSTANCE_TYPE', 'default') # Default to 'default' if not set
+        self.instance_type = os.environ.get('INSTANCE_SIZE', 'default') # Default to 'default' if not set
         logger.info(f"Worker {self.worker_id} initialized for instance type: {self.instance_type}")
         
         # Initialize PostgresClient - it will be used per-query within poll_and_process
