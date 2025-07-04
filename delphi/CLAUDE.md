@@ -335,14 +335,14 @@ To manually configure these settings, set the following environment variables:
 
 ```bash
 # For small instances (t3.large)
-DELPHI_INSTANCE_TYPE=small
+INSTANCE_SIZE=small
 DELPHI_MAX_WORKERS=3
 DELPHI_WORKER_MEMORY=2g
 DELPHI_CONTAINER_MEMORY=8g
 DELPHI_CONTAINER_CPUS=2
 
 # For large instances (c6g.4xlarge)
-DELPHI_INSTANCE_TYPE=large
+INSTANCE_SIZE=large
 DELPHI_MAX_WORKERS=8
 DELPHI_WORKER_MEMORY=8g
 DELPHI_CONTAINER_MEMORY=32g

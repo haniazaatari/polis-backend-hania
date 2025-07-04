@@ -107,6 +107,7 @@ services:
       - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-polis123}
       - DATABASE_SSL_MODE=${DATABASE_SSL_MODE}
       - NUMBA_DISABLE_JIT=${NUMBA_DISABLE_JIT:-1}
+      - INSTANCE_SIZE=${INSTANCE_SIZE:-default}
     networks:
       - "polis-net"
     extra_hosts:
