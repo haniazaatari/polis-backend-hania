@@ -250,6 +250,19 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                     ],
                     'Projection': {'ProjectionType': 'ALL'},
                     'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                },
+                {
+                    'IndexName': 'zid-index',
+                    'KeySchema': [
+                        {'AttributeName': 'conversation_id', 'KeyType': 'HASH'}
+                    ],
+                    'Projection': {
+                        'ProjectionType': 'ALL'
+                    },
+                    'ProvisionedThroughput': {
+                        'ReadCapacityUnits': 5,
+                        'WriteCapacityUnits': 5
+                    }
                 }
             ],
             'ProvisionedThroughput': {
