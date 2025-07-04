@@ -8,7 +8,7 @@ Usage:
     python create_topic_agenda_table.py [options]
 
 Options:
-    --endpoint-url ENDPOINT_URL   DynamoDB endpoint URL (default: http://localhost:8000)
+    --endpoint-url ENDPOINT_URL   DynamoDB endpoint URL
     --region REGION               AWS region (default: us-east-1)
     --force                       Force recreate table if it exists
 """
@@ -75,8 +75,8 @@ def create_topic_agenda_table(dynamodb, force_recreate=False):
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser(description='Create Topic Agenda DynamoDB table')
-    parser.add_argument('--endpoint-url', type=str, default='http://localhost:8000',
-                      help='DynamoDB endpoint URL (default: http://localhost:8000)')
+    parser.add_argument('--endpoint-url', type=str, default=None,
+                      help='DynamoDB endpoint URL')
     parser.add_argument('--region', type=str, default='us-east-1',
                       help='AWS region (default: us-east-1)')
     parser.add_argument('--force', action='store_true',
@@ -84,9 +84,10 @@ def main():
     args = parser.parse_args()
     
     # Set up environment variables for local DynamoDB
-    if 'localhost' in args.endpoint_url or '127.0.0.1' in args.endpoint_url:
-        os.environ['AWS_ACCESS_KEY_ID'] = 'dummy'
-        os.environ['AWS_SECRET_ACCESS_KEY'] = 'dummy'
+    if args.endpoint_url:
+        if 'localhost' in args.endpoint_url or '127.0.0.1' in args.endpoint_url:
+            os.environ['AWS_ACCESS_KEY_ID'] = 'dummy'
+            os.environ['AWS_SECRET_ACCESS_KEY'] = 'dummy'
     
     # Create DynamoDB resource
     dynamodb = boto3.resource(

@@ -6788,8 +6788,12 @@ Email verified! You can close this tab or hit the back button.
         const isExplicitModerator =
           moderatorResult && moderatorResult.length > 0;
         conv.is_mod =
-          conv.site_id === requestingUserInfo.site_id || isExplicitModerator;
-        conv.is_owner = conv.owner === uid;
+          conv.site_id === requestingUserInfo.site_id ||
+          isExplicitModerator ||
+          (JSON.parse(Config.adminUIDs) as Array<string>).includes(uid);
+        conv.is_owner =
+          conv.owner === uid ||
+          (JSON.parse(Config.adminUIDs) as Array<string>).includes(uid);
         delete conv.uid; // conv.owner is what you want, uid shouldn't be returned.
         return conv;
       });
