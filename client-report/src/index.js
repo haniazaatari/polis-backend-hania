@@ -5,13 +5,14 @@ import React from "react";
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from "./components/app.jsx";
+import ErrorBoundary from "./components/framework/ErrorBoundary.jsx";
 
 class Root extends React.Component {
   render() {
     return (
-      <div>
+      <ErrorBoundary>
         <App />
-      </div>
+      </ErrorBoundary>
     );
   }
 }

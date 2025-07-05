@@ -32,6 +32,8 @@ import TopicPrioritizeSimple from "./topicPrioritizeSimple/TopicPrioritizeSimple
 import TopicAgenda from "./topicAgenda/TopicAgenda.jsx";
 import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
 import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
+import InviteCodes from "./inviteCodes/InviteCodes.jsx";
+import DataErrorBoundary from "./framework/DataErrorBoundary.jsx";
 
 const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicPrioritize/2arcefpshi" or "/topicPrioritizeSimple/2arcefpshi" or "/topicAgenda/2arcefpshi" or "/topicHierarchy/2arcefpshi"
 const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicPrioritize", "topicPrioritizeSimple", "topicAgenda", or "topicHierarchy"
@@ -42,16 +44,41 @@ const report_id = pathname.split("/")[2];
 console.log("ROUTE CHECK:", { pathname, route_type, report_id });
 
 function assertExists(obj, key) {
-  if (typeof obj[key] === "undefined") {
-    console.error("assertExists failed. Missing: ", key);
+  if (!obj || typeof obj[key] === "undefined") {
+    const errorMsg = `assertExists failed. Missing key: ${key} in object: ${obj ? JSON.stringify(Object.keys(obj)) : 'null/undefined'}`;
+    console.error(errorMsg);
+    throw new Error(errorMsg);
   }
 }
 
+const safeGet = (obj, path, defaultValue = null) => {
+  try {
+    const keys = path.split('.');
+    let result = obj;
+    for (const key of keys) {
+      if (result == null) return defaultValue;
+      result = result[key];
+    }
+    return result !== undefined ? result : defaultValue;
+  } catch (e) {
+    console.warn(`safeGet failed for path: ${path}`, e);
+    return defaultValue;
+  }
+};
+
 const computeVoteTotal = (users) => {
   let voteTotal = 0;
+  
+  if (!users || typeof users !== 'object') {
+    console.warn('computeVoteTotal called with invalid users object:', users);
+    return 0;
+  }
 
   for (const count in users) {
-    voteTotal += users[count];
+    const value = users[count];
+    if (typeof value === 'number' && !isNaN(value)) {
+      voteTotal += value;
+    }
   }
 
   return voteTotal;
@@ -406,17 +433,19 @@ const App = (props) => {
         assertExists(mathResult.pca, "comment-projection");
         assertExists(mathResult.pca, "comps");
 
-        let indexToTid = mathResult.tids;
+        let indexToTid = mathResult.tids || [];
 
         // # ptpts that voted
-        var _ptptCountTotal = _conversation.participant_count;
+        var _ptptCountTotal = _conversation?.participant_count || 0;
 
         // # ptpts that voted enough to be included in math
         var _ptptCount = 0;
-        const groupVotes = mathResult["group-votes"];
+        const groupVotes = mathResult["group-votes"] || {};
         for (const key in groupVotes) {
           const val = groupVotes[key];
-          _ptptCount += val["n-members"];
+          if (val && typeof val["n-members"] === 'number') {
+            _ptptCount += val["n-members"];
+          }
         }
 
         var _badTids = {};
@@ -425,28 +454,40 @@ const App = (props) => {
 
         // prep Correlation matrix.
         if (globals.enableMatrix && correlationHClust) {
-          var probabilities = correlationHClust.matrix;
-          var tids = correlationHClust.comments;
-          for (let row = 0; row < probabilities.length; row++) {
-            if (probabilities[row][0] === "NaN") {
-              let tid = correlationHClust.comments[row];
-              _badTids[tid] = true;
+          try {
+            var probabilities = correlationHClust.matrix || [];
+            var tids = correlationHClust.comments || [];
+            
+            for (let row = 0; row < probabilities.length; row++) {
+              if (probabilities[row] && probabilities[row][0] === "NaN") {
+                let tid = correlationHClust.comments?.[row];
+                if (tid !== undefined) {
+                  _badTids[tid] = true;
+                }
+              }
             }
-          }
-          _filteredProbabilities = probabilities
-            .map((row) => {
-              return row.filter((cell, colNum) => {
-                let colTid = correlationHClust.comments[colNum];
-                return _badTids[colTid] !== true;
+            
+            _filteredProbabilities = probabilities
+              .filter(row => Array.isArray(row))
+              .map((row) => {
+                return row.filter((cell, colNum) => {
+                  let colTid = correlationHClust.comments?.[colNum];
+                  return colTid !== undefined && _badTids[colTid] !== true;
+                });
+              })
+              .filter((row, rowNum) => {
+                let rowTid = correlationHClust.comments?.[rowNum];
+                return rowTid !== undefined && _badTids[rowTid] !== true;
               });
-            })
-            .filter((row, rowNum) => {
-              let rowTid = correlationHClust.comments[rowNum];
-              return _badTids[rowTid] !== true;
+              
+            _filteredTids = tids.filter((tid /*, index*/) => {
+              return tid !== undefined && _badTids[tid] !== true;
             });
-          _filteredTids = tids.filter((tid /*, index*/) => {
-            return _badTids[tid] !== true;
-          });
+          } catch (e) {
+            console.error('Error processing correlation matrix:', e);
+            _filteredProbabilities = [];
+            _filteredTids = [];
+          }
         }
 
         var maxTid = -1;
@@ -509,10 +550,17 @@ const App = (props) => {
 
         const _extremity = {};
 
-        for (const index in mathResult.pca["comment-extremity"]) {
-          const e = mathResult.pca["comment-extremity"][index];
-          const tid = indexToTid[index];
-          _extremity[tid] = e;
+        try {
+          const commentExtremity = mathResult.pca?.["comment-extremity"] || {};
+          for (const index in commentExtremity) {
+            const e = commentExtremity[index];
+            const tid = indexToTid?.[index];
+            if (tid !== undefined && e !== undefined) {
+              _extremity[tid] = e;
+            }
+          }
+        } catch (e) {
+          console.error('Error processing comment extremity:', e);
         }
 
         var uniqueCommenters = {};
@@ -910,6 +958,8 @@ const App = (props) => {
           voteColors={voteColors}
         />
 
+        <InviteCodes conversation={conversation} />
+
         <RawDataExport conversation={conversation} report_id={report_id} />
 
         {isNarrativeReport ? (
@@ -987,16 +1037,18 @@ const App = (props) => {
           </>
         ) : (
           <>
-            <Beeswarm
-              conversation={conversation}
-              extremity={extremity}
-              math={math}
-              comments={comments}
-              probabilities={filteredCorrelationMatrix}
-              probabilitiesTids={filteredCorrelationTids}
-              voteColors={voteColors}
-              formatTid={formatTid}
-            />
+            <DataErrorBoundary dataType="beeswarm visualization">
+              <Beeswarm
+                conversation={conversation}
+                extremity={extremity}
+                math={math}
+                comments={comments}
+                probabilities={filteredCorrelationMatrix}
+                probabilitiesTids={filteredCorrelationTids}
+                voteColors={voteColors}
+                formatTid={formatTid}
+              />
+            </DataErrorBoundary>
             <MajorityStrict
               math={math}
               conversation={conversation}
@@ -1046,18 +1098,20 @@ const App = (props) => {
               formatTid={formatTid}
               ptptCount={ptptCount}
               voteColors={voteColors}/> : ""} */}
-            <ParticipantsGraph
-              comments={comments}
-              groupNames={groupNames}
-              badTids={badTids}
-              colorBlindMode={colorBlindMode}
-              formatTid={formatTid}
-              repfulAgreeTidsByGroup={repfulAgreeTidsByGroup}
-              math={math}
-              renderHeading={true}
-              report={report}
-              voteColors={voteColors}
-            />
+            <DataErrorBoundary dataType="participants graph">
+              <ParticipantsGraph
+                comments={comments}
+                groupNames={groupNames}
+                badTids={badTids}
+                colorBlindMode={colorBlindMode}
+                formatTid={formatTid}
+                repfulAgreeTidsByGroup={repfulAgreeTidsByGroup}
+                math={math}
+                renderHeading={true}
+                report={report}
+                voteColors={voteColors}
+              />
+            </DataErrorBoundary>
             {/* <BoxPlot
               groupVotes={math["group-votes"]}/>*/}
             <AllCommentsModeratedIn

@@ -394,6 +394,37 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                 'ReadCapacityUnits': 5,
                 'WriteCapacityUnits': 5
             }
+        },
+        # Invite Codes table for multi-generational invite system
+        'treevite': {
+            'KeySchema': [
+                {'AttributeName': 'pk', 'KeyType': 'HASH'},
+                {'AttributeName': 'sk', 'KeyType': 'RANGE'}
+            ],
+            'AttributeDefinitions': [
+                {'AttributeName': 'pk', 'AttributeType': 'S'},
+                {'AttributeName': 'sk', 'AttributeType': 'S'},
+                {'AttributeName': 'gsi1pk', 'AttributeType': 'S'},
+                {'AttributeName': 'gsi1sk', 'AttributeType': 'S'}
+            ],
+            'GlobalSecondaryIndexes': [
+                {
+                    'IndexName': 'gsi1',
+                    'KeySchema': [
+                        {'AttributeName': 'gsi1pk', 'KeyType': 'HASH'},
+                        {'AttributeName': 'gsi1sk', 'KeyType': 'RANGE'}
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                    'ProvisionedThroughput': {
+                        'ReadCapacityUnits': 5,
+                        'WriteCapacityUnits': 5
+                    }
+                }
+            ],
+            'ProvisionedThroughput': {
+                'ReadCapacityUnits': 5,
+                'WriteCapacityUnits': 5
+            }
         }
     }
     

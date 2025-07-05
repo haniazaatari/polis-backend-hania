@@ -27,6 +27,14 @@ import { handle_GET_delphi_reports } from "./src/routes/delphi/reports";
 import { handle_POST_delphi_batch_reports } from "./src/routes/delphi/batchReports";
 
 import {
+  handle_POST_invite_codes_create,
+  handle_POST_invite_redeem,
+  handle_POST_invite_codes_generate_children,
+  handle_GET_invite_tree,
+  handle_GET_user_invite_codes,
+} from "./src/routes/invite-codes";
+
+import {
   handle_GET_topicMod_topics,
   handle_GET_topicMod_comments,
   handle_POST_topicMod_moderate,
@@ -1014,6 +1022,95 @@ helpersInitialized.then(
           res.json({
             status: "error",
             message: "Internal server error in topicAgenda selections endpoint",
+            error: err.message || "Unknown error",
+          });
+        }
+      }
+    );
+
+    // Invite Code routes
+    app.post("/api/v3/conversations/:conversation_id/invite-codes",
+      moveToBody,
+      auth(assignToP),
+      need("conversation_id", getConversationIdFetchZid, assignToPCustom("zid")),
+      function (req, res) {
+        try {
+          handle_POST_invite_codes_create(req, res);
+        } catch (err) {
+          res.json({
+            status: "error",
+            message: "Internal server error in invite code creation",
+            error: err.message || "Unknown error",
+          });
+        }
+      }
+    );
+
+    app.post("/api/v3/invite/redeem",
+      moveToBody,
+      authOptional(assignToP),
+      need("code", getStringLimitLength(1, 50), assignToP),
+      need("conversation_id", getInt, assignToP),
+      function (req, res) {
+        try {
+          handle_POST_invite_redeem(req, res);
+        } catch (err) {
+          res.json({
+            status: "error",
+            message: "Internal server error in invite redemption",
+            error: err.message || "Unknown error",
+          });
+        }
+      }
+    );
+
+    app.post("/api/v3/invite-codes/generate-children",
+      moveToBody,
+      auth(assignToP),
+      need("zid", getInt, assignToP),
+      need("parent_code", getStringLimitLength(1, 50), assignToP),
+      want("count", getInt, assignToP),
+      function (req, res) {
+        try {
+          handle_POST_invite_codes_generate_children(req, res);
+        } catch (err) {
+          res.json({
+            status: "error",
+            message: "Internal server error in child code generation",
+            error: err.message || "Unknown error",
+          });
+        }
+      }
+    );
+
+    app.get("/api/v3/conversations/:conversation_id/invite-tree",
+      moveToBody,
+      auth(assignToP),
+      need("conversation_id", getConversationIdFetchZid, assignToPCustom("zid")),
+      function (req, res) {
+        try {
+          handle_GET_invite_tree(req, res);
+        } catch (err) {
+          res.json({
+            status: "error",
+            message: "Internal server error fetching invite tree",
+            error: err.message || "Unknown error",
+          });
+        }
+      }
+    );
+
+    app.get("/api/v3/my-invite-codes/:conversation_id",
+      moveToBody,
+      auth(assignToP),
+      need("conversation_id", getInt, assignToP),
+      function (req, res) {
+        try {
+          handle_GET_user_invite_codes(req, res);
+        } catch (err) {
+          res.json({
+            status: "error",
+            message: "Internal server error fetching user invite codes",
             error: err.message || "Unknown error",
           });
         }

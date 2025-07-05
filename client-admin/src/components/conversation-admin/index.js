@@ -15,6 +15,7 @@ import TopicModeration from './topic-moderation/'
 
 // import DataExport from "./data-export";
 import ShareAndEmbed from './share-and-embed'
+import InviteCodes from './invite-codes'
 
 import Reports from './report/reports'
 
@@ -76,6 +77,15 @@ class ConversationAdminContainer extends React.Component {
           <Box sx={{ mb: [3] }}>
             <Link
               sx={{
+                variant: url === 'invites' ? 'links.activeNav' : 'links.nav'
+              }}
+              to={`${match.url}/invites`}>
+              Invites
+            </Link>
+          </Box>
+          <Box sx={{ mb: [3] }}>
+            <Link
+              sx={{
                 variant: url === 'comments' ? 'links.activeNav' : 'links.nav'
               }}
               data-test-id="moderate-comments"
@@ -123,6 +133,11 @@ class ConversationAdminContainer extends React.Component {
               exact
               path={`${match.path}/share`}
               component={ShareAndEmbed}
+            />
+            <Route
+              exact
+              path={`${match.path}/invites`}
+              component={InviteCodes}
             />
             <Route exact path={`${match.path}/reports`} component={Reports} />
             <Route
