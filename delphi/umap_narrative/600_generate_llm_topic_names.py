@@ -553,9 +553,18 @@ def save_topic_names(conversation_id, layer_id, topic_names, model_name, dynamo_
             else:
                 prefixed_topic_name = f"{layer_id}_{cluster_id}: {topic_name}" if topic_name.strip() else f"{layer_id}_{cluster_id}:"
             
+            # Get job_id from environment variable (set by job_poller.py)
+            job_id = os.environ.get('DELPHI_JOB_ID')
+            if not job_id:
+                # Generate a fallback job_id for standalone runs
+                job_id = f"standalone_{conversation_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                logger.warning(f"No DELPHI_JOB_ID found, using fallback: {job_id}")
+            
             model = {
+                'job_id': job_id,
                 'conversation_id': conversation_id,
                 'topic_key': topic_key,
+                'conversation_id_topic_key': f"{conversation_id}#{topic_key}",
                 'layer_id': layer_id,
                 'cluster_id': int(cluster_id),
                 'topic_name': prefixed_topic_name,
