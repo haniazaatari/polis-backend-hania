@@ -191,7 +191,8 @@ class DataConverter:
         comment_id: int,
         cluster_layers: List[np.ndarray],
         distances: Optional[Dict[str, float]] = None,
-        confidences: Optional[Dict[str, float]] = None
+        confidences: Optional[Dict[str, float]] = None,
+        job_id: str = None
     ) -> CommentCluster:
         """
         Create a CommentCluster model from raw data.
@@ -202,6 +203,7 @@ class DataConverter:
             cluster_layers: List of cluster label arrays, one per layer
             distances: Optional dictionary of distances to centroids
             confidences: Optional dictionary of cluster confidence scores
+            job_id: Job ID for this pipeline run
             
         Returns:
             CommentCluster model object
@@ -242,6 +244,11 @@ class DataConverter:
         if confidences:
             # Convert all float values to Decimal for DynamoDB compatibility
             data['cluster_confidence'] = {k: float(v) for k, v in confidences.items()}
+        
+        # Add job_id (required field)
+        if not job_id:
+            raise ValueError("job_id is required for CommentCluster creation")
+        data['job_id'] = job_id
         
         # Create the model directly from the data dict
         # The model creation will use pydantic to validate the types
@@ -393,7 +400,8 @@ class DataConverter:
         size: int,
         top_words: List[str],
         top_tfidf_scores: List[float],
-        sample_comments: List[str]
+        sample_comments: List[str],
+        job_id: Optional[str] = None
     ) -> ClusterCharacteristic:
         """
         Create a ClusterCharacteristic model from raw data.
@@ -411,15 +419,21 @@ class DataConverter:
             ClusterCharacteristic model object
         """
         # Create the model
-        model = ClusterCharacteristic(
-            conversation_id=conversation_id,
-            layer_id=layer_id,
-            cluster_id=cluster_id,
-            size=size,
-            top_words=top_words,
-            top_tfidf_scores=top_tfidf_scores,
-            sample_comments=sample_comments
-        )
+        model_data = {
+            'conversation_id': conversation_id,
+            'layer_id': layer_id,
+            'cluster_id': cluster_id,
+            'size': size,
+            'top_words': top_words,
+            'top_tfidf_scores': top_tfidf_scores,
+            'sample_comments': sample_comments
+        }
+        
+        # Add job_id if provided
+        if job_id:
+            model_data['job_id'] = job_id
+            
+        model = ClusterCharacteristic(**model_data)
         
         return model
     
@@ -498,7 +512,8 @@ class DataConverter:
     def batch_convert_cluster_characteristics(
         conversation_id: str,
         characteristics_dict: Dict[str, Dict[str, Any]],
-        layer_id: int
+        layer_id: int,
+        job_id: Optional[str] = None
     ) -> List[ClusterCharacteristic]:
         """
         Convert batch of cluster characteristics from dictionary to model objects.
@@ -524,7 +539,8 @@ class DataConverter:
                     size=characteristic_data.get('size', 0),
                     top_words=characteristic_data.get('top_words', []),
                     top_tfidf_scores=characteristic_data.get('top_tfidf_scores', []),
-                    sample_comments=characteristic_data.get('sample_comments', [])
+                    sample_comments=characteristic_data.get('sample_comments', []),
+                    job_id=job_id
                 )
                 
                 characteristics.append(characteristic)
@@ -741,7 +757,8 @@ class DataConverter:
     def batch_convert_clusters(
         conversation_id: str,
         cluster_layers: List[np.ndarray],
-        document_map: np.ndarray
+        document_map: np.ndarray,
+        job_id: str = None
     ) -> List[CommentCluster]:
         """
         Convert batch of clusters from NumPy arrays to model objects.
@@ -750,6 +767,7 @@ class DataConverter:
             conversation_id: ID of the conversation
             cluster_layers: List of cluster label arrays
             document_map: Matrix of 2D coordinates
+            job_id: Job ID for this pipeline run
             
         Returns:
             List of CommentCluster model objects
@@ -799,7 +817,8 @@ class DataConverter:
                 comment_id=comment_id,
                 cluster_layers=cluster_layers,
                 distances=distances_map.get(comment_id),
-                confidences=confidence_map.get(comment_id)
+                confidences=confidence_map.get(comment_id),
+                job_id=job_id
             )
             
             clusters.append(cluster)

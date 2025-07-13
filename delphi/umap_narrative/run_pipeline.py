@@ -621,8 +621,9 @@ def process_layers_and_store_characteristics(
             characteristic_models = DataConverter.batch_convert_cluster_characteristics(
                 conversation_id,
                 cluster_characteristics,
-                layer_idx
-            ) # job_id is not directly part of characteristics PK, but good to have if we extend
+                layer_idx,
+                job_id=job_id
+            )
 
             result = dynamo_storage.batch_create_cluster_characteristics(characteristic_models)
             logger.info(f"Stored {result['success']} cluster characteristics with {result['failure']} failures")
@@ -1226,7 +1227,8 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False):
         cluster_models = DataConverter.batch_convert_clusters(
             conversation_id,
             cluster_layers,
-            document_map
+            document_map,
+            job_id=job_id
         )
         result = dynamo_storage.batch_create_comment_clusters(cluster_models)
         logger.info(f"Stored {result['success']} cluster assignments with {result['failure']} failures")

@@ -435,12 +435,14 @@ class BatchReportGenerator:
         try:
             job_queue_table = self.dynamodb.Table('Delphi_JobQueue')
             
-            # Query all jobs for this conversation, sorted by creation time (newest first)
-            response = job_queue_table.scan(
-                FilterExpression=boto3.dynamodb.conditions.Attr('conversation_id').eq(self.conversation_id) & 
-                                boto3.dynamodb.conditions.Attr('job_type').eq('FULL_PIPELINE') & 
-                                boto3.dynamodb.conditions.Attr('status').eq('COMPLETED'),
-                ProjectionExpression='job_id, created_at'
+            # Query using the ConversationIndex GSI, sorted by creation time (newest first)
+            response = job_queue_table.query(
+                IndexName='ConversationIndex',
+                KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id),
+                FilterExpression=boto3.dynamodb.conditions.Attr('job_type').eq('FULL_PIPELINE') & 
+                                boto3.dynamodb.conditions.Attr('status').eq('completed'),
+                ProjectionExpression='job_id, created_at',
+                ScanIndexForward=False  # Sort by created_at descending (newest first)
             )
             
             jobs = response.get('Items', [])

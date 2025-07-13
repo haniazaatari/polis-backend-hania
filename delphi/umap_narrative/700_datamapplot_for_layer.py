@@ -265,19 +265,24 @@ def load_comment_texts(zid):
         # Clean up connection
         postgres_client.shutdown()
 
-def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
+def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage, job_id=None):
     """
-    Load data from DynamoDB for a specific conversation and layer.
+    Load data from DynamoDB for a specific conversation and layer using job_id correlation.
     
     Args:
         zid: Conversation ID
         layer_id: Layer ID
         dynamo_storage: DynamoDBStorage instance
+        job_id: Job ID for data correlation
         
     Returns:
         Dictionary with data from DynamoDB
     """
-    logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id}")
+    logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id}, job_id: {job_id}")
+    
+    if not job_id:
+        logger.error("job_id is required for data correlation")
+        return None
     
     # Initialize data dictionary
     data = {
@@ -334,15 +339,15 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         
-    # Get comment clusters
+    # Get comment clusters using job_id
     try:
-        # Query CommentClusters for this conversation
-        logger.info(f"Loading cluster assignments from CommentClusters...")
+        # Query CommentClusters for this job_id
+        logger.info(f"Loading cluster assignments from CommentClusters using job_id: {job_id}...")
         table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['comment_clusters'])
         logger.debug(f"CommentClusters table name: {dynamo_storage.table_names['comment_clusters']}")
         
         response = table.query(
-            KeyConditionExpression=Key('conversation_id').eq(str(zid))
+            KeyConditionExpression=Key('job_id').eq(job_id)
         )
         clusters = response.get('Items', [])
         
@@ -350,7 +355,7 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         while 'LastEvaluatedKey' in response:
             logger.debug(f"Handling pagination for comment clusters...")
             response = table.query(
-                KeyConditionExpression=Key('conversation_id').eq(str(zid)),
+                KeyConditionExpression=Key('job_id').eq(job_id),
                 ExclusiveStartKey=response['LastEvaluatedKey']
             )
             clusters.extend(response.get('Items', []))
@@ -484,15 +489,15 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage):
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
     
-    # Get topic names from LLMTopicNames
+    # Get topic names from LLMTopicNames using job_id
     try:
-        # Query LLMTopicNames for this conversation and layer
-        logger.info(f"Loading topic names from LLMTopicNames...")
+        # Query LLMTopicNames for this job_id and layer
+        logger.info(f"Loading topic names from LLMTopicNames using job_id: {job_id}...")
         table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['llm_topic_names'])
         logger.debug(f"LLMTopicNames table name: {dynamo_storage.table_names['llm_topic_names']}")
         
         response = table.query(
-            KeyConditionExpression=Key('conversation_id').eq(str(zid))
+            KeyConditionExpression=Key('job_id').eq(job_id)
         )
         topic_names = response.get('Items', [])
         
@@ -778,15 +783,16 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
         logger.error(f"Outer traceback: {traceback.format_exc()}")
         return None
 
-def generate_visualization(zid, layer_id=0, output_dir=None, dynamo_endpoint=None):
+def generate_visualization(zid, layer_id=0, output_dir=None, dynamo_endpoint=None, job_id=None):
     """
-    Generate visualization for a specific conversation and layer.
+    Generate visualization for a specific conversation and layer using job_id correlation.
     
     Args:
         zid: Conversation ID
         layer_id: Optional Layer ID (default: 0)
         output_dir: Optional directory to save the visualization
         dynamo_endpoint: Optional DynamoDB endpoint URL
+        job_id: Job ID for data correlation
         
     Returns:
         Path to the saved visualization
@@ -827,9 +833,16 @@ def generate_visualization(zid, layer_id=0, output_dir=None, dynamo_endpoint=Non
             return None
         logger.info(f"Successfully loaded {len(comment_texts)} comment texts")
         
+        # Get job_id from environment variable or parameter
+        if not job_id:
+            job_id = os.environ.get('DELPHI_JOB_ID')
+            if not job_id:
+                logger.error("job_id is required for data correlation. Set DELPHI_JOB_ID environment variable or pass job_id parameter.")
+                return None
+        
         # Load data from DynamoDB
-        logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id}...")
-        data = load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage)
+        logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id} with job_id: {job_id}...")
+        data = load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage, job_id)
         if not data:
             logger.error("Failed to load data from DynamoDB")
             return None
@@ -886,6 +899,8 @@ def main():
                       help='Directory to save the visualization')
     parser.add_argument('--dynamo_endpoint', type=str, default=None,
                       help='DynamoDB endpoint URL')
+    parser.add_argument('--job_id', type=str, default=None,
+                      help='Job ID for data correlation (default: use DELPHI_JOB_ID env var)')
     
     args = parser.parse_args()
     
@@ -895,7 +910,8 @@ def main():
         args.conversation_id,
         layer_id=args.layer,
         output_dir=args.output_dir,
-        dynamo_endpoint=args.dynamo_endpoint
+        dynamo_endpoint=args.dynamo_endpoint,
+        job_id=args.job_id
     )
     
     if viz_file:

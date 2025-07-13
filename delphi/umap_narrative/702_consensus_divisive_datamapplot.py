@@ -92,18 +92,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def load_data_from_dynamodb(zid, layer_num=0):
+def load_data_from_dynamodb(zid, layer_num=0, job_id=None):
     """
-    Load data from DynamoDB for visualization.
+    Load data from DynamoDB for visualization using job_id correlation.
     
     Args:
         zid: Conversation ID
         layer_num: Layer number (default 0)
+        job_id: Job ID for data correlation
         
     Returns:
         Dictionary with comment positions, cluster assignments, and topic names
     """
-    logger.info(f'Loading UMAP positions and cluster data for conversation {zid}, layer {layer_num}')
+    logger.info(f'Loading UMAP positions and cluster data for conversation {zid}, layer {layer_num}, job_id: {job_id}')
+    
+    if not job_id:
+        job_id = os.environ.get('DELPHI_JOB_ID')
+        if not job_id:
+            logger.error("job_id is required for data correlation. Set DELPHI_JOB_ID environment variable.")
+            return None
     
     # Set up DynamoDB client
     endpoint_url = os.environ.get('DYNAMODB_ENDPOINT')
@@ -161,13 +168,25 @@ def load_data_from_dynamodb(zid, layer_num=0):
         logger.error(f'Error retrieving positions from UMAPGraph: {e}')
         logger.error(traceback.format_exc())
     
-    # 2. Get cluster assignments
+    # 2. Get cluster assignments using job_id query (more efficient than scan)
     try:
-        clusters = scan_table('Delphi_CommentHierarchicalClusterAssignments', 
-                              filter_expr='conversation_id = :conversation_id',
-                              expr_attr_values={':conversation_id': str(zid)})
+        from boto3.dynamodb.conditions import Key
+        table = dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
         
-        logger.info(f'Retrieved {len(clusters)} comment cluster assignments')
+        response = table.query(
+            KeyConditionExpression=Key('job_id').eq(job_id)
+        )
+        clusters = response.get('Items', [])
+        
+        # Handle pagination if needed
+        while 'LastEvaluatedKey' in response:
+            response = table.query(
+                KeyConditionExpression=Key('job_id').eq(job_id),
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            clusters.extend(response.get('Items', []))
+        
+        logger.info(f'Retrieved {len(clusters)} comment cluster assignments for job_id: {job_id}')
         
         # Extract cluster assignments for this layer
         for item in clusters:
@@ -182,19 +201,33 @@ def load_data_from_dynamodb(zid, layer_num=0):
         logger.error(f'Error retrieving cluster assignments: {e}')
         logger.error(traceback.format_exc())
     
-    # 3. Get topic names
+    # 3. Get topic names using job_id query (more efficient than scan)
     try:
-        topic_name_items = scan_table('Delphi_CommentClustersLLMTopicNames', 
-                                     filter_expr='conversation_id = :conversation_id AND layer_id = :layer_id',
-                                     expr_attr_values={':conversation_id': str(zid), ':layer_id': layer_num})
+        table = dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
         
-        logger.info(f'Retrieved {len(topic_name_items)} topic names')
+        response = table.query(
+            KeyConditionExpression=Key('job_id').eq(job_id)
+        )
+        topic_name_items = response.get('Items', [])
         
-        # Create topic name map
+        # Handle pagination if needed
+        while 'LastEvaluatedKey' in response:
+            response = table.query(
+                KeyConditionExpression=Key('job_id').eq(job_id),
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            topic_name_items.extend(response.get('Items', []))
+        
+        logger.info(f'Retrieved {len(topic_name_items)} topic names for job_id: {job_id}')
+        
+        # Create topic name map - filter by layer_id
         for item in topic_name_items:
-            cluster_id = int(item.get('cluster_id', 0))
-            topic_name = item.get('topic_name', f'Topic {cluster_id}')
-            data["topic_names"][cluster_id] = topic_name
+            if item.get('layer_id') == layer_num:  # Filter by layer on client side
+                cluster_id = int(item.get('cluster_id', 0))
+                topic_name = item.get('topic_name', f'Topic {cluster_id}')
+                data["topic_names"][cluster_id] = topic_name
+        
+        logger.info(f'Extracted {len(data["topic_names"])} topic names for layer {layer_num}')
     
     except Exception as e:
         logger.error(f'Error retrieving topic names: {e}')
@@ -561,23 +594,28 @@ def load_comment_texts_and_extremity(zid, layer_num=0):
     logger.info(f'Final extremity values count: {len(extremity_values)}')
     return comment_texts, extremity_values
 
-def create_consensus_divisive_datamapplot(zid, layer_num=0, output_dir=None):
+def create_consensus_divisive_datamapplot(zid, layer_num=0, output_dir=None, job_id=None):
     """
-    Generate visualizations that color comments by consensus/divisiveness.
+    Generate visualizations that color comments by consensus/divisiveness using job_id correlation.
     
     Args:
         zid: Conversation ID
         layer_num: Layer number (default 0)
         output_dir: Optional output directory override
+        job_id: Job ID for data correlation
         
     Returns:
         Boolean indicating success
     """
-    logger.info(f'Generating consensus/divisive datamapplot for conversation {zid}, layer {layer_num}')
+    logger.info(f'Generating consensus/divisive datamapplot for conversation {zid}, layer {layer_num}, job_id: {job_id}')
     
     try:
-        # 1. Load data from DynamoDB
-        dynamo_data = load_data_from_dynamodb(zid, layer_num)
+        # 1. Load data from DynamoDB using job_id correlation
+        dynamo_data = load_data_from_dynamodb(zid, layer_num, job_id)
+        if not dynamo_data:
+            logger.error("Failed to load data from DynamoDB")
+            return False
+            
         positions = dynamo_data["positions"]
         clusters = dynamo_data["clusters"] 
         topic_names = dynamo_data["topic_names"]
@@ -789,6 +827,8 @@ def main():
     parser.add_argument("--zid", type=str, required=True, help="Conversation ID")
     parser.add_argument("--layer", type=int, default=0, help="Layer number")
     parser.add_argument("--output_dir", type=str, help="Output directory")
+    parser.add_argument("--job_id", type=str, default=None, 
+                        help="Job ID for data correlation (default: use DELPHI_JOB_ID env var)")
     parser.add_argument("--extremity_threshold", type=float, 
                         help=f"Maximum extremity value (values above this are capped). Set to 0 or negative for adaptive percentile-based normalization (recommended). Default: {VIZ_CONFIG['extremity_threshold']}")
     parser.add_argument("--invert_extremity", action="store_true", 
@@ -813,7 +853,7 @@ def main():
     
     # Generate visualization
     try:
-        success = create_consensus_divisive_datamapplot(args.zid, args.layer, args.output_dir)
+        success = create_consensus_divisive_datamapplot(args.zid, args.layer, args.output_dir, args.job_id)
         
         if success:
             logger.info("Consensus/divisive datamapplot generation completed successfully")
