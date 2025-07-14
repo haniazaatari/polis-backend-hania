@@ -168,25 +168,43 @@ def load_data_from_dynamodb(zid, layer_num=0, job_id=None):
         logger.error(f'Error retrieving positions from UMAPGraph: {e}')
         logger.error(traceback.format_exc())
     
-    # 2. Get cluster assignments using job_id query (more efficient than scan)
+    # 2. Get cluster assignments - prefer job_id if available, fall back to conversation_id
     try:
         from boto3.dynamodb.conditions import Key
         table = dynamodb.Table('Delphi_CommentHierarchicalClusterAssignments')
         
-        response = table.query(
-            KeyConditionExpression=Key('job_id').eq(job_id)
-        )
+        if job_id:
+            # Use JobIdIndex for job-based correlation
+            logger.info(f'Loading cluster assignments using job_id: {job_id}')
+            response = table.query(
+                IndexName='JobIdIndex',
+                KeyConditionExpression=Key('job_id').eq(job_id)
+            )
+        else:
+            # Fall back to conversation-based query for backwards compatibility
+            logger.info(f'Loading cluster assignments using conversation_id: {zid}')
+            response = table.query(
+                KeyConditionExpression=Key('conversation_id').eq(str(zid))
+            )
+        
         clusters = response.get('Items', [])
         
         # Handle pagination if needed
         while 'LastEvaluatedKey' in response:
-            response = table.query(
-                KeyConditionExpression=Key('job_id').eq(job_id),
-                ExclusiveStartKey=response['LastEvaluatedKey']
-            )
+            if job_id:
+                response = table.query(
+                    IndexName='JobIdIndex',
+                    KeyConditionExpression=Key('job_id').eq(job_id),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
+            else:
+                response = table.query(
+                    KeyConditionExpression=Key('conversation_id').eq(str(zid)),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
             clusters.extend(response.get('Items', []))
         
-        logger.info(f'Retrieved {len(clusters)} comment cluster assignments for job_id: {job_id}')
+        logger.info(f'Retrieved {len(clusters)} comment cluster assignments')
         
         # Extract cluster assignments for this layer
         for item in clusters:
@@ -201,24 +219,42 @@ def load_data_from_dynamodb(zid, layer_num=0, job_id=None):
         logger.error(f'Error retrieving cluster assignments: {e}')
         logger.error(traceback.format_exc())
     
-    # 3. Get topic names using job_id query (more efficient than scan)
+    # 3. Get topic names - prefer job_id if available, fall back to conversation_id
     try:
         table = dynamodb.Table('Delphi_CommentClustersLLMTopicNames')
         
-        response = table.query(
-            KeyConditionExpression=Key('job_id').eq(job_id)
-        )
+        if job_id:
+            # Use JobIdIndex for job-based correlation
+            logger.info(f'Loading topic names using job_id: {job_id}')
+            response = table.query(
+                IndexName='JobIdIndex',
+                KeyConditionExpression=Key('job_id').eq(job_id)
+            )
+        else:
+            # Fall back to conversation-based query for backwards compatibility
+            logger.info(f'Loading topic names using conversation_id: {zid}')
+            response = table.query(
+                KeyConditionExpression=Key('conversation_id').eq(str(zid))
+            )
+        
         topic_name_items = response.get('Items', [])
         
         # Handle pagination if needed
         while 'LastEvaluatedKey' in response:
-            response = table.query(
-                KeyConditionExpression=Key('job_id').eq(job_id),
-                ExclusiveStartKey=response['LastEvaluatedKey']
-            )
+            if job_id:
+                response = table.query(
+                    IndexName='JobIdIndex',
+                    KeyConditionExpression=Key('job_id').eq(job_id),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
+            else:
+                response = table.query(
+                    KeyConditionExpression=Key('conversation_id').eq(str(zid)),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
             topic_name_items.extend(response.get('Items', []))
         
-        logger.info(f'Retrieved {len(topic_name_items)} topic names for job_id: {job_id}')
+        logger.info(f'Retrieved {len(topic_name_items)} topic names')
         
         # Create topic name map - filter by layer_id
         for item in topic_name_items:

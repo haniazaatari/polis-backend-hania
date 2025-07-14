@@ -245,10 +245,9 @@ class DataConverter:
             # Convert all float values to Decimal for DynamoDB compatibility
             data['cluster_confidence'] = {k: float(v) for k, v in confidences.items()}
         
-        # Add job_id (required field)
-        if not job_id:
-            raise ValueError("job_id is required for CommentCluster creation")
-        data['job_id'] = job_id
+        # Add job_id (optional field for backwards compatibility)
+        if job_id:
+            data['job_id'] = job_id
         
         # Create the model directly from the data dict
         # The model creation will use pydantic to validate the types

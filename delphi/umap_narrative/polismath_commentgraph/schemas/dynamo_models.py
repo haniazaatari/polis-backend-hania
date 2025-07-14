@@ -72,12 +72,15 @@ class CommentEmbedding(BaseModel):
 
 class CommentCluster(BaseModel):
     """Cluster assignments for a single comment across layers."""
-    job_id: str
+    # Natural business keys (backwards compatible)
     conversation_id: str
     comment_id: int
-    conversation_id_comment_id: str  # composite key: "{conversation_id}#{comment_id}"
+    
+    # Job correlation field (optional for backwards compatibility)
+    job_id: Optional[str] = None
+    
+    # Cluster assignment fields
     is_outlier: bool = False
-    # We'll add layer-specific cluster IDs dynamically during initialization
     layer0_cluster_id: Optional[int] = None
     layer1_cluster_id: Optional[int] = None
     layer2_cluster_id: Optional[int] = None
@@ -86,13 +89,6 @@ class CommentCluster(BaseModel):
     distance_to_centroid: Optional[Dict[str, float]] = None
     cluster_confidence: Optional[Dict[str, float]] = None
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
-    
-    @root_validator(pre=True)
-    def create_composite_key(cls, values):
-        """Create the composite key if not provided."""
-        if "conversation_id_comment_id" not in values and "conversation_id" in values and "comment_id" in values:
-            values["conversation_id_comment_id"] = f"{values['conversation_id']}#{values['comment_id']}"
-        return values
 
 
 class ClusterTopic(BaseModel):
@@ -129,10 +125,14 @@ class UMAPGraphEdge(BaseModel):
 
 class ClusterCharacteristic(BaseModel):
     """Characteristics of a cluster based on TF-IDF analysis."""
-    job_id: str
+    # Natural business keys (backwards compatible)
     conversation_id: str
     cluster_key: str  # format: "layer{layer_id}_{cluster_id}"
-    conversation_id_cluster_key: str  # composite key: "{conversation_id}#{cluster_key}"
+    
+    # Job correlation field (optional for backwards compatibility) 
+    job_id: Optional[str] = None
+    
+    # Cluster data fields
     layer_id: int
     cluster_id: int
     size: int
@@ -142,46 +142,46 @@ class ClusterCharacteristic(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     
     @root_validator(pre=True)
-    def create_keys(cls, values):
-        """Create the cluster_key and composite key if not provided."""
+    def create_cluster_key(cls, values):
+        """Create the cluster_key if not provided."""
         if "cluster_key" not in values and "layer_id" in values and "cluster_id" in values:
             values["cluster_key"] = f"layer{values['layer_id']}_{values['cluster_id']}"
-        
-        if "conversation_id_cluster_key" not in values and "conversation_id" in values and "cluster_key" in values:
-            values["conversation_id_cluster_key"] = f"{values['conversation_id']}#{values['cluster_key']}"
-        
         return values
 
 
 class EnhancedTopicName(BaseModel):
     """Enhanced topic name with keywords, based on TF-IDF analysis."""
-    job_id: str
+    # Natural business keys (backwards compatible)
     conversation_id: str
     topic_key: str  # format: "layer{layer_id}_{cluster_id}"
-    conversation_id_topic_key: str  # composite key: "{conversation_id}#{topic_key}"
+    
+    # Job correlation field (optional for backwards compatibility)
+    job_id: Optional[str] = None
+    
+    # Topic data fields
     layer_id: int
     cluster_id: int
     topic_name: str  # Format: "Keywords: word1, word2, word3, ..."
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     
     @root_validator(pre=True)
-    def create_keys(cls, values):
-        """Create the topic_key and composite key if not provided."""
+    def create_topic_key(cls, values):
+        """Create the topic_key if not provided."""
         if "topic_key" not in values and "layer_id" in values and "cluster_id" in values:
             values["topic_key"] = f"layer{values['layer_id']}_{values['cluster_id']}"
-        
-        if "conversation_id_topic_key" not in values and "conversation_id" in values and "topic_key" in values:
-            values["conversation_id_topic_key"] = f"{values['conversation_id']}#{values['topic_key']}"
-        
         return values
 
 
 class LLMTopicName(BaseModel):
     """LLM-generated topic name."""
-    job_id: str
+    # Natural business keys (backwards compatible)
     conversation_id: str
     topic_key: str  # format: "layer{layer_id}_{cluster_id}"
-    conversation_id_topic_key: str  # composite key: "{conversation_id}#{topic_key}"
+    
+    # Job correlation field (optional for backwards compatibility)
+    job_id: Optional[str] = None
+    
+    # Topic data fields
     layer_id: int
     cluster_id: int
     topic_name: str  # LLM-generated name
@@ -189,14 +189,10 @@ class LLMTopicName(BaseModel):
     created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
     
     @root_validator(pre=True)
-    def create_keys(cls, values):
-        """Create the topic_key and composite key if not provided."""
+    def create_topic_key(cls, values):
+        """Create the topic_key if not provided."""
         if "topic_key" not in values and "layer_id" in values and "cluster_id" in values:
             values["topic_key"] = f"layer{values['layer_id']}_{values['cluster_id']}"
-        
-        if "conversation_id_topic_key" not in values and "conversation_id" in values and "topic_key" in values:
-            values["conversation_id_topic_key"] = f"{values['conversation_id']}#{values['topic_key']}"
-        
         return values
 
 

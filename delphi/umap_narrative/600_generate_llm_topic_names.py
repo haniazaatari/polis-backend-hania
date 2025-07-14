@@ -216,18 +216,22 @@ def load_layer_data(conversation_id, layer_id, dynamo_storage=None, output_base_
             logger.error(f"Layer {layer_id} does not exist in metadata")
             return None
         
-        # Query CommentClusters to get cluster assignments using job_id
-        logger.info(f"Loading clusters for layer {layer_id} from DynamoDB using job_id: {job_id}")
-        
-        if not job_id:
-            logger.error("job_id is required for cluster data loading")
-            return None
-        
-        # Get all comment clusters for this job
+        # Query CommentClusters - prefer job_id if available, fall back to conversation_id
         table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['comment_clusters'])
-        response = table.query(
-            KeyConditionExpression=Key('job_id').eq(job_id)
-        )
+        
+        if job_id:
+            # Use JobIdIndex for job-based correlation
+            logger.info(f"Loading clusters for layer {layer_id} from DynamoDB using job_id: {job_id}")
+            response = table.query(
+                IndexName='JobIdIndex',
+                KeyConditionExpression=Key('job_id').eq(job_id)
+            )
+        else:
+            # Fall back to conversation-based query for backwards compatibility
+            logger.info(f"Loading clusters for layer {layer_id} from DynamoDB using conversation_id: {conversation_id}")
+            response = table.query(
+                KeyConditionExpression=Key('conversation_id').eq(str(conversation_id))
+            )
         clusters = response.get('Items', [])
         
         # Handle pagination if needed

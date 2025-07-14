@@ -383,6 +383,7 @@ class BatchReportGenerator:
                 
                 while True:
                     query_kwargs = {
+                        'IndexName': 'JobIdIndex',
                         'KeyConditionExpression': boto3.dynamodb.conditions.Key('job_id').eq(job_id)
                     }
                     if last_evaluated_key:
@@ -440,7 +441,7 @@ class BatchReportGenerator:
                 IndexName='ConversationIndex',
                 KeyConditionExpression=boto3.dynamodb.conditions.Key('conversation_id').eq(self.conversation_id),
                 FilterExpression=boto3.dynamodb.conditions.Attr('job_type').eq('FULL_PIPELINE') & 
-                                boto3.dynamodb.conditions.Attr('status').eq('completed'),
+                                boto3.dynamodb.conditions.Attr('status').eq('COMPLETED'),
                 ProjectionExpression='job_id, created_at',
                 ScanIndexForward=False  # Sort by created_at descending (newest first)
             )
@@ -473,6 +474,11 @@ class BatchReportGenerator:
                 raise ValueError(f"No successful UMAP job found for conversation {self.conversation_id}. "
                                "Cannot generate narrative report without proper job correlation.")
             
+            # Update self.job_id if it wasn't set (standalone mode)
+            if not self.job_id:
+                self.job_id = target_job_id
+                logger.info(f"Updated job_id to {target_job_id} for standalone mode")
+            
             logger.info(f"Using job_id {target_job_id} for topic correlation")
             
             # Fetch topic names for the specific job_id
@@ -482,6 +488,7 @@ class BatchReportGenerator:
             last_key = None
             while True:
                 query_kwargs = {
+                    'IndexName': 'JobIdIndex',
                     'KeyConditionExpression': boto3.dynamodb.conditions.Key('job_id').eq(target_job_id)
                 }
                 if last_key:
@@ -504,6 +511,7 @@ class BatchReportGenerator:
             last_key = None
             while True:
                 query_kwargs = {
+                    'IndexName': 'JobIdIndex',
                     'KeyConditionExpression': boto3.dynamodb.conditions.Key('job_id').eq(target_job_id)
                 }
                 if last_key:
@@ -515,12 +523,13 @@ class BatchReportGenerator:
                     break
             
             if not keyword_items:
-                raise ValueError(f"No cluster structure/keyword data found for job {target_job_id}. "
-                               "The job may have failed during clustering phase.")
-            
-            # Create a fast, in-memory lookup map for keywords
-            keywords_lookup = {item['cluster_key']: item for item in keyword_items}
-            logger.info(f"Created lookup map for {len(keywords_lookup)} keyword entries.")
+                logger.warning(f"No cluster structure/keyword data found for job {target_job_id}. "
+                              "Proceeding without structure/keywords data.")
+                keywords_lookup = {}
+            else:
+                # Create a fast, in-memory lookup map for keywords
+                keywords_lookup = {item['cluster_key']: item for item in keyword_items}
+                logger.info(f"Created lookup map for {len(keywords_lookup)} keyword entries.")
             
             # Load all cluster assignments for all comments from the specific job
             all_clusters = await asyncio.to_thread(self.load_comment_clusters_from_dynamodb, self.conversation_id, target_job_id)

@@ -339,25 +339,41 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage, job_id=Non
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         
-    # Get comment clusters using job_id
+    # Get comment clusters - prefer job_id if available, fall back to conversation_id
     try:
-        # Query CommentClusters for this job_id
-        logger.info(f"Loading cluster assignments from CommentClusters using job_id: {job_id}...")
         table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['comment_clusters'])
         logger.debug(f"CommentClusters table name: {dynamo_storage.table_names['comment_clusters']}")
         
-        response = table.query(
-            KeyConditionExpression=Key('job_id').eq(job_id)
-        )
+        if job_id:
+            # Use JobIdIndex for job-based correlation
+            logger.info(f"Loading cluster assignments from CommentClusters using job_id: {job_id}...")
+            response = table.query(
+                IndexName='JobIdIndex',
+                KeyConditionExpression=Key('job_id').eq(job_id)
+            )
+        else:
+            # Fall back to conversation-based query for backwards compatibility
+            logger.info(f"Loading cluster assignments from CommentClusters using conversation_id: {zid}...")
+            response = table.query(
+                KeyConditionExpression=Key('conversation_id').eq(str(zid))
+            )
+        
         clusters = response.get('Items', [])
         
         # Handle pagination if needed
         while 'LastEvaluatedKey' in response:
             logger.debug(f"Handling pagination for comment clusters...")
-            response = table.query(
-                KeyConditionExpression=Key('job_id').eq(job_id),
-                ExclusiveStartKey=response['LastEvaluatedKey']
-            )
+            if job_id:
+                response = table.query(
+                    IndexName='JobIdIndex',
+                    KeyConditionExpression=Key('job_id').eq(job_id),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
+            else:
+                response = table.query(
+                    KeyConditionExpression=Key('conversation_id').eq(str(zid)),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
             clusters.extend(response.get('Items', []))
         
         logger.info(f"Retrieved {len(clusters)} comment cluster assignments")
@@ -489,25 +505,41 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage, job_id=Non
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
     
-    # Get topic names from LLMTopicNames using job_id
+    # Get topic names from LLMTopicNames - prefer job_id if available, fall back to conversation_id
     try:
-        # Query LLMTopicNames for this job_id and layer
-        logger.info(f"Loading topic names from LLMTopicNames using job_id: {job_id}...")
         table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['llm_topic_names'])
         logger.debug(f"LLMTopicNames table name: {dynamo_storage.table_names['llm_topic_names']}")
         
-        response = table.query(
-            KeyConditionExpression=Key('job_id').eq(job_id)
-        )
+        if job_id:
+            # Use JobIdIndex for job-based correlation
+            logger.info(f"Loading topic names from LLMTopicNames using job_id: {job_id}...")
+            response = table.query(
+                IndexName='JobIdIndex',
+                KeyConditionExpression=Key('job_id').eq(job_id)
+            )
+        else:
+            # Fall back to conversation-based query for backwards compatibility
+            logger.info(f"Loading topic names from LLMTopicNames using conversation_id: {zid}...")
+            response = table.query(
+                KeyConditionExpression=Key('conversation_id').eq(str(zid))
+            )
+        
         topic_names = response.get('Items', [])
         
         # Handle pagination if needed
         while 'LastEvaluatedKey' in response:
             logger.debug(f"Handling pagination for topic names...")
-            response = table.query(
-                KeyConditionExpression=Key('conversation_id').eq(str(zid)),
-                ExclusiveStartKey=response['LastEvaluatedKey']
-            )
+            if job_id:
+                response = table.query(
+                    IndexName='JobIdIndex',
+                    KeyConditionExpression=Key('job_id').eq(job_id),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
+            else:
+                response = table.query(
+                    KeyConditionExpression=Key('conversation_id').eq(str(zid)),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
             topic_names.extend(response.get('Items', []))
         
         # Log sample item for debugging
