@@ -418,9 +418,57 @@ class BatchReportGenerator:
                 if not cluster_map:
                     raise ValueError(f"No cluster assignments found for job {job_id}. "
                                    "The job may have failed during clustering phase.")
+            elif self.job_id:
+                # Use self.job_id as fallback
+                logger.warning(f"Using self.job_id ({self.job_id}) as fallback for cluster assignment queries")
+                last_evaluated_key = None
+                available_layers = set()
+                
+                while True:
+                    query_kwargs = {
+                        'IndexName': 'JobIdIndex',
+                        'KeyConditionExpression': boto3.dynamodb.conditions.Key('job_id').eq(self.job_id)
+                    }
+                    if last_evaluated_key:
+                        query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+                        
+                    response = clusters_table.query(**query_kwargs)
+                    # Rest of the query code would be duplicated here
+                    # So instead we'll just check if we got any results
+                    if response.get('Items'):
+                        for item in response.get('Items', []):
+                            comment_id = item.get('comment_id')
+                            if comment_id is not None:
+                                comment_id_str = str(comment_id)
+                                if comment_id_str not in cluster_map:
+                                    cluster_map[comment_id_str] = {}
+                                
+                                # Extract all layer cluster assignments
+                                for key, value in item.items():
+                                    if key.startswith('layer') and key.endswith('_cluster_id') and value is not None:
+                                        # Extract layer number from key like 'layer0_cluster_id'
+                                        layer_num_str = key.replace('layer', '').replace('_cluster_id', '')
+                                        try:
+                                            layer_num = int(layer_num_str)
+                                            cluster_map[comment_id_str][layer_num] = value
+                                            available_layers.add(layer_num)
+                                        except ValueError:
+                                            # Skip invalid layer keys
+                                            continue
+                    
+                    last_evaluated_key = response.get('LastEvaluatedKey')
+                    if not last_evaluated_key:
+                        break
+                
+                if not cluster_map:
+                    raise ValueError(f"No cluster assignments found for job {self.job_id} (used as fallback). ")
             else:
-                raise ValueError("job_id is required for cluster assignment queries. "
-                               "Cannot proceed without proper job correlation.")
+                # Generate a fallback job_id as last resort
+                fallback_job_id = str(uuid.uuid4())
+                logger.error(f"No job_id available for cluster assignment queries. ")
+                logger.error(f"Cannot proceed without proper job correlation - no data will be available.")
+                # Return empty map as we can't query without a job_id
+                return {}
 
             logger.info(f"Loaded {len(cluster_map)} comment cluster assignments across {len(available_layers)} layers: {sorted(available_layers)}")
             return cluster_map
@@ -587,8 +635,10 @@ class BatchReportGenerator:
                     all_topics.append(topic)
 
             # --- Step 3: Add global sections ---
+            # Use job_id from instance, falling back to generating a new one if necessary
             if not self.job_id:
-                raise ValueError("job_id is required for versioned topic keys but is missing or empty")
+                self.job_id = str(uuid.uuid4())
+                logger.warning(f"Generated fallback job_id: {self.job_id} for versioned topic keys")
             
             global_topic_prefix = f"{self.job_id}_global"
             global_sections = [

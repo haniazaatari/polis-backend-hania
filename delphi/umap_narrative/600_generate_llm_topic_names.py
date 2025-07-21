@@ -742,7 +742,7 @@ def update_conversation_with_ollama(conversation_id, layer_id=None, model_name=N
                 result = update_layer_with_ollama(
                     conversation_id, layer_id, conversation_name, 
                     model_name, output_base_dir, dynamo_storage,
-                    start_cluster, end_cluster
+                    start_cluster, end_cluster, job_id, parent_job_id, root_job_id
                 )
                 results.append(result)
             
@@ -756,7 +756,7 @@ def update_conversation_with_ollama(conversation_id, layer_id=None, model_name=N
                 result = update_layer_with_ollama(
                     conversation_id, layer_id, conversation_name, 
                     model_name, output_base_dir, dynamo_storage,
-                    start_cluster, end_cluster
+                    start_cluster, end_cluster, job_id, parent_job_id, root_job_id
                 )
                 results.append(result)
             

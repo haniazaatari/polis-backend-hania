@@ -410,7 +410,8 @@ class DynamoDBStorage:
             'cluster_topics': 'Delphi_CommentClustersStructureKeywords',
             'umap_graph': 'Delphi_UMAPGraph',
             'cluster_characteristics': 'Delphi_CommentClustersFeatures',
-            'llm_topic_names': 'Delphi_CommentClustersLLMTopicNames'
+            'llm_topic_names': 'Delphi_CommentClustersLLMTopicNames',
+            'job_queue': 'Delphi_JobQueue'
             # Note: CommentTexts table is intentionally excluded
             # Comment texts are stored in PostgreSQL as the single source of truth
         }
@@ -428,10 +429,42 @@ class DynamoDBStorage:
             
             # Check each required table
             for name, table_name in self.table_names.items():
-                if table_name not in existing_tables:
-                    logger.warning(f"Table {table_name} does not exist. Operations will fail.")
+                # Check for different table naming patterns in order of preference:
+                # 1. Original name with job_id schema (highest priority)
+                # 2. _New suffix for transition tables
+                # 3. Original name with conversation_id schema (lowest priority)
+                new_table_name = f"{table_name}_New"
+                
+                # First, check if the original table exists
+                if table_name in existing_tables:
+                    # Try to determine if it's using the job_id schema by checking key schema
+                    try:
+                        table = self.dynamodb.Table(table_name)
+                        key_schema = table.key_schema
+                        has_job_id_schema = any(key['AttributeName'] == 'job_id' for key in key_schema)
+                        
+                        if has_job_id_schema:
+                            logger.info(f"Table {table_name} exists with job_id schema.")
+                            self.table_names[name] = table_name
+                        else:
+                            # Check if _New table exists with job_id schema
+                            if new_table_name in existing_tables:
+                                logger.info(f"Using new schema table {new_table_name} for {name}")
+                                self.table_names[name] = new_table_name
+                            else:
+                                logger.info(f"Table {table_name} exists with conversation_id schema.")
+                                self.table_names[name] = table_name
+                    except Exception as schema_error:
+                        logger.warning(f"Error checking schema for {table_name}: {schema_error}")
+                        logger.info(f"Using existing table {table_name} for {name}")
+                        self.table_names[name] = table_name
+                        
+                # If original table doesn't exist, check for _New table
+                elif new_table_name in existing_tables:
+                    logger.info(f"Using new schema table {new_table_name} for {name}")
+                    self.table_names[name] = new_table_name
                 else:
-                    logger.info(f"Table {table_name} exists and is accessible.")
+                    logger.warning(f"Neither {table_name} nor {new_table_name} exist. Operations will fail.")
         except Exception as e:
             logger.error(f"Error validating DynamoDB tables: {str(e)}")
     
@@ -1250,6 +1283,183 @@ class DynamoDBStorage:
             'success': success_count,
             'failure': failure_count
         }
+    
+    def get_latest_job_for_conversation(self, conversation_id: str, status: str = "COMPLETED", job_stage: str = None) -> Optional[Dict[str, Any]]:
+        """
+        Get the latest job for a conversation with the specified status.
+        
+        Args:
+            conversation_id: ID of the conversation
+            status: Job status to filter by (default: COMPLETED)
+            job_stage: Optional job stage to filter by (e.g., "UMAP", "FULL_PIPELINE")
+            
+        Returns:
+            Latest job for the conversation or None if not found
+        """
+        try:
+            # Use boto3 to access the job queue table
+            job_queue_table = self.dynamodb.Table(self.table_names['job_queue'])
+            
+            # Query the ConversationIndex GSI
+            filter_expression = Attr('status').eq(status)
+            
+            # Add job_stage filter if provided
+            if job_stage:
+                filter_expression = filter_expression & Attr('job_stage').eq(job_stage)
+                
+            response = job_queue_table.query(
+                IndexName="ConversationIndex",
+                KeyConditionExpression=Key('conversation_id').eq(conversation_id),
+                FilterExpression=filter_expression,
+                ScanIndexForward=False,  # Descending order by created_at
+                Limit=1  # Get just the latest job
+            )
+            
+            items = response.get('Items', [])
+            if items:
+                logger.info(f"Found latest {status} job for conversation {conversation_id}{' with stage ' + job_stage if job_stage else ''}: {items[0]['job_id']}")
+                return items[0]
+            else:
+                logger.info(f"No {status} jobs found for conversation {conversation_id}{' with stage ' + job_stage if job_stage else ''}")
+                return None
+                
+        except ClientError as e:
+            logger.error(f"Error getting latest job for conversation {conversation_id}: {str(e)}")
+            return None
+    
+    def get_comment_clusters_by_job(self, job_id: str) -> List[Dict[str, Any]]:
+        """
+        Retrieve comment cluster assignments for a specific job.
+        
+        Args:
+            job_id: ID of the job
+            
+        Returns:
+            List of comment cluster dictionaries
+        """
+        table = self.dynamodb.Table(self.table_names['comment_clusters'])
+        
+        try:
+            # Try querying directly if job_id is the primary key
+            try:
+                response = table.query(
+                    KeyConditionExpression=Key('job_id').eq(job_id)
+                )
+                items = response.get('Items', [])
+                
+                # If we got results, we're using the new schema where job_id is the primary key
+                if items:
+                    logger.info(f"Retrieved {len(items)} comment clusters for job: {job_id} (using primary key)")
+                    
+                    # Handle pagination if necessary (for large result sets)
+                    while 'LastEvaluatedKey' in response and response['LastEvaluatedKey']:
+                        logger.info(f"Retrieving additional comment clusters for job: {job_id}")
+                        response = table.query(
+                            KeyConditionExpression=Key('job_id').eq(job_id),
+                            ExclusiveStartKey=response['LastEvaluatedKey']
+                        )
+                        items.extend(response.get('Items', []))
+                        logger.info(f"Retrieved {len(response.get('Items', []))} additional comment clusters")
+                    
+                    return items
+                    
+            except ClientError as e:
+                # If there was an error using job_id as the primary key, fall back to GSI
+                if "ValidationException" not in str(e):
+                    raise e
+                logger.info(f"Using GSI for job_id query (job_id is not the primary key): {job_id}")
+                
+            # Query by job_id using the JobIdIndex GSI
+            response = table.query(
+                IndexName='JobIdIndex',
+                KeyConditionExpression=Key('job_id').eq(job_id)
+            )
+            
+            items = response.get('Items', [])
+            logger.info(f"Retrieved {len(items)} comment clusters for job: {job_id} (using GSI)")
+            
+            # Handle pagination if necessary (for large result sets)
+            while 'LastEvaluatedKey' in response and response['LastEvaluatedKey']:
+                logger.info(f"Retrieving additional comment clusters for job: {job_id}")
+                response = table.query(
+                    IndexName='JobIdIndex',
+                    KeyConditionExpression=Key('job_id').eq(job_id),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
+                items.extend(response.get('Items', []))
+                logger.info(f"Retrieved {len(response.get('Items', []))} additional comment clusters")
+            
+            return items
+        except ClientError as e:
+            logger.error(f"Error retrieving comment clusters by job: {str(e)}")
+            return []
+    
+    def get_llm_topic_names_by_job(self, job_id: str) -> List[Dict[str, Any]]:
+        """
+        Retrieve LLM-generated topic names for a specific job.
+        
+        Args:
+            job_id: ID of the job
+            
+        Returns:
+            List of LLM topic name dictionaries
+        """
+        table = self.dynamodb.Table(self.table_names['llm_topic_names'])
+        
+        try:
+            # Try querying directly if job_id is the primary key
+            try:
+                response = table.query(
+                    KeyConditionExpression=Key('job_id').eq(job_id)
+                )
+                items = response.get('Items', [])
+                
+                # If we got results, we're using the new schema where job_id is the primary key
+                if items:
+                    logger.info(f"Retrieved {len(items)} LLM topic names for job: {job_id} (using primary key)")
+                    
+                    # Handle pagination if necessary (for large result sets)
+                    while 'LastEvaluatedKey' in response and response['LastEvaluatedKey']:
+                        logger.info(f"Retrieving additional LLM topic names for job: {job_id}")
+                        response = table.query(
+                            KeyConditionExpression=Key('job_id').eq(job_id),
+                            ExclusiveStartKey=response['LastEvaluatedKey']
+                        )
+                        items.extend(response.get('Items', []))
+                        logger.info(f"Retrieved {len(response.get('Items', []))} additional LLM topic names")
+                    
+                    return items
+                    
+            except ClientError as e:
+                # If there was an error using job_id as the primary key, fall back to GSI
+                if "ValidationException" not in str(e):
+                    raise e
+                logger.info(f"Using GSI for job_id query (job_id is not the primary key): {job_id}")
+                
+            # Query by job_id using the JobIdIndex GSI
+            response = table.query(
+                IndexName='JobIdIndex',
+                KeyConditionExpression=Key('job_id').eq(job_id)
+            )
+            
+            items = response.get('Items', [])
+            logger.info(f"Retrieved {len(items)} LLM topic names for job: {job_id} (using GSI)")
+            
+            # Handle pagination if necessary (for large result sets)
+            while 'LastEvaluatedKey' in response and response['LastEvaluatedKey']:
+                logger.info(f"Retrieving additional LLM topic names for job: {job_id}")
+                response = table.query(
+                    IndexName='JobIdIndex',
+                    KeyConditionExpression=Key('job_id').eq(job_id),
+                    ExclusiveStartKey=response['LastEvaluatedKey']
+                )
+                items.extend(response.get('Items', []))
+                logger.info(f"Retrieved {len(response.get('Items', []))} additional LLM topic names")
+            
+            return items
+        except ClientError as e:
+            logger.error(f"Error retrieving LLM topic names by job: {str(e)}")
+            return []
     
     # Note: Methods for storing comment texts in DynamoDB have been intentionally removed
     # Comment texts are kept in PostgreSQL which serves as the single source of truth
