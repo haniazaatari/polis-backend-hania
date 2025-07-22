@@ -3,11 +3,14 @@ import Layout from '../pages/layouts/Layout.astro';
 import Header from '../components/Header.astro';
 import Survey from '../components/Survey.jsx';
 import SurveyForm from '../components/SurveyForm.jsx'; 
+import TopicAgenda from '../components/topicAgenda/TopicAgenda.jsx';
 import { getTranslations } from '../strings/strings.js';
 
 const { conversation_id } = Astro.params;
 let initialData;
 let fetchError = null;
+let reportData = null;
+let commentsData = null;
 
 try {
   const apiParams = new URLSearchParams({
@@ -28,13 +31,47 @@ try {
     apiParams.append('x_profile_image_url', x_profile_image_url);
   }
 
-  const apiUrl = `${import.meta.env.INTERNAL_SERVICE_URL}/participationInit?${apiParams.toString()}`;
+  const apiUrl = `${import.meta.env.INTERNAL_SERVICE_URL}/participationInit?conversation_id=${conversation_id}`;
   
   const response = await fetch(apiUrl);
   if (!response.ok) {
     throw new Error(`API request failed with status: ${response.status}`);
   }
   initialData = await response.json();
+  console.log('Initial data:', initialData);
+  console.log('Conversation object:', initialData?.conversation);
+  
+  // Check if topic prioritization is available for this conversation
+  try {
+    const topicPrioritizeResponse = await fetch(
+      `${import.meta.env.PUBLIC_SERVICE_URL}/participation/topicPrioritize?conversation_id=${conversation_id}`
+    );
+    
+    if (topicPrioritizeResponse.ok) {
+      const topicPrioritizeData = await topicPrioritizeResponse.json();
+      console.log('Topic prioritize check:', topicPrioritizeData);
+      
+      if (topicPrioritizeData.has_report && topicPrioritizeData.report_id) {
+        reportData = {
+          report_id: topicPrioritizeData.report_id,
+          conversation_id: topicPrioritizeData.conversation_id
+        };
+        
+        // Also fetch comments for the TopicAgenda
+        // Use the original zinvite for the comments API, not the numeric conversation_id
+        const commentsResponse = await fetch(
+          `${import.meta.env.PUBLIC_SERVICE_URL}/comments?conversation_id=${conversation_id}&moderation=true&include_voting_patterns=true`
+        );
+        
+        if (commentsResponse.ok) {
+          commentsData = await commentsResponse.json();
+          console.log(`Found ${commentsData.length} comments for topic prioritization`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Failed to check topic prioritization availability:", err);
+  }
 } catch (error) {
   console.error("Failed to fetch conversation data:", error);
   fetchError = "Could not load this conversation. Please check the ID and try again.";
@@ -81,10 +118,28 @@ if (initialData) {
             <Survey 
               client:load 
               initialStatement={firstStatement}
-              conversation_id={conversation_id}
+              conversation_id={initialData.conversation.conversation_id}
               s={s} 
             />
             <SurveyForm client:load s={s} conversation_id={conversation_id} />
+            
+            {/* Topic Agenda - only show if we have report and comments data */}
+            {reportData && commentsData ? (
+              <TopicAgenda 
+                client:load
+                conversation={initialData.conversation}
+                report_id={reportData.report_id}
+                comments={commentsData}
+              />
+            ) : (
+              <div style="margin-top: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; text-align: center; color: #666;">
+                <p style="margin: 0; font-size: 0.9rem;">
+                  Topic Agenda not available yet. 
+                  {!reportData && " (No report found)"}
+                  {reportData && !commentsData && " (No comments found)"}
+                </p>
+              </div>
+            )}
           </>
         ) : (
           <div class="footer-spacer"></div>
@@ -95,7 +150,7 @@ if (initialData) {
     )}
 
     <div style="margin-top: 3rem;">
-      <div class="logo">p.</div>
+      <div class="logo">p</div>
       <div class="footer-links">
         <a href="/privacy" target="_blank" rel="noopener noreferrer">{s.privacy}</a>
         <a href="/tos" target="_blank" rel="noopener noreferrer">{s.TOS}</a>
