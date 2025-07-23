@@ -9,8 +9,6 @@ import { getTranslations } from '../strings/strings.js';
 const { conversation_id } = Astro.params;
 let initialData;
 let fetchError = null;
-let reportData = null;
-let commentsData = null;
 
 try {
   const apiParams = new URLSearchParams({
@@ -38,40 +36,6 @@ try {
     throw new Error(`API request failed with status: ${response.status}`);
   }
   initialData = await response.json();
-  console.log('Initial data:', initialData);
-  console.log('Conversation object:', initialData?.conversation);
-  
-  // Check if topic prioritization is available for this conversation
-  try {
-    const topicPrioritizeResponse = await fetch(
-      `${import.meta.env.PUBLIC_SERVICE_URL}/participation/topicPrioritize?conversation_id=${conversation_id}`
-    );
-    
-    if (topicPrioritizeResponse.ok) {
-      const topicPrioritizeData = await topicPrioritizeResponse.json();
-      console.log('Topic prioritize check:', topicPrioritizeData);
-      
-      if (topicPrioritizeData.has_report && topicPrioritizeData.report_id) {
-        reportData = {
-          report_id: topicPrioritizeData.report_id,
-          conversation_id: topicPrioritizeData.conversation_id
-        };
-        
-        // Also fetch comments for the TopicAgenda
-        // Use the original zinvite for the comments API, not the numeric conversation_id
-        const commentsResponse = await fetch(
-          `${import.meta.env.PUBLIC_SERVICE_URL}/comments?conversation_id=${conversation_id}&moderation=true&include_voting_patterns=true`
-        );
-        
-        if (commentsResponse.ok) {
-          commentsData = await commentsResponse.json();
-          console.log(`Found ${commentsData.length} comments for topic prioritization`);
-        }
-      }
-    }
-  } catch (err) {
-    console.error("Failed to check topic prioritization availability:", err);
-  }
 } catch (error) {
   console.error("Failed to fetch conversation data:", error);
   fetchError = "Could not load this conversation. Please check the ID and try again.";
@@ -123,23 +87,11 @@ if (initialData) {
             />
             <SurveyForm client:load s={s} conversation_id={conversation_id} />
             
-            {/* Topic Agenda - only show if we have report and comments data */}
-            {reportData && commentsData ? (
-              <TopicAgenda 
-                client:load
+            <TopicAgenda 
+                client:only="react"
                 conversation={initialData.conversation}
-                report_id={reportData.report_id}
-                comments={commentsData}
+                conversation_id={conversation_id}
               />
-            ) : (
-              <div style="margin-top: 2rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; text-align: center; color: #666;">
-                <p style="margin: 0; font-size: 0.9rem;">
-                  Topic Agenda not available yet. 
-                  {!reportData && " (No report found)"}
-                  {reportData && !commentsData && " (No comments found)"}
-                </p>
-              </div>
-            )}
           </>
         ) : (
           <div class="footer-spacer"></div>
@@ -158,6 +110,3 @@ if (initialData) {
     </div>
   </div>
 </Layout>
-<style>
-
-</style>

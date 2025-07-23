@@ -932,9 +932,10 @@ helpersInitialized.then(
     });
 
     // Topic Agenda routes
-    app.post("/api/v3/topicAgenda/selections", 
-      auth(assignToP), 
-      moveToBody, 
+    app.post(
+      "/api/v3/topicAgenda/selections",
+      auth(assignToP),
+      moveToBody,
       function (req, res) {
         try {
           handle_POST_topicAgenda_selections(req, res);
@@ -948,9 +949,11 @@ helpersInitialized.then(
       }
     );
 
-    app.get("/api/v3/topicAgenda/selections", 
-      auth(assignToP), 
-      moveToBody, 
+    app.get(
+      "/api/v3/topicAgenda/selections",
+      auth(assignToP),
+      moveToBody,
+      handle_GET_topicAgenda_selections,
       function (req, res) {
         try {
           handle_GET_topicAgenda_selections(req, res);
@@ -964,9 +967,10 @@ helpersInitialized.then(
       }
     );
 
-    app.put("/api/v3/topicAgenda/selections", 
-      auth(assignToP), 
-      moveToBody, 
+    app.put(
+      "/api/v3/topicAgenda/selections",
+      auth(assignToP),
+      moveToBody,
       function (req, res) {
         try {
           handle_PUT_topicAgenda_selections(req, res);
@@ -980,9 +984,10 @@ helpersInitialized.then(
       }
     );
 
-    app.delete("/api/v3/topicAgenda/selections", 
-      auth(assignToP), 
-      moveToBody, 
+    app.delete(
+      "/api/v3/topicAgenda/selections",
+      auth(assignToP),
+      moveToBody,
       function (req, res) {
         try {
           handle_DELETE_topicAgenda_selections(req, res);

@@ -5,7 +5,12 @@ import LayerHeader from "./components/LayerHeader";
 import ScrollableTopicsGrid from "./components/ScrollableTopicsGrid";
 import TopicAgendaStyles from "./components/TopicAgendaStyles";
 
-const TopicAgenda = ({ conversation, report_id, comments }) => {
+const TopicAgenda = ({ conversation, conversation_id }) => {
+  
+  const [selections, setSelections] = useState(new Set());
+  const [commentMap, setCommentMap] = useState(new Map());
+  const [comments, setComments] = useState([]);
+  const [reportData, setReportData] = useState({});
   const {
     loading,
     error,
@@ -13,10 +18,53 @@ const TopicAgenda = ({ conversation, report_id, comments }) => {
     hierarchyAnalysis,
     clusterGroups,
     fetchUMAPData
-  } = useTopicData(report_id);
-  
-  const [selections, setSelections] = useState(new Set());
-  const [commentMap, setCommentMap] = useState(new Map());
+  } = useTopicData(reportData?.report_id);
+
+  useEffect(() => {
+    const f = async () => {
+      // Check if topic prioritization is available for this conversation
+      try {
+        const topicPrioritizeResponse = await fetch(
+          `${import.meta.env.PUBLIC_SERVICE_URL}/participation/topicPrioritize?conversation_id=${conversation_id}`, 
+          {
+            method: 'GET',
+            credentials: 'include'
+          }
+        );
+        
+        if (topicPrioritizeResponse.ok) {
+          const topicPrioritizeData = await topicPrioritizeResponse.json();
+          console.log('Topic prioritize check:', topicPrioritizeData);
+          
+          if (topicPrioritizeData.has_report && topicPrioritizeData.report_id) {
+            rd = {
+              report_id: topicPrioritizeData.report_id,
+              conversation_id: topicPrioritizeData.conversation_id
+            };
+            setReportData(rd);
+            
+            // Also fetch comments for the TopicAgenda
+            // Use the original zinvite for the comments API, not the numeric conversation_id
+            const commentsResponse = await fetch(
+              `${import.meta.env.PUBLIC_SERVICE_URL}/comments?conversation_id=${conversation_id}&moderation=true&include_voting_patterns=true`,
+              {
+                method: 'GET',
+                credentials: 'include'
+              }
+            );
+            
+            if (commentsResponse.ok) {
+              cd = await commentsResponse.json();
+              console.log(`Found ${commentsData.length} comments for topic prioritization`);
+              setComments(cd);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to check topic prioritization availability:", err);
+      }
+    }
+  })
 
   // Build comment map for easy lookup
   useEffect(() => {
@@ -140,16 +188,6 @@ const TopicAgenda = ({ conversation, report_id, comments }) => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="topic-agenda">
-        <div className="topic-agenda-widget">
-          <div className="loading">Loading topic data...</div>
-        </div>
-        <TopicAgendaStyles />
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -165,34 +203,39 @@ const TopicAgenda = ({ conversation, report_id, comments }) => {
     );
   }
 
-  return (
-    <div className="topic-agenda">
-      <div className="topic-agenda-widget">
-        <div className="current-layer">
-          <LayerHeader />
-          
-          <ScrollableTopicsGrid
-            topicData={topicData}
-            selections={selections}
-            onToggleSelection={toggleTopicSelection}
-            clusterGroups={clusterGroups}
-            hierarchyAnalysis={hierarchyAnalysis}
-          />
-          
-          <div className="done-button-container">
-            <button 
-              className="done-button"
-              onClick={handleDone}
-              disabled={selections.size === 0}
-            >
-              Done ({selections.size} selected)
-            </button>
+  if (comments.length > 0 && Object.keys(reportData).length > 0) {
+    return (
+      <div className="topic-agenda">
+        <div className="topic-agenda-widget">
+          <div className="current-layer">
+            <LayerHeader />
+            
+            <ScrollableTopicsGrid
+              topicData={topicData}
+              selections={selections}
+              onToggleSelection={toggleTopicSelection}
+              clusterGroups={clusterGroups}
+              hierarchyAnalysis={hierarchyAnalysis}
+            />
+            
+            <div className="done-button-container">
+              <button 
+                className="done-button"
+                onClick={handleDone}
+                disabled={selections.size === 0}
+              >
+                Done ({selections.size} selected)
+              </button>
+            </div>
           </div>
         </div>
+        <TopicAgendaStyles />
       </div>
-      <TopicAgendaStyles />
-    </div>
-  );
+    );
+  }
+
+  return null;
+
 };
 
 export default TopicAgenda;

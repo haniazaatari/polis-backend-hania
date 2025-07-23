@@ -1,7 +1,13 @@
 import { Request, Response } from "express";
 import logger from "../../utils/logger";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  GetCommand,
+  UpdateCommand,
+  DeleteCommand,
+} from "@aws-sdk/lib-dynamodb";
 import Config from "../../config";
 import { queryP as pgQueryP } from "../../db/pg-query";
 import Conversation from "../../conversation";
@@ -50,7 +56,9 @@ async function getCurrentDelphiJobId(zid: string): Promise<string | null> {
       ORDER BY created_at DESC 
       LIMIT 1
     `;
-    const result = await pgQueryP(query, [zid]) as { rows: Array<{ job_id: string }> };
+    const result = (await pgQueryP(query, [zid])) as {
+      rows: Array<{ job_id: string }>;
+    };
     return result.rows.length > 0 ? result.rows[0].job_id : null;
   } catch (error) {
     logger.error("Error getting current Delphi job ID", error);
@@ -62,7 +70,10 @@ async function getCurrentDelphiJobId(zid: string): Promise<string | null> {
  * POST /api/v3/topicAgenda/selections
  * Save topic agenda selections for a user
  */
-export async function handle_POST_topicAgenda_selections(req: Request & { user?: any }, res: Response) {
+export async function handle_POST_topicAgenda_selections(
+  req: Request & { user?: any },
+  res: Response
+) {
   try {
     const { conversation_id, selections } = req.body;
 
@@ -113,7 +124,9 @@ export async function handle_POST_topicAgenda_selections(req: Request & { user?:
 
     await docClient.send(new PutCommand(putParams));
 
-    logger.info(`Saved topic agenda selections for user ${pidStr} in conversation ${zidStr}`);
+    logger.info(
+      `Saved topic agenda selections for user ${pidStr} in conversation ${zidStr}`
+    );
 
     res.json({
       status: "success",
@@ -138,7 +151,10 @@ export async function handle_POST_topicAgenda_selections(req: Request & { user?:
  * GET /api/v3/topicAgenda/selections
  * Retrieve topic agenda selections for a user
  */
-export async function handle_GET_topicAgenda_selections(req: Request & { user?: any }, res: Response) {
+export async function handle_GET_topicAgenda_selections(
+  req: Request & { user?: any },
+  res: Response
+) {
   try {
     const conversation_id = req.query.conversation_id as string;
 
@@ -148,6 +164,8 @@ export async function handle_GET_topicAgenda_selections(req: Request & { user?: 
         message: "conversation_id is required",
       });
     }
+
+    console.log(`USER: ${JSON.stringify(req.user)}`);
 
     if (!req.user || !req.user.uid) {
       return res.status(401).json({
@@ -183,7 +201,9 @@ export async function handle_GET_topicAgenda_selections(req: Request & { user?: 
       });
     }
 
-    logger.info(`Retrieved topic agenda selections for user ${pidStr} in conversation ${zidStr}`);
+    logger.info(
+      `Retrieved topic agenda selections for user ${pidStr} in conversation ${zidStr}`
+    );
 
     res.json({
       status: "success",
@@ -202,7 +222,10 @@ export async function handle_GET_topicAgenda_selections(req: Request & { user?: 
  * PUT /api/v3/topicAgenda/selections
  * Update topic agenda selections for a user
  */
-export async function handle_PUT_topicAgenda_selections(req: Request & { user?: any }, res: Response) {
+export async function handle_PUT_topicAgenda_selections(
+  req: Request & { user?: any },
+  res: Response
+) {
   try {
     const { conversation_id, selections } = req.body;
 
@@ -238,7 +261,8 @@ export async function handle_PUT_topicAgenda_selections(req: Request & { user?: 
         conversation_id: zidStr,
         participant_id: pidStr,
       },
-      UpdateExpression: "SET archetypal_selections = :selections, metadata = :metadata",
+      UpdateExpression:
+        "SET archetypal_selections = :selections, metadata = :metadata",
       ExpressionAttributeValues: {
         ":selections": selections,
         ":metadata": {
@@ -254,7 +278,9 @@ export async function handle_PUT_topicAgenda_selections(req: Request & { user?: 
 
     const result = await docClient.send(new UpdateCommand(updateParams));
 
-    logger.info(`Updated topic agenda selections for user ${pidStr} in conversation ${zidStr}`);
+    logger.info(
+      `Updated topic agenda selections for user ${pidStr} in conversation ${zidStr}`
+    );
 
     res.json({
       status: "success",
@@ -279,7 +305,10 @@ export async function handle_PUT_topicAgenda_selections(req: Request & { user?: 
  * DELETE /api/v3/topicAgenda/selections
  * Delete topic agenda selections for a user
  */
-export async function handle_DELETE_topicAgenda_selections(req: Request & { user?: any }, res: Response) {
+export async function handle_DELETE_topicAgenda_selections(
+  req: Request & { user?: any },
+  res: Response
+) {
   try {
     const conversation_id = req.query.conversation_id as string;
 
@@ -316,7 +345,9 @@ export async function handle_DELETE_topicAgenda_selections(req: Request & { user
 
     await docClient.send(new DeleteCommand(deleteParams));
 
-    logger.info(`Deleted topic agenda selections for user ${pidStr} in conversation ${zidStr}`);
+    logger.info(
+      `Deleted topic agenda selections for user ${pidStr} in conversation ${zidStr}`
+    );
 
     res.json({
       status: "success",
