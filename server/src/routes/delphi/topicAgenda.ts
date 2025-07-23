@@ -165,8 +165,6 @@ export async function handle_GET_topicAgenda_selections(
       });
     }
 
-    console.log(`USER: ${JSON.stringify(req.user)}`);
-
     if (!req.user || !req.user.uid) {
       return res.status(401).json({
         status: "error",
