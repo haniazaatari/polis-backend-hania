@@ -65,9 +65,19 @@ class CommentEmbedding(BaseModel):
     
     Note: UMAP coordinates are stored as "position" in UMAPGraph table where source_id = target_id = comment_id.
     Nearest neighbors are stored as edges in UMAPGraph where either source_id or target_id = comment_id."""
+    # Natural business keys (backwards compatible)
     conversation_id: str
     comment_id: int
+    
+    # Job relationship fields (optional for backwards compatibility)
+    job_id: Optional[str] = None
+    parent_job_id: Optional[str] = None
+    root_job_id: Optional[str] = None
+    job_stage: Optional[str] = None
+    
+    # Embedding data
     embedding: Embedding
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
 class CommentCluster(BaseModel):
@@ -112,8 +122,17 @@ class UMAPGraphEdge(BaseModel):
     
     Note: When source_id equals target_id, this represents a node with its position.
     Otherwise, this represents an edge between two nodes."""
+    # Natural business keys (backwards compatible)
     conversation_id: str
     edge_id: str  # format: "{source_id}_{target_id}"
+    
+    # Job relationship fields (optional for backwards compatibility)
+    job_id: Optional[str] = None
+    parent_job_id: Optional[str] = None
+    root_job_id: Optional[str] = None
+    job_stage: Optional[str] = None
+    
+    # Edge data fields
     source_id: int
     target_id: int
     weight: float
@@ -121,6 +140,7 @@ class UMAPGraphEdge(BaseModel):
     is_nearest_neighbor: bool = True
     shared_cluster_layers: List[int] = []
     position: Optional[Coordinates] = None  # Only present when source_id = target_id
+    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
 class ClusterCharacteristic(BaseModel):

@@ -1168,19 +1168,16 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False, job_id=None,
         logger.error("Failed to fetch conversation data.")
         return False
         
-    # Get job_id (parameter, environment variable, or generate one)
-    if not job_id:
-        job_id = os.environ.get("DELPHI_JOB_ID")
+    # Generate a job_id if not provided
     if not job_id:
         job_id = f"pipeline_run_{uuid.uuid4()}"
     
-    # Get other job parameters from environment if not provided
-    if not parent_job_id:
-        parent_job_id = os.environ.get("DELPHI_PARENT_JOB_ID")
+    # Set defaults for other job parameters if not provided
     if not root_job_id:
-        root_job_id = os.environ.get("DELPHI_ROOT_JOB_ID", job_id)  # Default to job_id if no root specified
+        root_job_id = job_id  # Default to job_id if no root specified
+    
     if not job_stage:
-        job_stage = os.environ.get("DELPHI_JOB_STAGE", "UMAP")
+        job_stage = "UMAP"  # Default stage
         
     logger.info(f"Using job tree: job_id={job_id}, parent_job_id={parent_job_id}, root_job_id={root_job_id}, job_stage={job_stage}")
     
@@ -1222,7 +1219,11 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False, job_id=None,
         logger.info("Storing comment embeddings...")
         embedding_models = DataConverter.batch_convert_embeddings(
             conversation_id,
-            document_vectors
+            document_vectors,
+            job_id=job_id,
+            parent_job_id=parent_job_id,
+            root_job_id=root_job_id,
+            job_stage=job_stage
         )
         result = dynamo_storage.batch_create_comment_embeddings(embedding_models)
         logger.info(f"Stored {result['success']} embeddings with {result['failure']} failures")
@@ -1232,7 +1233,11 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False, job_id=None,
         edge_models = DataConverter.batch_convert_umap_edges(
             conversation_id,
             document_map,
-            cluster_layers
+            cluster_layers,
+            job_id=job_id,
+            parent_job_id=parent_job_id,
+            root_job_id=root_job_id,
+            job_stage=job_stage
         )
         result = dynamo_storage.batch_create_graph_edges(edge_models)
         logger.info(f"Stored {result['success']} UMAP graph edges with {result['failure']} failures")
@@ -1256,7 +1261,11 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False, job_id=None,
             document_map,
             topic_names={},  # No topic names yet
             characteristics={},  # No characteristics yet
-            comments=[{'body': comment['txt']} for comment in comments]
+            comments=[{'body': comment['txt']} for comment in comments],
+            job_id=job_id,
+            parent_job_id=parent_job_id,
+            root_job_id=root_job_id,
+            job_stage=job_stage
         )
         result = dynamo_storage.batch_create_cluster_topics(topic_models)
         logger.info(f"Stored {result['success']} topics with {result['failure']} failures")
@@ -1341,12 +1350,8 @@ def main():
         job_id = str(uuid.uuid4())
         logger.info(f"Generated job_id: {job_id}")
     
-    # Store job parameters in environment for backward compatibility
-    os.environ["DELPHI_JOB_ID"] = job_id
-    if args.parent_job_id:
-        os.environ["DELPHI_PARENT_JOB_ID"] = args.parent_job_id
-    if args.root_job_id:
-        os.environ["DELPHI_ROOT_JOB_ID"] = args.root_job_id
+    # Don't store job parameters in environment to avoid race conditions
+    # between concurrent jobs
     
     # Log job tree information
     logger.info(f"Job tree parameters:")

@@ -156,7 +156,11 @@ class DataConverter:
     def create_comment_embedding(
         conversation_id: str,
         comment_id: int,
-        vector: np.ndarray
+        vector: np.ndarray,
+        job_id: Optional[str] = None,
+        parent_job_id: Optional[str] = None,
+        root_job_id: Optional[str] = None,
+        job_stage: Optional[str] = None
     ) -> CommentEmbedding:
         """
         Create a CommentEmbedding model from raw data.
@@ -176,12 +180,25 @@ class DataConverter:
             model='all-MiniLM-L6-v2'
         )
         
-        # Create the model with just the embedding vector
-        model = CommentEmbedding(
-            conversation_id=conversation_id,
-            comment_id=int(comment_id),
-            embedding=embedding
-        )
+        # Create model data with required fields
+        model_data = {
+            'conversation_id': conversation_id,
+            'comment_id': int(comment_id),
+            'embedding': embedding
+        }
+        
+        # Add job relationship fields if provided
+        if job_id:
+            model_data['job_id'] = job_id
+        if parent_job_id:
+            model_data['parent_job_id'] = parent_job_id
+        if root_job_id:
+            model_data['root_job_id'] = root_job_id
+        if job_stage:
+            model_data['job_stage'] = job_stage
+            
+        # Create the model
+        model = CommentEmbedding(**model_data)
         
         return model
     
@@ -344,7 +361,11 @@ class DataConverter:
         distance: float,
         is_nearest_neighbor: bool,
         shared_layers: List[int],
-        position: Optional[np.ndarray] = None
+        position: Optional[np.ndarray] = None,
+        job_id: Optional[str] = None,
+        parent_job_id: Optional[str] = None,
+        root_job_id: Optional[str] = None,
+        job_stage: Optional[str] = None
     ) -> UMAPGraphEdge:
         """
         Create a UMAPGraphEdge model from raw data.
@@ -376,18 +397,31 @@ class DataConverter:
                 y=float(position[1])
             )
         
+        # Create model data with required fields
+        model_data = {
+            'conversation_id': conversation_id,
+            'edge_id': edge_id,
+            'source_id': int(source_id),
+            'target_id': int(target_id),
+            'weight': float(weight),
+            'distance': float(distance),
+            'is_nearest_neighbor': bool(is_nearest_neighbor),
+            'shared_cluster_layers': shared_layers,
+            'position': position_coords
+        }
+        
+        # Add job relationship fields if provided
+        if job_id:
+            model_data['job_id'] = job_id
+        if parent_job_id:
+            model_data['parent_job_id'] = parent_job_id
+        if root_job_id:
+            model_data['root_job_id'] = root_job_id
+        if job_stage:
+            model_data['job_stage'] = job_stage
+            
         # Create the model
-        model = UMAPGraphEdge(
-            conversation_id=conversation_id,
-            edge_id=edge_id,
-            source_id=int(source_id),
-            target_id=int(target_id),
-            weight=float(weight),
-            distance=float(distance),
-            is_nearest_neighbor=bool(is_nearest_neighbor),
-            shared_cluster_layers=shared_layers,
-            position=position_coords
-        )
+        model = UMAPGraphEdge(**model_data)
         
         return model
     
@@ -636,7 +670,11 @@ class DataConverter:
     @staticmethod
     def batch_convert_embeddings(
         conversation_id: str,
-        document_vectors: np.ndarray
+        document_vectors: np.ndarray,
+        job_id: Optional[str] = None,
+        parent_job_id: Optional[str] = None,
+        root_job_id: Optional[str] = None,
+        job_stage: Optional[str] = None
     ) -> List[CommentEmbedding]:
         """
         Convert batch of embeddings from NumPy arrays to model objects.
@@ -656,7 +694,11 @@ class DataConverter:
             embedding = DataConverter.create_comment_embedding(
                 conversation_id=conversation_id,
                 comment_id=i,
-                vector=document_vectors[i]
+                vector=document_vectors[i],
+                job_id=job_id,
+                parent_job_id=parent_job_id,
+                root_job_id=root_job_id,
+                job_stage=job_stage
             )
             
             embeddings.append(embedding)
@@ -668,7 +710,11 @@ class DataConverter:
         conversation_id: str,
         document_map: np.ndarray,
         cluster_layers: List[np.ndarray],
-        k_neighbors: int = 5
+        k_neighbors: int = 5,
+        job_id: Optional[str] = None,
+        parent_job_id: Optional[str] = None,
+        root_job_id: Optional[str] = None,
+        job_stage: Optional[str] = None
     ) -> List[UMAPGraphEdge]:
         """
         Convert UMAP projection data to graph edges and nodes with positions.
@@ -705,7 +751,11 @@ class DataConverter:
                 is_nearest_neighbor=False,
                 shared_layers=[layer_id for layer_id, layer in enumerate(cluster_layers) 
                               if i < len(layer) and layer[i] >= 0],
-                position=document_map[i]  # Store actual UMAP coordinates
+                position=document_map[i],  # Store actual UMAP coordinates
+                job_id=job_id,
+                parent_job_id=parent_job_id,
+                root_job_id=root_job_id,
+                job_stage=job_stage
             )
             
             edges.append(node)
@@ -745,7 +795,11 @@ class DataConverter:
                     weight=1.0 - distance,  # Convert distance to similarity
                     distance=float(distance),
                     is_nearest_neighbor=True,
-                    shared_layers=shared_layers
+                    shared_layers=shared_layers,
+                    job_id=job_id,
+                    parent_job_id=parent_job_id,
+                    root_job_id=root_job_id,
+                    job_stage=job_stage
                 )
                 
                 edges.append(edge)

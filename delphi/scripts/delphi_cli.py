@@ -228,9 +228,9 @@ def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50,
         }),
         'created_by': 'delphi_cli',
         # Job tree fields
-        'parent_job_id': parent_job_id or "",  # Empty string if None for GSI compatibility
-        'root_job_id': root_job_id or "",      # Empty string if None for GSI compatibility
-        'job_stage': job_stage or "",          # Empty string if None for GSI compatibility
+        'parent_job_id': parent_job_id or "NONE",  # Placeholder if None for GSI compatibility
+        'root_job_id': root_job_id or "NONE",      # Placeholder if None for GSI compatibility
+        'job_stage': job_stage or "NONE",          # Placeholder if None for GSI compatibility
         'child_jobs': []                      # Initialize with empty array
     }
     

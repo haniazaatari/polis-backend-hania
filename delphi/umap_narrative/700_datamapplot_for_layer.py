@@ -267,22 +267,24 @@ def load_comment_texts(zid):
 
 def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage, job_id=None):
     """
-    Load data from DynamoDB for a specific conversation and layer using job_id correlation.
+    Load data from DynamoDB for a specific conversation and layer.
     
     Args:
         zid: Conversation ID
         layer_id: Layer ID
         dynamo_storage: DynamoDBStorage instance
-        job_id: Job ID for data correlation
+        job_id: Job ID for data correlation (if None, uses legacy mode)
         
     Returns:
         Dictionary with data from DynamoDB
     """
-    logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id}, job_id: {job_id}")
+    if job_id:
+        logger.info(f"Loading data from DynamoDB in job mode for conversation {zid}, layer {layer_id}, job_id: {job_id}")
+    else:
+        logger.info(f"Loading data from DynamoDB in legacy mode for conversation {zid}, layer {layer_id}")
     
-    if not job_id:
-        logger.error("job_id is required for data correlation")
-        return None
+    # Determine operation mode based on job_id
+    job_mode = job_id is not None
     
     # Initialize data dictionary
     data = {
@@ -339,42 +341,34 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage, job_id=Non
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         
-    # Get comment clusters - prefer job_id if available, fall back to conversation_id
+    # Get comment clusters - using clean job/legacy mode approach
     try:
-        table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['comment_clusters'])
-        logger.debug(f"CommentClusters table name: {dynamo_storage.table_names['comment_clusters']}")
-        
-        if job_id:
-            # Use JobIdIndex for job-based correlation
-            logger.info(f"Loading cluster assignments from CommentClusters using job_id: {job_id}...")
-            response = table.query(
-                IndexName='JobIdIndex',
-                KeyConditionExpression=Key('job_id').eq(job_id)
-            )
+        if job_mode:
+            # Job mode: Use get_clusters_by_job_id method
+            logger.info(f"Loading cluster assignments using job_id: {job_id}...")
+            clusters = dynamo_storage.get_comment_clusters_by_job(job_id)
+            # Filter by conversation_id if needed
+            clusters = [c for c in clusters if c.get('conversation_id') == str(zid)]
         else:
-            # Fall back to conversation-based query for backwards compatibility
-            logger.info(f"Loading cluster assignments from CommentClusters using conversation_id: {zid}...")
+            # Legacy mode: Use conversation_id-based query
+            logger.info(f"Loading cluster assignments using conversation_id: {zid}...")
+            table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['comment_clusters'])
+            logger.debug(f"CommentClusters table name: {dynamo_storage.table_names['comment_clusters']}")
+            
             response = table.query(
                 KeyConditionExpression=Key('conversation_id').eq(str(zid))
             )
-        
-        clusters = response.get('Items', [])
-        
-        # Handle pagination if needed
-        while 'LastEvaluatedKey' in response:
-            logger.debug(f"Handling pagination for comment clusters...")
-            if job_id:
-                response = table.query(
-                    IndexName='JobIdIndex',
-                    KeyConditionExpression=Key('job_id').eq(job_id),
-                    ExclusiveStartKey=response['LastEvaluatedKey']
-                )
-            else:
+            
+            clusters = response.get('Items', [])
+            
+            # Handle pagination if needed
+            while 'LastEvaluatedKey' in response:
+                logger.debug(f"Handling pagination for comment clusters...")
                 response = table.query(
                     KeyConditionExpression=Key('conversation_id').eq(str(zid)),
                     ExclusiveStartKey=response['LastEvaluatedKey']
                 )
-            clusters.extend(response.get('Items', []))
+                clusters.extend(response.get('Items', []))
         
         logger.info(f"Retrieved {len(clusters)} comment cluster assignments")
         
@@ -423,73 +417,62 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage, job_id=Non
         if len(data["comment_positions"]) == 0:
             logger.info("No positions found in CommentClusters, fetching from UMAPGraph...")
             
-            # Try to get positions from the UMAPGraph table
+            # Try to get positions from the UMAPGraph table using job_id or conversation_id
             try:
-                # Get all edges from UMAPGraph for this conversation
-                umap_table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['umap_graph'])
-                logger.debug(f"UMAPGraph table name: {dynamo_storage.table_names['umap_graph']}")
-                
-                response = umap_table.query(
-                    KeyConditionExpression=Key('conversation_id').eq(str(zid))
-                )
-                edges = response.get('Items', [])
-                
-                # Handle pagination if needed
-                while 'LastEvaluatedKey' in response:
-                    logger.debug(f"Handling pagination for UMAP graph...")
+                if job_mode:
+                    # Job mode: Use get_positions_by_job_id method
+                    logger.info(f"Loading positions using job_id: {job_id}...")
+                    positions_map = dynamo_storage.get_positions_by_job_id(job_id, str(zid))
+                else:
+                    # Legacy mode: Use conversation_id-based query
+                    logger.info(f"Loading positions using conversation_id: {zid}...")
+                    # Get all edges from UMAPGraph for this conversation
+                    umap_table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['umap_graph'])
+                    logger.debug(f"UMAPGraph table name: {dynamo_storage.table_names['umap_graph']}")
+                    
                     response = umap_table.query(
-                        KeyConditionExpression=Key('conversation_id').eq(str(zid)),
-                        ExclusiveStartKey=response['LastEvaluatedKey']
+                        KeyConditionExpression=Key('conversation_id').eq(str(zid))
                     )
-                    edges.extend(response.get('Items', []))
-                
-                logger.info(f"Retrieved {len(edges)} edges from UMAPGraph")
-                
-                # Check how many edges have position data
-                edges_with_position = [e for e in edges if 'position' in e and isinstance(e['position'], dict)]
-                logger.debug(f"Number of edges with position field: {len(edges_with_position)}")
-                
-                # Check how many are self-referencing edges
-                self_ref_edges = [e for e in edges if 'source_id' in e and 'target_id' in e and str(e['source_id']) == str(e['target_id'])]
-                logger.debug(f"Number of self-referencing edges: {len(self_ref_edges)}")
-                
-                # Check how many self-referencing edges have position data
-                self_ref_with_pos = [e for e in self_ref_edges if 'position' in e and isinstance(e['position'], dict)]
-                logger.debug(f"Number of self-referencing edges with position: {len(self_ref_with_pos)}")
-                
-                # Extract positions from edges - only self-referring edges have position data
-                positions = {}
-                position_count = 0
-                
-                for edge in edges:
-                    # Check if this edge has position information
-                    if 'position' in edge and isinstance(edge['position'], dict) and 'x' in edge['position'] and 'y' in edge['position']:
-                        pos = edge['position']
-                        
-                        # Check if this is a self-referencing edge
-                        is_self_ref = False
-                        if 'source_id' in edge and 'target_id' in edge:
-                            is_self_ref = str(edge['source_id']) == str(edge['target_id'])
-                        
-                        # Only self-referencing edges contain the position data
-                        if is_self_ref:
-                            comment_id = int(edge['source_id'])
-                            positions[comment_id] = [float(pos['x']), float(pos['y'])]
-                            position_count += 1
+                    edges = response.get('Items', [])
+                    
+                    # Handle pagination if needed
+                    while 'LastEvaluatedKey' in response:
+                        logger.debug(f"Handling pagination for UMAP graph...")
+                        response = umap_table.query(
+                            KeyConditionExpression=Key('conversation_id').eq(str(zid)),
+                            ExclusiveStartKey=response['LastEvaluatedKey']
+                        )
+                        edges.extend(response.get('Items', []))
+                    
+                    logger.info(f"Retrieved {len(edges)} edges from UMAPGraph")
+                    
+                    # Extract positions from edges - only self-referring edges have position data
+                    positions_map = {}
+                    position_count = 0
+                    
+                    for edge in edges:
+                        # Check if this edge has position information
+                        if 'position' in edge and isinstance(edge['position'], dict) and 'x' in edge['position'] and 'y' in edge['position']:
+                            pos = edge['position']
                             
-                            # Don't log individual positions as they're too verbose
-                            pass
+                            # Check if this is a self-referencing edge
+                            is_self_ref = False
+                            if 'source_id' in edge and 'target_id' in edge:
+                                is_self_ref = str(edge['source_id']) == str(edge['target_id'])
+                            
+                            # Only self-referencing edges contain the position data
+                            if is_self_ref:
+                                comment_id = int(edge['source_id'])
+                                positions_map[comment_id] = {'x': float(pos['x']), 'y': float(pos['y'])}
+                                position_count += 1
                 
-                logger.debug(f"Extracted {position_count} positions from self-referencing edges")
+                logger.info(f"Retrieved {len(positions_map)} positions from UMAPGraph")
                 
-                # Map positions to comment IDs
-                for comment_id in data["cluster_assignments"].keys():
-                    if comment_id in positions:
-                        data["comment_positions"][comment_id] = positions[comment_id]
+                # Convert positions to the format expected by data["comment_positions"]
+                for comment_id, pos in positions_map.items():
+                    data["comment_positions"][comment_id] = [float(pos['x']), float(pos['y'])]
                 
-                logger.info(f"Extracted {len(data['comment_positions'])} positions from UMAPGraph")
-                
-                # If we still don't have all positions, check if we can use the comment embeddings
+                # If we still don't have all positions, report missing positions
                 if len(data['comment_positions']) < len(data['cluster_assignments']):
                     logger.info(f"Still missing positions for {len(data['cluster_assignments']) - len(data['comment_positions'])} comments")
                     
@@ -505,42 +488,34 @@ def load_conversation_data_from_dynamo(zid, layer_id, dynamo_storage, job_id=Non
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
     
-    # Get topic names from LLMTopicNames - prefer job_id if available, fall back to conversation_id
+    # Get topic names from LLMTopicNames - using clean job/legacy mode approach
     try:
-        table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['llm_topic_names'])
-        logger.debug(f"LLMTopicNames table name: {dynamo_storage.table_names['llm_topic_names']}")
-        
-        if job_id:
-            # Use JobIdIndex for job-based correlation
-            logger.info(f"Loading topic names from LLMTopicNames using job_id: {job_id}...")
-            response = table.query(
-                IndexName='JobIdIndex',
-                KeyConditionExpression=Key('job_id').eq(job_id)
-            )
+        if job_mode:
+            # Job mode: Use get_llm_topic_names_by_job method
+            logger.info(f"Loading topic names using job_id: {job_id}...")
+            topic_names = dynamo_storage.get_llm_topic_names_by_job(job_id)
+            # Filter by conversation_id if needed
+            topic_names = [t for t in topic_names if t.get('conversation_id') == str(zid)]
         else:
-            # Fall back to conversation-based query for backwards compatibility
-            logger.info(f"Loading topic names from LLMTopicNames using conversation_id: {zid}...")
+            # Legacy mode: Use conversation_id-based query
+            logger.info(f"Loading topic names using conversation_id: {zid}...")
+            table = dynamo_storage.dynamodb.Table(dynamo_storage.table_names['llm_topic_names'])
+            logger.debug(f"LLMTopicNames table name: {dynamo_storage.table_names['llm_topic_names']}")
+            
             response = table.query(
                 KeyConditionExpression=Key('conversation_id').eq(str(zid))
             )
-        
-        topic_names = response.get('Items', [])
-        
-        # Handle pagination if needed
-        while 'LastEvaluatedKey' in response:
-            logger.debug(f"Handling pagination for topic names...")
-            if job_id:
-                response = table.query(
-                    IndexName='JobIdIndex',
-                    KeyConditionExpression=Key('job_id').eq(job_id),
-                    ExclusiveStartKey=response['LastEvaluatedKey']
-                )
-            else:
+            
+            topic_names = response.get('Items', [])
+            
+            # Handle pagination if needed
+            while 'LastEvaluatedKey' in response:
+                logger.debug(f"Handling pagination for topic names...")
                 response = table.query(
                     KeyConditionExpression=Key('conversation_id').eq(str(zid)),
                     ExclusiveStartKey=response['LastEvaluatedKey']
                 )
-            topic_names.extend(response.get('Items', []))
+                topic_names.extend(response.get('Items', []))
         
         # Log sample item for debugging
         if topic_names:
@@ -772,12 +747,12 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
             
             # Upload to S3
             try:
-                # Get job ID and report ID from environment variables
-                job_id = os.environ.get('DELPHI_JOB_ID', 'unknown')
-                report_id = os.environ.get('DELPHI_REPORT_ID', 'unknown')
+                # Use job_id parameter passed to the function (or default to 'unknown')
+                job_id_for_s3 = job_id if job_id else 'unknown'
+                report_id = os.environ.get('DELPHI_REPORT_ID', 'unknown')  # This is still needed for S3 path
                 
                 # Create S3 key using report_id and job ID to avoid exposing ZIDs
-                s3_key = f"visualizations/{report_id}/{job_id}/layer_{layer_id}_datamapplot.html"
+                s3_key = f"visualizations/{report_id}/{job_id_for_s3}/layer_{layer_id}_datamapplot.html"
                 s3_url = s3_upload_file(viz_file, s3_key)
                 
                 if s3_url:
@@ -865,12 +840,20 @@ def generate_visualization(zid, layer_id=0, output_dir=None, dynamo_endpoint=Non
             return None
         logger.info(f"Successfully loaded {len(comment_texts)} comment texts")
         
-        # Get job_id from environment variable or parameter
+        # Check for job_id parameter
         if not job_id:
-            job_id = os.environ.get('DELPHI_JOB_ID')
-            if not job_id:
-                logger.error("job_id is required for data correlation. Set DELPHI_JOB_ID environment variable or pass job_id parameter.")
-                return None
+            logger.warning("No job_id provided via command-line argument.")
+            logger.warning("Running in legacy mode - data correlation will be based on conversation_id only.")
+            logger.warning("For consistent data correlation, provide a job_id parameter.")
+        else:
+            logger.info(f"Using provided job_id: {job_id}")
+        
+        # Log operation mode
+        if job_id:
+            logger.info("Operating in job mode with job_id-based data correlation")
+        else:
+            logger.warning("Operating in legacy mode with conversation_id-based data correlation")
+            logger.warning("This mode may lead to inconsistent data across pipeline components")
         
         # Load data from DynamoDB
         logger.info(f"Loading data from DynamoDB for conversation {zid}, layer {layer_id} with job_id: {job_id}...")
@@ -932,7 +915,7 @@ def main():
     parser.add_argument('--dynamo_endpoint', type=str, default=None,
                       help='DynamoDB endpoint URL')
     parser.add_argument('--job_id', type=str, default=None,
-                      help='Job ID for data correlation (default: use DELPHI_JOB_ID env var)')
+                      help='Job ID for data correlation')
     
     args = parser.parse_args()
     
