@@ -37,11 +37,10 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
           console.log('Topic prioritize check:', topicPrioritizeData);
           
           if (topicPrioritizeData.has_report && topicPrioritizeData.report_id) {
-            rd = {
+            setReportData({
               report_id: topicPrioritizeData.report_id,
               conversation_id: topicPrioritizeData.conversation_id
-            };
-            setReportData(rd);
+            });
             
             // Also fetch comments for the TopicAgenda
             // Use the original zinvite for the comments API, not the numeric conversation_id
@@ -54,8 +53,8 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
             );
             
             if (commentsResponse.ok) {
-              cd = await commentsResponse.json();
-              console.log(`Found ${commentsData.length} comments for topic prioritization`);
+              const cd = await commentsResponse.json();
+              console.log(`Found ${cd.length} comments for topic prioritization`);
               setComments(cd);
             }
           }
@@ -64,7 +63,8 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
         console.error("Failed to check topic prioritization availability:", err);
       }
     }
-  })
+    f();
+  }, []);
 
   // Build comment map for easy lookup
   useEffect(() => {
