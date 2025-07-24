@@ -209,7 +209,10 @@ class DataConverter:
         cluster_layers: List[np.ndarray],
         distances: Optional[Dict[str, float]] = None,
         confidences: Optional[Dict[str, float]] = None,
-        job_id: str = None
+        job_id: str = None,
+        parent_job_id: Optional[str] = None,
+        root_job_id: Optional[str] = None,
+        job_stage: Optional[str] = None
     ) -> CommentCluster:
         """
         Create a CommentCluster model from raw data.
@@ -262,9 +265,18 @@ class DataConverter:
             # Convert all float values to Decimal for DynamoDB compatibility
             data['cluster_confidence'] = {k: float(v) for k, v in confidences.items()}
         
-        # Add job_id (optional field for backwards compatibility)
+        # Add job relationship fields (optional for backwards compatibility)
         if job_id:
             data['job_id'] = job_id
+            
+        if parent_job_id:
+            data['parent_job_id'] = parent_job_id
+            
+        if root_job_id:
+            data['root_job_id'] = root_job_id
+            
+        if job_stage:
+            data['job_stage'] = job_stage
         
         # Create the model directly from the data dict
         # The model creation will use pydantic to validate the types
@@ -285,7 +297,11 @@ class DataConverter:
         top_words: Optional[List[str]] = None,
         top_tfidf_scores: Optional[List[float]] = None,
         parent_cluster: Optional[Dict[str, int]] = None,
-        child_clusters: Optional[List[Dict[str, int]]] = None
+        child_clusters: Optional[List[Dict[str, int]]] = None,
+        job_id: Optional[str] = None,
+        parent_job_id: Optional[str] = None,
+        root_job_id: Optional[str] = None,
+        job_stage: Optional[str] = None
     ) -> ClusterTopic:
         """
         Create a ClusterTopic model from raw data.
@@ -334,21 +350,34 @@ class DataConverter:
                 for child in child_clusters
             ]
         
+        # Create model data with required fields
+        model_data = {
+            'conversation_id': conversation_id,
+            'cluster_key': cluster_key,
+            'layer_id': layer_id,
+            'cluster_id': cluster_id,
+            'topic_label': topic_label,
+            'size': size,
+            'sample_comments': sample_comments,
+            'centroid_coordinates': centroid_coords,
+            'top_words': top_words,
+            'top_tfidf_scores': top_tfidf_scores,
+            'parent_cluster': parent_ref,
+            'child_clusters': child_refs
+        }
+        
+        # Add job relationship fields if provided
+        if job_id:
+            model_data['job_id'] = job_id
+        if parent_job_id:
+            model_data['parent_job_id'] = parent_job_id
+        if root_job_id:
+            model_data['root_job_id'] = root_job_id
+        if job_stage:
+            model_data['job_stage'] = job_stage
+            
         # Create the model
-        model = ClusterTopic(
-            conversation_id=conversation_id,
-            cluster_key=cluster_key,
-            layer_id=layer_id,
-            cluster_id=cluster_id,
-            topic_label=topic_label,
-            size=size,
-            sample_comments=sample_comments,
-            centroid_coordinates=centroid_coords,
-            top_words=top_words,
-            top_tfidf_scores=top_tfidf_scores,
-            parent_cluster=parent_ref,
-            child_clusters=child_refs
-        )
+        model = ClusterTopic(**model_data)
         
         return model
     
@@ -811,7 +840,10 @@ class DataConverter:
         conversation_id: str,
         cluster_layers: List[np.ndarray],
         document_map: np.ndarray,
-        job_id: str = None
+        job_id: str = None,
+        parent_job_id: Optional[str] = None,
+        root_job_id: Optional[str] = None,
+        job_stage: Optional[str] = None
     ) -> List[CommentCluster]:
         """
         Convert batch of clusters from NumPy arrays to model objects.
@@ -871,7 +903,10 @@ class DataConverter:
                 cluster_layers=cluster_layers,
                 distances=distances_map.get(comment_id),
                 confidences=confidence_map.get(comment_id),
-                job_id=job_id
+                job_id=job_id,
+                parent_job_id=parent_job_id,
+                root_job_id=root_job_id,
+                job_stage=job_stage
             )
             
             clusters.append(cluster)
@@ -885,7 +920,11 @@ class DataConverter:
         document_map: np.ndarray,
         topic_names: Dict[str, Dict[str, str]] = None,
         characteristics: Dict[str, Dict[str, Any]] = None,
-        comments: List[Dict[str, Any]] = None
+        comments: List[Dict[str, Any]] = None,
+        job_id: Optional[str] = None,
+        parent_job_id: Optional[str] = None,
+        root_job_id: Optional[str] = None,
+        job_stage: Optional[str] = None
     ) -> List[ClusterTopic]:
         """
         Convert batch of topics from raw data to model objects.
@@ -1036,7 +1075,11 @@ class DataConverter:
                     top_words=top_words,
                     top_tfidf_scores=top_tfidf_scores,
                     parent_cluster=parent_cluster,
-                    child_clusters=child_clusters
+                    child_clusters=child_clusters,
+                    job_id=job_id,
+                    parent_job_id=parent_job_id,
+                    root_job_id=root_job_id,
+                    job_stage=job_stage
                 )
                 
                 topics.append(topic)

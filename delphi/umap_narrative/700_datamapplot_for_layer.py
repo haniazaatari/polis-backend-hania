@@ -747,12 +747,13 @@ def create_visualization(zid, layer_id, data, comment_texts, output_dir=None):
             
             # Upload to S3
             try:
-                # Use job_id parameter passed to the function (or default to 'unknown')
-                job_id_for_s3 = job_id if job_id else 'unknown'
+                # Get job_id from the data dictionary if available, otherwise use 'unknown'
+                # 'job_id' variable wasn't defined in this scope
+                data_job_id = data.get("meta", {}).get("job_id", "unknown")
                 report_id = os.environ.get('DELPHI_REPORT_ID', 'unknown')  # This is still needed for S3 path
                 
                 # Create S3 key using report_id and job ID to avoid exposing ZIDs
-                s3_key = f"visualizations/{report_id}/{job_id_for_s3}/layer_{layer_id}_datamapplot.html"
+                s3_key = f"visualizations/{report_id}/{data_job_id}/layer_{layer_id}_datamapplot.html"
                 s3_url = s3_upload_file(viz_file, s3_key)
                 
                 if s3_url:

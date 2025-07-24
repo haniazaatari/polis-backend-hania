@@ -1248,7 +1248,10 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False, job_id=None,
             conversation_id,
             cluster_layers,
             document_map,
-            job_id=job_id
+            job_id=job_id,
+            parent_job_id=parent_job_id,
+            root_job_id=root_job_id,
+            job_stage=job_stage
         )
         result = dynamo_storage.batch_create_comment_clusters(cluster_models)
         logger.info(f"Stored {result['success']} cluster assignments with {result['failure']} failures")

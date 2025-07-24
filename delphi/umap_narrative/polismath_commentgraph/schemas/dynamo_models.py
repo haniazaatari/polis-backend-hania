@@ -86,8 +86,11 @@ class CommentCluster(BaseModel):
     conversation_id: str
     comment_id: int
     
-    # Job correlation field (optional for backwards compatibility)
+    # Job relationship fields (optional for backwards compatibility)
     job_id: Optional[str] = None
+    parent_job_id: Optional[str] = None
+    root_job_id: Optional[str] = None
+    job_stage: Optional[str] = None
     
     # Cluster assignment fields
     is_outlier: bool = False
@@ -115,6 +118,12 @@ class ClusterTopic(BaseModel):
     top_tfidf_scores: Optional[List[float]] = None
     parent_cluster: Optional[ClusterReference] = None
     child_clusters: Optional[List[ClusterReference]] = None
+    
+    # Job relationship fields (optional for backwards compatibility)
+    job_id: Optional[str] = None
+    parent_job_id: Optional[str] = None
+    root_job_id: Optional[str] = None
+    job_stage: Optional[str] = None
 
 
 class UMAPGraphEdge(BaseModel):
