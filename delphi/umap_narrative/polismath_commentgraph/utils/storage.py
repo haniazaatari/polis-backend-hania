@@ -1163,13 +1163,14 @@ class DynamoDBStorage:
             'failure': failure_count
         }
     
-    def get_cluster_characteristics_by_layer(self, conversation_id, layer_id):
+    def get_cluster_characteristics_by_layer(self, job_id, layer_id, conversation_id=None):
         """
         Retrieve all cluster characteristics for a specific layer.
         
         Args:
-            conversation_id: ID of the conversation
+            job_id: ID of the job - used as the primary key for DynamoDB queries
             layer_id: Layer ID to retrieve characteristics for
+            conversation_id: Optional ID of the conversation (for filtering)
             
         Returns:
             List of cluster characteristic dictionaries
@@ -1177,9 +1178,9 @@ class DynamoDBStorage:
         table = self.dynamodb.Table(self.table_names['cluster_characteristics'])
         
         try:
-            # Query by conversation ID and filter by layer_id
+            # Query by job_id as primary key and filter by layer_id
             response = table.query(
-                KeyConditionExpression=Key('conversation_id').eq(conversation_id),
+                KeyConditionExpression=Key('job_id').eq(job_id),
                 FilterExpression=Attr('layer_id').eq(layer_id)
             )
             
@@ -1188,7 +1189,7 @@ class DynamoDBStorage:
             # Handle pagination if needed
             while 'LastEvaluatedKey' in response:
                 response = table.query(
-                    KeyConditionExpression=Key('conversation_id').eq(conversation_id),
+                    KeyConditionExpression=Key('job_id').eq(job_id),
                     FilterExpression=Attr('layer_id').eq(layer_id),
                     ExclusiveStartKey=response['LastEvaluatedKey']
                 )
@@ -1196,7 +1197,7 @@ class DynamoDBStorage:
             
             logger.info(
                 f"Retrieved {len(characteristics)} cluster characteristics for layer {layer_id} "
-                f"in conversation {conversation_id}"
+                f"in job {job_id}"
             )
             return characteristics
         except ClientError as e:
