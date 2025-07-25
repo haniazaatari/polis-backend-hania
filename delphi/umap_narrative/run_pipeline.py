@@ -1198,7 +1198,8 @@ def process_conversation(zid, export_dynamo=True, use_ollama=False):
             conversation_id,
             document_vectors,
             cluster_layers,
-            metadata
+            metadata,
+            job_id=job_id
         )
         dynamo_storage.create_conversation_meta(conversation_meta)
         
