@@ -68,7 +68,7 @@ const ConversationAdminContainer = () => {
               variant: url === 'topics' ? 'links.activeNav' : 'links.nav'
             }}
             data-test-id="moderate-topics"
-            to={`${match.url}/topics`}>
+            to={`${baseUrl}/topics`}>
             Topic Mod
           </Link>
         </Box>
@@ -123,9 +123,9 @@ const ConversationAdminContainer = () => {
           <Route path="comments/*" element={<ModerateComments />} />
           <Route path="stats" element={<ConversationStats />} />
           <Route
-            path={`${match.path}/topics`}
+            path={`${baseUrl}/topics`}
             render={(props) => (
-              <TopicModeration {...props} conversation_id={match.params.conversation_id} />
+              <TopicModeration {...props} conversation_id={params.conversation_id} />
             )}
           />
           {/* <Route path="export" element={<DataExport />} /> */}

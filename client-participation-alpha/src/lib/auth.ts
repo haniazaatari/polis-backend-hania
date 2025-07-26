@@ -28,3 +28,88 @@ export function getJwtPayload(key: string) {
     return null;
   }
 }
+
+const oidcCacheKeyPrefix = import.meta.env.OIDC_CACHE_KEY_PREFIX;
+const oidcCacheKeyIdTokenSuffix = import.meta.env.OIDC_CACHE_KEY_ID_TOKEN_SUFFIX;
+
+export function setJwtToken(token: string) {
+  try {
+    if (!token) {
+      console.warn("[PolisStorage] Attempted to set null/empty token");
+      return;
+    }
+
+    var conversationId = _getConversationIdFromDecodedJwt(token);
+    if (!conversationId) {
+      console.error("[PolisStorage] No conversation_id in JWT, cannot store participant token securely.");
+      return;
+    }
+
+    var tokenKey = "participant_token_" + conversationId;
+
+    // Store as participant_token_{conversationId}
+    if (window.localStorage) {
+      window.localStorage.setItem(tokenKey, token);
+    } else if (window.sessionStorage) {
+      window.sessionStorage.setItem(tokenKey, token);
+    } else {
+      console.warn("[PolisStorage] No storage available for JWT token");
+    }
+  } catch (e) {
+    console.error("[PolisStorage] Error storing JWT token:", e);
+  }
+}
+
+function _getConversationIdFromDecodedJwt(token: string) {
+  if (!token) return null;
+  try {
+    var parts = token.split(".");
+    if (parts.length !== 3) {
+      return null;
+    }
+    var payload = JSON.parse(atob(parts[1]));
+    return payload.conversation_id || null;
+  } catch (e) {
+    console.error("[PolisStorage] Error decoding JWT for conversation_id:", e);
+    return null;
+  }
+}
+
+function _getOidcTokenFromStorage(storage: Storage) {
+  if (!storage) return null;
+
+  for (let i = 0; i < storage.length; i++) {
+    const key = storage.key(i);
+    // The access token is in a key that does NOT end with @@user@@
+    if (key && key.startsWith(oidcCacheKeyPrefix) && !key.endsWith(oidcCacheKeyIdTokenSuffix)) {
+      try {
+        const value = storage.getItem(key);
+        if (value) {
+          const parsed = JSON.parse(value);
+          // Check for expiry and access_token
+          if (
+            parsed &&
+            parsed.body &&
+            parsed.body.access_token &&
+            parsed.expiresAt &&
+            parsed.expiresAt > Math.floor(Date.now() / 1000)
+          ) {
+            return parsed.body.access_token;
+          }
+        }
+      } catch (e) {
+        // Not valid JSON or other error, continue
+        console.warn("[PolisStorage] Error parsing OIDC storage key " + key, e);
+      }
+    }
+  }
+  return null;
+}
+
+export function getOidcToken() {
+  let token = _getOidcTokenFromStorage(window.localStorage);
+  if (!token) {
+    token = _getOidcTokenFromStorage(window.sessionStorage);
+  }
+  return token;
+}

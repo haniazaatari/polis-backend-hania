@@ -9,8 +9,8 @@ import {
   DeleteCommand,
 } from "@aws-sdk/lib-dynamodb";
 import Config from "../../config";
-import { queryP as pgQueryP } from "../../db/pg-query";
-import Conversation from "../../conversation";
+import p from "../../db/pg-query";
+import { getZidFromConversationId } from "../../conversation";
 import { getPidPromise } from "../../user";
 
 // DynamoDB configuration (reuse pattern from other Delphi routes)
@@ -56,7 +56,7 @@ async function getCurrentDelphiJobId(zid: string): Promise<string | null> {
       ORDER BY created_at DESC 
       LIMIT 1
     `;
-    const result = (await pgQueryP(query, [zid])) as {
+    const result = (await p.queryP(query, [zid])) as {
       rows: Array<{ job_id: string }>;
     };
     return result.rows.length > 0 ? result.rows[0].job_id : null;
@@ -92,11 +92,11 @@ export async function handle_POST_topicAgenda_selections(
     }
 
     // Convert conversation_id to zid
-    const zid = await Conversation.getZidFromConversationId(conversation_id);
+    const zid = await getZidFromConversationId(conversation_id);
     const zidStr = zid.toString();
 
     // Get participant ID
-    const pid = await getPidPromise(zidStr, req.user.uid);
+    const pid = await getPidPromise(Number(zidStr), req.user.uid);
     const pidStr = pid.toString();
 
     // Get current Delphi job ID
@@ -173,11 +173,11 @@ export async function handle_GET_topicAgenda_selections(
     }
 
     // Convert conversation_id to zid
-    const zid = await Conversation.getZidFromConversationId(conversation_id);
+    const zid = await getZidFromConversationId(conversation_id);
     const zidStr = zid.toString();
 
     // Get participant ID
-    const pid = await getPidPromise(zidStr, req.user.uid);
+    const pid = await getPidPromise(Number(zidStr), req.user.uid);
     const pidStr = pid.toString();
 
     // Retrieve from DynamoDB
@@ -242,11 +242,11 @@ export async function handle_PUT_topicAgenda_selections(
     }
 
     // Convert conversation_id to zid
-    const zid = await Conversation.getZidFromConversationId(conversation_id);
+    const zid = await getZidFromConversationId(conversation_id);
     const zidStr = zid.toString();
 
     // Get participant ID
-    const pid = await getPidPromise(zidStr, req.user.uid);
+    const pid = await getPidPromise(Number(zidStr), req.user.uid);
     const pidStr = pid.toString();
 
     // Get current Delphi job ID
@@ -274,7 +274,7 @@ export async function handle_PUT_topicAgenda_selections(
       ReturnValues: "ALL_NEW" as const,
     };
 
-    const result = await docClient.send(new UpdateCommand(updateParams));
+    await docClient.send(new UpdateCommand(updateParams));
 
     logger.info(
       `Updated topic agenda selections for user ${pidStr} in conversation ${zidStr}`
@@ -325,11 +325,11 @@ export async function handle_DELETE_topicAgenda_selections(
     }
 
     // Convert conversation_id to zid
-    const zid = await Conversation.getZidFromConversationId(conversation_id);
+    const zid = await getZidFromConversationId(conversation_id);
     const zidStr = zid.toString();
 
     // Get participant ID
-    const pid = await getPidPromise(zidStr, req.user.uid);
+    const pid = await getPidPromise(Number(zidStr), req.user.uid);
     const pidStr = pid.toString();
 
     // Delete from DynamoDB

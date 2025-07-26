@@ -934,7 +934,7 @@ helpersInitialized.then(
     // Topic Agenda routes
     app.post(
       "/api/v3/topicAgenda/selections",
-      auth(assignToP),
+      hybridAuth(assignToP),
       moveToBody,
       function (req, res) {
         try {
@@ -951,7 +951,7 @@ helpersInitialized.then(
 
     app.get(
       "/api/v3/topicAgenda/selections",
-      auth(assignToP),
+      hybridAuth(assignToP),
       moveToBody,
       handle_GET_topicAgenda_selections,
       function (req, res) {
@@ -969,7 +969,7 @@ helpersInitialized.then(
 
     app.put(
       "/api/v3/topicAgenda/selections",
-      auth(assignToP),
+      hybridAuth(assignToP),
       moveToBody,
       function (req, res) {
         try {
@@ -986,7 +986,7 @@ helpersInitialized.then(
 
     app.delete(
       "/api/v3/topicAgenda/selections",
-      auth(assignToP),
+      hybridAuth(assignToP),
       moveToBody,
       function (req, res) {
         try {

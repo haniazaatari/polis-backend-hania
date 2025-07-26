@@ -1,11 +1,11 @@
+/* eslint-disable */
 // Copyright (C) 2012-present, The Authors. This program is free software: you can redistribute it and/or  modify it under the terms of the GNU Affero General Public License, version 3, as published by the Free Software Foundation. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details. You should have received a copy of the GNU Affero General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
-/** @jsx jsx */
 
 import ComponentHelpers from '../../../util/component-helpers'
 import NoPermission from '../no-permission'
 import React from 'react'
 import { connect } from 'react-redux'
-import { Heading, Flex, Box, jsx } from 'theme-ui'
+import { Heading, Flex, Box } from 'theme-ui'
 import { Switch, Route, Link } from 'react-router-dom'
 
 import TopicTree from './topic-tree'
@@ -53,11 +53,11 @@ class TopicModeration extends React.Component {
         </Box>
       )
     }
-    
+
     if (ComponentHelpers.shouldShowPermissionsError(this.props)) {
       return <NoPermission />
     }
-    
+
     const { match, location } = this.props
     const url = location.pathname.split('/')[4]
 
@@ -103,7 +103,9 @@ class TopicModeration extends React.Component {
             <Route
               exact
               path={`${match.url}`}
-              render={(props) => <TopicTree {...props} conversation_id={this.props.conversation_id} />}
+              render={(props) => (
+                <TopicTree {...props} conversation_id={this.props.conversation_id} />
+              )}
             />
             <Route
               exact
@@ -113,7 +115,9 @@ class TopicModeration extends React.Component {
             <Route
               exact
               path={`${match.url}/stats`}
-              render={(props) => <TopicStats {...props} conversation_id={this.props.conversation_id} />}
+              render={(props) => (
+                <TopicStats {...props} conversation_id={this.props.conversation_id} />
+              )}
             />
             <Route
               exact

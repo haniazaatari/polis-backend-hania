@@ -1,5 +1,4 @@
 // Copyright (C) 2012-present, The Authors. This program is free software: you can redistribute it and/or  modify it under the terms of the GNU Affero General Public License, version 3, as published by the Free Software Foundation. This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details. You should have received a copy of the GNU Affero General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
-/** @jsx jsx */
 
 import React from 'react'
 import { connect } from 'react-redux'
@@ -42,27 +41,29 @@ class TopicDetail extends React.Component {
       const { match } = this.props
       const conversation_id = match.params.conversation_id
       const topicKey = decodeURIComponent(match.params.topicKey)
-      
+
       // Fetch comments for this specific topic
-      const response = await fetch(`/api/v3/topicMod/topics/${encodeURIComponent(topicKey)}/comments?report_id=${conversation_id}`)
+      const response = await fetch(
+        `/api/v3/topicMod/topics/${encodeURIComponent(topicKey)}/comments?report_id=${conversation_id}`
+      )
       const data = await response.json()
-      
+
       if (data.status === 'success') {
-        this.setState({ 
+        this.setState({
           comments: data.comments || [],
           loading: false,
           selectedComments: new Set()
         })
       } else {
-        this.setState({ 
+        this.setState({
           error: data.message || 'Failed to load comments',
-          loading: false 
+          loading: false
         })
       }
     } catch (err) {
-      this.setState({ 
+      this.setState({
         error: 'Network error loading comments',
-        loading: false 
+        loading: false
       })
     }
   }
@@ -70,14 +71,14 @@ class TopicDetail extends React.Component {
   toggleComment(commentId) {
     const { selectedComments } = this.state
     const newSelected = new Set(selectedComments)
-    
+
     if (newSelected.has(commentId)) {
       newSelected.delete(commentId)
     } else {
       newSelected.add(commentId)
     }
-    
-    this.setState({ 
+
+    this.setState({
       selectedComments: newSelected,
       selectAll: newSelected.size === this.state.comments.length
     })
@@ -85,35 +86,35 @@ class TopicDetail extends React.Component {
 
   toggleSelectAll() {
     const { selectAll, comments } = this.state
-    
+
     if (selectAll) {
-      this.setState({ 
+      this.setState({
         selectedComments: new Set(),
-        selectAll: false 
+        selectAll: false
       })
     } else {
-      this.setState({ 
-        selectedComments: new Set(comments.map(c => c.comment_id)),
-        selectAll: true 
+      this.setState({
+        selectedComments: new Set(comments.map((c) => c.comment_id)),
+        selectAll: true
       })
     }
   }
 
   async moderateSelected(action) {
     const { selectedComments } = this.state
-    
+
     if (selectedComments.size === 0) {
       return
     }
-    
+
     try {
       const { match } = this.props
       const conversation_id = match.params.conversation_id
-      
+
       const response = await fetch('/api/v3/topicMod/moderate', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           report_id: conversation_id,
@@ -122,9 +123,9 @@ class TopicDetail extends React.Component {
           moderator: 'admin' // TODO: Get from auth state
         })
       })
-      
+
       const data = await response.json()
-      
+
       if (data.status === 'success') {
         // Reload comments to reflect changes
         this.loadTopicComments()
@@ -138,19 +139,33 @@ class TopicDetail extends React.Component {
 
   getStatusColor(status) {
     switch (status) {
-      case 'accepted': case 1: return 'green'
-      case 'rejected': case -1: return 'red'
-      case 'meta': case 0: return 'orange'
-      default: return 'gray'
+      case 'accepted':
+      case 1:
+        return 'green'
+      case 'rejected':
+      case -1:
+        return 'red'
+      case 'meta':
+      case 0:
+        return 'orange'
+      default:
+        return 'gray'
     }
   }
 
   getStatusText(status) {
     switch (status) {
-      case 'accepted': case 1: return 'Accepted'
-      case 'rejected': case -1: return 'Rejected'
-      case 'meta': case 0: return 'Meta'
-      default: return 'Pending'
+      case 'accepted':
+      case 1:
+        return 'Accepted'
+      case 'rejected':
+      case -1:
+        return 'Rejected'
+      case 'meta':
+      case 0:
+        return 'Meta'
+      default:
+        return 'Pending'
     }
   }
 
@@ -158,7 +173,7 @@ class TopicDetail extends React.Component {
     const { selectedComments } = this.state
     const isSelected = selectedComments.has(comment.comment_id)
     const status = comment.moderation_status || 'pending'
-    
+
     return (
       <Box
         key={comment.comment_id}
@@ -172,7 +187,6 @@ class TopicDetail extends React.Component {
           cursor: 'pointer'
         }}
         onClick={() => this.toggleComment(comment.comment_id)}>
-        
         <Flex sx={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <Flex sx={{ alignItems: 'flex-start', flex: 1 }}>
             <Checkbox
@@ -182,24 +196,24 @@ class TopicDetail extends React.Component {
               onClick={(e) => e.stopPropagation()}
             />
             <Box sx={{ flex: 1 }}>
-              <Text sx={{ mb: 2, lineHeight: 'body' }}>
-                {comment.comment_text}
-              </Text>
+              <Text sx={{ mb: 2, lineHeight: 'body' }}>{comment.comment_text}</Text>
               <Flex sx={{ gap: 3, fontSize: 0, color: 'textSecondary' }}>
                 <Text>ID: {comment.comment_id}</Text>
                 <Text>Cluster: {comment.cluster_id}</Text>
                 <Text>Layer: {comment.layer_id}</Text>
                 {comment.umap_x !== undefined && comment.umap_y !== undefined && (
-                  <Text>Position: ({comment.umap_x?.toFixed(2)}, {comment.umap_y?.toFixed(2)})</Text>
+                  <Text>
+                    Position: ({comment.umap_x?.toFixed(2)}, {comment.umap_y?.toFixed(2)})
+                  </Text>
                 )}
               </Flex>
             </Box>
           </Flex>
-          
+
           <Box sx={{ textAlign: 'right' }}>
-            <Text 
-              sx={{ 
-                fontSize: 0, 
+            <Text
+              sx={{
+                fontSize: 0,
                 fontWeight: 'bold',
                 color: this.getStatusColor(status)
               }}>
@@ -215,7 +229,7 @@ class TopicDetail extends React.Component {
     const { match } = this.props
     const { loading, error, comments, selectedComments, selectAll } = this.state
     const topicKey = decodeURIComponent(match.params.topicKey)
-    
+
     if (loading) {
       return (
         <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -223,7 +237,7 @@ class TopicDetail extends React.Component {
         </Box>
       )
     }
-    
+
     if (error) {
       return (
         <Box sx={{ textAlign: 'center', py: 4 }}>
@@ -234,7 +248,7 @@ class TopicDetail extends React.Component {
         </Box>
       )
     }
-    
+
     return (
       <Box>
         <Flex sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
@@ -248,14 +262,20 @@ class TopicDetail extends React.Component {
               Topic: {topicKey}
             </Heading>
           </Box>
-          <Text sx={{ color: 'textSecondary' }}>
-            {comments.length} comments
-          </Text>
+          <Text sx={{ color: 'textSecondary' }}>{comments.length} comments</Text>
         </Flex>
-        
+
         {comments.length > 0 && (
           <>
-            <Flex sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 4, p: 3, bg: 'muted', borderRadius: 'default' }}>
+            <Flex
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 4,
+                p: 3,
+                bg: 'muted',
+                borderRadius: 'default'
+              }}>
               <Flex sx={{ alignItems: 'center' }}>
                 <Label sx={{ display: 'flex', alignItems: 'center', mr: 4 }}>
                   <Checkbox
@@ -266,7 +286,7 @@ class TopicDetail extends React.Component {
                   Select All ({selectedComments.size} selected)
                 </Label>
               </Flex>
-              
+
               <Flex sx={{ gap: 2 }}>
                 <Button
                   variant="success"
@@ -291,13 +311,11 @@ class TopicDetail extends React.Component {
                 </Button>
               </Flex>
             </Flex>
-            
-            <Box>
-              {comments.map(comment => this.renderComment(comment))}
-            </Box>
+
+            <Box>{comments.map((comment) => this.renderComment(comment))}</Box>
           </>
         )}
-        
+
         {comments.length === 0 && (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Text>No comments found for this topic.</Text>
