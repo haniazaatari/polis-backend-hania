@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import { Statement } from './Statement';
 import EmailSubscribeForm from './EmailSubscribeForm';
 import { getPreferredLanguages } from '../strings/strings';
-import { getJwtPayload } from '../lib/auth';
+import { getConversationToken } from '../lib/auth';
 
 const submitVoteAndGetNextCommentAPI = async (vote, conversation_id, high_priority = false) => {
-  const tokenKey = `participant_token_${conversation_id}`;
-  const decodedToken = getJwtPayload(tokenKey);
+  const decodedToken = getConversationToken(conversation_id);
 
   const response = await fetch(`${import.meta.env.PUBLIC_SERVICE_URL}/votes`, {
     method: 'POST',

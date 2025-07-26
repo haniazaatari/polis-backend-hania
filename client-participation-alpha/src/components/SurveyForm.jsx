@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { getJwtPayload } from '../lib/auth';
+import { getConversationToken } from '../lib/auth';
 
 const submitPerspectiveAPI = async (text, conversation_id) => {
-  const tokenKey = `participant_token_${conversation_id}`;
-  const decodedToken = getJwtPayload(tokenKey);
+  const decodedToken = getConversationToken(conversation_id);
   const pid = decodedToken?.pid;
 
   if (!pid) {
