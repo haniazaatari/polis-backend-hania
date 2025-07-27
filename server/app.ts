@@ -47,6 +47,8 @@ import {
   handle_GET_topicMod_stats,
 } from "./src/routes/delphi/topicMod";
 
+import { handle_GET_topicStats } from "./src/routes/topicStats";
+
 import {
   handle_POST_topicAgenda_selections,
   handle_GET_topicAgenda_selections,
@@ -926,6 +928,18 @@ helpersInitialized.then(
         res.json({
           status: "error",
           message: "Internal server error in topicMod hierarchy endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
+    app.get("/api/v3/topicStats", moveToBody, function (req, res) {
+      try {
+        handle_GET_topicStats(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in topicStats endpoint",
           error: err.message || "Unknown error",
         });
       }
@@ -1835,6 +1849,12 @@ helpersInitialized.then(
     );
     app.get(
       /^\/topicMapNarrativeReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      function (req, res, next) {
+        return fetchIndexForReportPage(req, res, next);
+      }
+    );
+    app.get(
+      /^\/topicStats\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       function (req, res, next) {
         return fetchIndexForReportPage(req, res, next);
       }

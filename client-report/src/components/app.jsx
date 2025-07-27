@@ -32,9 +32,10 @@ import TopicPrioritizeSimple from "./topicPrioritizeSimple/TopicPrioritizeSimple
 import TopicAgenda from "./topicAgenda/TopicAgenda.jsx";
 import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
 import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
+import TopicStats from "./topicStats/TopicStats.jsx";
 
-const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicPrioritize/2arcefpshi" or "/topicPrioritizeSimple/2arcefpshi" or "/topicAgenda/2arcefpshi" or "/topicHierarchy/2arcefpshi"
-const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicPrioritize", "topicPrioritizeSimple", "topicAgenda", or "topicHierarchy"
+const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicPrioritize/2arcefpshi" or "/topicPrioritizeSimple/2arcefpshi" or "/topicAgenda/2arcefpshi" or "/topicHierarchy/2arcefpshi" or "/topicStats/2arcefpshi"
+const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicPrioritize", "topicPrioritizeSimple", "topicAgenda", "topicHierarchy", or "topicStats"
 
 const report_id = pathname.split("/")[2];
 
@@ -877,6 +878,16 @@ const App = (props) => {
         comments={comments}
         formatTid={formatTid}
         voteColors={voteColors}
+      />
+    )
+  }
+
+  if (route_type === "topicStats") {
+    console.log("RENDERING: TopicStats");
+    return (
+      <TopicStats
+        conversation={conversation}
+        report_id={report_id}
       />
     )
   }
