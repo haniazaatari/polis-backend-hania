@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import logger from "../utils/logger";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
 import { getZidFromReport } from "../utils/parameter";
 import Config from "../config";
 import pgQuery from "../db/pg-query";
@@ -198,45 +198,41 @@ export async function handle_GET_topicStats(req: Request, res: Response) {
     // Fetch group-aware consensus from DynamoDB
     let groupAwareConsensusData: Record<string, number> = {};
     try {
-      // First, check what tick values exist for this conversation
-      const pca_table = "Delphi_PCAConversationConfig";
-      const pcaParams = {
-        TableName: pca_table,
-        KeyConditionExpression: "zid = :z",
-        ExpressionAttributeValues: {
-          ":z": conversation_id,
-        },
-      };
-      
-      const pcaData = await docClient.send(new QueryCommand(pcaParams));
-      let tick = "999999999"; // Default
-      if (pcaData.Items && pcaData.Items.length > 0) {
-        // Get the latest tick from the PCA config
-        const latestItem = pcaData.Items[pcaData.Items.length - 1];
-        if (latestItem.math_tick) {
-          tick = latestItem.math_tick.toString();
-          logger.info(`Using tick ${tick} from PCAConversationConfig`);
-        }
-      } else {
-        logger.info(`No PCA config found for zid ${conversation_id}, using default tick ${tick}`);
-      }
-      
-      // Query the Delphi_CommentRouting table for comment metrics
+      // Since we don't know the exact tick value, we need to scan for entries
+      // starting with the conversation_id
       const commentRoutingTable = "Delphi_CommentRouting";
-      const commentRoutingParams = {
+      
+      // Use scan with a filter to find all entries for this conversation
+      const scanParams = {
         TableName: commentRoutingTable,
-        KeyConditionExpression: "zid_tick = :zt",
+        FilterExpression: "begins_with(zid_tick, :zid)",
         ExpressionAttributeValues: {
-          ":zt": `${conversation_id}:${tick}`,
+          ":zid": `${conversation_id}:`,
         },
       };
-
-      const commentRoutingData = await docClient.send(new QueryCommand(commentRoutingParams));
-      logger.info(`Queried Delphi_CommentRouting with key ${conversation_id}:${tick}, got ${commentRoutingData.Items?.length || 0} items`);
       
-      if (commentRoutingData.Items && commentRoutingData.Items.length > 0) {
+      let allItems: any[] = [];
+      let lastEvaluatedKey;
+      
+      // Handle pagination
+      do {
+        const params: any = {
+          ...scanParams,
+          ExclusiveStartKey: lastEvaluatedKey,
+        };
+        
+        const scanResult = await docClient.send(new ScanCommand(params));
+        if (scanResult.Items) {
+          allItems = allItems.concat(scanResult.Items);
+        }
+        lastEvaluatedKey = scanResult.LastEvaluatedKey;
+      } while (lastEvaluatedKey);
+      
+      logger.info(`Found ${allItems.length} items in Delphi_CommentRouting for conversation ${conversation_id}`);
+      
+      if (allItems.length > 0) {
         // Build a map of comment_id to consensus_score (group-informed consensus)
-        commentRoutingData.Items.forEach((item: any) => {
+        allItems.forEach((item: any) => {
           if (item.comment_id && item.consensus_score !== undefined) {
             // Store using the comment_id as a string key
             // consensus_score is stored as a string in DynamoDB
@@ -249,7 +245,7 @@ export async function handle_GET_topicStats(req: Request, res: Response) {
         const sampleKeys = Object.keys(groupAwareConsensusData).slice(0, 3);
         logger.info(`Sample group-aware consensus data: ${JSON.stringify(sampleKeys.map(k => ({ tid: k, gac: groupAwareConsensusData[k] })))}`);
       } else {
-        logger.warn(`No items found in Delphi_CommentRouting for ${conversation_id}:${tick}`);
+        logger.warn(`No items found in Delphi_CommentRouting for conversation ${conversation_id}`);
       }
     } catch (err) {
       logger.warn(`Could not fetch group-aware consensus from DynamoDB: ${err}`);
