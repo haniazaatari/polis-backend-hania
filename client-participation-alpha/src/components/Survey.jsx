@@ -55,6 +55,8 @@ const submitVoteAndGetNextCommentAPI = async (vote, conversation_id, high_priori
       console.error("[Index] Failed to store JWT token:", e);
     }
   }
+
+  return resp;
 };
 
 
