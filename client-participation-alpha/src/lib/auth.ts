@@ -1,8 +1,3 @@
-// SET JWT PRIVATE KEY AND LOOK AT OIDC CONNECTOR
-
-
-
-
 /**
  * Decodes a JWT from localStorage without verifying its signature.
  *
@@ -42,8 +37,8 @@ export function getConversationToken(conversation_id: string) {
   return token;
 }
 
-const oidcCacheKeyPrefix = import.meta.env.OIDC_CACHE_KEY_PREFIX;
-const oidcCacheKeyIdTokenSuffix = import.meta.env.OIDC_CACHE_KEY_ID_TOKEN_SUFFIX;
+const oidcCacheKeyPrefix = import.meta.env.PUBLIC_OIDC_CACHE_KEY_PREFIX;
+const oidcCacheKeyIdTokenSuffix = import.meta.env.PUBLIC_OIDC_CACHE_KEY_ID_TOKEN_SUFFIX;
 
 export function setJwtToken(token: string) {
   try {

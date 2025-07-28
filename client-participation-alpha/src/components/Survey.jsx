@@ -6,7 +6,6 @@ import { getConversationToken } from '../lib/auth';
 
 const submitVoteAndGetNextCommentAPI = async (vote, conversation_id, high_priority = false) => {
   const decodedToken = getConversationToken(conversation_id);
-
   const response = await fetch(`${import.meta.env.PUBLIC_SERVICE_URL}/votes`, {
     method: 'POST',
     headers: {
@@ -31,7 +30,31 @@ const submitVoteAndGetNextCommentAPI = async (vote, conversation_id, high_priori
     throw error;
   }
 
-  return await response.json();
+  
+  const resp = await response.json();
+  
+  if (resp?.auth?.token) {
+    // Store the token for later use
+    try {
+      const token = resp.auth.token;
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        if (payload.conversation_id) {
+          const tokenKey = "participant_token_" + payload.conversation_id;
+            if (window.localStorage) {
+            window.localStorage.setItem(tokenKey, token);
+          } else if (window.sessionStorage) {
+            window.sessionStorage.setItem(tokenKey, token);
+          }
+        } else {
+          console.warn("[Index] No conversation_id in JWT payload, not storing token.");
+        }
+      }
+    } catch (e) {
+      console.error("[Index] Failed to store JWT token:", e);
+    }
+  }
 };
 
 
