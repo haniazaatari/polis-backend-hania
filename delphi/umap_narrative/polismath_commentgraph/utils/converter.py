@@ -146,6 +146,7 @@ class DataConverter:
         meta = ConversationMeta(
             job_id=job_id,
             conversation_id=conversation_id,
+            timestamp=datetime.now().isoformat(),
             processed_date=datetime.now().isoformat(),
             num_comments=len(document_vectors),
             num_participants=metadata.get('num_participants', 0) if metadata else 0,
@@ -192,6 +193,7 @@ class DataConverter:
             job_id=job_id,
             comment_id=int(comment_id),
             conversation_id=conversation_id,
+            timestamp=datetime.now().isoformat(),
             embedding=embedding
         )
         
@@ -228,6 +230,7 @@ class DataConverter:
             'job_id': job_id,
             'comment_id': comment_id,  # Will be converted to Decimal by Pydantic model
             'conversation_id': conversation_id,
+            'timestamp': datetime.now().isoformat(),
             'is_outlier': False
         }
         
@@ -339,6 +342,7 @@ class DataConverter:
             job_id=job_id,
             cluster_key=cluster_key,
             conversation_id=conversation_id,
+            timestamp=datetime.now().isoformat(),
             layer_id=layer_id,
             cluster_id=cluster_id,
             topic_label=topic_label,
@@ -404,6 +408,7 @@ class DataConverter:
             job_id=job_id,
             edge_id=edge_id,
             conversation_id=conversation_id,
+            timestamp=datetime.now().isoformat(),
             source_id=int(source_id),
             target_id=int(target_id),
             weight=float(weight),
@@ -453,6 +458,7 @@ class DataConverter:
             job_id=job_id,
             cluster_key=cluster_key,
             conversation_id=conversation_id,
+            timestamp=datetime.now().isoformat(),
             layer_id=layer_id,
             cluster_id=cluster_id,
             size=size,
@@ -495,6 +501,7 @@ class DataConverter:
             job_id=job_id,
             topic_key=topic_key,
             conversation_id=conversation_id,
+            timestamp=datetime.now().isoformat(),
             layer_id=layer_id,
             cluster_id=cluster_id,
             topic_name=topic_name
@@ -538,7 +545,7 @@ class DataConverter:
             cluster_id=cluster_id,
             topic_name=topic_name,
             model_name=model_name,
-            created_at=datetime.now().isoformat()
+            timestamp=datetime.now().isoformat()
         )
         
         return model

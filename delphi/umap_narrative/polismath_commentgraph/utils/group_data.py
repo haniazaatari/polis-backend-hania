@@ -531,6 +531,7 @@ class GroupDataProcessor:
                 'extremity_value': decimal_extremity,
                 'calculation_method': calculation_method,
                 'calculation_timestamp': datetime.now().isoformat(),
+                'timestamp': datetime.now().isoformat(),
                 'component_values': decimal_components
             }
             

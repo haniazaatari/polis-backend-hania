@@ -51,6 +51,7 @@ class ConversationMeta(BaseModel):
     """Metadata for a conversation."""
     job_id: str  # Primary hash key
     conversation_id: str  # Primary range key and used in GSI
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     processed_date: str
     num_comments: int
     num_participants: int = 0
@@ -69,6 +70,7 @@ class CommentEmbedding(BaseModel):
     job_id: str  # Primary hash key
     comment_id: int  # Primary range key
     conversation_id: str  # Regular attribute, used in GSI
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     embedding: Embedding
 
 
@@ -77,6 +79,7 @@ class CommentCluster(BaseModel):
     job_id: str  # Primary hash key
     comment_id: int  # Primary range key
     conversation_id: str  # Regular attribute, used in GSI
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     is_outlier: bool = False
     # We'll add layer-specific cluster IDs dynamically during initialization
     layer0_cluster_id: Optional[int] = None
@@ -93,6 +96,7 @@ class ClusterTopic(BaseModel):
     job_id: str  # Primary hash key
     cluster_key: str  # Primary range key, format: "layer{layer_id}_{cluster_id}"
     conversation_id: str  # Regular attribute, used in GSI
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     layer_id: int
     cluster_id: int
     topic_label: str
@@ -113,6 +117,7 @@ class UMAPGraphEdge(BaseModel):
     job_id: str  # Primary hash key
     edge_id: str  # Primary range key, format: "{source_id}_{target_id}"
     conversation_id: str  # Regular attribute, used in GSI
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     source_id: int
     target_id: int
     weight: float
@@ -127,6 +132,7 @@ class ClusterCharacteristic(BaseModel):
     job_id: str  # Primary hash key
     cluster_key: str  # Primary range key, format: "layer{layer_id}_{cluster_id}"
     conversation_id: str  # Regular attribute, used in GSI
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     layer_id: int
     cluster_id: int
     size: int
@@ -147,6 +153,7 @@ class EnhancedTopicName(BaseModel):
     job_id: str  # Primary hash key
     topic_key: str  # Primary range key, format: "layer{layer_id}_{cluster_id}"
     conversation_id: str  # Regular attribute, used in GSI
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     layer_id: int
     cluster_id: int
     topic_name: str  # Format: "Keywords: word1, word2, word3, ..."
@@ -161,18 +168,22 @@ class EnhancedTopicName(BaseModel):
 
 class LLMTopicName(BaseModel):
     """LLM-generated topic name."""
-    job_id: str  # Primary hash key
-    topic_key: str  # Primary range key, format: "layer{layer_id}_{cluster_id}"
-    conversation_id: str  # Regular attribute, used in GSI
+    conversation_job_id: str  # ADD THIS LINE - The new HASH key
+    job_id: str
+    topic_key: str  # Primary range key
+    conversation_id: str
     layer_id: int
     cluster_id: int
-    topic_name: str  # LLM-generated name
-    model_name: str = "unknown"  # Name of the LLM model used
-    created_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+    topic_name: str
+    model_name: str = "unknown"
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
     
     @root_validator(pre=True)
-    def create_topic_key(cls, values):
-        """Create the topic_key if not provided."""
+    def create_keys(cls, values):
+        """Create composite keys if not provided."""
+        # Create conversation_job_id
+        if "conversation_job_id" not in values and "conversation_id" in values and "job_id" in values:
+            values["conversation_job_id"] = f"{values['conversation_id']}#{values['job_id']}"
         if "topic_key" not in values and "layer_id" in values and "cluster_id" in values:
             values["topic_key"] = f"layer{values['layer_id']}_{values['cluster_id']}"
         return values

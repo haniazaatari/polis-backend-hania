@@ -48,10 +48,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
             'AttributeDefinitions': [
                 {'AttributeName': 'zid', 'AttributeType': 'S'}
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         # PCA and cluster data
         'Delphi_PCAResults': {
@@ -63,10 +60,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
                 {'AttributeName': 'zid', 'AttributeType': 'S'},
                 {'AttributeName': 'math_tick', 'AttributeType': 'N'}
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         # Group data
         'Delphi_KMeansClusters': {
@@ -78,10 +72,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
                 {'AttributeName': 'zid_tick', 'AttributeType': 'S'},
                 {'AttributeName': 'group_id', 'AttributeType': 'N'}
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         # Comment data with priorities
         'Delphi_CommentRouting': {
@@ -93,10 +84,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
                 {'AttributeName': 'zid_tick', 'AttributeType': 'S'},
                 {'AttributeName': 'comment_id', 'AttributeType': 'S'}
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         # Representativeness data
         'Delphi_RepresentativeComments': {
@@ -108,10 +96,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
                 {'AttributeName': 'zid_tick_gid', 'AttributeType': 'S'},
                 {'AttributeName': 'comment_id', 'AttributeType': 'S'}
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         # Participant projection data
         'Delphi_PCAParticipantProjections': {
@@ -123,10 +108,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
                 {'AttributeName': 'zid_tick', 'AttributeType': 'S'},
                 {'AttributeName': 'participant_id', 'AttributeType': 'S'}
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         }
     }
     
@@ -248,14 +230,10 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                         {'AttributeName': 'calculation_method', 'KeyType': 'HASH'},
                         {'AttributeName': 'conversation_id', 'KeyType': 'RANGE'}
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    'Projection': {'ProjectionType': 'ALL'}
                 }
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         'Delphi_NarrativeReports': {
             'KeySchema': [
@@ -297,14 +275,10 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                     'KeySchema': [
                         {'AttributeName': 'conversation_id', 'KeyType': 'HASH'}
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    'Projection': {'ProjectionType': 'ALL'}
                 }
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         'Delphi_CommentEmbeddings': {
             'KeySchema': [
@@ -323,14 +297,10 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                         {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                         {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    'Projection': {'ProjectionType': 'ALL'}
                 }
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         'Delphi_CommentHierarchicalClusterAssignments': {
             'KeySchema': [
@@ -349,14 +319,10 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                         {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                         {'AttributeName': 'comment_id', 'KeyType': 'RANGE'}
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    'Projection': {'ProjectionType': 'ALL'}
                 }
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         'Delphi_CommentClustersStructureKeywords': {
             'KeySchema': [
@@ -375,14 +341,10 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                         {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                         {'AttributeName': 'cluster_key', 'KeyType': 'RANGE'}
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    'Projection': {'ProjectionType': 'ALL'}
                 }
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         'Delphi_UMAPGraph': {
             'KeySchema': [
@@ -401,14 +363,10 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                         {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                         {'AttributeName': 'edge_id', 'KeyType': 'RANGE'}
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    'Projection': {'ProjectionType': 'ALL'}
                 }
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         
         # Extended tables
@@ -429,40 +387,39 @@ def create_evoc_tables(dynamodb, delete_existing=False):
                         {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
                         {'AttributeName': 'cluster_key', 'KeyType': 'RANGE'}
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    'Projection': {'ProjectionType': 'ALL'}
                 }
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         },
         'Delphi_CommentClustersLLMTopicNames': {
             'KeySchema': [
-                {'AttributeName': 'job_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'conversation_job_id', 'KeyType': 'HASH'},
                 {'AttributeName': 'topic_key', 'KeyType': 'RANGE'}
             ],
             'AttributeDefinitions': [
-                {'AttributeName': 'job_id', 'AttributeType': 'S'},
+                {'AttributeName': 'conversation_job_id', 'AttributeType': 'S'},
                 {'AttributeName': 'topic_key', 'AttributeType': 'S'},
-                {'AttributeName': 'conversation_id', 'AttributeType': 'S'}
+                {'AttributeName': 'conversation_id', 'AttributeType': 'S'},
+                {'AttributeName': 'job_id', 'AttributeType': 'S'}
             ],
             'GlobalSecondaryIndexes': [
                 {
-                    'IndexName': 'ConversationIdIndex',
+                    'IndexName': 'ConversationIndex',
                     'KeySchema': [
-                        {'AttributeName': 'conversation_id', 'KeyType': 'HASH'},
-                        {'AttributeName': 'topic_key', 'KeyType': 'RANGE'}
+                        {'AttributeName': 'conversation_id', 'KeyType': 'HASH'}
                     ],
-                    'Projection': {'ProjectionType': 'ALL'},
-                    'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    'Projection': {'ProjectionType': 'ALL'}
+                },
+                {
+                    'IndexName': 'JobIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'job_id', 'KeyType': 'HASH'}
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'}
                 }
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST'
         }
     }
     

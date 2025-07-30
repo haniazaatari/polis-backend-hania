@@ -105,6 +105,7 @@ export async function handle_GET_delphi(req: Request, res: Response) {
     do {
       const params: any = {
         TableName: tableName,
+        IndexName: "ConversationIndex",
         KeyConditionExpression: "conversation_id = :cid",
         ExpressionAttributeValues: { ":cid": conversation_id },
         ExclusiveStartKey: lastEvaluatedKey,
@@ -129,7 +130,7 @@ export async function handle_GET_delphi(req: Request, res: Response) {
     const runGroups: Record<string, any[]> = {};
     allItems.forEach((item) => {
       const modelName = item.model_name || "unknown";
-      const createdAt = item.created_at || "";
+      const createdAt = item.created_at || item.timestamp || "";
       const createdDate = createdAt.substring(0, 10);
       const runKey = `${modelName}_${createdDate}`;
       if (!runGroups[runKey]) {
@@ -150,14 +151,14 @@ export async function handle_GET_delphi(req: Request, res: Response) {
         topicsByLayer[layerId][clusterId] = {
           topic_name: item.topic_name,
           model_name: item.model_name,
-          created_at: item.created_at,
+          created_at: item.created_at || item.timestamp,
           topic_key: item.topic_key,
         };
       });
       const sampleItem = runItems[0];
       allRuns[runKey] = {
         model_name: sampleItem.model_name,
-        created_date: sampleItem.created_at,
+        created_date: sampleItem.created_at || sampleItem.timestamp,
         topics_by_layer: topicsByLayer,
         item_count: runItems.length,
         job_uuid: currentJobUuid, // Include job UUID for section key construction
@@ -189,7 +190,8 @@ export async function handle_GET_delphi(req: Request, res: Response) {
       return res.status(404).json({
         status: "error",
         message: "Delphi topic service not available yet.",
-        hint: "The table may need to be created by running the Delphi pipeline.",
+        hint:
+          "The table may need to be created by running the Delphi pipeline.",
         report_id,
       });
     }

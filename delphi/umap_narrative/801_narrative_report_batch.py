@@ -30,8 +30,8 @@ import boto3
 import asyncio
 import numpy as np
 import pandas as pd
-import re  # Added re import for regex operations
-import requests  # Added for HTTP error handling
+import re
+import requests
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union, Tuple
@@ -41,7 +41,7 @@ import csv
 import io
 import xmltodict
 from collections import defaultdict
-import traceback  # Added for detailed error tracing
+import traceback
 
 # Import the model provider
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -212,7 +212,7 @@ class BatchReportGenerator:
         self.model = model
         self.no_cache = no_cache
         self.max_batch_size = max_batch_size
-        self.layers = layers  # List of layers to process, or None for all layers
+        self.layers = layers
         self.job_id = job_id or os.environ.get('DELPHI_JOB_ID')
         self.report_id = os.environ.get('DELPHI_REPORT_ID')
         self.postgres_client = PostgresClient()
@@ -410,7 +410,7 @@ class BatchReportGenerator:
                                     except ValueError:
                                         # Skip invalid layer keys
                                         continue
-                    
+                        
                     last_evaluated_key = response.get('LastEvaluatedKey')
                     if not last_evaluated_key:
                         break
@@ -434,6 +434,7 @@ class BatchReportGenerator:
             last_key = None
             while True:
                 query_kwargs = {
+                    'IndexName': 'JobIndex',
                     'KeyConditionExpression': boto3.dynamodb.conditions.Key('job_id').eq(str(self.job_id))
                 }
                 if last_key:
@@ -546,7 +547,7 @@ class BatchReportGenerator:
         except Exception as e:
             logger.error(f"A critical error occurred in get_topics: {str(e)}", exc_info=True)
             return []
-        
+    
     def filter_topics(self, comment, topic_cluster_id=None, topic_layer_id=None, topic_citations=None, sample_comments=None, filter_type=None, filter_threshold=None):
         """Filter for comments that are part of a specific topic or meet global section criteria."""
         # Get comment ID
@@ -565,7 +566,7 @@ class BatchReportGenerator:
             comment_cluster_id = comment.get(layer_cluster_key)
             if comment_cluster_id is not None:
                 # Debug logging for cluster 0
-                if str(topic_cluster_id) == "0" and comment_id in [1, 2, 3]:  # Log first few comments
+                if str(topic_cluster_id) == "0" and comment_id in [1, 2, 3]:
                     logger.info(f"DEBUG: Checking comment {comment_id} - layer{topic_layer_id}_cluster_id={comment_cluster_id}, topic_cluster_id={topic_cluster_id}")
                     logger.info(f"DEBUG: String comparison: '{str(comment_cluster_id)}' == '{str(topic_cluster_id)}' = {str(comment_cluster_id) == str(topic_cluster_id)}")
                 
@@ -628,7 +629,7 @@ class BatchReportGenerator:
                         threshold = 0.47
                     elif num_groups == 4:
                         threshold = 0.32
-                    else:  # 5+ groups
+                    else:
                         threshold = 0.24
                 else:
                     threshold = filter_threshold
@@ -671,10 +672,10 @@ class BatchReportGenerator:
         try:
             # Base limits for different categories
             base_limits = {
-                "global_sections": 50,   # Fixed limit for global sections
-                "fine_layers": 100,      # More comments for specific topics (layer 0)
-                "medium_layers": 75,     # Balanced approach (middle layers)
-                "coarse_layers": 50      # Fewer, highest quality comments (top layer)
+                "global_sections": 50,
+                "fine_layers": 100,
+                "medium_layers": 75,
+                "coarse_layers": 50
             }
             
             # Determine category
@@ -684,11 +685,11 @@ class BatchReportGenerator:
             elif layer_id is not None and total_layers is not None:
                 # This is a layer-specific topic
                 if layer_id == 0:
-                    category = "fine_layers"  # Most specific layer
+                    category = "fine_layers"
                 elif layer_id == total_layers - 1:
-                    category = "coarse_layers"  # Most general layer
+                    category = "coarse_layers"
                 else:
-                    category = "medium_layers"  # Middle layers
+                    category = "medium_layers"
             else:
                 # Fallback to medium limit
                 category = "medium_layers"
@@ -712,7 +713,7 @@ class BatchReportGenerator:
             limit = max(limit, 10)
             
             logger.debug(f"Dynamic comment limit: category={category}, base={base_limits[category]}, "
-                        f"final={limit}, comment_count={comment_count}, layer_id={layer_id}")
+                         f"final={limit}, comment_count={comment_count}, layer_id={layer_id}")
             
             return limit
             
@@ -747,17 +748,17 @@ class BatchReportGenerator:
                 if filter_type == "comment_extremity":
                     # For extremity filtering, prioritize highly divisive comments
                     extremity = comment.get('comment_extremity', 0)
-                    metric_score = extremity * 1000  # Scale up for sorting
+                    metric_score = extremity * 1000
                 elif filter_type == "group_aware_consensus":
                     # For consensus filtering, prioritize high agreement comments
                     consensus = comment.get('group_aware_consensus', 0)
-                    metric_score = consensus * 1000  # Scale up for sorting
+                    metric_score = consensus * 1000
                 elif filter_type == "uncertainty_ratio":
                     # For uncertainty filtering, prioritize comments with high pass rates
                     passes = comment.get('passes', 0)
                     total_votes = comment.get('votes', 1)
                     uncertainty = passes / max(total_votes, 1)
-                    metric_score = uncertainty * 1000  # Scale up for sorting
+                    metric_score = uncertainty * 1000
                 else:
                     # For topic filtering, use a combination of votes and engagement
                     agrees = comment.get('agrees', 0)
@@ -775,7 +776,7 @@ class BatchReportGenerator:
             selected = sorted_comments[:limit]
             
             logger.info(f"Selected {len(selected)} high-quality comments from {len(comments)} "
-                       f"(filter_type={filter_type}, limit={limit})")
+                        f"(filter_type={filter_type}, limit={limit})")
             
             return selected
             
@@ -829,7 +830,7 @@ class BatchReportGenerator:
                     if layer_id is not None:
                         # Try to determine total layers from available cluster data
                         # This is a heuristic - in practice you might want to pass this explicitly
-                        total_layers = max(layer_id + 1, 3)  # Assume at least 3 layers if we have layer data
+                        total_layers = max(layer_id + 1, 3)
                 
                 # Calculate dynamic limit
                 comment_limit = self._get_dynamic_comment_limit(
@@ -842,7 +843,7 @@ class BatchReportGenerator:
                 # Apply intelligent comment selection if we exceed the limit
                 if len(filtered_comments) > comment_limit:
                     logger.info(f"Applying dynamic comment limit: {len(filtered_comments)} -> {comment_limit} "
-                               f"(layer_id={layer_id}, filter_type={filter_type}, total_comments={total_comment_count})")
+                                f"(layer_id={layer_id}, filter_type={filter_type}, total_comments={total_comment_count})")
                     
                     # Use intelligent selection based on Polis metrics
                     filtered_comments = self._select_high_quality_comments(
@@ -898,7 +899,7 @@ class BatchReportGenerator:
         # For each topic, prepare a prompt and add it to the batch
         for topic in topics:
             topic_name = topic['name']
-            topic_key = topic['topic_key']  # Use the stable topic_key from DynamoDB
+            topic_key = topic['topic_key']
             
             # Convert topic_key to section_name format
             # Topic keys use # delimiters (uuid#layer#cluster) but section names use _ delimiters (uuid_layer_cluster)
@@ -926,7 +927,7 @@ class BatchReportGenerator:
                 }
                 
                 logger.info(f"Global section mapping - name: {topic_name}, filter_type: {filter_type}, "
-                           f"filter_threshold: {filter_threshold}, topic_key: {topic_key}")
+                            f"filter_threshold: {filter_threshold}, topic_key: {topic_key}")
             else:
                 # Layer-specific topic - use cluster_id and layer_id
                 topic_cluster_id = topic['cluster_id']
@@ -941,7 +942,7 @@ class BatchReportGenerator:
                 }
                 
                 logger.info(f"Topic mapping - cluster_id: {topic_cluster_id}, layer_id: {topic_layer_id}, "
-                           f"topic_name: {topic_name}, topic_key: {topic_key}")
+                            f"topic_name: {topic_name}, topic_key: {topic_key}")
             
             
             # Get comments as XML
@@ -1382,10 +1383,10 @@ class BatchReportGenerator:
                                 logger.info(f"- {table.name}")
                         except Exception as e:
                             logger.error(f"Failed to list tables: {str(e)}")
-                        return batch.id  # Still return batch ID even if we can't update DynamoDB
+                        return batch.id
 
                     # Simplify the update - just focus on getting batch_id stored
-                    batch_id_str = str(batch.id)  # Convert to string to ensure compatibility
+                    batch_id_str = str(batch.id)
                     logger.info(f"Attempting to store batch_id as string: {batch_id_str}")
 
                     # Update the job with batch information - fixed version with ExpressionAttributeNames
@@ -1393,12 +1394,12 @@ class BatchReportGenerator:
                         Key={'job_id': self.job_id},
                         UpdateExpression="SET batch_id = :batch_id, #s = :job_status, model = :model",
                         ExpressionAttributeNames={
-                            '#s': 'status'  # Use ExpressionAttributeNames to avoid 'status' reserved keyword
+                            '#s': 'status'
                         },
                         ExpressionAttributeValues={
                             ':batch_id': batch_id_str,
-                            ':job_status': 'PROCESSING',  # Set job status to PROCESSING so poller knows to check batch status
-                            ':model': self.model  # Store the model name
+                            ':job_status': 'PROCESSING',
+                            ':model': self.model
                         },
                         ReturnValues="UPDATED_NEW"
                     )
@@ -1432,14 +1433,14 @@ class BatchReportGenerator:
                         status_job = {
                             'job_id': status_check_job_id,
                             'status': 'PENDING',
-                            'job_type': 'AWAITING_NARRATIVE_BATCH',  # New job type for clearer state machine
+                            'job_type': 'AWAITING_NARRATIVE_BATCH',
                             'batch_job_id': self.job_id,
                             'batch_id': batch.id,
                             'conversation_id': self.conversation_id,
                             'report_id': self.report_id,
                             'created_at': now,
                             'updated_at': now,
-                            'priority': 50,  # Medium priority
+                            'priority': 50,
                             'version': 1,
                             'logs': json.dumps({'entries': []})
                         }

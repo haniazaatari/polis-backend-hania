@@ -418,7 +418,7 @@ def load_conversation_data_from_dynamo(zid, job_id, layer_id, dynamo_storage):
                 while 'LastEvaluatedKey' in response:
                     logger.debug(f"Handling pagination for UMAP graph...")
                     response = umap_table.query(
-                        KeyConditionExpression=Key('conversation_id').eq(str(zid)),
+                        KeyConditionExpression=Key('job_id').eq(str(job_id)),
                         ExclusiveStartKey=response['LastEvaluatedKey']
                     )
                     edges.extend(response.get('Items', []))
@@ -493,6 +493,7 @@ def load_conversation_data_from_dynamo(zid, job_id, layer_id, dynamo_storage):
         logger.debug(f"LLMTopicNames table name: {dynamo_storage.table_names['llm_topic_names']}")
         
         response = table.query(
+            IndexName='JobIndex',
             KeyConditionExpression=Key('job_id').eq(str(job_id))
         )
         topic_names = response.get('Items', [])
@@ -501,6 +502,7 @@ def load_conversation_data_from_dynamo(zid, job_id, layer_id, dynamo_storage):
         while 'LastEvaluatedKey' in response:
             logger.debug(f"Handling pagination for topic names...")
             response = table.query(
+                IndexName='JobIndex',
                 KeyConditionExpression=Key('job_id').eq(str(job_id)),
                 ExclusiveStartKey=response['LastEvaluatedKey']
             )
