@@ -86,9 +86,9 @@ const TopicStats = ({ conversation, report_id: propsReportId }) => {
             
             {/* Overall ranking section */}
             <div style={{ marginTop: 30, marginBottom: 40, padding: 20, backgroundColor: "#f5f5f5", borderRadius: 5 }}>
-              <h3>Top Topics by Vote Density and Divisiveness</h3>
+              <h3>Top Topics by Vote Density and Consensus</h3>
               <p style={{ marginBottom: 15, fontSize: "0.9em", color: "#666" }}>
-                Topics ranked by vote density (engagement) and group-aware consensus (lower consensus = more divisive)
+                Topics ranked by vote density (engagement) and overall consensus (lower divisiveness = higher agreement)
               </p>
               {(() => {
                 // Collect all topics across layers
@@ -113,9 +113,10 @@ const TopicStats = ({ conversation, report_id: propsReportId }) => {
                     const densityB = b.stats.vote_density || 0;
                     if (densityA !== densityB) return densityB - densityA;
                     
-                    const consensusA = a.stats.group_aware_consensus || 1;
-                    const consensusB = b.stats.group_aware_consensus || 1;
-                    return consensusA - consensusB;
+                    // Sort by divisiveness (lower = more consensus)
+                    const divisiveA = a.stats.divisiveness || 0;
+                    const divisiveB = b.stats.divisiveness || 0;
+                    return divisiveA - divisiveB;
                   })
                   .slice(0, 10);
                 
@@ -126,7 +127,6 @@ const TopicStats = ({ conversation, report_id: propsReportId }) => {
                         <strong>{item.topic.topic_name}</strong> (Layer {item.layerId})
                         <div style={{ fontSize: "0.85em", color: "#666", marginTop: 2 }}>
                           Vote Density: {item.stats.vote_density?.toFixed(1) || 0} votes/comment | 
-                          Group Consensus: {item.stats.group_aware_consensus !== undefined ? `${(item.stats.group_aware_consensus * 100).toFixed(1)}%` : 'N/A'} | 
                           Divisiveness: {item.stats.divisiveness?.toFixed(2) || 0}
                         </div>
                       </li>
@@ -146,8 +146,7 @@ const TopicStats = ({ conversation, report_id: propsReportId }) => {
                       <th style={{ padding: "10px", textAlign: "right" }}>Comments</th>
                       <th style={{ padding: "10px", textAlign: "right" }}>Total Votes</th>
                       <th style={{ padding: "10px", textAlign: "right" }}>Vote Density</th>
-                      <th style={{ padding: "10px", textAlign: "right" }}>Group Consensus</th>
-                      <th style={{ padding: "10px", textAlign: "right" }}>Divisiveness</th>
+                      <th style={{ padding: "10px", textAlign: "right" }} title="Overall vote split (0=consensus, 1=even split)">Divisiveness</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -163,10 +162,8 @@ const TopicStats = ({ conversation, report_id: propsReportId }) => {
                         const densityB = b.stats.vote_density || 0;
                         if (densityA !== densityB) return densityB - densityA;
                         
-                        // Then by group consensus (ascending - lower consensus = more divisive)
-                        const consensusA = a.stats.group_aware_consensus || 0;
-                        const consensusB = b.stats.group_aware_consensus || 0;
-                        return consensusA - consensusB;
+                        // Then by divisiveness (ascending - lower divisiveness = more consensus)
+                        return a.stats.divisiveness - b.stats.divisiveness;
                       })
                       .map(({ clusterId, topic, stats }) => (
                         <tr key={clusterId} style={{ borderBottom: "1px solid #ccc" }}>
@@ -175,9 +172,6 @@ const TopicStats = ({ conversation, report_id: propsReportId }) => {
                           <td style={{ padding: "10px", textAlign: "right" }}>{stats.total_votes || 0}</td>
                           <td style={{ padding: "10px", textAlign: "right" }}>
                             {stats.vote_density !== undefined ? stats.vote_density.toFixed(1) : '-'}
-                          </td>
-                          <td style={{ padding: "10px", textAlign: "right" }}>
-                            {stats.group_aware_consensus !== undefined ? `${(stats.group_aware_consensus * 100).toFixed(1)}%` : '-'}
                           </td>
                           <td style={{ padding: "10px", textAlign: "right" }}>
                             {stats.divisiveness !== undefined ? stats.divisiveness.toFixed(2) : '-'}

@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import logger from "../utils/logger";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, QueryCommand, ScanCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { getZidFromReport } from "../utils/parameter";
 import Config from "../config";
 import pgQuery from "../db/pg-query";
@@ -40,17 +40,16 @@ interface TopicMetrics {
   agree_votes: number;
   disagree_votes: number;
   pass_votes: number;
-  group_aware_consensus: number;
   vote_density: number; // votes per comment
 }
+
 
 /**
  * Calculate consensus and divisiveness metrics for a set of comments
  */
 async function calculateTopicMetrics(
   zid: number,
-  commentIds: number[],
-  groupAwareConsensus?: Record<string, number>
+  commentIds: number[]
 ): Promise<TopicMetrics> {
   if (commentIds.length === 0) {
     return {
@@ -61,7 +60,6 @@ async function calculateTopicMetrics(
       agree_votes: 0,
       disagree_votes: 0,
       pass_votes: 0,
-      group_aware_consensus: 0,
       vote_density: 0,
     };
   }
@@ -91,7 +89,6 @@ async function calculateTopicMetrics(
         agree_votes: 0,
         disagree_votes: 0,
         pass_votes: 0,
-        group_aware_consensus: 0,
         vote_density: 0,
       };
     }
@@ -133,23 +130,11 @@ async function calculateTopicMetrics(
     const avgConsensus = totalVotes > 0 ? consensusSum / totalVotes : 0;
     const avgDivisiveness = totalVotes > 0 ? divisiveSum / totalVotes : 0;
     
-    // Calculate group-aware consensus if available
-    let avgGroupAwareConsensus = 0;
-    if (groupAwareConsensus) {
-      let gacSum = 0;
-      let gacCount = 0;
-      commentIds.forEach(tid => {
-        const gac = groupAwareConsensus[tid.toString()];
-        if (gac !== undefined) {
-          gacSum += gac;
-          gacCount++;
-        }
-      });
-      avgGroupAwareConsensus = gacCount > 0 ? gacSum / gacCount : 0;
-    }
-    
     // Calculate vote density
     const voteDensity = commentIds.length > 0 ? totalVotes / commentIds.length : 0;
+    
+    // Topic-based group consensus would go here if we had group membership data
+    // For now, we rely on the Delphi group-aware consensus
 
     return {
       comment_count: commentIds.length,
@@ -159,7 +144,6 @@ async function calculateTopicMetrics(
       agree_votes: totalAgree,
       disagree_votes: totalDisagree,
       pass_votes: totalPass,
-      group_aware_consensus: avgGroupAwareConsensus,
       vote_density: voteDensity,
     };
   } catch (err) {
@@ -194,63 +178,6 @@ export async function handle_GET_topicStats(req: Request, res: Response) {
 
     const conversation_id = zid.toString();
     logger.info(`Fetching topic stats for conversation_id: ${conversation_id}`);
-    
-    // Fetch group-aware consensus from DynamoDB
-    let groupAwareConsensusData: Record<string, number> = {};
-    try {
-      // Since we don't know the exact tick value, we need to scan for entries
-      // starting with the conversation_id
-      const commentRoutingTable = "Delphi_CommentRouting";
-      
-      // Use scan with a filter to find all entries for this conversation
-      const scanParams = {
-        TableName: commentRoutingTable,
-        FilterExpression: "begins_with(zid_tick, :zid)",
-        ExpressionAttributeValues: {
-          ":zid": `${conversation_id}:`,
-        },
-      };
-      
-      let allItems: any[] = [];
-      let lastEvaluatedKey;
-      
-      // Handle pagination
-      do {
-        const params: any = {
-          ...scanParams,
-          ExclusiveStartKey: lastEvaluatedKey,
-        };
-        
-        const scanResult = await docClient.send(new ScanCommand(params));
-        if (scanResult.Items) {
-          allItems = allItems.concat(scanResult.Items);
-        }
-        lastEvaluatedKey = scanResult.LastEvaluatedKey;
-      } while (lastEvaluatedKey);
-      
-      logger.info(`Found ${allItems.length} items in Delphi_CommentRouting for conversation ${conversation_id}`);
-      
-      if (allItems.length > 0) {
-        // Build a map of comment_id to consensus_score (group-informed consensus)
-        allItems.forEach((item: any) => {
-          if (item.comment_id && item.consensus_score !== undefined) {
-            // Store using the comment_id as a string key
-            // consensus_score is stored as a string in DynamoDB
-            groupAwareConsensusData[item.comment_id.toString()] = parseFloat(item.consensus_score);
-          }
-        });
-        logger.info(`Fetched group-aware consensus for ${Object.keys(groupAwareConsensusData).length} comments from DynamoDB`);
-        
-        // Debug: log a sample of the data
-        const sampleKeys = Object.keys(groupAwareConsensusData).slice(0, 3);
-        logger.info(`Sample group-aware consensus data: ${JSON.stringify(sampleKeys.map(k => ({ tid: k, gac: groupAwareConsensusData[k] })))}`);
-      } else {
-        logger.warn(`No items found in Delphi_CommentRouting for conversation ${conversation_id}`);
-      }
-    } catch (err) {
-      logger.warn(`Could not fetch group-aware consensus from DynamoDB: ${err}`);
-      // Continue without it - we'll just use the simple consensus metric
-    }
 
     // Get all topics first
     const topicsTable = "Delphi_CommentClustersLLMTopicNames";
@@ -375,7 +302,7 @@ export async function handle_GET_topicStats(req: Request, res: Response) {
         logger.info(`Sample comment IDs for topic ${topicKey}: ${JSON.stringify(commentIds.slice(0, 3))}`);
       }
       
-      const metrics = await calculateTopicMetrics(zid, commentIds, groupAwareConsensusData);
+      const metrics = await calculateTopicMetrics(zid, commentIds);
       topicStats[topicKey] = metrics;
     }
 
