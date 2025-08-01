@@ -147,6 +147,7 @@ const TopicStats = ({ conversation, report_id: propsReportId }) => {
                       <th style={{ padding: "10px", textAlign: "right" }}>Total Votes</th>
                       <th style={{ padding: "10px", textAlign: "right" }}>Vote Density</th>
                       <th style={{ padding: "10px", textAlign: "right" }} title="Overall vote split (0=consensus, 1=even split)">Divisiveness</th>
+                      <th style={{ padding: "10px", textAlign: "center" }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -175,6 +176,24 @@ const TopicStats = ({ conversation, report_id: propsReportId }) => {
                           </td>
                           <td style={{ padding: "10px", textAlign: "right" }}>
                             {stats.divisiveness !== undefined ? stats.divisiveness.toFixed(2) : '-'}
+                          </td>
+                          <td style={{ padding: "10px", textAlign: "center" }}>
+                            {stats.divisiveness !== undefined && stats.divisiveness < 0.2 && stats.total_votes > 50 ? (
+                              <button 
+                                style={{
+                                  backgroundColor: "#4CAF50",
+                                  color: "white",
+                                  border: "none",
+                                  padding: "5px 10px",
+                                  borderRadius: "4px",
+                                  cursor: "pointer",
+                                  fontSize: "0.85em"
+                                }}
+                                onClick={() => console.log('Create collective statement for topic:', topic.topic_name, topic.topic_key)}
+                              >
+                                Create Collective Statement
+                              </button>
+                            ) : null}
                           </td>
                         </tr>
                       ))}
