@@ -888,6 +888,11 @@ const App = (props) => {
       <TopicStats
         conversation={conversation}
         report_id={report_id}
+        math={math}
+        comments={comments}
+        ptptCount={ptptCount}
+        formatTid={formatTid}
+        voteColors={voteColors}
       />
     )
   }

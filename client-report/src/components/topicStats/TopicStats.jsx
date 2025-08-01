@@ -3,13 +3,16 @@ import net from "../../util/net";
 import { useReportId } from "../framework/useReportId";
 import Heading from "../framework/heading.jsx";
 import Footer from "../framework/Footer.jsx";
+import CollectiveStatementModal from "./CollectiveStatementModal.jsx";
 
-const TopicStats = ({ conversation, report_id: propsReportId }) => {
+const TopicStats = ({ conversation, report_id: propsReportId, math, comments, ptptCount, formatTid, voteColors }) => {
   const { report_id } = useReportId(propsReportId);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [topicsData, setTopicsData] = useState(null);
   const [statsData, setStatsData] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedTopic, setSelectedTopic] = useState(null);
 
   useEffect(() => {
     if (!report_id) return;
@@ -189,7 +192,10 @@ const TopicStats = ({ conversation, report_id: propsReportId }) => {
                                   cursor: "pointer",
                                   fontSize: "0.85em"
                                 }}
-                                onClick={() => console.log('Create collective statement for topic:', topic.topic_name, topic.topic_key)}
+                                onClick={() => {
+                                  setSelectedTopic({ name: topic.topic_name, key: topic.topic_key });
+                                  setModalOpen(true);
+                                }}
                               >
                                 Create Collective Statement
                               </button>
@@ -206,6 +212,23 @@ const TopicStats = ({ conversation, report_id: propsReportId }) => {
         
         <Footer />
       </div>
+      
+      <CollectiveStatementModal
+        isOpen={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setSelectedTopic(null);
+        }}
+        topicName={selectedTopic?.name}
+        topicKey={selectedTopic?.key}
+        reportId={report_id}
+        conversation={conversation}
+        math={math}
+        comments={comments}
+        ptptCount={ptptCount}
+        formatTid={formatTid}
+        voteColors={voteColors}
+      />
     </div>
   );
 };

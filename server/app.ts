@@ -50,6 +50,11 @@ import {
 import { handle_GET_topicStats } from "./src/routes/topicStats";
 
 import {
+  handle_POST_collectiveStatement,
+  handle_GET_collectiveStatement,
+} from "./src/routes/collectiveStatement";
+
+import {
   handle_POST_topicAgenda_selections,
   handle_GET_topicAgenda_selections,
   handle_PUT_topicAgenda_selections,
@@ -940,6 +945,31 @@ helpersInitialized.then(
         res.json({
           status: "error",
           message: "Internal server error in topicStats endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
+    // Collective Statement routes
+    app.post("/api/v3/collectiveStatement", moveToBody, function (req, res) {
+      try {
+        handle_POST_collectiveStatement(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in collectiveStatement endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
+    app.get("/api/v3/collectiveStatement", moveToBody, function (req, res) {
+      try {
+        handle_GET_collectiveStatement(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in collectiveStatement endpoint",
           error: err.message || "Unknown error",
         });
       }
