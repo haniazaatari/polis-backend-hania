@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Check and process Anthropic Batch API results for a specific job.
+Check and process OpenAI Batch API results for a specific job.
 
 This script is a simple worker that is called by the job_poller. It does not
 contain any job-finding or locking logic itself. It expects to be given a
@@ -14,21 +14,24 @@ import os, sys, json, boto3, logging, argparse, asyncio
 from typing import Dict, Optional
 from datetime import datetime, timedelta, timezone
 from botocore.exceptions import ClientError
+from openai import OpenAI, APIError
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Anthropic Batch API Statuses
-ANTHROPIC_BATCH_PREPARING = "preparing"
-ANTHROPIC_BATCH_IN_PROGRESS = "in_progress"
-ANTHROPIC_BATCH_COMPLETED = "completed"
-ANTHROPIC_BATCH_ENDED = "ended"  # Anthropic API returns "ended" for completed batches
-ANTHROPIC_BATCH_FAILED = "failed"
-ANTHROPIC_BATCH_CANCELLED = "cancelled"
+# OpenAI Batch API Statuses
+OPENAI_BATCH_VALIDATING = "validating"
+OPENAI_BATCH_IN_PROGRESS = "in_progress"
+OPENAI_BATCH_FINALIZING = "finalizing"
+OPENAI_BATCH_COMPLETED = "completed"
+OPENAI_BATCH_FAILED = "failed"
+OPENAI_BATCH_CANCELLING = "cancelling"
+OPENAI_BATCH_CANCELLED = "cancelled"
+OPENAI_BATCH_EXPIRED = "expired"
 
-TERMINAL_BATCH_STATES = [ANTHROPIC_BATCH_COMPLETED, ANTHROPIC_BATCH_ENDED, ANTHROPIC_BATCH_FAILED, ANTHROPIC_BATCH_CANCELLED]
-NON_TERMINAL_BATCH_STATES = [ANTHROPIC_BATCH_PREPARING, ANTHROPIC_BATCH_IN_PROGRESS]
+TERMINAL_BATCH_STATES = [OPENAI_BATCH_COMPLETED, OPENAI_BATCH_FAILED, OPENAI_BATCH_CANCELLED, OPENAI_BATCH_EXPIRED]
+NON_TERMINAL_BATCH_STATES = [OPENAI_BATCH_VALIDATING, OPENAI_BATCH_IN_PROGRESS, OPENAI_BATCH_FINALIZING, OPENAI_BATCH_CANCELLING]
 
 # Script Exit Codes (when --job-id is used)
 EXIT_CODE_TERMINAL_STATE = 0      # Batch is done (completed/failed/cancelled), script handled it.
@@ -48,20 +51,19 @@ class BatchStatusChecker:
         self.report_table = self.dynamodb.Table('Delphi_NarrativeReports')
 
         try:
-            from anthropic import Anthropic
-            api_key = os.environ.get("ANTHROPIC_API_KEY")
-            if not api_key: raise ValueError("ANTHROPIC_API_KEY is not set.")
-            self.anthropic = Anthropic(api_key=api_key)
+            api_key = os.environ.get("OPENAI_API_KEY")
+            if not api_key: raise ValueError("OPENAI_API_KEY is not set.")
+            self.openai = OpenAI(api_key=api_key)
         except (ImportError, ValueError) as e:
-            logger.error(f"Failed to initialize Anthropic client: {e}")
-            self.anthropic = None
+            logger.error(f"Failed to initialize OpenAI client: {e}")
+            self.openai = None
 
     async def check_and_process_job(self, job_id: str) -> int:
         """
         Main logic: Fetches a job, checks its batch status, and processes if complete.
         Returns an exit code to the calling process.
         """
-        if not self.anthropic:
+        if not self.openai:
             return EXIT_CODE_SCRIPT_ERROR
 
         try:
@@ -78,23 +80,23 @@ class BatchStatusChecker:
                 self.job_table.update_item(Key={'job_id': job_id}, UpdateExpression="SET #s = :s", ExpressionAttributeNames={'#s':'status'}, ExpressionAttributeValues={':s':'FAILED'})
                 return EXIT_CODE_TERMINAL_STATE
 
-            # 2. Check the status on the Anthropic API
-            logger.info(f"Checking status for Anthropic batch {batch_id} (from job {job_id})...")
-            batch = self.anthropic.beta.messages.batches.retrieve(batch_id)
-            status = batch.processing_status
-            logger.info(f"Anthropic API returned status '{status}' for batch {batch_id}.")
+            # 2. Check the status on the OpenAI API
+            logger.info(f"Checking status for OpenAI batch {batch_id} (from job {job_id})...")
+            batch = self.openai.batches.retrieve(batch_id)
+            status = batch.status
+            logger.info(f"OpenAI API returned status '{status}' for batch {batch_id}.")
 
             # 3. Decide what to do based on the status
-            if status in ["completed", "ended"]:
+            if status == OPENAI_BATCH_COMPLETED:
                 await self.process_batch_results(job_item)
                 return EXIT_CODE_TERMINAL_STATE
             
-            elif status in ["failed", "cancelled"]:
+            elif status in [OPENAI_BATCH_FAILED, OPENAI_BATCH_CANCELLED, OPENAI_BATCH_EXPIRED]:
                 logger.error(f"Batch {batch_id} for job {job_id} is in a terminal failure state: {status}")
                 self.job_table.update_item(Key={'job_id': job_id}, UpdateExpression="SET #s = :s, error_message = :e", ExpressionAttributeNames={'#s':'status'}, ExpressionAttributeValues={':s':'FAILED', ':e': f'Batch status: {status}'})
                 return EXIT_CODE_TERMINAL_STATE
 
-            elif status in ["in_progress", "preparing"]:
+            elif status in NON_TERMINAL_BATCH_STATES:
                 logger.info(f"Batch {batch_id} is still {status}. Will check again later.")
                 return EXIT_CODE_PROCESSING_CONTINUES
             
@@ -117,27 +119,32 @@ class BatchStatusChecker:
         job_id = job_item.get('job_id', 'unknown')
         batch_id = job_item.get('batch_id')
         report_id = job_item.get('report_id')
+        model = job_item.get('model')
 
-        if not all([job_id, batch_id, report_id, self.anthropic]):
-            logger.error(f"Job {job_id}: Missing required info (job_id, batch_id, report_id, or client) for processing.")
+        if not all([job_id, batch_id, report_id, self.openai, model]):
+            logger.error(f"Job {job_id}: Missing required info (job_id, batch_id, report_id, model, or client) for processing.")
             return False
 
         try:
             logger.info(f"Job {job_id}: Retrieving results for completed batch {batch_id}...")
-            # Anthropic's SDK can stream results which is memory efficient
-            results_stream = self.anthropic.beta.messages.batches.results(batch_id)
+            batch = self.openai.batches.retrieve(batch_id)
+
+            if not batch.output_file_id:
+                raise ValueError(f"Batch {batch_id} is complete but has no output file ID.")
+
+            results_content = self.openai.files.content(batch.output_file_id).read()
+            results = [json.loads(line) for line in results_content.decode('utf-8').strip().split('\n')]
 
             processed_count = 0
             failed_count = 0
             
-            for entry in results_stream:
-                if entry.result.type == "succeeded":
-                    custom_id = entry.custom_id
-                    response_message = entry.result.message
-                    model = response_message.model
-                    content = response_message.content[0].text if response_message.content else "{}"
+            for entry in results:
+                custom_id = entry.get('custom_id')
+                response_body = entry.get('response', {}).get('body', {})
+                
+                if response_body and 'error' not in response_body:
+                    content = response_body.get('choices', [{}])[0].get('message', {}).get('content', '{}')
 
-                    # Reconstruct the section name from the custom_id
                     parts = custom_id.split('_', 1)
                     if len(parts) < 2:
                         logger.error(f"Job {job_id}: Invalid custom_id format '{custom_id}'. Skipping result.")
@@ -145,7 +152,6 @@ class BatchStatusChecker:
                         continue
                     section_name = parts[1]
 
-                    # Store the report
                     rid_section_model = f"{report_id}#{section_name}#{model}"
                     self.report_table.put_item(Item={
                         'rid_section_model': rid_section_model,
@@ -159,12 +165,10 @@ class BatchStatusChecker:
                     })
                     logger.info(f"Job {job_id}: Successfully stored report for section '{section_name}'.")
                     processed_count += 1
-
-                elif entry.result.type == "failed":
+                elif 'error' in response_body:
                     failed_count += 1
-                    logger.error(f"Job {job_id}: A request in batch {batch_id} failed. Custom ID: {entry.custom_id}, Error: {entry.result.error}")
+                    logger.error(f"Job {job_id}: A request in batch {batch_id} failed. Custom ID: {custom_id}, Error: {response_body['error']}")
 
-            # Finalize the job status
             final_status = 'COMPLETED' if processed_count > 0 else 'FAILED'
             update_expression = "SET #s = :status, completed_at = :time"
             expression_values = {':status': final_status, ':time': datetime.now(timezone.utc).isoformat()}
@@ -185,17 +189,24 @@ class BatchStatusChecker:
         
         except Exception as e:
             logger.error(f"Job {job_id}: A critical error occurred during result processing for batch {batch_id}: {e}", exc_info=True)
-            # Mark the job as FAILED
             self.job_table.update_item(Key={'job_id': job_id}, UpdateExpression="SET #s = :s, error_message = :e", ExpressionAttributeNames={'#s':'status'}, ExpressionAttributeValues={':s':'FAILED', ':e': f"Result processing error: {str(e)}"})
             return False
 
     async def check_and_process_jobs(self, specific_job_id: Optional[str] = None) -> Optional[int]:
+        # This function is preserved from the original file but is not called by main.
+        from anthropic import Anthropic # Preserved original import
+        ANTHROPIC_BATCH_COMPLETED = "completed"
+        ANTHROPIC_BATCH_ENDED = "ended"
+        ANTHROPIC_BATCH_FAILED = "failed"
+        ANTHROPIC_BATCH_CANCELLED = "cancelled"
+        NON_TERMINAL_BATCH_STATES = ["preparing", "in_progress"]
+        
         jobs_to_check = self.find_pending_jobs(specific_job_id)
 
         if not jobs_to_check:
             if specific_job_id:
                 logger.error(f"Job {specific_job_id} not found or no longer in a processable state.")
-                return self.EXIT_CODE_TERMINAL_STATE
+                return EXIT_CODE_TERMINAL_STATE
             logger.info("No pending batch jobs found in this polling cycle.")
             return None
 
@@ -233,13 +244,13 @@ class BatchStatusChecker:
                     logger.error(f"Error locking job {job_id}: {e}")
                     continue
 
-            current_job_processing_signal = self.EXIT_CODE_SCRIPT_ERROR
+            current_job_processing_signal = EXIT_CODE_SCRIPT_ERROR
             try:
                 batch_api_status = await self.check_batch_status(job_item)
 
                 if batch_api_status in [ANTHROPIC_BATCH_COMPLETED, ANTHROPIC_BATCH_ENDED]:
                     await self.process_batch_results(job_item)
-                    current_job_processing_signal = self.EXIT_CODE_TERMINAL_STATE
+                    current_job_processing_signal = EXIT_CODE_TERMINAL_STATE
                 
                 elif batch_api_status in [ANTHROPIC_BATCH_FAILED, ANTHROPIC_BATCH_CANCELLED, "BATCH_NOT_FOUND"]:
                     self.job_table.update_item(
@@ -252,15 +263,15 @@ class BatchStatusChecker:
                             ':error': f"Batch terminal status: {batch_api_status}"
                         }
                     )
-                    current_job_processing_signal = self.EXIT_CODE_TERMINAL_STATE
+                    current_job_processing_signal = EXIT_CODE_TERMINAL_STATE
 
                 elif batch_api_status in NON_TERMINAL_BATCH_STATES:
                     logger.info(f"Job {job_id}: Batch still {batch_api_status}. Lock will time out if worker fails.")
-                    current_job_processing_signal = self.EXIT_CODE_PROCESSING_CONTINUES
+                    current_job_processing_signal = EXIT_CODE_PROCESSING_CONTINUES
 
                 else:
                     logger.error(f"Job {job_id}: Could not determine batch status. Lock will time out.")
-                    current_job_processing_signal = self.EXIT_CODE_SCRIPT_ERROR
+                    current_job_processing_signal = EXIT_CODE_SCRIPT_ERROR
             
             except Exception as processing_error:
                 logger.error(f"Critical error processing locked job {job_id}: {processing_error}", exc_info=True)
@@ -268,7 +279,7 @@ class BatchStatusChecker:
                     self.job_table.update_item(Key={'job_id': job_id}, UpdateExpression="SET #s = :s, error_message = :e", ExpressionAttributeNames={'#s':'status'}, ExpressionAttributeValues={':s':'FAILED', ':e': str(processing_error)})
                 except Exception as final_error:
                     logger.critical(f"FATAL: Could not mark job {job_id} as FAILED. It is now a zombie: {final_error}")
-                current_job_processing_signal = self.EXIT_CODE_SCRIPT_ERROR
+                current_job_processing_signal = EXIT_CODE_SCRIPT_ERROR
 
             if specific_job_id:
                 return current_job_processing_signal
@@ -277,8 +288,8 @@ class BatchStatusChecker:
 
 async def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description='Check a single Anthropic Batch Job status.')
-    parser.add_argument('--job-id', type=str, required=True, help='The main job ID (e.g., batch_report_...) to check.')
+    parser = argparse.ArgumentParser(description='Check a single OpenAI Batch Job status.')
+    parser.add_argument('--job-id', type=str, required=True, help='The checker job ID (e.g., batch_check_...) to process.')
     args = parser.parse_args()
 
     checker = BatchStatusChecker()
@@ -288,8 +299,4 @@ async def main():
     sys.exit(exit_signal)
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
-if __name__ == "__main__":
-    # Module-level constants are accessible here
     asyncio.run(main())
