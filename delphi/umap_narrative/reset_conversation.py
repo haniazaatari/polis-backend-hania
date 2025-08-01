@@ -153,15 +153,19 @@ def delete_dynamodb_data(conversation_id: str, report_id: str = None):
             
     return total_deleted_count
 
-def delete_s3_data(bucket_name: str, conversation_id: str):
+def delete_s3_data(bucket_name: str, report_id: str):
     """
-    Deletes all visualization files from S3/MinIO for a given conversation_id.
+    Deletes all visualization files from S3/MinIO for a given report_id.
     """
+    if not report_id:
+        logger.info("\nNo report_id (--rid) provided. Skipping S3/MinIO cleanup.")
+        return 0
+
     s3 = get_boto_resource('s3')
     bucket = s3.Bucket(bucket_name)
-    prefix = f'visualizations/{conversation_id}/'
+    prefix = f'visualizations/{report_id}/'
     
-    logger.info(f"\nDeleting S3/MinIO data for conversation {conversation_id} from bucket '{bucket_name}'...")
+    logger.info(f"\nDeleting S3/MinIO data for report {report_id} from bucket '{bucket_name}'...")
     logger.info(f"  - Looking for objects with prefix: {prefix}")
     
     try:
@@ -198,7 +202,7 @@ def main(zid: str, rid: str = None):
     dynamo_deleted_count = delete_dynamodb_data(zid_str, rid)
     
     s3_bucket = os.environ.get("AWS_S3_BUCKET_NAME", "polis-delphi")
-    s3_deleted_count = delete_s3_data(s3_bucket, zid_str)
+    s3_deleted_count = delete_s3_data(s3_bucket, rid)
     
     print("=" * 60)
     logger.info("✅ Reset complete!\n")
