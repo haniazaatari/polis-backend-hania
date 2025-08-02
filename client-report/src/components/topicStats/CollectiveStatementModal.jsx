@@ -2,7 +2,19 @@ import React, { useState, useEffect } from "react";
 import net from "../../util/net";
 import CommentList from "../lists/commentList.jsx";
 
-const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, reportId, conversation, math, comments, ptptCount, formatTid, voteColors }) => {
+const CollectiveStatementModal = ({
+  isOpen,
+  onClose,
+  topicName,
+  topicKey,
+  reportId,
+  conversation,
+  math,
+  comments,
+  ptptCount,
+  formatTid,
+  voteColors,
+}) => {
   const [loading, setLoading] = useState(false);
   const [statementData, setStatementData] = useState(null);
   const [commentsData, setCommentsData] = useState(null);
@@ -18,13 +30,13 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await net.polisPost("/api/v3/collectiveStatement", {
         report_id: reportId,
         topic_key: topicKey,
         topic_name: topicName,
       });
-      
+
       if (response.status === "success") {
         console.log("Collective statement response:", response);
         setStatementData(response.statementData);
@@ -44,13 +56,13 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
   const extractCitations = (content) => {
     const citations = [];
     if (content && content.paragraphs) {
-      content.paragraphs.forEach(paragraph => {
+      content.paragraphs.forEach((paragraph) => {
         if (paragraph.sentences) {
-          paragraph.sentences.forEach(sentence => {
+          paragraph.sentences.forEach((sentence) => {
             if (sentence.clauses) {
-              sentence.clauses.forEach(clause => {
+              sentence.clauses.forEach((clause) => {
                 if (clause.citations && Array.isArray(clause.citations)) {
-                  citations.push(...clause.citations.filter(c => typeof c === 'number'));
+                  citations.push(...clause.citations.filter((c) => typeof c === "number"));
                 }
               });
             }
@@ -60,7 +72,7 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
     }
     return [...new Set(citations)]; // Remove duplicates
   };
-  
+
   // Clear state when modal closes
   useEffect(() => {
     if (!isOpen) {
@@ -73,7 +85,7 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
       style={{
         position: "fixed",
         top: 0,
@@ -88,7 +100,7 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
       }}
       onClick={onClose}
     >
-      <div 
+      <div
         style={{
           backgroundColor: "white",
           borderRadius: "8px",
@@ -101,11 +113,11 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ marginBottom: "30px", borderBottom: "2px solid #eee", paddingBottom: "20px" }}>
+        <div
+          style={{ marginBottom: "30px", borderBottom: "2px solid #eee", paddingBottom: "20px" }}
+        >
           <h2 style={{ margin: 0, marginBottom: "8px", fontSize: "1.8em" }}>{topicName}</h2>
-          <p style={{ margin: 0, color: "#666", fontSize: "1.1em" }}>
-            Collective Statement
-          </p>
+          <p style={{ margin: 0, color: "#666", fontSize: "1.1em" }}>Candidate Collective Statement</p>
         </div>
 
         {loading && (
@@ -118,27 +130,31 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
         )}
 
         {error && (
-          <div style={{ 
-            padding: "20px", 
-            backgroundColor: "#fee", 
-            borderRadius: "4px",
-            marginBottom: "20px" 
-          }}>
+          <div
+            style={{
+              padding: "20px",
+              backgroundColor: "#fee",
+              borderRadius: "4px",
+              marginBottom: "20px",
+            }}
+          >
             <p style={{ margin: 0, color: "#c00" }}>Error: {error}</p>
           </div>
         )}
 
         {!loading && !error && statementData && (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "30px",
-            alignItems: "start"
-          }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "30px",
+              alignItems: "start",
+            }}
+          >
             {/* Left side: Collective Statement */}
             <div>
               <h3 style={{ marginTop: 0, marginBottom: "20px", fontSize: "1.2em" }}>Statement</h3>
-              <div 
+              <div
                 style={{
                   padding: "20px",
                   backgroundColor: "#f8f9fa",
@@ -146,48 +162,60 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
                   lineHeight: "1.6",
                   height: "100%",
                   maxHeight: "500px",
-                  overflowY: "auto"
+                  overflowY: "auto",
                 }}
               >
-                {statementData && statementData.paragraphs && statementData.paragraphs.map((paragraph, idx) => (
-                  <div key={idx} style={{ marginBottom: "20px" }}>
-                    <h4 style={{ marginTop: 0, marginBottom: "10px", color: "#333" }}>{paragraph.title}</h4>
-                    {paragraph.sentences && paragraph.sentences.map((sentence, sIdx) => (
-                      <p key={sIdx} style={{ marginBottom: "10px" }}>
-                        {sentence.clauses && sentence.clauses.map((clause, cIdx) => (
-                          <span key={cIdx}>
-                            {clause.text}
-                            {clause.citations && clause.citations.length > 0 && (
-                              <sup style={{ 
-                                color: "#007bff", 
-                                fontSize: "0.8em",
-                                marginLeft: "2px"
-                              }}>
-                                [{clause.citations.join(', ')}]
-                              </sup>
-                            )}
-                            {cIdx < sentence.clauses.length - 1 && ' '}
-                          </span>
+                {statementData &&
+                  statementData.paragraphs &&
+                  statementData.paragraphs.map((paragraph, idx) => (
+                    <div key={idx} style={{ marginBottom: "20px" }}>
+                      <h4 style={{ marginTop: 0, marginBottom: "10px", color: "#333" }}>
+                        {paragraph.title}
+                      </h4>
+                      {paragraph.sentences &&
+                        paragraph.sentences.map((sentence, sIdx) => (
+                          <p key={sIdx} style={{ marginBottom: "10px" }}>
+                            {sentence.clauses &&
+                              sentence.clauses.map((clause, cIdx) => (
+                                <span key={cIdx}>
+                                  {clause.text}
+                                  {clause.citations && clause.citations.length > 0 && (
+                                    <sup
+                                      style={{
+                                        color: "#007bff",
+                                        fontSize: "0.8em",
+                                        marginLeft: "2px",
+                                      }}
+                                    >
+                                      [{clause.citations.join(", ")}]
+                                    </sup>
+                                  )}
+                                  {cIdx < sentence.clauses.length - 1 && " "}
+                                </span>
+                              ))}
+                          </p>
                         ))}
-                      </p>
-                    ))}
-                  </div>
-                ))}
+                    </div>
+                  ))}
               </div>
             </div>
 
-            {/* Right side: Referenced Comments */}
+            {/* Right side: Cited Comments */}
             <div>
-              <h3 style={{ marginTop: 0, marginBottom: "20px", fontSize: "1.2em" }}>Referenced Comments</h3>
+              <h3 style={{ marginTop: 0, marginBottom: "20px", fontSize: "1.2em" }}>
+                Cited Comments
+              </h3>
               {comments && comments.length > 0 && statementData ? (
-                <div style={{ 
-                  backgroundColor: "#fff",
-                  border: "1px solid #e0e0e0",
-                  borderRadius: "8px",
-                  padding: "15px",
-                  maxHeight: "500px",
-                  overflowY: "auto"
-                }}>
+                <div
+                  style={{
+                    backgroundColor: "#fff",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: "8px",
+                    padding: "15px",
+                    maxHeight: "500px",
+                    overflowY: "auto",
+                  }}
+                >
                   <CommentList
                     conversation={conversation}
                     ptptCount={ptptCount}
@@ -195,49 +223,53 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
                     formatTid={formatTid}
                     tidsToRender={extractCitations(statementData)}
                     comments={comments}
-                    voteColors={voteColors || {
-                      agree: "#21a53a",
-                      disagree: "#e74c3c", 
-                      pass: "#b3b3b3"
-                    }}
+                    voteColors={
+                      voteColors || {
+                        agree: "#21a53a",
+                        disagree: "#e74c3c",
+                        pass: "#b3b3b3",
+                      }
+                    }
                   />
                 </div>
               ) : (
-                <div style={{
-                  padding: "40px",
-                  textAlign: "center",
-                  color: "#999",
-                  backgroundColor: "#f8f9fa",
-                  borderRadius: "8px"
-                }}>
+                <div
+                  style={{
+                    padding: "40px",
+                    textAlign: "center",
+                    color: "#999",
+                    backgroundColor: "#f8f9fa",
+                    borderRadius: "8px",
+                  }}
+                >
                   No comments referenced
                 </div>
               )}
             </div>
           </div>
         )}
-            
-        )}
-        
+
         {!loading && !error && statementData && (
-          <div style={{ 
-            marginTop: "30px", 
-            padding: "15px", 
-            backgroundColor: "#e7f3ff",
-            borderRadius: "4px",
-            fontSize: "0.85em",
-            color: "#666"
-          }}>
+          <div
+            style={{
+              marginTop: "30px",
+              padding: "15px",
+              backgroundColor: "#e7f3ff",
+              borderRadius: "4px",
+              fontSize: "0.85em",
+              color: "#666",
+            }}
+          >
             <p style={{ margin: 0 }}>
-              <strong>Note:</strong> This collective statement was generated using AI (Claude Opus 4) based on 
-              the voting patterns and comments from all participants. It represents areas of shared 
-              understanding and consensus on this topic.
+              <strong>Note:</strong> This candidate collective statement was generated using AI (Claude Opus
+              4) based on the voting patterns and comments from all participants. It represents
+              areas of shared understanding and consensus on this topic.
             </p>
           </div>
         )}
 
         <div style={{ marginTop: "30px", textAlign: "right" }}>
-          <button 
+          <button
             onClick={onClose}
             style={{
               padding: "10px 20px",

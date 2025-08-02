@@ -63,10 +63,28 @@ async function generateCollectiveStatement(
   }));
 
   // Build the XML prompt
-  const systemPrompt = `You are a professional facilitator helping diverse groups find common ground and shared understanding. You will analyze voting patterns and comments to create collective statements that all participants might agree with.`;
+  const systemPrompt = `You are a professional facilitator analyzing voting patterns across different participant groups. Your primary focus is on understanding how different groups voted on comments - looking for patterns of agreement within and between groups. Use the voting data to identify shared perspectives and create collective statements that reflect the actual voting consensus.`;
 
   const userPrompt = `<task>
-Write a collective statement for a topic where participants have shown consensus. The statement should be written in first person plural ("We believe...", "We agree that...", "We recognize...") and capture areas of agreement.
+Analyze the voting patterns in this topic to write a collective statement. Focus on:
+1. Comments with HIGH agreement rates (>70% agree) - these show consensus
+2. Comments with MANY total votes - these engaged many participants
+3. Voting patterns BETWEEN groups - look for comments where multiple groups voted similarly
+
+CRITICAL WRITING RULES:
+- Write ONLY in first person plural ("We believe...", "We agree...", "We support...")
+- NEVER say "of participants", "of those voting", "of those who expressed an opinion"
+- DO NOT include percentages or voting statistics in the text
+- DO NOT qualify statements with voting data
+- Trust that only high-consensus comments are being provided
+- Let the citations [number] handle the reference to specific data
+- Maintain the collective voice throughout - write as if everyone agrees because this is a candidate statement supported by votes that are transparently available
+
+GOOD: "We strongly believe cities should include nature in their designs[81]"
+BAD: "97% of participants believe cities should include nature[81]"
+BAD: "We believe cities should include nature, with 97% agreeing[81]"
+
+Base your analysis on the voting data, but express the results as collective statements without the statistics.
 </task>
 
 <topic>
