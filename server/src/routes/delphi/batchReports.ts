@@ -58,12 +58,12 @@ export async function handle_POST_delphi_batch_reports(
 
     // Model parameter - must be explicitly set
     // eslint-disable-next-line no-restricted-properties
-    const model = (req.body.model as string) || process.env.ANTHROPIC_MODEL;
+    const model = (req.body.model as string) || process.env.GENAI_MODEL;
     if (!model) {
       return res.json({
         status: "error",
         message:
-          "Model must be specified in request or ANTHROPIC_MODEL environment variable must be set",
+          "Model must be specified in request or GENAI_MODEL environment variable must be set",
       });
     }
     const max_batch_size = (req.body.max_batch_size as number) || 20;

@@ -113,7 +113,7 @@ def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50,
         stages.append({
             "stage": "REPORT",
             "config": {
-                "model": model if model else os.environ.get("ANTHROPIC_MODEL"), # Use provided model or env var
+                "model": model if model else os.environ.get("GENAI_MODEL"), # Use provided model or env var
                 "include_topics": True
             }
         })
@@ -127,9 +127,9 @@ def submit_job(dynamodb, zid, job_type='FULL_PIPELINE', priority=50,
             raise ValueError("report_id_for_stage is required for CREATE_NARRATIVE_BATCH job type.")
         
         # Default values if not provided, matching typical expectations or server defaults if known
-        current_model = model if model else os.environ.get("ANTHROPIC_MODEL") # Must be set via arg or env var
+        current_model = model if model else os.environ.get("GENAI_MODEL") # Must be set via arg or env var
         if not current_model:
-            raise ValueError("Model must be specified via --model or ANTHROPIC_MODEL environment variable")
+            raise ValueError("Model must be specified via --model or GENAI_MODEL environment variable")
         current_max_batch_size = int(max_batch_size_stage) if max_batch_size_stage is not None else 100 # Default batch size for stage
         
         job_config = {
@@ -403,16 +403,16 @@ def interactive_mode():
                     batch_size_input = Prompt.ask("Batch size (optional)", default="")
                     if batch_size_input: batch_size = batch_size_input
 
-                    model_input = Prompt.ask("Model for REPORT stage (optional, defaults to ANTHROPIC_MODEL env var)", default="")
+                    model_input = Prompt.ask("Model for REPORT stage (optional, defaults to GENAI_MODEL env var)", default="")
                     if model_input: model_param = model_input
             
             elif job_type == "CREATE_NARRATIVE_BATCH":
                 report_id_stage_param = Prompt.ask("[bold]Report ID (for stage config)[/bold]")
-                default_model = os.environ.get("ANTHROPIC_MODEL", "")
+                default_model = os.environ.get("GENAI_MODEL", "")
                 if default_model:
                     model_param = Prompt.ask(f"[bold]Model[/bold] (defaults to {default_model})", default=default_model)
                 else:
-                    model_param = Prompt.ask("[bold]Model[/bold] (REQUIRED - set ANTHROPIC_MODEL env var to avoid this prompt)")
+                    model_param = Prompt.ask("[bold]Model[/bold] (REQUIRED - set GENAI_MODEL env var to avoid this prompt)")
                 max_batch_size_input = Prompt.ask("Max batch size (for stage config, optional, default 100)", default="")
                 if max_batch_size_input:
                     max_batch_size_stage_param = max_batch_size_input
@@ -840,7 +840,7 @@ def main():
     submit_parser.add_argument("--max-votes", help="Maximum votes to process (for FULL_PIPELINE/PCA)")
     submit_parser.add_argument("--batch-size", help="Batch size for processing (for FULL_PIPELINE/PCA)")
     # General model argument, used by FULL_PIPELINE's REPORT stage and CREATE_NARRATIVE_BATCH
-    submit_parser.add_argument("--model", help="Model to use (defaults to ANTHROPIC_MODEL env var)")
+    submit_parser.add_argument("--model", help="Model to use (defaults to GENAI_MODEL env var)")
 
     # Arguments for CREATE_NARRATIVE_BATCH stage config
     submit_parser.add_argument("--report-id-stage", help="Report ID for the CREATE_NARRATIVE_BATCH stage config")

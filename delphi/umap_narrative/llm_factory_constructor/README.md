@@ -49,7 +49,7 @@ export OLLAMA_MODEL=llama3
 export OLLAMA_ENDPOINT=http://localhost:11434
 
 # Anthropic configuration
-export ANTHROPIC_MODEL=claude-3-sonnet-20240229
+export GENAI_MODEL=claude-3-sonnet-20240229
 export ANTHROPIC_API_KEY=your_api_key_here
 ```
 

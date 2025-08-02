@@ -13,7 +13,7 @@ Usage:
 
 Args:
     --conversation_id: Conversation ID/zid
-    --model: LLM model to use (defaults to ANTHROPIC_MODEL env var)
+    --model: LLM model to use (defaults to GENAI_MODEL env var)
     --no-cache: Ignore cached report data
     --max-batch-size: Maximum number of topics to include in a single batch (default: 20)
     --layers: Specific layer numbers to process (e.g., --layers 0 1 2). If not specified, all layers will be processed.
@@ -44,6 +44,10 @@ from collections import defaultdict
 import traceback  # Added for detailed error tracing
 
 from openai import OpenAI, APIError
+
+from anthropic import Anthropic, APIError
+from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
+from anthropic.types.messages.batch_create_params import Request
 
 # Import from local modules
 from polismath_commentgraph.utils.storage import PostgresClient, DynamoDBStorage
@@ -1296,6 +1300,102 @@ class BatchReportGenerator:
         except Exception as e:
             logger.error(f"An unexpected error occurred during batch submission: {str(e)}")
             logger.error(traceback.format_exc())
+            return None
+
+class AnthropicBatchReportGenerator(BatchReportGenerator):
+    """Generates batch reports using Anthropic's Batch API."""
+
+    def __init__(self, conversation_id, model=None, **kwargs):
+        super().__init__(conversation_id, model, **kwargs)
+        if not self.model:
+            self.model = os.environ.get("ANTHROPIC_MODEL")
+            if not self.model:
+                raise ValueError("Anthropic model must be specified via --model or ANTHROPIC_MODEL env var")
+
+    async def submit_batch(self):
+        """Prepares and submits a batch job to the Anthropic API."""
+        logger.info("=== Starting Anthropic batch submission process ===")
+        
+        raw_requests = await self.prepare_batch_requests()
+        if not raw_requests:
+            logger.error("No batch requests to submit.")
+            return None
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            logger.error("ERROR: ANTHROPIC_API_KEY is not set.")
+            return None
+
+        try:
+            client = Anthropic(api_key=api_key)
+            
+            logger.info("Formatting requests for Anthropic SDK...")
+            sdk_requests = []
+            for request in raw_requests:
+                metadata = request.get('metadata', {})
+                section_name = metadata.get('section_name', 'unknown_section')
+                custom_id = f"{self.conversation_id}_{section_name}"
+                safe_custom_id = re.sub(r'[^a-zA-Z0-9_-]', '_', custom_id)[:64]
+
+                sdk_requests.append(
+                    Request(
+                        custom_id=safe_custom_id,
+                        params=MessageCreateParamsNonStreaming(
+                            model=self.model,
+                            messages=request.get('messages', []),
+                            system=request.get('system'),
+                            max_tokens=request.get('max_tokens', 4000),
+                        )
+                    )
+                )
+
+            logger.info(f"Submitting {len(sdk_requests)} requests to Anthropic Batch API...")
+            batch = client.messages.batches.create(requests=sdk_requests)
+            logger.info(f"Successfully submitted batch to Anthropic. Batch ID: {batch.id}")
+
+            if self.job_id:
+                logger.info(f"Updating job {self.job_id} with batch information in DynamoDB...")
+                try:
+                    job_table = self.dynamodb.Table('Delphi_JobQueue')
+                    batch_id_str = str(batch.id)
+                    
+                    job_table.update_item(
+                        Key={'job_id': self.job_id},
+                        UpdateExpression="SET batch_id = :batch_id, #s = :job_status, model = :model",
+                        ExpressionAttributeNames={'#s': 'status'},
+                        ExpressionAttributeValues={
+                            ':batch_id': batch_id_str,
+                            ':job_status': 'PROCESSING',
+                            ':model': self.model
+                        }
+                    )
+                    
+                    now = datetime.now(timezone.utc).isoformat()
+                    status_check_job_id = f"batch_check_{self.job_id}_{int(time.time())}"
+                    status_job = {
+                        'job_id': status_check_job_id,
+                        'status': 'PENDING',
+                        'job_type': 'AWAITING_NARRATIVE_BATCH',
+                        'batch_job_id': self.job_id,
+                        'batch_id': batch.id,
+                        'conversation_id': self.conversation_id,
+                        'report_id': self.report_id,
+                        'created_at': now,
+                        'updated_at': now,
+                        'priority': 50,
+                        'version': 1,
+                        'logs': json.dumps({'entries': []})
+                    }
+                    job_table.put_item(Item=status_job)
+                    logger.info(f"Scheduled batch status check job {status_check_job_id}")
+
+                except Exception as e:
+                    logger.error(f"Failed to update job with batch information: {str(e)}")
+                    logger.error(traceback.format_exc())
+
+            return batch.id
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during Anthropic batch submission: {e}", exc_info=True)
             return None
 
 async def main():

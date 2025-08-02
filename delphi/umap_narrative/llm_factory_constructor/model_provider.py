@@ -506,9 +506,9 @@ def get_model_provider(provider_type: str = None, model_name: str = None) -> Mod
     provider_type = provider_type or os.environ.get("LLM_PROVIDER")
     
     if provider_type.lower() == "anthropic":
-        model_name = model_name or os.environ.get("ANTHROPIC_MODEL")
+        model_name = model_name or os.environ.get("GENAI_MODEL")
         if not model_name:
-            raise ValueError("Model name must be specified or ANTHROPIC_MODEL environment variable must be set")
+            raise ValueError("Model name must be specified or GENAI_MODEL environment variable must be set")
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         logger.info(f"Using Anthropic provider with model: {model_name}")
         return AnthropicProvider(model_name=model_name, api_key=api_key)
