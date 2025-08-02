@@ -4,6 +4,7 @@ import { useReportId } from "../framework/useReportId";
 import Heading from "../framework/heading.jsx";
 import Footer from "../framework/Footer.jsx";
 import CollectiveStatementModal from "./CollectiveStatementModal.jsx";
+import TopicScatterplot from "../topicScatterplot/TopicScatterplot.jsx";
 
 const TopicStats = ({ conversation, report_id: propsReportId, math, comments, ptptCount, formatTid, voteColors }) => {
   const { report_id } = useReportId(propsReportId);
@@ -95,6 +96,45 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
             <p>Model: {latestRun.model_name}</p>
             <p>Generated: {new Date(latestRun.created_at).toLocaleString()}</p>
             
+            {/* Scatterplot visualization */}
+            {statsData && (
+              <div style={{ marginTop: 30, marginBottom: 40, padding: 20, backgroundColor: "#f5f5f5", borderRadius: 8 }}>
+                <h3>Topic Overview</h3>
+                <p style={{ marginBottom: 15, fontSize: "0.9em", color: "#666" }}>
+                  Bubble size represents the number of comments in each topic
+                </p>
+                <TopicScatterplot
+                  data={(() => {
+                    const scatterData = [];
+                    Object.entries(latestRun.topics_by_layer || {}).forEach(([layerId, topics]) => {
+                      Object.entries(topics).forEach(([clusterId, topic]) => {
+                        const stats = statsData[topic.topic_key] || {};
+                        if (stats.comment_count > 0) {
+                          scatterData.push({
+                            topic_name: topic.topic_name,
+                            consensus: stats.divisiveness !== undefined ? (1 - stats.divisiveness) : 0,
+                            avg_votes_per_comment: stats.vote_density || 0,
+                            comment_count: stats.comment_count || 0,
+                            layer: layerId,
+                            topic_key: topic.topic_key
+                          });
+                        }
+                      });
+                    });
+                    return scatterData;
+                  })()}
+                  config={{
+                    height: 400,
+                    bubbleOpacity: 0.6
+                  }}
+                  onClick={(topic) => {
+                    setSelectedTopic({ name: topic.topic_name, key: topic.topic_key });
+                    setModalOpen(true);
+                  }}
+                />
+              </div>
+            )}
+            
             {/* Overall ranking section */}
             <div style={{ marginTop: 30, marginBottom: 40, padding: 20, backgroundColor: "#f5f5f5", borderRadius: 5 }}>
               <h3>Top Topics by Comment Count</h3>
@@ -138,7 +178,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                       <li key={`${item.layerId}-${item.clusterId}`} style={{ marginBottom: 8 }}>
                         <strong>{item.topic.topic_name}</strong> (Layer {item.layerId})
                         <div style={{ fontSize: "0.85em", color: "#666", marginTop: 2 }}>
-                          Vote Density: {item.stats.vote_density?.toFixed(1) || 0} votes/comment | 
+                          Avg Votes/Comment: {item.stats.vote_density?.toFixed(1) || 0} | 
                           Consensus: {item.stats.divisiveness !== undefined ? (1 - item.stats.divisiveness).toFixed(2) : '-'}
                         </div>
                       </li>
@@ -200,7 +240,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                       </th>
                       <th style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}
                           onClick={() => handleSort('vote_density')}>
-                        Vote Density {sortConfig.key === 'vote_density' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
+                        Avg Votes/Comment {sortConfig.key === 'vote_density' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
                       </th>
                       <th style={{ padding: "10px", textAlign: "center" }}>Action</th>
                     </tr>

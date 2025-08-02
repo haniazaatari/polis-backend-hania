@@ -92,7 +92,7 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
         style={{
           backgroundColor: "white",
           borderRadius: "8px",
-          maxWidth: "600px",
+          maxWidth: "1200px",
           width: "90%",
           maxHeight: "80vh",
           overflow: "auto",
@@ -101,10 +101,10 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ marginBottom: "20px" }}>
-          <h2 style={{ margin: 0, marginBottom: "10px" }}>Collective Statement</h2>
-          <p style={{ margin: 0, color: "#666", fontSize: "0.9em" }}>
-            Topic: {topicName}
+        <div style={{ marginBottom: "30px", borderBottom: "2px solid #eee", paddingBottom: "20px" }}>
+          <h2 style={{ margin: 0, marginBottom: "8px", fontSize: "1.8em" }}>{topicName}</h2>
+          <p style={{ margin: 0, color: "#666", fontSize: "1.1em" }}>
+            Collective Statement
           </p>
         </div>
 
@@ -129,79 +129,110 @@ const CollectiveStatementModal = ({ isOpen, onClose, topicName, topicKey, report
         )}
 
         {!loading && !error && statementData && (
-          <div>
-            <div 
-              style={{
-                padding: "20px",
-                backgroundColor: "#f8f9fa",
-                borderRadius: "4px",
-                marginBottom: "20px",
-                lineHeight: "1.6",
-              }}
-            >
-              {statementData && statementData.paragraphs && statementData.paragraphs.map((paragraph, idx) => (
-                <div key={idx} style={{ marginBottom: "20px" }}>
-                  <h4 style={{ marginTop: 0, marginBottom: "10px", color: "#333" }}>{paragraph.title}</h4>
-                  {paragraph.sentences && paragraph.sentences.map((sentence, sIdx) => (
-                    <p key={sIdx} style={{ marginBottom: "10px" }}>
-                      {sentence.clauses && sentence.clauses.map((clause, cIdx) => (
-                        <span key={cIdx}>
-                          {clause.text}
-                          {clause.citations && clause.citations.length > 0 && (
-                            <sup style={{ 
-                              color: "#007bff", 
-                              fontSize: "0.8em",
-                              marginLeft: "2px"
-                            }}>
-                              [{clause.citations.join(', ')}]
-                            </sup>
-                          )}
-                          {cIdx < sentence.clauses.length - 1 && ' '}
-                        </span>
-                      ))}
-                    </p>
-                  ))}
-                </div>
-              ))}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "30px",
+            alignItems: "start"
+          }}>
+            {/* Left side: Collective Statement */}
+            <div>
+              <h3 style={{ marginTop: 0, marginBottom: "20px", fontSize: "1.2em" }}>Statement</h3>
+              <div 
+                style={{
+                  padding: "20px",
+                  backgroundColor: "#f8f9fa",
+                  borderRadius: "8px",
+                  lineHeight: "1.6",
+                  height: "100%",
+                  maxHeight: "500px",
+                  overflowY: "auto"
+                }}
+              >
+                {statementData && statementData.paragraphs && statementData.paragraphs.map((paragraph, idx) => (
+                  <div key={idx} style={{ marginBottom: "20px" }}>
+                    <h4 style={{ marginTop: 0, marginBottom: "10px", color: "#333" }}>{paragraph.title}</h4>
+                    {paragraph.sentences && paragraph.sentences.map((sentence, sIdx) => (
+                      <p key={sIdx} style={{ marginBottom: "10px" }}>
+                        {sentence.clauses && sentence.clauses.map((clause, cIdx) => (
+                          <span key={cIdx}>
+                            {clause.text}
+                            {clause.citations && clause.citations.length > 0 && (
+                              <sup style={{ 
+                                color: "#007bff", 
+                                fontSize: "0.8em",
+                                marginLeft: "2px"
+                              }}>
+                                [{clause.citations.join(', ')}]
+                              </sup>
+                            )}
+                            {cIdx < sentence.clauses.length - 1 && ' '}
+                          </span>
+                        ))}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* Comments list for citations */}
-            {comments && comments.length > 0 && statementData && (
-              <div style={{ marginTop: "30px", overflowX: "auto" }}>
-                <h4 style={{ marginBottom: "15px" }}>Referenced Comments</h4>
-                <CommentList
-                  conversation={conversation}
-                  ptptCount={ptptCount}
-                  math={math}
-                  formatTid={formatTid}
-                  tidsToRender={extractCitations(statementData)}
-                  comments={comments}
-                  voteColors={voteColors || {
-                    agree: "#21a53a",
-                    disagree: "#e74c3c", 
-                    pass: "#b3b3b3"
-                  }}
-                  style={{
-                    width: "max-content"
-                  }}
-                />
-              </div>
-            )}
-            
-            <div style={{ 
-              marginTop: "20px", 
-              padding: "15px", 
-              backgroundColor: "#e7f3ff",
-              borderRadius: "4px",
-              fontSize: "0.85em",
-              color: "#666"
-            }}>
-              <p style={{ margin: 0 }}>
-                <strong>Note:</strong> This collective statement was generated using AI (Claude Opus 4) based on 
-                the voting patterns and comments from all participants. It represents areas of shared 
-                understanding and consensus on this topic.
-              </p>
+            {/* Right side: Referenced Comments */}
+            <div>
+              <h3 style={{ marginTop: 0, marginBottom: "20px", fontSize: "1.2em" }}>Referenced Comments</h3>
+              {comments && comments.length > 0 && statementData ? (
+                <div style={{ 
+                  backgroundColor: "#fff",
+                  border: "1px solid #e0e0e0",
+                  borderRadius: "8px",
+                  padding: "15px",
+                  maxHeight: "500px",
+                  overflowY: "auto"
+                }}>
+                  <CommentList
+                    conversation={conversation}
+                    ptptCount={ptptCount}
+                    math={math}
+                    formatTid={formatTid}
+                    tidsToRender={extractCitations(statementData)}
+                    comments={comments}
+                    voteColors={voteColors || {
+                      agree: "#21a53a",
+                      disagree: "#e74c3c", 
+                      pass: "#b3b3b3"
+                    }}
+                  />
+                </div>
+              ) : (
+                <div style={{
+                  padding: "40px",
+                  textAlign: "center",
+                  color: "#999",
+                  backgroundColor: "#f8f9fa",
+                  borderRadius: "8px"
+                }}>
+                  No comments referenced
+                </div>
+              )}
             </div>
+          </div>
+        )}
+            
+        )}
+        
+        {!loading && !error && statementData && (
+          <div style={{ 
+            marginTop: "30px", 
+            padding: "15px", 
+            backgroundColor: "#e7f3ff",
+            borderRadius: "4px",
+            fontSize: "0.85em",
+            color: "#666"
+          }}>
+            <p style={{ margin: 0 }}>
+              <strong>Note:</strong> This collective statement was generated using AI (Claude Opus 4) based on 
+              the voting patterns and comments from all participants. It represents areas of shared 
+              understanding and consensus on this topic.
+            </p>
           </div>
         )}
 
