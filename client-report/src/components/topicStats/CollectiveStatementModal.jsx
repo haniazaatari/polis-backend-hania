@@ -31,10 +31,31 @@ const CollectiveStatementModal = ({
       setLoading(true);
       setError(null);
 
+      // Only send group-aware consensus for comments in this topic
+      const topicStats = await net.polisGet("/api/v3/topicStats", {
+        report_id: reportId,
+      });
+      
+      let topicCommentIds = [];
+      if (topicStats.status === "success" && topicStats.stats[topicKey]) {
+        topicCommentIds = topicStats.stats[topicKey].comment_tids || [];
+      }
+      
+      // Extract only the group consensus values we need
+      const relevantConsensus = {};
+      if (math && math["group-aware-consensus"]) {
+        topicCommentIds.forEach(tid => {
+          if (math["group-aware-consensus"][tid] !== undefined) {
+            relevantConsensus[tid] = math["group-aware-consensus"][tid];
+          }
+        });
+      }
+
       const response = await net.polisPost("/api/v3/collectiveStatement", {
         report_id: reportId,
         topic_key: topicKey,
         topic_name: topicName,
+        group_consensus: relevantConsensus,
       });
 
       if (response.status === "success") {

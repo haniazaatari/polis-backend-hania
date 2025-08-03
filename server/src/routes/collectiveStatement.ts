@@ -60,6 +60,7 @@ async function generateCollectiveStatement(
     disagrees: comment.disagrees || 0,
     passes: comment.passes || 0,
     total_votes: comment.total_votes || 0,
+    group_consensus: comment.group_consensus || null,
   }));
 
   // Build the XML prompt
@@ -227,12 +228,46 @@ export async function handle_POST_collectiveStatement(req: Request, res: Respons
       });
     }
     
+    // Filter and rank comments by group-aware consensus
+    const groupConsensus = req.body.group_consensus;
+    let filteredComments = topicComments;
+    
+    if (groupConsensus && Object.keys(groupConsensus).length > 0) {
+      // Add group consensus to each comment
+      filteredComments = topicComments.map(comment => ({
+        ...comment,
+        group_consensus: groupConsensus[comment.comment_id] || 0
+      }));
+      
+      // Debug: Log a sample to verify mapping
+      if (filteredComments.length > 0) {
+        logger.info(`Sample comment with consensus: ID ${filteredComments[0].comment_id}, consensus: ${filteredComments[0].group_consensus}`);
+      }
+      
+      // Filter out comments with less than 20 votes
+      filteredComments = filteredComments.filter(c => c.total_votes >= 20);
+      
+      // Sort by group consensus (descending)
+      filteredComments.sort((a, b) => b.group_consensus - a.group_consensus);
+      
+      // Take top quartile
+      const quartileSize = Math.ceil(filteredComments.length / 4);
+      filteredComments = filteredComments.slice(0, quartileSize);
+      
+      logger.info(`Filtered from ${topicComments.length} to ${filteredComments.length} comments (min 20 votes, top quartile by consensus)`);
+      
+      // Debug: Log the consensus values of top and bottom comments
+      if (filteredComments.length > 0) {
+        logger.info(`Top comment consensus: ${filteredComments[0].group_consensus}, Bottom comment consensus: ${filteredComments[filteredComments.length - 1].group_consensus}`);
+      }
+    }
+    
     // Generate the collective statement
     const result = await generateCollectiveStatement(
       zid,
       topic_key,
       topic_name,
-      topicComments
+      filteredComments
     );
 
     // Store in DynamoDB
