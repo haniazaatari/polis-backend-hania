@@ -89,25 +89,55 @@ const TopicScatterplot = ({ data, config = {}, onHover, onClick }) => {
         (normalized * (mergedConfig.maxBubbleSize - mergedConfig.minBubbleSize));
     };
     
+    // Apply optional transformations for positioning
+    const xValues = data.map(d => {
+      const val = d.avg_votes_per_comment || 0;
+      if (mergedConfig.xTransform === 'pow2') return Math.pow(val, 2);
+      if (mergedConfig.xTransform === 'pow3') return Math.pow(val, 3);
+      if (mergedConfig.xTransform === 'sqrt') return Math.sqrt(val);
+      if (mergedConfig.xTransform === 'pow1.5') return Math.pow(val, 1.5);
+      return val;
+    });
+    
+    const yValues = data.map(d => {
+      const val = d.consensus || 0;
+      if (mergedConfig.yTransform === 'pow2') return Math.pow(val, 2);
+      if (mergedConfig.yTransform === 'pow3') return Math.pow(val, 3);
+      if (mergedConfig.yTransform === 'sqrt') return Math.sqrt(val);
+      if (mergedConfig.yTransform === 'pow1.5') return Math.pow(val, 1.5);
+      return val;
+    });
+    
+    // Store original values for custom hover text
+    const originalValues = data.map(d => ({
+      x: d.avg_votes_per_comment || 0,
+      y: d.consensus || 0
+    }));
+    
     // Prepare Plotly data
     const plotData = [{
-      x: data.map(d => d.avg_votes_per_comment || 0),
-      y: data.map(d => d.consensus || 0),
+      x: xValues,
+      y: yValues,
       mode: 'markers',
       type: 'scatter',
       marker: {
         size: data.map(d => scaleSize(d.comment_count || 0)),
-        color: 'rgba(66, 133, 244, 1)', // Google blue
+        color: data.map(d => {
+          if (mergedConfig.colorFunction) {
+            return mergedConfig.colorFunction(d);
+          }
+          return 'rgba(66, 133, 244, 1)'; // Default Google blue
+        }),
         opacity: mergedConfig.bubbleOpacity,
         line: {
-          color: 'rgba(66, 133, 244, 1)',
+          color: 'rgba(0, 0, 0, 0.2)',
           width: 1
         }
       },
       text: data.map(d => {
         // Build hover text
         let hoverText = `<b>${d.topic_name}</b><br>`;
-        hoverText += `Consensus: ${(d.consensus * 100).toFixed(1)}%<br>`;
+        hoverText += `Consensus: ${d.consensus.toFixed(3)}<br>`;
         hoverText += `Avg Votes/Comment: ${d.avg_votes_per_comment.toFixed(1)}<br>`;
         hoverText += `Comments: ${d.comment_count}`;
         
@@ -134,14 +164,17 @@ const TopicScatterplot = ({ data, config = {}, onHover, onClick }) => {
       xaxis: {
         title: mergedConfig.xAxisLabel,
         zeroline: false,
-        gridcolor: 'rgba(0,0,0,0.1)'
+        gridcolor: 'rgba(0,0,0,0.1)',
+        type: mergedConfig.xAxisType || 'linear',
+        exponentformat: mergedConfig.xAxisType === 'pow' ? 'e' : undefined
       },
       yaxis: {
         title: mergedConfig.yAxisLabel,
         zeroline: false,
         gridcolor: 'rgba(0,0,0,0.1)',
-        tickformat: '.0%', // Format as percentage
-        range: [-0.05, 1.05] // Ensure full 0-100% range is visible
+        type: mergedConfig.yAxisType || 'linear',
+        tickformat: mergedConfig.yAxisTickFormat || '',
+        exponentformat: mergedConfig.yAxisType === 'pow' ? 'e' : undefined
       },
       hovermode: 'closest',
       showlegend: false,

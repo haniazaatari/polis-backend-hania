@@ -41,6 +41,7 @@ interface TopicMetrics {
   disagree_votes: number;
   pass_votes: number;
   vote_density: number; // votes per comment
+  comment_tids?: number[]; // List of comment IDs for client-side calculations
 }
 
 
@@ -145,6 +146,7 @@ async function calculateTopicMetrics(
       disagree_votes: totalDisagree,
       pass_votes: totalPass,
       vote_density: voteDensity,
+      comment_tids: commentIds,
     };
   } catch (err) {
     logger.error(`Error calculating topic metrics: ${err}`);
