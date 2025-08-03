@@ -4,8 +4,6 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { getZidFromReport } from "../utils/parameter";
 import Config from "../config";
-import pgQuery from "../db/pg-query";
-import * as request from "request-promise";
 
 const dynamoDBConfig: any = {
   region: Config.AWS_REGION || "us-east-1",
@@ -34,124 +32,21 @@ const docClient = DynamoDBDocumentClient.from(client, {
 
 interface TopicMetrics {
   comment_count: number;
-  total_votes: number;
-  consensus: number;
-  divisiveness: number;
-  agree_votes: number;
-  disagree_votes: number;
-  pass_votes: number;
-  vote_density: number; // votes per comment
-  comment_tids?: number[]; // List of comment IDs for client-side calculations
+  comment_tids: number[]; // List of comment IDs for client-side calculations
 }
 
 
 /**
- * Calculate consensus and divisiveness metrics for a set of comments
+ * Return basic topic info - all calculations done client-side
  */
 async function calculateTopicMetrics(
   zid: number,
   commentIds: number[]
 ): Promise<TopicMetrics> {
-  if (commentIds.length === 0) {
-    return {
-      comment_count: 0,
-      total_votes: 0,
-      consensus: 0,
-      divisiveness: 0,
-      agree_votes: 0,
-      disagree_votes: 0,
-      pass_votes: 0,
-      vote_density: 0,
-    };
-  }
-
-  try {
-    // Get vote data for these comments
-    const voteQuery = `
-      SELECT 
-        tid,
-        COUNT(*) as vote_count,
-        SUM(CASE WHEN vote = 1 THEN 1 ELSE 0 END) as agree_count,
-        SUM(CASE WHEN vote = -1 THEN 1 ELSE 0 END) as disagree_count,
-        SUM(CASE WHEN vote = 0 THEN 1 ELSE 0 END) as pass_count
-      FROM votes_latest_unique
-      WHERE zid = $1 AND tid = ANY($2::int[])
-      GROUP BY tid
-    `;
-
-    const voteResults = await pgQuery.queryP(voteQuery, [zid, commentIds]) as any[];
-    
-    if (!voteResults || voteResults.length === 0) {
-      return {
-        comment_count: commentIds.length,
-        total_votes: 0,
-        consensus: 0,
-        divisiveness: 0,
-        agree_votes: 0,
-        disagree_votes: 0,
-        pass_votes: 0,
-        vote_density: 0,
-      };
-    }
-
-    // Calculate aggregate metrics
-    let totalVotes = 0;
-    let totalAgree = 0;
-    let totalDisagree = 0;
-    let totalPass = 0;
-    let consensusSum = 0;
-    let divisiveSum = 0;
-
-    voteResults.forEach((row: any) => {
-      const voteCount = parseInt(row.vote_count) || 0;
-      const agreeCount = parseInt(row.agree_count) || 0;
-      const disagreeCount = parseInt(row.disagree_count) || 0;
-      const passCount = parseInt(row.pass_count) || 0;
-
-      totalVotes += voteCount;
-      totalAgree += agreeCount;
-      totalDisagree += disagreeCount;
-      totalPass += passCount;
-
-      // Calculate per-comment consensus (agreement rate among non-pass votes)
-      const activeVotes = agreeCount + disagreeCount;
-      if (activeVotes > 0) {
-        const agreeRate = agreeCount / activeVotes;
-        const disagreeRate = disagreeCount / activeVotes;
-        const consensus = Math.max(agreeRate, disagreeRate);
-        consensusSum += consensus * voteCount; // Weight by vote count
-
-        // Divisiveness: how evenly split the votes are (0 = consensus, 1 = perfectly split)
-        const divisiveness = 1 - Math.abs(agreeRate - disagreeRate);
-        divisiveSum += divisiveness * voteCount;
-      }
-    });
-
-    // Calculate weighted averages
-    const avgConsensus = totalVotes > 0 ? consensusSum / totalVotes : 0;
-    const avgDivisiveness = totalVotes > 0 ? divisiveSum / totalVotes : 0;
-    
-    // Calculate vote density
-    const voteDensity = commentIds.length > 0 ? totalVotes / commentIds.length : 0;
-    
-    // Topic-based group consensus would go here if we had group membership data
-    // For now, we rely on the Delphi group-aware consensus
-
-    return {
-      comment_count: commentIds.length,
-      total_votes: totalVotes,
-      consensus: avgConsensus,
-      divisiveness: avgDivisiveness,
-      agree_votes: totalAgree,
-      disagree_votes: totalDisagree,
-      pass_votes: totalPass,
-      vote_density: voteDensity,
-      comment_tids: commentIds,
-    };
-  } catch (err) {
-    logger.error(`Error calculating topic metrics: ${err}`);
-    throw err;
-  }
+  return {
+    comment_count: commentIds.length,
+    comment_tids: commentIds,
+  };
 }
 
 /**

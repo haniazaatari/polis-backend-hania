@@ -16,6 +16,65 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [sortConfig, setSortConfig] = useState({ key: 'comment_count', direction: 'desc' });
   
+  // Calculate metrics from comments data
+  const calculateMetricsFromComments = (commentTids, allComments) => {
+    if (!commentTids || !allComments) return null;
+    
+    // Create a map for quick lookup
+    const commentMap = {};
+    allComments.forEach(c => {
+      commentMap[c.tid] = c;
+    });
+    
+    let totalVotes = 0;
+    let totalAgree = 0;
+    let totalDisagree = 0;
+    let totalPass = 0;
+    let consensusSum = 0;
+    let divisiveSum = 0;
+    let commentCount = 0;
+    
+    commentTids.forEach(tid => {
+      const comment = commentMap[tid];
+      if (!comment) return;
+      
+      commentCount++;
+      const agreeCount = comment.agree_count || 0;
+      const disagreeCount = comment.disagree_count || 0;
+      const passCount = comment.pass_count || 0;
+      const voteCount = agreeCount + disagreeCount + passCount;
+      
+      totalVotes += voteCount;
+      totalAgree += agreeCount;
+      totalDisagree += disagreeCount;
+      totalPass += passCount;
+      
+      // Calculate per-comment consensus
+      const activeVotes = agreeCount + disagreeCount;
+      if (activeVotes > 0) {
+        const agreeRate = agreeCount / activeVotes;
+        const disagreeRate = disagreeCount / activeVotes;
+        const consensus = Math.max(agreeRate, disagreeRate);
+        consensusSum += consensus * voteCount;
+        
+        // Divisiveness: how evenly split the votes are
+        const divisiveness = 1 - Math.abs(agreeRate - disagreeRate);
+        divisiveSum += divisiveness * voteCount;
+      }
+    });
+    
+    return {
+      comment_count: commentCount,
+      total_votes: totalVotes,
+      consensus: totalVotes > 0 ? consensusSum / totalVotes : 0,
+      divisiveness: totalVotes > 0 ? divisiveSum / totalVotes : 0,
+      agree_votes: totalAgree,
+      disagree_votes: totalDisagree,
+      pass_votes: totalPass,
+      vote_density: commentCount > 0 ? totalVotes / commentCount : 0,
+    };
+  };
+  
   // Color gradient function: green-red vertical, grey-saturated horizontal
   const createColorGradient = (consensus, avgVotes, maxVotes) => {
     // Normalize votes to 0-1 range for saturation
@@ -62,8 +121,18 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
           setTopicsData(topicsResponse.runs);
         }
         
-        if (statsResponse.status === "success") {
-          setStatsData(statsResponse.stats);
+        if (statsResponse.status === "success" && comments) {
+          // Calculate metrics client-side using comments data
+          const enrichedStats = {};
+          Object.entries(statsResponse.stats).forEach(([topicKey, stats]) => {
+            const metrics = calculateMetricsFromComments(stats.comment_tids, comments);
+            enrichedStats[topicKey] = {
+              ...stats,
+              ...metrics,
+              comment_tids: stats.comment_tids
+            };
+          });
+          setStatsData(enrichedStats);
         }
         
         setLoading(false);
@@ -75,7 +144,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
     };
 
     fetchData();
-  }, [report_id]);
+  }, [report_id, comments]);
 
   if (loading) {
     return (
@@ -114,55 +183,6 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
             <p>Model: {latestRun.model_name}</p>
             <p>Generated: {new Date(latestRun.created_at).toLocaleString()}</p>
             
-            {/* Scatterplot visualization */}
-            {statsData && (
-              <div style={{ marginTop: 30, marginBottom: 40, padding: 20, backgroundColor: "#f5f5f5", borderRadius: 8 }}>
-                <h3>Topic Overview: Vote Consensus</h3>
-                <p style={{ marginBottom: 15, fontSize: "0.9em", color: "#666" }}>
-                  <strong>Y-axis (Topic Consensus):</strong> Measures vote alignment within each topic. 
-                  High values (near 1.0) mean most people either agree OR disagree consistently. 
-                  Low values (near 0.0) mean votes are evenly split.<br />
-                  <strong>X-axis:</strong> Average votes per comment | <strong>Bubble size:</strong> Number of comments<br />
-                  <strong>Colors:</strong> <span style={{ color: "#008000" }}>Green</span> = high consensus, 
-                  <span style={{ color: "#ff0000" }}> Red</span> = low consensus, 
-                  <span style={{ color: "#808080" }}> Grey</span> = few votes
-                </p>
-                <TopicScatterplot
-                  data={(() => {
-                    const scatterData = [];
-                    let maxVotes = 0;
-                    Object.entries(latestRun.topics_by_layer || {}).forEach(([layerId, topics]) => {
-                      Object.entries(topics).forEach(([clusterId, topic]) => {
-                        const stats = statsData[topic.topic_key] || {};
-                        if (stats.comment_count > 0) {
-                          const avgVotes = stats.vote_density || 0;
-                          maxVotes = Math.max(maxVotes, avgVotes);
-                          scatterData.push({
-                            topic_name: topic.topic_name,
-                            consensus: stats.divisiveness !== undefined ? (1 - stats.divisiveness) : 0,
-                            avg_votes_per_comment: avgVotes,
-                            comment_count: stats.comment_count || 0,
-                            layer: layerId,
-                            topic_key: topic.topic_key
-                          });
-                        }
-                      });
-                    });
-                    // Add max votes to each item for color calculation
-                    return scatterData.map(d => ({ ...d, maxVotes }));
-                  })()}
-                  config={{
-                    height: 400,
-                    bubbleOpacity: 0.8,
-                    colorFunction: (d) => createColorGradient(d.consensus, d.avg_votes_per_comment, d.maxVotes)
-                  }}
-                  onClick={(topic) => {
-                    setSelectedTopic({ name: topic.topic_name, key: topic.topic_key });
-                    setModalOpen(true);
-                  }}
-                />
-              </div>
-            )}
             
             {/* Group-aware consensus scatterplot */}
             {statsData && math && math["group-aware-consensus"] && (
@@ -317,11 +337,6 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                           onClick={() => handleSort('topic_name')}>
                         Topic {sortConfig.key === 'topic_name' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
                       </th>
-                      <th style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }} 
-                          title="Overall agreement level (1.00=full consensus, 0.00=even split)"
-                          onClick={() => handleSort('consensus')}>
-                        Topic Consensus {sortConfig.key === 'consensus' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
-                      </th>
                       <th style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}
                           onClick={() => handleSort('comment_count')}>
                         Comments {sortConfig.key === 'comment_count' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
@@ -373,10 +388,6 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                             aValue = a.topic.topic_name.toLowerCase();
                             bValue = b.topic.topic_name.toLowerCase();
                             break;
-                          case 'consensus':
-                            aValue = a.stats.divisiveness !== undefined ? (1 - a.stats.divisiveness) : 0;
-                            bValue = b.stats.divisiveness !== undefined ? (1 - b.stats.divisiveness) : 0;
-                            break;
                           case 'comment_count':
                             aValue = a.stats.comment_count || 0;
                             bValue = b.stats.comment_count || 0;
@@ -407,9 +418,6 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                       .map(({ clusterId, topic, stats }) => (
                         <tr key={clusterId} style={{ borderBottom: "1px solid #ccc" }}>
                           <td style={{ padding: "10px" }}>{topic.topic_name}</td>
-                          <td style={{ padding: "10px", textAlign: "right" }}>
-                            {stats.divisiveness !== undefined ? (1 - stats.divisiveness).toFixed(2) : '-'}
-                          </td>
                           <td style={{ padding: "10px", textAlign: "right" }}>{stats.comment_count || 0}</td>
                           <td style={{ padding: "10px", textAlign: "right" }}>{stats.total_votes || 0}</td>
                           <td style={{ padding: "10px", textAlign: "right" }}>
