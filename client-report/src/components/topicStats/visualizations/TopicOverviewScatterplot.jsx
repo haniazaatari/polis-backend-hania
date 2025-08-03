@@ -74,6 +74,7 @@ const TopicOverviewScatterplot = ({ latestRun, statsData, math, voteColors, onTo
           xTransform: 'sqrt',
           yTransform: 'pow2',
           yAxisLabel: "Group-Aware Consensus",
+          xAxisLabel: "Average Votes per Comment",
           useColorScale: true,
           colorScale: [[0, '#e74c3c'], [0.5, '#f1c40f'], [1, '#21a53a']]
         }}

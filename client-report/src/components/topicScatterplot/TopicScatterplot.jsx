@@ -111,6 +111,8 @@ const TopicScatterplot = ({ data, config = {}, onHover, onClick }) => {
     
     // Calculate custom tick values for transformed axes
     let xTickVals, xTickText;
+    let yTickVals, yTickText;
+    
     if (mergedConfig.xTransform === 'sqrt') {
       // Dynamically calculate nice tick values based on data range
       const maxX = Math.max(...xOriginal);
@@ -146,6 +148,30 @@ const TopicScatterplot = ({ data, config = {}, onHover, onClick }) => {
       
       xTickVals = tickValues;
       xTickText = tickLabels;
+    }
+    
+    // Calculate custom tick values for y-axis with pow2 transform
+    if (mergedConfig.yTransform === 'pow2') {
+      const yOriginal = data.map(d => d.consensus || 0);
+      const maxY = Math.max(...yOriginal);
+      const minY = Math.min(...yOriginal.filter(y => y > 0)) || 0;
+      
+      // Generate nice tick values for consensus (0 to 1 range typically)
+      const tickValues = [];
+      const tickLabels = [];
+      
+      // For consensus values, use fixed intervals
+      const steps = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+      
+      for (const val of steps) {
+        if (val >= minY * 0.9 && val <= maxY * 1.1) {
+          tickValues.push(Math.pow(val, 2));
+          tickLabels.push(val.toFixed(1));
+        }
+      }
+      
+      yTickVals = tickValues;
+      yTickText = tickLabels;
     }
     
     // Store original values for custom hover text
@@ -218,7 +244,10 @@ const TopicScatterplot = ({ data, config = {}, onHover, onClick }) => {
         zeroline: false,
         gridcolor: 'rgba(0,0,0,0.1)',
         type: mergedConfig.yAxisType || 'linear',
-        tickformat: mergedConfig.yAxisTickFormat || '',
+        tickmode: yTickVals ? 'array' : 'auto',
+        tickvals: yTickVals,
+        ticktext: yTickText,
+        tickformat: yTickVals ? undefined : (mergedConfig.yAxisTickFormat || ''),
         exponentformat: mergedConfig.yAxisType === 'pow' ? 'e' : undefined
       },
       hovermode: 'closest',

@@ -4,7 +4,8 @@ import { useReportId } from "../framework/useReportId";
 import Heading from "../framework/heading.jsx";
 import Footer from "../framework/Footer.jsx";
 import CollectiveStatementModal from "./CollectiveStatementModal.jsx";
-import AllCommentsScatterplot from "./visualizations/AllCommentsScatterplot.jsx";
+import TopicSummaryModal from "./TopicSummaryModal.jsx";
+import AllCommentsModal from "./AllCommentsModal.jsx";
 import TopicOverviewScatterplot from "./visualizations/TopicOverviewScatterplot.jsx";
 import TopicTables from "./visualizations/TopicTables.jsx";
 
@@ -15,6 +16,8 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
   const [topicsData, setTopicsData] = useState(null);
   const [statsData, setStatsData] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [scatterModalOpen, setScatterModalOpen] = useState(false);
+  const [beeswarmModalOpen, setBeeswarmModalOpen] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState(null);
   
   // Calculate metrics from comments data
@@ -161,14 +164,6 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
             <p>Model: {latestRun.model_name}</p>
             <p>Generated: {new Date(latestRun.created_at).toLocaleString()}</p>
             
-            
-            {/* Individual comments scatterplot */}
-            <AllCommentsScatterplot 
-              comments={comments} 
-              math={math} 
-              voteColors={voteColors} 
-            />
-            
             {/* Group-aware consensus scatterplot */}
             <TopicOverviewScatterplot 
               latestRun={latestRun}
@@ -190,6 +185,14 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                 setSelectedTopic(topic);
                 setModalOpen(true);
               }}
+              onScatterplot={(topic) => {
+                setSelectedTopic(topic);
+                setScatterModalOpen(true);
+              }}
+              onBeeswarm={(topic) => {
+                setSelectedTopic(topic);
+                setBeeswarmModalOpen(true);
+              }}
             />
           </div>
         )}
@@ -206,6 +209,37 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
         topicName={selectedTopic?.name}
         topicKey={selectedTopic?.key}
         reportId={report_id}
+        conversation={conversation}
+        math={math}
+        comments={comments}
+        ptptCount={ptptCount}
+        formatTid={formatTid}
+        voteColors={voteColors}
+      />
+      
+      <AllCommentsModal
+        isOpen={scatterModalOpen}
+        onClose={() => {
+          setScatterModalOpen(false);
+          setSelectedTopic(null);
+        }}
+        topicName={selectedTopic?.name}
+        topicKey={selectedTopic?.key}
+        topicStats={selectedTopic ? statsData[selectedTopic.key] : null}
+        comments={comments}
+        math={math}
+        voteColors={voteColors}
+      />
+      
+      <TopicSummaryModal
+        isOpen={beeswarmModalOpen}
+        onClose={() => {
+          setBeeswarmModalOpen(false);
+          setSelectedTopic(null);
+        }}
+        topicName={selectedTopic?.name}
+        topicKey={selectedTopic?.key}
+        topicStats={selectedTopic ? statsData[selectedTopic.key] : null}
         conversation={conversation}
         math={math}
         comments={comments}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const TopicTables = ({ latestRun, statsData, math, onTopicSelect }) => {
+const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot, onBeeswarm }) => {
   const [sortConfig, setSortConfig] = useState({ key: 'comment_count', direction: 'desc' });
   
   const handleSort = (key) => {
@@ -136,7 +136,7 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect }) => {
                       {stats.group_consensus !== null ? stats.group_consensus.toFixed(2) : '-'}
                     </td>
                     <td style={{ padding: "10px", textAlign: "center" }}>
-                      {stats.divisiveness !== undefined && stats.divisiveness < 0.2 && stats.total_votes > 50 ? (
+                      <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', alignItems: 'center' }}>
                         <button 
                           style={{
                             backgroundColor: "#4CAF50",
@@ -151,7 +151,41 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect }) => {
                         >
                           Create Collective Statement
                         </button>
-                      ) : null}
+                        
+                        <button 
+                          style={{
+                            backgroundColor: "#757575",
+                            color: "white",
+                            border: "none",
+                            padding: "5px 8px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "1em",
+                            minWidth: "32px"
+                          }}
+                          onClick={() => onScatterplot({ name: topic.topic_name, key: topic.topic_key })}
+                          title="View scatterplot"
+                        >
+                          📊
+                        </button>
+                        
+                        <button 
+                          style={{
+                            backgroundColor: "#757575",
+                            color: "white",
+                            border: "none",
+                            padding: "5px 8px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "1em",
+                            minWidth: "32px"
+                          }}
+                          onClick={() => onBeeswarm({ name: topic.topic_name, key: topic.topic_key })}
+                          title="View beeswarm"
+                        >
+                          🐝
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
