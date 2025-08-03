@@ -90,6 +90,7 @@ const TopicScatterplot = ({ data, config = {}, onHover, onClick }) => {
     };
     
     // Apply optional transformations for positioning
+    const xOriginal = data.map(d => d.avg_votes_per_comment || 0);
     const xValues = data.map(d => {
       const val = d.avg_votes_per_comment || 0;
       if (mergedConfig.xTransform === 'pow2') return Math.pow(val, 2);
@@ -107,6 +108,45 @@ const TopicScatterplot = ({ data, config = {}, onHover, onClick }) => {
       if (mergedConfig.yTransform === 'pow1.5') return Math.pow(val, 1.5);
       return val;
     });
+    
+    // Calculate custom tick values for transformed axes
+    let xTickVals, xTickText;
+    if (mergedConfig.xTransform === 'sqrt') {
+      // Dynamically calculate nice tick values based on data range
+      const maxX = Math.max(...xOriginal);
+      const minX = Math.min(...xOriginal.filter(x => x > 0)) || 0;
+      
+      // Calculate order of magnitude
+      const magnitude = Math.pow(10, Math.floor(Math.log10(maxX)));
+      const normalizedMax = maxX / magnitude;
+      
+      // Determine step size based on range
+      let step;
+      if (normalizedMax <= 1) step = magnitude * 0.1;
+      else if (normalizedMax <= 2) step = magnitude * 0.2;
+      else if (normalizedMax <= 5) step = magnitude * 0.5;
+      else step = magnitude;
+      
+      // Generate tick values
+      const tickValues = [];
+      const tickLabels = [];
+      
+      for (let val = 0; val <= maxX * 1.1; val += step) {
+        if (val === 0 || val >= minX * 0.9) {
+          tickValues.push(Math.sqrt(val));
+          tickLabels.push(Math.round(val).toString());
+        }
+      }
+      
+      // Ensure we have the max value
+      if (tickValues[tickValues.length - 1] < Math.sqrt(maxX)) {
+        tickValues.push(Math.sqrt(maxX));
+        tickLabels.push(Math.round(maxX).toString());
+      }
+      
+      xTickVals = tickValues;
+      xTickText = tickLabels;
+    }
     
     // Store original values for custom hover text
     const originalValues = data.map(d => ({
@@ -169,7 +209,9 @@ const TopicScatterplot = ({ data, config = {}, onHover, onClick }) => {
         zeroline: false,
         gridcolor: 'rgba(0,0,0,0.1)',
         type: mergedConfig.xAxisType || 'linear',
-        exponentformat: mergedConfig.xAxisType === 'pow' ? 'e' : undefined
+        tickmode: xTickVals ? 'array' : 'auto',
+        tickvals: xTickVals,
+        ticktext: xTickText
       },
       yaxis: {
         title: mergedConfig.yAxisLabel,

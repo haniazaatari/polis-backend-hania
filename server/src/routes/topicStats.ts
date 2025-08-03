@@ -181,24 +181,12 @@ export async function handle_GET_topicStats(req: Request, res: Response) {
       }
     });
     
-    // Debug: Log mapping results
-    logger.info(`Cluster to topic mapping has ${Object.keys(clusterToTopic).length} entries`);
-    logger.info(`Found ${allAssignments.length} comment assignments`);
-    const nonEmptyTopics = Object.entries(commentsByTopic).filter(([_, comments]) => comments.size > 0);
-    logger.info(`Topics with comments: ${nonEmptyTopics.length} out of ${Object.keys(commentsByTopic).length} total topics`);
 
     // Calculate metrics for each topic
     const topicStats: Record<string, TopicMetrics> = {};
     
     for (const [topicKey, commentIdSet] of Object.entries(commentsByTopic)) {
       const commentIds = Array.from(commentIdSet);
-      logger.info(`Calculating metrics for topic ${topicKey} with ${commentIds.length} comments`);
-      
-      // Debug: log sample comment IDs for first topic
-      if (Object.keys(topicStats).length === 0 && commentIds.length > 0) {
-        logger.info(`Sample comment IDs for topic ${topicKey}: ${JSON.stringify(commentIds.slice(0, 3))}`);
-      }
-      
       const metrics = await calculateTopicMetrics(zid, commentIds);
       topicStats[topicKey] = metrics;
     }

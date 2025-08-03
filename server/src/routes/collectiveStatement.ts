@@ -387,6 +387,11 @@ async function getCommentsForTopic(zid: number, topicKey: string): Promise<any[]
     });
     
     logger.info(`Topic ${topicKey} - Layer: ${layer}, Cluster: ${cluster}, Found ${commentIds.length} comment assignments`);
+    
+    // Debug: Log the comment IDs found
+    if (commentIds.length > 0) {
+      logger.info(`Comment IDs for topic ${topicKey}: ${JSON.stringify(commentIds.slice(0, 20))}`);
+    }
 
     if (commentIds.length === 0) {
       return [];
@@ -397,10 +402,10 @@ async function getCommentsForTopic(zid: number, topicKey: string): Promise<any[]
       SELECT 
         c.tid as comment_id,
         c.txt as comment_text,
-        COUNT(DISTINCT v.pid) as total_votes,
-        SUM(CASE WHEN v.vote = 1 THEN 1 ELSE 0 END) as agrees,
-        SUM(CASE WHEN v.vote = -1 THEN 1 ELSE 0 END) as disagrees,
-        SUM(CASE WHEN v.vote = 0 THEN 1 ELSE 0 END) as passes
+        COALESCE(COUNT(DISTINCT v.pid), 0) as total_votes,
+        COALESCE(SUM(CASE WHEN v.vote = 1 THEN 1 ELSE 0 END), 0) as agrees,
+        COALESCE(SUM(CASE WHEN v.vote = -1 THEN 1 ELSE 0 END), 0) as disagrees,
+        COALESCE(SUM(CASE WHEN v.vote = 0 THEN 1 ELSE 0 END), 0) as passes
       FROM comments c
       LEFT JOIN votes_latest_unique v ON c.tid = v.tid AND c.zid = v.zid
       WHERE c.zid = $1 AND c.tid = ANY($2::int[])
@@ -409,6 +414,12 @@ async function getCommentsForTopic(zid: number, topicKey: string): Promise<any[]
     `;
 
     const commentsData = await pgQuery.queryP(commentsQuery, [zid, commentIds]) as any[];
+    
+    // Debug: Log the results
+    logger.info(`SQL query returned ${commentsData.length} comments for topic ${topicKey}`);
+    if (commentsData.length !== commentIds.length) {
+      logger.warn(`Mismatch: Found ${commentIds.length} comment IDs in DynamoDB but only ${commentsData.length} in PostgreSQL`);
+    }
     
     // Return comments with basic voting data
     // Group-level analysis would require participant_group_associations table which doesn't exist yet
