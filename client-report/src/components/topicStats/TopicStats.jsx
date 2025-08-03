@@ -75,23 +75,6 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
     };
   };
   
-  // Color gradient function: green-red vertical, grey-saturated horizontal
-  const createColorGradient = (consensus, avgVotes, maxVotes) => {
-    // Normalize votes to 0-1 range for saturation
-    const voteSaturation = Math.min(avgVotes / maxVotes, 1);
-    
-    // Consensus determines green (high) to red (low)
-    // Using HSL: H=120 is green, H=0 is red
-    const hue = consensus * 120; // 0-120 range
-    
-    // Saturation based on vote density (0% = grey, 100% = full color)
-    const saturation = voteSaturation * 100;
-    
-    // Keep lightness constant for visibility
-    const lightness = 50;
-    
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-  };
 
   const handleSort = (key) => {
     setSortConfig(prevConfig => ({
@@ -192,14 +175,15 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                   <strong>Y-axis (Group-Aware Consensus):</strong> Measures agreement across different participant groups from PCA2. 
                   Higher values indicate topics where groups tend to vote similarly (cross-group agreement).<br />
                   <strong>X-axis:</strong> Average votes per comment | <strong>Bubble size:</strong> Number of comments<br />
-                  <strong>Colors:</strong> <span style={{ color: "#008000" }}>Green</span> = high group consensus, 
-                  <span style={{ color: "#ff0000" }}> Red</span> = low group consensus, 
-                  <span style={{ color: "#808080" }}> Grey</span> = few votes
+                  <strong>Colors:</strong> <span style={{ color: voteColors?.agree || "#21a53a" }}>Green</span> = high group consensus, 
+                  <span style={{ color: voteColors?.disagree || "#e74c3c" }}> Red</span> = low group consensus
                 </p>
                 <TopicScatterplot
                   data={(() => {
                     const scatterData = [];
-                    let maxVotes = 0;
+                    let minConsensus = Infinity;
+                    let maxConsensus = -Infinity;
+                    
                     Object.entries(latestRun.topics_by_layer || {}).forEach(([layerId, topics]) => {
                       Object.entries(topics).forEach(([clusterId, topic]) => {
                         const stats = statsData[topic.topic_key] || {};
@@ -218,7 +202,11 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                         
                         if (stats.comment_count > 0 && groupConsensus !== null) {
                           const avgVotes = stats.vote_density || 0;
-                          maxVotes = Math.max(maxVotes, avgVotes);
+                          
+                          // Track min/max consensus for color scaling
+                          minConsensus = Math.min(minConsensus, groupConsensus);
+                          maxConsensus = Math.max(maxConsensus, groupConsensus);
+                          
                           scatterData.push({
                             topic_name: topic.topic_name,
                             consensus: groupConsensus,
@@ -230,14 +218,25 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                         }
                       });
                     });
-                    // Add max votes to each item for color calculation
-                    return scatterData.map(d => ({ ...d, maxVotes }));
+                    
+                    // Fix edge case where no data
+                    if (minConsensus === Infinity) {
+                      minConsensus = 0;
+                      maxConsensus = 1;
+                    }
+                    
+                    
+                    // Add consensus extents to each item for color calculation
+                    return scatterData.map(d => ({ ...d, minConsensus, maxConsensus }));
                   })()}
                   config={{
-                    height: 400,
+                    height: 600,
                     bubbleOpacity: 0.8,
+                    xAxisType: 'log',
+                    yTransform: 'pow2',
                     yAxisLabel: "Group-Aware Consensus",
-                    colorFunction: (d) => createColorGradient(d.consensus, d.avg_votes_per_comment, d.maxVotes)
+                    useColorScale: true,
+                    colorScale: [[0, '#e74c3c'], [0.5, '#f1c40f'], [1, '#21a53a']]
                   }}
                   onClick={(topic) => {
                     setSelectedTopic({ name: topic.topic_name, key: topic.topic_key });
@@ -247,58 +246,6 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
               </div>
             )}
             
-            {/* Overall ranking section */}
-            <div style={{ marginTop: 30, marginBottom: 40, padding: 20, backgroundColor: "#f5f5f5", borderRadius: 5 }}>
-              <h3>Top Topics by Comment Count</h3>
-              <p style={{ marginBottom: 15, fontSize: "0.9em", color: "#666" }}>
-                Topics ranked by number of comments (size) and overall consensus
-              </p>
-              {(() => {
-                // Collect all topics across layers
-                const allTopics = [];
-                Object.entries(latestRun.topics_by_layer || {}).forEach(([layerId, topics]) => {
-                  Object.entries(topics).forEach(([clusterId, topic]) => {
-                    const stats = statsData?.[topic.topic_key] || {};
-                    allTopics.push({
-                      layerId,
-                      clusterId,
-                      topic,
-                      stats
-                    });
-                  });
-                });
-                
-                // Sort and take top 10
-                const topTopics = allTopics
-                  .filter(item => item.stats.comment_count > 0)
-                  .sort((a, b) => {
-                    // Sort by comment count (descending)
-                    const commentsA = a.stats.comment_count || 0;
-                    const commentsB = b.stats.comment_count || 0;
-                    if (commentsA !== commentsB) return commentsB - commentsA;
-                    
-                    // Then by consensus (descending)
-                    const consensusA = a.stats.divisiveness !== undefined ? (1 - a.stats.divisiveness) : 0;
-                    const consensusB = b.stats.divisiveness !== undefined ? (1 - b.stats.divisiveness) : 0;
-                    return consensusB - consensusA;
-                  })
-                  .slice(0, 10);
-                
-                return (
-                  <ol style={{ margin: 0, paddingLeft: 25 }}>
-                    {topTopics.map((item, index) => (
-                      <li key={`${item.layerId}-${item.clusterId}`} style={{ marginBottom: 8 }}>
-                        <strong>{item.topic.topic_name}</strong> (Layer {item.layerId})
-                        <div style={{ fontSize: "0.85em", color: "#666", marginTop: 2 }}>
-                          Avg Votes/Comment: {item.stats.vote_density?.toFixed(1) || 0} | 
-                          Consensus: {item.stats.divisiveness !== undefined ? (1 - item.stats.divisiveness).toFixed(2) : '-'}
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                );
-              })()}
-            </div>
             
             {(() => {
               const layerEntries = Object.entries(latestRun.topics_by_layer || {});

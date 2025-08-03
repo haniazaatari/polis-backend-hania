@@ -122,12 +122,15 @@ const TopicScatterplot = ({ data, config = {}, onHover, onClick }) => {
       type: 'scatter',
       marker: {
         size: data.map(d => scaleSize(d.comment_count || 0)),
-        color: data.map(d => {
+        color: mergedConfig.useColorScale ? yValues : data.map(d => {
           if (mergedConfig.colorFunction) {
             return mergedConfig.colorFunction(d);
           }
           return 'rgba(66, 133, 244, 1)'; // Default Google blue
         }),
+        colorscale: mergedConfig.colorScale || 'RdYlGn',
+        reversescale: mergedConfig.reverseScale || false,
+        showscale: mergedConfig.showColorScale || false,
         opacity: mergedConfig.bubbleOpacity,
         line: {
           color: 'rgba(0, 0, 0, 0.2)',
