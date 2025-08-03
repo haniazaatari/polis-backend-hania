@@ -125,67 +125,115 @@ const CollectiveStatementModal = ({
         style={{
           backgroundColor: "white",
           borderRadius: "8px",
-          maxWidth: "1200px",
-          width: "90%",
-          maxHeight: "80vh",
-          overflow: "auto",
-          padding: "30px",
+          maxWidth: "95vw",
+          width: "95vw",
+          maxHeight: "95vh",
+          height: "95vh",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
           boxShadow: "0 4px 20px rgba(0, 0, 0, 0.15)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <div
-          style={{ marginBottom: "30px", borderBottom: "2px solid #eee", paddingBottom: "20px" }}
+          style={{ 
+            display: "flex",
+            height: "100%",
+            overflow: "hidden"
+          }}
         >
-          <h2 style={{ margin: 0, marginBottom: "8px", fontSize: "1.8em" }}>{topicName}</h2>
-          <p style={{ margin: 0, color: "#666", fontSize: "1.1em" }}>Candidate Collective Statement</p>
-        </div>
-
-        {loading && (
-          <div style={{ textAlign: "center", padding: "40px" }}>
-            <p>Generating collective statement...</p>
-            <p style={{ fontSize: "0.85em", color: "#666", marginTop: "10px" }}>
-              This may take a moment as we analyze voting patterns and comments.
-            </p>
-          </div>
-        )}
-
-        {error && (
-          <div
-            style={{
-              padding: "20px",
-              backgroundColor: "#fee",
-              borderRadius: "4px",
-              marginBottom: "20px",
+          {/* Left sidebar with title */}
+          <div 
+            style={{ 
+              width: "150px",
+              padding: "20px 10px",
+              borderRight: "2px solid #eee",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#f8f9fa",
+              overflow: "hidden",
+              flexShrink: 0
             }}
           >
-            <p style={{ margin: 0, color: "#c00" }}>Error: {error}</p>
+            <div style={{ 
+              writingMode: "vertical-rl",
+              textOrientation: "mixed",
+              textAlign: "center",
+              whiteSpace: "nowrap",
+              overflow: "visible",
+              maxHeight: "80vh"
+            }}>
+              <h2 style={{ margin: 0, marginBottom: "20px", fontSize: "1.4em" }}>{topicName}</h2>
+              <p style={{ margin: 0, color: "#666", fontSize: "0.9em" }}>Candidate Collective Statement</p>
+            </div>
           </div>
-        )}
+          
+          {/* Main content area */}
+          <div style={{ 
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden"
+          }}>
 
-        {!loading && !error && statementData && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: "30px",
-              alignItems: "start",
-            }}
-          >
-            {/* Left side: Collective Statement */}
-            <div>
-              <h3 style={{ marginTop: 0, marginBottom: "20px", fontSize: "1.2em" }}>Statement</h3>
+            {loading && (
+              <div style={{ 
+                display: "flex", 
+                alignItems: "center", 
+                justifyContent: "center", 
+                height: "100%",
+                flexDirection: "column"
+              }}>
+                <p>Generating collective statement...</p>
+                <p style={{ fontSize: "0.85em", color: "#666", marginTop: "10px" }}>
+                  This may take a moment as we analyze voting patterns and comments.
+                </p>
+              </div>
+            )}
+
+            {error && (
+              <div style={{ padding: "40px" }}>
+                <div
+                  style={{
+                    padding: "20px",
+                    backgroundColor: "#fee",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <p style={{ margin: 0, color: "#c00" }}>Error: {error}</p>
+                </div>
+              </div>
+            )}
+
+            {!loading && !error && statementData && (
               <div
                 style={{
-                  padding: "20px",
-                  backgroundColor: "#f8f9fa",
-                  borderRadius: "8px",
-                  lineHeight: "1.6",
+                  display: "flex",
                   height: "100%",
-                  maxHeight: "500px",
-                  overflowY: "auto",
+                  overflow: "hidden",
                 }}
               >
+                {/* Left side: Collective Statement */}
+                <div style={{ 
+                  flex: "0 0 45%",
+                  display: "flex",
+                  flexDirection: "column",
+                  borderRight: "1px solid #e0e0e0"
+                }}>
+                  <div style={{
+                    flex: 1,
+                    padding: "30px",
+                    overflowY: "auto"
+                  }}>
+                    <h3 style={{ marginTop: 0, marginBottom: "20px", fontSize: "1.2em" }}>Statement</h3>
+                    <div
+                      style={{
+                        lineHeight: "1.8",
+                        fontSize: "1.05em"
+                      }}
+                    >
                 {statementData &&
                   statementData.paragraphs &&
                   statementData.paragraphs.map((paragraph, idx) => (
@@ -218,25 +266,51 @@ const CollectiveStatementModal = ({
                         ))}
                     </div>
                   ))}
-              </div>
-            </div>
+                    </div>
+                  </div>
+                  
+                  {/* Footer note in left column */}
+                  <div
+                    style={{
+                      padding: "20px 30px",
+                      borderTop: "1px solid #e0e0e0",
+                      backgroundColor: "#f8f9fa"
+                    }}
+                  >
+                    <p style={{ margin: 0, fontSize: "0.85em", color: "#666", marginBottom: "15px" }}>
+                      <strong>Note:</strong> This candidate collective statement was generated using AI (Claude Opus
+                      4) based on the voting patterns and comments from all participants. It represents
+                      areas of shared understanding and consensus on this topic.
+                    </p>
+                    <button
+                      onClick={onClose}
+                      style={{
+                        padding: "10px 20px",
+                        backgroundColor: "#007bff",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontSize: "1em",
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
 
-            {/* Right side: Cited Comments */}
-            <div>
-              <h3 style={{ marginTop: 0, marginBottom: "20px", fontSize: "1.2em" }}>
-                Cited Comments
-              </h3>
-              {comments && comments.length > 0 && statementData ? (
-                <div
-                  style={{
-                    backgroundColor: "#fff",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "8px",
-                    padding: "15px",
-                    maxHeight: "500px",
-                    overflowY: "auto",
-                  }}
-                >
+                {/* Right side: Cited Comments */}
+                <div style={{ 
+                  flex: "0 0 55%",
+                  padding: "30px",
+                  overflowY: "auto",
+                  backgroundColor: "#fafafa"
+                }}>
+                  <h3 style={{ marginTop: 0, marginBottom: "20px", fontSize: "1.2em" }}>
+                    Cited Comments
+                  </h3>
+                  {comments && comments.length > 0 && statementData ? (
+                    <div>
                   <CommentList
                     conversation={conversation}
                     ptptCount={ptptCount}
@@ -252,58 +326,24 @@ const CollectiveStatementModal = ({
                       }
                     }
                   />
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        padding: "40px",
+                        textAlign: "center",
+                        color: "#999",
+                        backgroundColor: "#fff",
+                        borderRadius: "8px",
+                      }}
+                    >
+                      No comments referenced
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div
-                  style={{
-                    padding: "40px",
-                    textAlign: "center",
-                    color: "#999",
-                    backgroundColor: "#f8f9fa",
-                    borderRadius: "8px",
-                  }}
-                >
-                  No comments referenced
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
-        )}
-
-        {!loading && !error && statementData && (
-          <div
-            style={{
-              marginTop: "30px",
-              padding: "15px",
-              backgroundColor: "#e7f3ff",
-              borderRadius: "4px",
-              fontSize: "0.85em",
-              color: "#666",
-            }}
-          >
-            <p style={{ margin: 0 }}>
-              <strong>Note:</strong> This candidate collective statement was generated using AI (Claude Opus
-              4) based on the voting patterns and comments from all participants. It represents
-              areas of shared understanding and consensus on this topic.
-            </p>
-          </div>
-        )}
-
-        <div style={{ marginTop: "30px", textAlign: "right" }}>
-          <button
-            onClick={onClose}
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#007bff",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "1em",
-            }}
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>
