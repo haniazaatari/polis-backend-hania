@@ -258,9 +258,26 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
         <p style={globals.primaryHeading}>{topicData.topic_name}</p>
         
         {/* Comment Divisiveness Distribution - moved to top */}
-        <div style={{ marginTop: 30, marginBottom: 40 }}>
-          <p style={globals.secondaryHeading}>Comment Divisiveness Distribution</p>
-          <p style={globals.paragraph}>
+        <div style={{ 
+          marginTop: 40, 
+          marginBottom: 60,
+          borderTop: "1px solid #e0e0e0",
+          paddingTop: 40
+        }}>
+          <p style={{
+            ...globals.secondaryHeading,
+            marginBottom: 8,
+            fontSize: "18px",
+            letterSpacing: "0.5px",
+            textTransform: "uppercase"
+          }}>Comment Divisiveness Distribution</p>
+          <p style={{
+            ...globals.paragraph,
+            fontSize: "14px",
+            lineHeight: 1.6,
+            color: "#666",
+            marginBottom: 30
+          }}>
             Each circle represents a comment. Position shows how similarly groups voted. Hover to see the group vote breakdown.
           </p>
           <TopicBeeswarm
@@ -275,8 +292,19 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
         </div>
         
         {/* Collective Statement - moved to top and auto-generated */}
-        <div style={{ marginTop: 30, marginBottom: 40 }}>
-          <p style={globals.secondaryHeading}>Collective Statement</p>
+        <div style={{ 
+          marginTop: 40, 
+          marginBottom: 60,
+          borderTop: "1px solid #e0e0e0",
+          paddingTop: 40
+        }}>
+          <p style={{
+            ...globals.secondaryHeading,
+            marginBottom: 8,
+            fontSize: "18px",
+            letterSpacing: "0.5px",
+            textTransform: "uppercase"
+          }}>Collective Statement</p>
           
           {loadingStatement && (
             <div style={{ 
@@ -408,40 +436,110 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
         </div>
         
         {/* Key Statistics */}
-        <section style={{ maxWidth: 1200, display: "flex", justifyContent: "space-between", gap: "1rem", marginBottom: 40 }}>
-          <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-            <h3>Comments</h3>
-            <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{topicStats.comment_count}</p>
-          </div>
-          <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-            <h3>Total Votes</h3>
-            <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{topicStats.total_votes.toLocaleString()}</p>
-          </div>
-          <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-            <h3>Agree</h3>
-            <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0, color: voteColors?.agree || globals.brandColors.agree }}>
-              {topicStats.total_votes > 0 ? Math.round((topicStats.agree_votes / topicStats.total_votes) * 100) : 0}%
-            </p>
-            <p style={{ fontSize: "14px", color: "#666", marginTop: "5px" }}>
-              ({topicStats.agree_votes.toLocaleString()} votes)
-            </p>
-          </div>
-          <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-            <h3>Disagree</h3>
-            <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0, color: voteColors?.disagree || globals.brandColors.disagree }}>
-              {topicStats.total_votes > 0 ? Math.round((topicStats.disagree_votes / topicStats.total_votes) * 100) : 0}%
-            </p>
-            <p style={{ fontSize: "14px", color: "#666", marginTop: "5px" }}>
-              ({topicStats.disagree_votes.toLocaleString()} votes)
-            </p>
+        <section style={{ 
+          maxWidth: 1200, 
+          marginBottom: 60,
+          borderTop: "1px solid #e0e0e0",
+          paddingTop: 40
+        }}>
+          <p style={{
+            ...globals.secondaryHeading,
+            marginBottom: 30,
+            fontSize: "18px",
+            letterSpacing: "0.5px",
+            textTransform: "uppercase"
+          }}>Key Metrics</p>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "2rem" }}>
+            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
+              <p style={{ 
+                fontSize: "13px", 
+                textTransform: "uppercase", 
+                letterSpacing: "1px", 
+                color: "#666",
+                marginBottom: "8px"
+              }}>Comments</p>
+              <p style={{ 
+                fontFamily: "Georgia, serif", 
+                fontSize: "3rem", 
+                margin: 0,
+                fontWeight: "normal"
+              }}>{topicStats.comment_count}</p>
+            </div>
+            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
+              <p style={{ 
+                fontSize: "13px", 
+                textTransform: "uppercase", 
+                letterSpacing: "1px", 
+                color: "#666",
+                marginBottom: "8px"
+              }}>Total Votes</p>
+              <p style={{ 
+                fontFamily: "Georgia, serif", 
+                fontSize: "3rem", 
+                margin: 0,
+                fontWeight: "normal"
+              }}>{topicStats.total_votes.toLocaleString()}</p>
+            </div>
+            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
+              <p style={{ 
+                fontSize: "13px", 
+                textTransform: "uppercase", 
+                letterSpacing: "1px", 
+                color: "#666",
+                marginBottom: "8px"
+              }}>Agree</p>
+              <p style={{ 
+                fontFamily: "Georgia, serif", 
+                fontSize: "3rem", 
+                margin: 0, 
+                color: voteColors?.agree || globals.brandColors.agree,
+                fontWeight: "normal"
+              }}>
+                {topicStats.total_votes > 0 ? Math.round((topicStats.agree_votes / topicStats.total_votes) * 100) : 0}%
+              </p>
+              <p style={{ fontSize: "13px", color: "#999", marginTop: "5px" }}>
+                {topicStats.agree_votes.toLocaleString()} votes
+              </p>
+            </div>
+            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
+              <p style={{ 
+                fontSize: "13px", 
+                textTransform: "uppercase", 
+                letterSpacing: "1px", 
+                color: "#666",
+                marginBottom: "8px"
+              }}>Disagree</p>
+              <p style={{ 
+                fontFamily: "Georgia, serif", 
+                fontSize: "3rem", 
+                margin: 0, 
+                color: voteColors?.disagree || globals.brandColors.disagree,
+                fontWeight: "normal"
+              }}>
+                {topicStats.total_votes > 0 ? Math.round((topicStats.disagree_votes / topicStats.total_votes) * 100) : 0}%
+              </p>
+              <p style={{ fontSize: "13px", color: "#999", marginTop: "5px" }}>
+                {topicStats.disagree_votes.toLocaleString()} votes
+              </p>
+            </div>
           </div>
         </section>
       </div>
 
       {/* Narrative Report Section */}
       {topicNarrative && topicNarrative.paragraphs && (
-        <div style={{ marginTop: 40 }}>
-          <p style={globals.secondaryHeading}>Narrative Summary</p>
+        <div style={{ 
+          marginTop: 40,
+          borderTop: "1px solid #e0e0e0",
+          paddingTop: 40
+        }}>
+          <p style={{
+            ...globals.secondaryHeading,
+            marginBottom: 30,
+            fontSize: "18px",
+            letterSpacing: "0.5px",
+            textTransform: "uppercase"
+          }}>Narrative Summary</p>
           
           {/* Extract all citations from the narrative */}
           {(() => {
@@ -539,9 +637,25 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
 
 
       {/* Consensus vs Engagement Section */}
-      <div style={{ marginTop: 40 }}>
-        <p style={globals.secondaryHeading}>Consensus vs Engagement</p>
-        <p style={globals.paragraph}>
+      <div style={{ 
+        marginTop: 40,
+        borderTop: "1px solid #e0e0e0",
+        paddingTop: 40
+      }}>
+        <p style={{
+          ...globals.secondaryHeading,
+          marginBottom: 8,
+          fontSize: "18px",
+          letterSpacing: "0.5px",
+          textTransform: "uppercase"
+        }}>Consensus vs Engagement</p>
+        <p style={{
+          ...globals.paragraph,
+          fontSize: "14px",
+          lineHeight: 1.6,
+          color: "#666",
+          marginBottom: 30
+        }}>
           This visualization shows how group consensus relates to voting engagement for each comment.
           Comments with high consensus and high engagement represent areas of strong agreement or disagreement across the conversation.
         </p>
@@ -562,9 +676,26 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
 
 
       {/* All Comments Section */}
-      <div style={{ marginTop: 40 }}>
-        <p style={globals.secondaryHeading}>All Comments ({topicComments.length})</p>
-        <p style={globals.paragraph}>
+      <div style={{ 
+        marginTop: 40,
+        borderTop: "1px solid #e0e0e0",
+        paddingTop: 40,
+        marginBottom: 60
+      }}>
+        <p style={{
+          ...globals.secondaryHeading,
+          marginBottom: 8,
+          fontSize: "18px",
+          letterSpacing: "0.5px",
+          textTransform: "uppercase"
+        }}>All Comments ({topicComments.length})</p>
+        <p style={{
+          ...globals.paragraph,
+          fontSize: "14px",
+          lineHeight: 1.6,
+          color: "#666",
+          marginBottom: 30
+        }}>
           All comments in this topic.
         </p>
         <div style={{ marginTop: 30 }}>

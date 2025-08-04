@@ -63,7 +63,7 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
   const [commentsWithConsensus, setCommentsWithConsensus] = useState(null);
   const [voronoi, setVoronoi] = useState(null);
   const [dataExtent, setDataExtent] = useState([0, 1]);
-  const [filterLowVotes, setFilterLowVotes] = useState(false);
+  const [filterLowVotes, setFilterLowVotes] = useState(true);
   const svgRef = useRef(null);
 
   const onHoverCallback = (d) => {
@@ -176,29 +176,27 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
   }
 
   return (
-    <div style={{ width: '100%', overflowX: 'auto', position: 'relative' }}>
-      {/* Vote filter checkbox in upper right */}
-      <label style={{ 
-        position: 'absolute', 
-        top: '10px', 
-        right: '10px', 
-        fontSize: '12px',
-        color: '#666',
-        cursor: 'pointer',
-        zIndex: 10,
-        display: 'flex',
-        alignItems: 'center'
-      }}>
-        <input
-          type="checkbox"
-          checked={filterLowVotes}
-          onChange={(e) => setFilterLowVotes(e.target.checked)}
-          style={{ marginRight: '5px', marginTop: '0' }}
-        />
-        remove comments with 0 or 1 votes
-      </label>
+    <div style={{ width: '100%' }}>
+      {/* Vote filter checkbox moved to the left */}
+      <div style={{ marginBottom: '10px' }}>
+        <label style={{ 
+          fontSize: '12px',
+          color: '#666',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center'
+        }}>
+          <input
+            type="checkbox"
+            checked={filterLowVotes}
+            onChange={(e) => setFilterLowVotes(e.target.checked)}
+            style={{ marginRight: '5px', marginTop: '0' }}
+          />
+          remove comments with 0 or 1 votes
+        </label>
+      </div>
       
-      <svg ref={svgRef} width={svgWidth} height={svgHeight} style={{ display: 'block', margin: '0 auto' }}>
+      <svg ref={svgRef} width={svgWidth} height={svgHeight} style={{ display: 'block' }}>
         <g className="main-group" transform={`translate(${margin.left},${margin.top})`}>
           <VoronoiCells
             currentComment={currentComment}
@@ -210,7 +208,7 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
       </svg>
       
       {/* Gradient legend as SVG */}
-      <svg width={svgWidth} height={100} style={{ display: 'block', margin: '0 auto' }}>
+      <svg width={svgWidth} height={100} style={{ display: 'block' }}>
         <g transform={`translate(${margin.left},10)`}>
           {/* Gradient definition */}
           <defs>
@@ -277,7 +275,9 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
           padding: "15px",
           backgroundColor: "#f5f5f5",
           borderRadius: "8px",
-          minHeight: "140px"
+          minHeight: "140px",
+          maxWidth: svgWidth + "px",
+          boxSizing: "border-box"
         }}>
           <div style={{ fontSize: "12px", color: "#666", marginBottom: "10px" }}>
             Group Consensus: {currentComment.groupConsensus.toFixed(3)} | 
