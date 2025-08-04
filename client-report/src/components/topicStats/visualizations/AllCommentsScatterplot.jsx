@@ -21,7 +21,7 @@ const AllCommentsScatterplot = ({ comments, math, voteColors }) => {
         maxConsensus = Math.max(maxConsensus, groupConsensus);
         
         scatterData.push({
-          topic_name: `Comment ${comment.tid}: ${comment.txt.substring(0, 50)}...`,
+          topic_name: `Comment ${comment.tid}: ${comment.txt}`,
           consensus: groupConsensus,
           avg_votes_per_comment: totalVotes, // Using total votes for x-axis
           comment_count: 1, // Fixed size for all comments

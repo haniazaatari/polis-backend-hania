@@ -63,6 +63,7 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
   const [commentsWithConsensus, setCommentsWithConsensus] = useState(null);
   const [voronoi, setVoronoi] = useState(null);
   const [dataExtent, setDataExtent] = useState([0, 1]);
+  const [filterLowVotes, setFilterLowVotes] = useState(false);
   const svgRef = useRef(null);
 
   const onHoverCallback = (d) => {
@@ -80,7 +81,9 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
       if (commentTids.includes(comment.tid)) {
         const totalVotes = (comment.agree_count || 0) + (comment.disagree_count || 0) + (comment.pass_count || 0);
         const groupConsensus = math["group-aware-consensus"][comment.tid];
-        if (groupConsensus !== undefined) {
+        // Apply vote filter - remove comments with 0 or 1 votes if filter is on
+        const minVotes = filterLowVotes ? 2 : 0;
+        if (groupConsensus !== undefined && totalVotes >= minVotes) {
           commentsWithConsensusData.push({
             ...comment,
             groupConsensus: groupConsensus,
@@ -132,21 +135,37 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
     setCommentsWithConsensus(commentsWithConsensusData);
     setVoronoi(voronoiPolygons);
 
-    // Add x-axis
-    if (svgRef.current) {
-      const svg = window.d3.select(svgRef.current);
-      svg.select(".x-axis").remove(); // Clear any existing axis
-      
-      svg.append("g")
-        .attr("class", "x-axis")
-        .attr("transform", `translate(${margin.left}, ${heightMinusMargins + margin.top})`)
-        .call(window.d3.axisBottom(x).ticks(5).tickFormat(d => d.toFixed(1)));
-    }
+    // Don't add axis here - we'll add it once in the useEffect
   }
 
   useEffect(() => {
     setup();
-  }, [comments, commentTids, math]);
+  }, [comments, commentTids, math, filterLowVotes]);
+
+  // Add axis in a separate effect after data is loaded
+  useEffect(() => {
+    if (svgRef.current && commentsWithConsensus && dataExtent) {
+      const svg = window.d3.select(svgRef.current);
+      
+      // First remove ALL axes to prevent duplicates
+      svg.selectAll(".x-axis").remove();
+      svg.selectAll("g").selectAll(".x-axis").remove();
+      
+      const x = window.d3.scaleLinear()
+        .domain(dataExtent)
+        .rangeRound([0, widthMinusMargins]);
+      
+      // Ensure we're selecting the right group and only adding one axis
+      const mainGroup = svg.select("g.main-group");
+      if (!mainGroup.empty()) {
+        mainGroup
+          .append("g")
+          .attr("class", "x-axis")
+          .attr("transform", `translate(0, ${heightMinusMargins})`)
+          .call(window.d3.axisBottom(x).ticks(5).tickFormat(d => d.toFixed(1)));
+      }
+    }
+  }, [commentsWithConsensus, dataExtent, widthMinusMargins, heightMinusMargins]);
 
   if (!commentsWithConsensus || !voronoi) {
     return (
@@ -157,9 +176,30 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
   }
 
   return (
-    <div style={{ width: '100%', overflowX: 'auto' }}>
+    <div style={{ width: '100%', overflowX: 'auto', position: 'relative' }}>
+      {/* Vote filter checkbox in upper right */}
+      <label style={{ 
+        position: 'absolute', 
+        top: '10px', 
+        right: '10px', 
+        fontSize: '12px',
+        color: '#666',
+        cursor: 'pointer',
+        zIndex: 10,
+        display: 'flex',
+        alignItems: 'center'
+      }}>
+        <input
+          type="checkbox"
+          checked={filterLowVotes}
+          onChange={(e) => setFilterLowVotes(e.target.checked)}
+          style={{ marginRight: '5px', marginTop: '0' }}
+        />
+        remove comments with 0 or 1 votes
+      </label>
+      
       <svg ref={svgRef} width={svgWidth} height={svgHeight} style={{ display: 'block', margin: '0 auto' }}>
-        <g transform={`translate(${margin.left},${margin.top})`}>
+        <g className="main-group" transform={`translate(${margin.left},${margin.top})`}>
           <VoronoiCells
             currentComment={currentComment}
             voronoi={voronoi}
@@ -169,40 +209,67 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
         </g>
       </svg>
       
-      <div style={{ margin: "10px 40px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+      {/* Gradient legend as SVG */}
+      <svg width={svgWidth} height={100} style={{ display: 'block', margin: '0 auto' }}>
+        <g transform={`translate(${margin.left},10)`}>
+          {/* Gradient definition */}
+          <defs>
+            <linearGradient id="consensus-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#e74c3c" />
+              <stop offset="50%" stopColor="#f1c40f" />
+              <stop offset="100%" stopColor="#21a53a" />
+            </linearGradient>
+          </defs>
+          
+          {/* Labels above gradient */}
           {(() => {
             const steps = 6;
             const labels = [];
             for (let i = 0; i < steps; i++) {
               const value = dataExtent[0] + (dataExtent[1] - dataExtent[0]) * (i / (steps - 1));
+              const x = (widthMinusMargins / (steps - 1)) * i;
               labels.push(
-                <span key={i} style={{ fontSize: "11px", color: "#666" }}>
+                <text key={i} x={x} y={0} fontSize="11" fill="#666" textAnchor="middle">
                   {value.toFixed(2)}
-                </span>
+                </text>
               );
             }
             return labels;
           })()}
-        </div>
-        <div style={{ 
-          height: "20px", 
-          background: "linear-gradient(to right, #e74c3c, #f1c40f, #21a53a)",
-          borderRadius: "4px",
-          marginBottom: "5px"
-        }}></div>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <p style={{ margin: 0, fontSize: "12px", color: "#666", maxWidth: "30%" }}>
-            All groups<br/>DISAGREE
-          </p>
-          <p style={{ margin: 0, fontSize: "12px", color: "#666", maxWidth: "30%", textAlign: "center" }}>
-            Groups are split<br/>(or low votes)
-          </p>
-          <p style={{ margin: 0, fontSize: "12px", color: "#666", maxWidth: "30%", textAlign: "right" }}>
-            All groups<br/>AGREE
-          </p>
-        </div>
-      </div>
+          
+          {/* Gradient bar */}
+          <rect
+            x={0}
+            y={10}
+            width={widthMinusMargins}
+            height={20}
+            fill="url(#consensus-gradient)"
+            rx={4}
+          />
+          
+          {/* Text labels below gradient */}
+          <text x={0} y={50} fontSize="12" fill="#666" textAnchor="start">
+            All groups
+          </text>
+          <text x={0} y={65} fontSize="12" fill="#666" textAnchor="start">
+            DISAGREE
+          </text>
+          
+          <text x={widthMinusMargins / 2} y={50} fontSize="12" fill="#666" textAnchor="middle">
+            Groups are split
+          </text>
+          <text x={widthMinusMargins / 2} y={65} fontSize="12" fill="#666" textAnchor="middle">
+            (or low votes)
+          </text>
+          
+          <text x={widthMinusMargins} y={50} fontSize="12" fill="#666" textAnchor="end">
+            All groups
+          </text>
+          <text x={widthMinusMargins} y={65} fontSize="12" fill="#666" textAnchor="end">
+            AGREE
+          </text>
+        </g>
+      </svg>
 
       {currentComment && (
         <div style={{

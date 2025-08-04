@@ -257,8 +257,12 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
         
         <p style={globals.primaryHeading}>{topicData.topic_name}</p>
         
-        {/* Consensus Distribution Beeswarm - moved to top */}
+        {/* Comment Divisiveness Distribution - moved to top */}
         <div style={{ marginTop: 30, marginBottom: 40 }}>
+          <p style={globals.secondaryHeading}>Comment Divisiveness Distribution</p>
+          <p style={globals.paragraph}>
+            Each circle represents a comment. Position shows how similarly groups voted. Hover to see the group vote breakdown.
+          </p>
           <TopicBeeswarm
             comments={comments}
             commentTids={topicStats.comment_tids || []}
@@ -561,47 +565,18 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
       <div style={{ marginTop: 40 }}>
         <p style={globals.secondaryHeading}>All Comments ({topicComments.length})</p>
         <p style={globals.paragraph}>
-          All comments in this topic, sorted by group consensus (highest to lowest).
-          The colored bar indicates the level of consensus across groups.
+          All comments in this topic.
         </p>
         <div style={{ marginTop: 30 }}>
-          {sortedComments.map((comment, index) => (
-            <div key={comment.tid} style={{
-              padding: "20px",
-              marginBottom: "20px",
-              backgroundColor: "#f8f8f8",
-              borderRadius: "8px",
-              borderLeft: `4px solid ${
-                comment.groupConsensus > 0.5 ? voteColors?.agree || globals.brandColors.agree :
-                comment.groupConsensus < 0.2 ? voteColors?.disagree || globals.brandColors.disagree :
-                globals.brandColors.yellowForRadial
-              }`
-            }}>
-              <div style={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                marginBottom: "15px",
-                fontSize: "14px",
-                color: "#666"
-              }}>
-                <span>
-                  <strong>#{index + 1}</strong> | Group Consensus: {comment.groupConsensus.toFixed(3)}
-                </span>
-                <span>
-                  {comment.agree_count} agree, {comment.disagree_count} disagree, {comment.pass_count} pass
-                </span>
-              </div>
-              <CommentList
-                conversation={conversation}
-                ptptCount={ptptCount}
-                math={math}
-                formatTid={formatTid}
-                tidsToRender={[comment.tid]}
-                comments={comments}
-                voteColors={voteColors}
-              />
-            </div>
-          ))}
+          <CommentList
+            conversation={conversation}
+            ptptCount={ptptCount}
+            math={math}
+            formatTid={formatTid}
+            tidsToRender={topicStats.comment_tids || []}
+            comments={comments}
+            voteColors={voteColors}
+          />
         </div>
       </div>
 
