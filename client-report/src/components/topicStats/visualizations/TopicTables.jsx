@@ -42,11 +42,11 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
             <h3 style={{ whiteSpace: "pre-line", margin: 0 }}>{layerLabel}</h3>
             <button 
               style={{
-                backgroundColor: "#9C27B0",
-                color: "white",
-                border: "none",
-                padding: "5px 10px",
-                borderRadius: "4px",
+                backgroundColor: "transparent",
+                color: "#666",
+                border: "1px solid #ccc",
+                padding: "4px 8px",
+                borderRadius: "3px",
                 cursor: "pointer",
                 fontSize: "0.85em"
               }}
