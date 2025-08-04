@@ -4,8 +4,9 @@ import { useReportId } from "../framework/useReportId";
 import Heading from "../framework/heading.jsx";
 import Footer from "../framework/Footer.jsx";
 import CollectiveStatementModal from "./CollectiveStatementModal.jsx";
-import TopicSummaryModal from "./TopicSummaryModal.jsx";
+import BeeswarmModal from "./BeeswarmModal.jsx";
 import AllCommentsModal from "./AllCommentsModal.jsx";
+import LayerDistributionModal from "./LayerDistributionModal.jsx";
 import TopicOverviewScatterplot from "./visualizations/TopicOverviewScatterplot.jsx";
 import TopicTables from "./visualizations/TopicTables.jsx";
 
@@ -18,7 +19,9 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
   const [modalOpen, setModalOpen] = useState(false);
   const [scatterModalOpen, setScatterModalOpen] = useState(false);
   const [beeswarmModalOpen, setBeeswarmModalOpen] = useState(false);
+  const [layerModalOpen, setLayerModalOpen] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState(null);
+  const [selectedLayer, setSelectedLayer] = useState(null);
   
   // Calculate metrics from comments data
   const calculateMetricsFromComments = (commentTids, allComments) => {
@@ -193,6 +196,10 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                 setSelectedTopic(topic);
                 setBeeswarmModalOpen(true);
               }}
+              onLayerDistribution={(layer) => {
+                setSelectedLayer(layer);
+                setLayerModalOpen(true);
+              }}
             />
           </div>
         )}
@@ -228,10 +235,13 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
         topicStats={selectedTopic ? statsData[selectedTopic.key] : null}
         comments={comments}
         math={math}
+        conversation={conversation}
+        ptptCount={ptptCount}
+        formatTid={formatTid}
         voteColors={voteColors}
       />
       
-      <TopicSummaryModal
+      <BeeswarmModal
         isOpen={beeswarmModalOpen}
         onClose={() => {
           setBeeswarmModalOpen(false);
@@ -246,6 +256,20 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
         ptptCount={ptptCount}
         formatTid={formatTid}
         voteColors={voteColors}
+      />
+      
+      <LayerDistributionModal
+        isOpen={layerModalOpen}
+        onClose={() => {
+          setLayerModalOpen(false);
+          setSelectedLayer(null);
+        }}
+        layerName={selectedLayer?.layerName}
+        layerId={selectedLayer?.layerId}
+        topics={selectedLayer?.topics}
+        statsData={statsData}
+        math={math}
+        comments={comments}
       />
     </div>
   );

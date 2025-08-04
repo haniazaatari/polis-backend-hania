@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot, onBeeswarm }) => {
+const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot, onBeeswarm, onLayerDistribution }) => {
   const [sortConfig, setSortConfig] = useState({ key: 'comment_count', direction: 'desc' });
   
   const handleSort = (key) => {
@@ -38,7 +38,24 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
       
       return (
         <div key={layerId} style={{ marginTop: 30 }}>
-          <h3 style={{ whiteSpace: "pre-line" }}>{layerLabel}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <h3 style={{ whiteSpace: "pre-line", margin: 0 }}>{layerLabel}</h3>
+            <button 
+              style={{
+                backgroundColor: "#9C27B0",
+                color: "white",
+                border: "none",
+                padding: "5px 10px",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "0.85em"
+              }}
+              onClick={() => onLayerDistribution({ layerId, layerName, topics })}
+              title="View distribution of consensus across topics"
+            >
+              📊 Distribution
+            </button>
+          </div>
           <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10 }}>
             <thead>
               <tr style={{ borderBottom: "2px solid #333" }}>

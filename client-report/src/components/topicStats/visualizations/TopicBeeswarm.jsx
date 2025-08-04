@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import _ from 'lodash';
+import CommentList from '../../lists/commentList.jsx';
 
 const VoronoiCells = ({ currentComment, voronoi, onHoverCallback, dataExtent }) => {
   const getFill = (cell) => {
@@ -9,24 +10,26 @@ const VoronoiCells = ({ currentComment, voronoi, onHoverCallback, dataExtent }) 
       // Color based on group consensus value, normalized to data extent
       const consensus = cell.data.groupConsensus || 0;
       const [min, max] = dataExtent || [0, 1];
-      const normalized = (consensus - min) / (max - min);
+      const normalized = Math.max(0, Math.min(1, (consensus - min) / (max - min)));
       
-      // Red (disagree) -> Yellow (split) -> Green (agree)
+      // Use a smooth gradient from red to yellow to green
+      let r, g, b;
+      
       if (normalized < 0.5) {
-        // Red to Yellow
+        // Red to Yellow (increase green)
         const ratio = normalized * 2;
-        const r = 231;
-        const g = Math.round(76 + (241 - 76) * ratio);
-        const b = Math.round(60 + (64 - 60) * ratio);
-        return `rgb(${r},${g},${b})`;
+        r = 231;
+        g = Math.round(76 + (165 * ratio));
+        b = 60;
       } else {
-        // Yellow to Green
+        // Yellow to Green (decrease red)
         const ratio = (normalized - 0.5) * 2;
-        const r = Math.round(241 - (241 - 33) * ratio);
-        const g = Math.round(196 - (196 - 165) * ratio);
-        const b = Math.round(64 - (64 - 58) * ratio);
-        return `rgb(${r},${g},${b})`;
+        r = Math.round(231 * (1 - ratio));
+        g = 231;
+        b = 60;
       }
+      
+      return `rgb(${r},${g},${b})`;
     }
   }
 
@@ -49,7 +52,7 @@ const VoronoiCells = ({ currentComment, voronoi, onHoverCallback, dataExtent }) 
   )
 }
 
-const TopicBeeswarm = ({ comments, commentTids, math }) => {
+const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, formatTid, voteColors }) => {
   const svgWidth = 1100; // Increased to fill modal width
   const svgHeight = 200;
   const margin = {top: 10, right: 40, bottom: 30, left: 40};
@@ -71,21 +74,18 @@ const TopicBeeswarm = ({ comments, commentTids, math }) => {
   const setup = () => {
     if (!comments || !commentTids || !math || !math["group-aware-consensus"]) return;
 
-    // Filter to only topic comments with enough votes and add group consensus
+    // Filter to only topic comments and add group consensus
     const commentsWithConsensusData = [];
     comments.forEach((comment) => {
       if (commentTids.includes(comment.tid)) {
         const totalVotes = (comment.agree_count || 0) + (comment.disagree_count || 0) + (comment.pass_count || 0);
-        // Only include comments with 5+ votes
-        if (totalVotes >= 5) {
-          const groupConsensus = math["group-aware-consensus"][comment.tid];
-          if (groupConsensus !== undefined) {
-            commentsWithConsensusData.push({
-              ...comment,
-              groupConsensus: groupConsensus,
-              totalVotes: totalVotes
-            });
-          }
+        const groupConsensus = math["group-aware-consensus"][comment.tid];
+        if (groupConsensus !== undefined) {
+          commentsWithConsensusData.push({
+            ...comment,
+            groupConsensus: groupConsensus,
+            totalVotes: totalVotes
+          });
         }
       }
     });
@@ -210,14 +210,21 @@ const TopicBeeswarm = ({ comments, commentTids, math }) => {
           padding: "15px",
           backgroundColor: "#f5f5f5",
           borderRadius: "8px",
-          minHeight: "80px"
+          minHeight: "140px"
         }}>
-          <div style={{ fontSize: "12px", color: "#666", marginBottom: "5px" }}>
+          <div style={{ fontSize: "12px", color: "#666", marginBottom: "10px" }}>
             Group Consensus: {currentComment.groupConsensus.toFixed(3)} | 
-            Votes: {currentComment.totalVotes} 
-            ({currentComment.agree_count} agree, {currentComment.disagree_count} disagree, {currentComment.pass_count} pass)
+            Total Votes: {currentComment.totalVotes}
           </div>
-          <div>{currentComment.txt}</div>
+          <CommentList
+            conversation={conversation}
+            ptptCount={ptptCount}
+            math={math}
+            formatTid={formatTid}
+            tidsToRender={[currentComment.tid]}
+            comments={comments}
+            voteColors={voteColors}
+          />
         </div>
       )}
     </div>
