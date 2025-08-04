@@ -45,8 +45,9 @@ const LayerDistributionModal = ({
           const totalVotes = comment ? 
             (comment.agree_count || 0) + (comment.disagree_count || 0) + (comment.pass_count || 0) : 0;
           
-          // Only include comments with at least 1 vote for meaningful distribution
-          if (totalVotes > 0) {
+          // Only include comments with at least 5 votes for meaningful distribution
+          // Comments with very few votes default to 0.333 consensus
+          if (totalVotes >= 5) {
             consensusValues.push(consensus);
             commentsData.push({ tid, consensus, votes: totalVotes });
           }
@@ -166,9 +167,9 @@ const LayerDistributionModal = ({
           padding: '20px'
         }}>
           <p style={{ marginBottom: '20px', color: '#666', fontSize: '14px' }}>
-            Box plots showing the distribution of group-aware consensus values for comments with at least 1 vote within each topic. 
+            Box plots showing the distribution of group-aware consensus values for comments with at least 5 votes within each topic. 
             The box shows the quartiles, the line inside is the median, and outliers are shown as individual points.
-            Zero-vote comments are excluded as they default to 0.333 consensus.
+            Comments with fewer than 5 votes are excluded as they default to 0.333 consensus.
           </p>
           
           {plotData && plotData.length > 0 ? (

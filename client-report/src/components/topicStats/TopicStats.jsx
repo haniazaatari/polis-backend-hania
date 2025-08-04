@@ -9,6 +9,7 @@ import AllCommentsModal from "./AllCommentsModal.jsx";
 import LayerDistributionModal from "./LayerDistributionModal.jsx";
 import TopicOverviewScatterplot from "./visualizations/TopicOverviewScatterplot.jsx";
 import TopicTables from "./visualizations/TopicTables.jsx";
+import TopicPage from "../topicPage/TopicPage.jsx";
 
 const TopicStats = ({ conversation, report_id: propsReportId, math, comments, ptptCount, formatTid, voteColors }) => {
   const { report_id } = useReportId(propsReportId);
@@ -22,6 +23,8 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
   const [layerModalOpen, setLayerModalOpen] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState(null);
+  const [showTopicPage, setShowTopicPage] = useState(false);
+  const [selectedTopicKey, setSelectedTopicKey] = useState(null);
   
   // Calculate metrics from comments data
   const calculateMetricsFromComments = (commentTids, allComments) => {
@@ -156,6 +159,26 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
   const latestRunKey = Object.keys(topicsData || {}).sort().reverse()[0];
   const latestRun = topicsData?.[latestRunKey];
 
+  // If showing a topic page, render that instead
+  if (showTopicPage && selectedTopicKey) {
+    return (
+      <TopicPage
+        conversation={conversation}
+        report_id={report_id}
+        topic_key={selectedTopicKey}
+        math={math}
+        comments={comments}
+        ptptCount={ptptCount}
+        formatTid={formatTid}
+        voteColors={voteColors}
+        onBack={() => {
+          setShowTopicPage(false);
+          setSelectedTopicKey(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div style={{ margin: "0px 10px", maxWidth: "1200px", padding: "20px" }} data-testid="topic-stats">
       <Heading conversation={conversation} />
@@ -199,6 +222,10 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
               onLayerDistribution={(layer) => {
                 setSelectedLayer(layer);
                 setLayerModalOpen(true);
+              }}
+              onViewTopic={(topic) => {
+                setSelectedTopicKey(topic.key);
+                setShowTopicPage(true);
               }}
             />
           </div>

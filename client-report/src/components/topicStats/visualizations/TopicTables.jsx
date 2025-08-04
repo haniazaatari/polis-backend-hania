@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot, onBeeswarm, onLayerDistribution }) => {
+const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot, onBeeswarm, onLayerDistribution, onViewTopic }) => {
   const [sortConfig, setSortConfig] = useState({ key: 'comment_count', direction: 'desc' });
   
   const handleSort = (key) => {
@@ -156,6 +156,23 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                       <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', alignItems: 'center' }}>
                         <button 
                           style={{
+                            backgroundColor: "#673AB7",
+                            color: "white",
+                            border: "none",
+                            padding: "5px 10px",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "0.85em",
+                            fontWeight: "bold"
+                          }}
+                          onClick={() => onViewTopic({ name: topic.topic_name, key: topic.topic_key })}
+                          title="View full topic page"
+                        >
+                          View Topic →
+                        </button>
+                        
+                        <button 
+                          style={{
                             backgroundColor: "#4CAF50",
                             color: "white",
                             border: "none",
@@ -166,7 +183,7 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                           }}
                           onClick={() => onTopicSelect({ name: topic.topic_name, key: topic.topic_key })}
                         >
-                          Create Collective Statement
+                          Statement
                         </button>
                         
                         <button 
