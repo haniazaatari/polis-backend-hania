@@ -59,28 +59,28 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
           <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10 }}>
             <thead>
               <tr style={{ borderBottom: "2px solid #333" }}>
-                <th style={{ padding: "10px", textAlign: "left", cursor: "pointer", userSelect: "none" }} 
+                <th style={{ padding: "10px", textAlign: "left", cursor: "pointer", userSelect: "none", width: "35%" }} 
                     onClick={() => handleSort('topic_name')}>
                   Topic {sortConfig.key === 'topic_name' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
                 </th>
-                <th style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                <th style={{ padding: "5px", textAlign: "right", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
                     onClick={() => handleSort('comment_count')}>
                   Comments {sortConfig.key === 'comment_count' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
                 </th>
-                <th style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                <th style={{ padding: "5px", textAlign: "right", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
                     onClick={() => handleSort('total_votes')}>
                   Total Votes {sortConfig.key === 'total_votes' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
                 </th>
-                <th style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                <th style={{ padding: "5px", textAlign: "right", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
                     onClick={() => handleSort('vote_density')}>
                   Avg Votes/Comment {sortConfig.key === 'vote_density' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
                 </th>
-                <th style={{ padding: "10px", textAlign: "right", cursor: "pointer", userSelect: "none" }}
+                <th style={{ padding: "5px", textAlign: "right", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
                     onClick={() => handleSort('group_consensus')}
                     title="Group-aware consensus from PCA2">
                   Group Consensus {sortConfig.key === 'group_consensus' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
                 </th>
-                <th style={{ padding: "10px", textAlign: "center" }}>Action</th>
+                <th style={{ padding: "10px", textAlign: "center", whiteSpace: "nowrap" }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -169,17 +169,18 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                     <td style={{ padding: "10px", textAlign: "right" }}>
                       {stats.group_consensus !== null ? stats.group_consensus.toFixed(2) : '-'}
                     </td>
-                    <td style={{ padding: "10px", textAlign: "center" }}>
-                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', alignItems: 'center' }}>
+                    <td style={{ padding: "5px", textAlign: "center" }}>
+                      <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', alignItems: 'center' }}>
                         <button 
                           style={{
                             backgroundColor: "transparent",
                             color: "#666",
                             border: "1px solid #ccc",
-                            padding: "4px 8px",
+                            padding: "3px 6px",
                             borderRadius: "3px",
                             cursor: "pointer",
-                            fontSize: "0.85em"
+                            fontSize: "0.8em",
+                            whiteSpace: "nowrap"
                           }}
                           onClick={() => onTopicSelect({ name: topic.topic_name, key: topic.topic_key })}
                         >
@@ -191,10 +192,11 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                             backgroundColor: "transparent",
                             color: "#666",
                             border: "1px solid #ccc",
-                            padding: "4px 8px",
+                            padding: "3px 6px",
                             borderRadius: "3px",
                             cursor: "pointer",
-                            fontSize: "0.85em"
+                            fontSize: "0.8em",
+                            whiteSpace: "nowrap"
                           }}
                           onClick={() => onScatterplot({ name: topic.topic_name, key: topic.topic_key })}
                           title="View votes"
@@ -207,10 +209,11 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                             backgroundColor: "transparent",
                             color: "#666",
                             border: "1px solid #ccc",
-                            padding: "4px 8px",
+                            padding: "3px 6px",
                             borderRadius: "3px",
                             cursor: "pointer",
-                            fontSize: "0.85em"
+                            fontSize: "0.8em",
+                            whiteSpace: "nowrap"
                           }}
                           onClick={() => onBeeswarm({ name: topic.topic_name, key: topic.topic_key })}
                           title="View beeswarm"
