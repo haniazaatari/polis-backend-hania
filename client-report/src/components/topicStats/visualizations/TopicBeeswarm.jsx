@@ -269,20 +269,17 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
         </g>
       </svg>
 
-      {currentComment && (
-        <div style={{
-          marginTop: "20px",
-          padding: "15px",
-          backgroundColor: "#f5f5f5",
-          borderRadius: "8px",
-          minHeight: "140px",
-          maxWidth: svgWidth + "px",
-          boxSizing: "border-box"
-        }}>
-          <div style={{ fontSize: "12px", color: "#666", marginBottom: "10px" }}>
-            Group Consensus: {currentComment.groupConsensus.toFixed(3)} | 
-            Total Votes: {currentComment.totalVotes}
-          </div>
+      <div style={{
+        marginTop: "20px",
+        padding: "15px",
+        backgroundColor: "#f5f5f5",
+        borderRadius: "8px",
+        height: "140px",
+        maxWidth: svgWidth + "px",
+        boxSizing: "border-box",
+        overflow: "auto"
+      }}>
+        {currentComment ? (
           <CommentList
             conversation={conversation}
             ptptCount={ptptCount}
@@ -292,8 +289,19 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
             comments={comments}
             voteColors={voteColors}
           />
-        </div>
-      )}
+        ) : (
+          <div style={{ 
+            height: "100%", 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "center",
+            color: "#999",
+            fontSize: "14px"
+          }}>
+            Hover over a circle to see comment details
+          </div>
+        )}
+      </div>
     </div>
   );
 }

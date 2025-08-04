@@ -257,6 +257,88 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
         
         <p style={globals.primaryHeading}>{topicData.topic_name}</p>
         
+        {/* Key Statistics */}
+        <section style={{ 
+          maxWidth: 1200, 
+          marginTop: 30,
+          marginBottom: 40
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "2rem" }}>
+            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
+              <p style={{ 
+                fontSize: "13px", 
+                textTransform: "uppercase", 
+                letterSpacing: "1px", 
+                color: "#666",
+                marginBottom: "8px"
+              }}>Comments</p>
+              <p style={{ 
+                fontFamily: "Georgia, serif", 
+                fontSize: "3rem", 
+                margin: 0,
+                fontWeight: "normal"
+              }}>{topicStats.comment_count}</p>
+            </div>
+            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
+              <p style={{ 
+                fontSize: "13px", 
+                textTransform: "uppercase", 
+                letterSpacing: "1px", 
+                color: "#666",
+                marginBottom: "8px"
+              }}>Total Votes</p>
+              <p style={{ 
+                fontFamily: "Georgia, serif", 
+                fontSize: "3rem", 
+                margin: 0,
+                fontWeight: "normal"
+              }}>{topicStats.total_votes.toLocaleString()}</p>
+            </div>
+            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
+              <p style={{ 
+                fontSize: "13px", 
+                textTransform: "uppercase", 
+                letterSpacing: "1px", 
+                color: "#666",
+                marginBottom: "8px"
+              }}>Agree</p>
+              <p style={{ 
+                fontFamily: "Georgia, serif", 
+                fontSize: "3rem", 
+                margin: 0, 
+                color: voteColors?.agree || globals.brandColors.agree,
+                fontWeight: "normal"
+              }}>
+                {topicStats.total_votes > 0 ? Math.round((topicStats.agree_votes / topicStats.total_votes) * 100) : 0}%
+              </p>
+              <p style={{ fontSize: "13px", color: "#999", marginTop: "5px" }}>
+                {topicStats.agree_votes.toLocaleString()} votes
+              </p>
+            </div>
+            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
+              <p style={{ 
+                fontSize: "13px", 
+                textTransform: "uppercase", 
+                letterSpacing: "1px", 
+                color: "#666",
+                marginBottom: "8px"
+              }}>Disagree</p>
+              <p style={{ 
+                fontFamily: "Georgia, serif", 
+                fontSize: "3rem", 
+                margin: 0, 
+                color: voteColors?.disagree || globals.brandColors.disagree,
+                fontWeight: "normal"
+              }}>
+                {topicStats.total_votes > 0 ? Math.round((topicStats.disagree_votes / topicStats.total_votes) * 100) : 0}%
+              </p>
+              <p style={{ fontSize: "13px", color: "#999", marginTop: "5px" }}>
+                {topicStats.disagree_votes.toLocaleString()} votes
+              </p>
+            </div>
+          </div>
+        </section>
+        
         {/* Comment Divisiveness Distribution - moved to top */}
         <div style={{ 
           marginTop: 40, 
@@ -434,96 +516,6 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
             </div>
           )}
         </div>
-        
-        {/* Key Statistics */}
-        <section style={{ 
-          maxWidth: 1200, 
-          marginBottom: 60,
-          borderTop: "1px solid #e0e0e0",
-          paddingTop: 40
-        }}>
-          <p style={{
-            ...globals.secondaryHeading,
-            marginBottom: 30,
-            fontSize: "18px",
-            letterSpacing: "0.5px",
-            textTransform: "uppercase"
-          }}>Key Metrics</p>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "2rem" }}>
-            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
-              <p style={{ 
-                fontSize: "13px", 
-                textTransform: "uppercase", 
-                letterSpacing: "1px", 
-                color: "#666",
-                marginBottom: "8px"
-              }}>Comments</p>
-              <p style={{ 
-                fontFamily: "Georgia, serif", 
-                fontSize: "3rem", 
-                margin: 0,
-                fontWeight: "normal"
-              }}>{topicStats.comment_count}</p>
-            </div>
-            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
-              <p style={{ 
-                fontSize: "13px", 
-                textTransform: "uppercase", 
-                letterSpacing: "1px", 
-                color: "#666",
-                marginBottom: "8px"
-              }}>Total Votes</p>
-              <p style={{ 
-                fontFamily: "Georgia, serif", 
-                fontSize: "3rem", 
-                margin: 0,
-                fontWeight: "normal"
-              }}>{topicStats.total_votes.toLocaleString()}</p>
-            </div>
-            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
-              <p style={{ 
-                fontSize: "13px", 
-                textTransform: "uppercase", 
-                letterSpacing: "1px", 
-                color: "#666",
-                marginBottom: "8px"
-              }}>Agree</p>
-              <p style={{ 
-                fontFamily: "Georgia, serif", 
-                fontSize: "3rem", 
-                margin: 0, 
-                color: voteColors?.agree || globals.brandColors.agree,
-                fontWeight: "normal"
-              }}>
-                {topicStats.total_votes > 0 ? Math.round((topicStats.agree_votes / topicStats.total_votes) * 100) : 0}%
-              </p>
-              <p style={{ fontSize: "13px", color: "#999", marginTop: "5px" }}>
-                {topicStats.agree_votes.toLocaleString()} votes
-              </p>
-            </div>
-            <div style={{ flex: 1, minWidth: "200px", textAlign: "center"}}>
-              <p style={{ 
-                fontSize: "13px", 
-                textTransform: "uppercase", 
-                letterSpacing: "1px", 
-                color: "#666",
-                marginBottom: "8px"
-              }}>Disagree</p>
-              <p style={{ 
-                fontFamily: "Georgia, serif", 
-                fontSize: "3rem", 
-                margin: 0, 
-                color: voteColors?.disagree || globals.brandColors.disagree,
-                fontWeight: "normal"
-              }}>
-                {topicStats.total_votes > 0 ? Math.round((topicStats.disagree_votes / topicStats.total_votes) * 100) : 0}%
-              </p>
-              <p style={{ fontSize: "13px", color: "#999", marginTop: "5px" }}>
-                {topicStats.disagree_votes.toLocaleString()} votes
-              </p>
-            </div>
-          </div>
-        </section>
       </div>
 
       {/* Narrative Report Section */}

@@ -53,7 +53,7 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
               onClick={() => onLayerDistribution({ layerId, layerName, topics })}
               title="View distribution of consensus across topics"
             >
-              📊 Distribution
+              Boxplots
             </button>
           </div>
           <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 10 }}>
@@ -143,7 +143,24 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                 })
                 .map(({ clusterId, topic, stats }) => (
                   <tr key={clusterId} style={{ borderBottom: "1px solid #ccc" }}>
-                    <td style={{ padding: "10px" }}>{topic.topic_name}</td>
+                    <td style={{ padding: "10px" }}>
+                      <a 
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onViewTopic({ name: topic.topic_name, key: topic.topic_key });
+                        }}
+                        style={{
+                          color: "#0066cc",
+                          textDecoration: "none",
+                          cursor: "pointer"
+                        }}
+                        onMouseEnter={(e) => e.target.style.textDecoration = "underline"}
+                        onMouseLeave={(e) => e.target.style.textDecoration = "none"}
+                      >
+                        {topic.topic_name}
+                      </a>
+                    </td>
                     <td style={{ padding: "10px", textAlign: "right" }}>{stats.comment_count || 0}</td>
                     <td style={{ padding: "10px", textAlign: "right" }}>{stats.total_votes || 0}</td>
                     <td style={{ padding: "10px", textAlign: "right" }}>
@@ -153,71 +170,52 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                       {stats.group_consensus !== null ? stats.group_consensus.toFixed(2) : '-'}
                     </td>
                     <td style={{ padding: "10px", textAlign: "center" }}>
-                      <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', alignItems: 'center' }}>
                         <button 
                           style={{
-                            backgroundColor: "#673AB7",
-                            color: "white",
-                            border: "none",
-                            padding: "5px 10px",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "0.85em",
-                            fontWeight: "bold"
-                          }}
-                          onClick={() => onViewTopic({ name: topic.topic_name, key: topic.topic_key })}
-                          title="View full topic page"
-                        >
-                          View Topic →
-                        </button>
-                        
-                        <button 
-                          style={{
-                            backgroundColor: "#4CAF50",
-                            color: "white",
-                            border: "none",
-                            padding: "5px 10px",
-                            borderRadius: "4px",
+                            backgroundColor: "transparent",
+                            color: "#666",
+                            border: "1px solid #ccc",
+                            padding: "4px 8px",
+                            borderRadius: "3px",
                             cursor: "pointer",
                             fontSize: "0.85em"
                           }}
                           onClick={() => onTopicSelect({ name: topic.topic_name, key: topic.topic_key })}
                         >
-                          Statement
+                          Collective Statement
                         </button>
                         
                         <button 
                           style={{
-                            backgroundColor: "#757575",
-                            color: "white",
-                            border: "none",
-                            padding: "5px 8px",
-                            borderRadius: "4px",
+                            backgroundColor: "transparent",
+                            color: "#666",
+                            border: "1px solid #ccc",
+                            padding: "4px 8px",
+                            borderRadius: "3px",
                             cursor: "pointer",
-                            fontSize: "1em",
-                            minWidth: "32px"
+                            fontSize: "0.85em"
                           }}
                           onClick={() => onScatterplot({ name: topic.topic_name, key: topic.topic_key })}
-                          title="View scatterplot"
+                          title="View votes"
                         >
-                          📊
+                          Votes
                         </button>
                         
                         <button 
                           style={{
-                            backgroundColor: "#757575",
-                            color: "white",
-                            border: "none",
-                            padding: "5px 8px",
-                            borderRadius: "4px",
+                            backgroundColor: "transparent",
+                            color: "#666",
+                            border: "1px solid #ccc",
+                            padding: "4px 8px",
+                            borderRadius: "3px",
                             cursor: "pointer",
-                            fontSize: "1em",
-                            minWidth: "32px"
+                            fontSize: "0.85em"
                           }}
                           onClick={() => onBeeswarm({ name: topic.topic_name, key: topic.topic_key })}
                           title="View beeswarm"
                         >
-                          🐝
+                          Beeswarm
                         </button>
                       </div>
                     </td>

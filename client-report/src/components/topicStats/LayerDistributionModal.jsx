@@ -58,16 +58,14 @@ const LayerDistributionModal = ({
         traces.push({
           y: consensusValues,
           type: 'box',
-          name: topic.topic_name.length > 30 ? 
-            topic.topic_name.substring(0, 30) + '...' : 
-            topic.topic_name,
+          name: topic.topic_name,
           boxpoints: 'outliers',
           marker: {
-            color: 'rgba(33, 165, 58, 0.6)',
-            outliercolor: 'rgba(231, 76, 60, 0.6)'
+            color: 'rgba(100, 100, 100, 0.6)',
+            outliercolor: 'rgba(150, 150, 150, 0.8)'
           },
           line: {
-            color: 'rgba(33, 165, 58, 1)'
+            color: 'rgba(80, 80, 80, 1)'
           }
         });
       }
@@ -91,10 +89,10 @@ const LayerDistributionModal = ({
         },
         showlegend: false,
         margin: {
-          l: 60,
-          r: 20,
-          t: 20,
-          b: 120
+          l: 80,
+          r: 40,
+          t: 40,
+          b: 250
         },
         plot_bgcolor: 'rgba(0,0,0,0)',
         paper_bgcolor: 'rgba(0,0,0,0)'
@@ -128,10 +126,10 @@ const LayerDistributionModal = ({
       <div style={{
         backgroundColor: 'white',
         borderRadius: '8px',
-        maxWidth: '90vw',
-        maxHeight: '90vh',
-        width: '1200px',
-        height: '700px',
+        maxWidth: '95vw',
+        maxHeight: '95vh',
+        width: '1600px',
+        height: '900px',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden'
@@ -173,7 +171,7 @@ const LayerDistributionModal = ({
           </p>
           
           {plotData && plotData.length > 0 ? (
-            <div id="layer-distribution-plot" style={{ width: '100%', height: '500px' }}></div>
+            <div id="layer-distribution-plot" style={{ width: '100%', height: '700px' }}></div>
           ) : (
             <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
               No data to display

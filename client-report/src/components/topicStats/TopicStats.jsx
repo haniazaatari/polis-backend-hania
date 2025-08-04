@@ -197,8 +197,8 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
               math={math}
               voteColors={voteColors}
               onTopicClick={(topic) => {
-                setSelectedTopic({ name: topic.topic_name, key: topic.topic_key });
-                setModalOpen(true);
+                setSelectedTopicKey(topic.topic_key);
+                setShowTopicPage(true);
               }}
             />
             
