@@ -27,15 +27,12 @@ import CommentsReport from "./commentsReport/CommentsReport.jsx";
 import TopicReport from "./topicReport/TopicReport.jsx";
 import ExportReport from "./exportReport/ExportReport.jsx";
 import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
-import TopicPrioritize from "./topicPrioritize/TopicPrioritize.jsx";
-import TopicPrioritizeSimple from "./topicPrioritizeSimple/TopicPrioritizeSimple.jsx";
-import TopicAgenda from "./topicAgenda/TopicAgenda.jsx";
 import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
 import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
 import TopicStats from "./topicStats/TopicStats.jsx";
 
-const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicPrioritize/2arcefpshi" or "/topicPrioritizeSimple/2arcefpshi" or "/topicAgenda/2arcefpshi" or "/topicHierarchy/2arcefpshi" or "/topicStats/2arcefpshi"
-const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicPrioritize", "topicPrioritizeSimple", "topicAgenda", "topicHierarchy", or "topicStats"
+const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicHierarchy/2arcefpshi" or "/topicStats/2arcefpshi"
+const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicHierarchy", or "topicStats"
 
 const report_id = pathname.split("/")[2];
 
@@ -749,9 +746,6 @@ const App = (props) => {
     shouldShowNarrativeReport: route_type === "narrativeReport",
     shouldShowTopicReport: route_type === "topicReport",
     shouldShowExportReport: route_type === "exportReport",
-    shouldShowTopicPrioritize: route_type === "topicPrioritize",
-    shouldShowTopicPrioritizeSimple: route_type === "topicPrioritizeSimple",
-    shouldShowTopicAgenda: route_type === "topicAgenda",
     shouldShowTopicHierarchy: route_type === "topicHierarchy",
   });
 
@@ -766,38 +760,8 @@ const App = (props) => {
     );
   }
 
-  // Directly render TopicPrioritize if the URL starts with /topicPrioritize
-  if (route_type === "topicPrioritize") {
-    console.log("RENDERING: TopicPrioritize");
-    return (
-      <TopicPrioritize
-        report_id={report_id}
-        math={math}
-        comments={comments}
-        conversation={conversation}
-        ptptCount={ptptCount}
-        formatTid={formatTid}
-        voteColors={voteColors}
-      />
-    );
-  }
 
-  // Directly render TopicPrioritizeSimple if the URL starts with /topicPrioritizeSimple
-  if (route_type === "topicPrioritizeSimple") {
-    console.log("RENDERING: TopicPrioritizeSimple");
-    return (
-      <TopicPrioritizeSimple
-        report_id={report_id}
-        conversation={conversation}
-      />
-    );
-  }
 
-  // Directly render TopicAgenda if the URL starts with /topicAgenda
-  if (route_type === "topicAgenda") {
-    console.log("RENDERING: TopicAgenda");
-    return <TopicAgenda report_id={report_id} conversation={conversation} comments={comments} />;
-  }
 
   // Directly render TopicHierarchy if the URL starts with /topicHierarchy
   if (route_type === "topicHierarchy") {
