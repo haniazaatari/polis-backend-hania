@@ -12,7 +12,7 @@ echo "Executing ApplicationStop hook..."
 # Adjust this path if your deployment process places files elsewhere
 DEPLOY_DIR="/opt/polis/polis"
 # File indicating the role of this instance (created by UserData/AfterInstall)
-SERVICE_TYPE_FILE="/tmp/service_type.txt"
+SERVICE_TYPE_FILE="/etc/app-info/service_type.txt"
 
 # --- Determine Service Type ---
 if [ -f "$SERVICE_TYPE_FILE" ]; then

@@ -322,7 +322,7 @@ When running Delphi in an autoscaling environment, the system automatically conf
 | small (t3.large)    | Cost-efficient processing | 3              | 2g            | 8g               | 2              |
 | large (c6g.4xlarge) | High-performance ARM      | 8              | 8g            | 32g              | 8              |
 
-These settings are automatically applied based on the `/tmp/instance_size.txt` file created during instance initialization.
+These settings are automatically applied based on the `/etc/app-info/instance_size.txt` file created during instance initialization.
 
 ### Manual Configuration
 
