@@ -80,8 +80,8 @@ echo "Appending DATABASE_URL to .env"
 printf "\nDATABASE_URL=%s\n" "$DATABASE_URL" | sudo tee -a .env > /dev/null
 
 # Original service detection
-SERVICE_FROM_FILE=$(cat /tmp/service_type.txt)
-echo "DEBUG: Service type read from /tmp/service_type.txt: [$SERVICE_FROM_FILE]"
+SERVICE_FROM_FILE=$(cat /etc/app-info/service_type.txt)
+echo "DEBUG: Service type read from /etc/app-info/service_type.txt: [$SERVICE_FROM_FILE]"
 
 # Original Docker cleanup/start logic
 echo "Stopping and removing existing Docker containers..."
@@ -115,8 +115,8 @@ elif [ "$SERVICE_FROM_FILE" == "delphi" ]; then
   printf "\nOLLAMA_HOST=%s\n" "$OLLAMA_URL" | sudo tee -a .env > /dev/null
   echo "OLLAMA_HOST appended."
 
-  if [ -f "/tmp/instance_size.txt" ]; then
-    INSTANCE_SIZE=$(cat /tmp/instance_size.txt)
+  if [ -f "/etc/app-info/instance_size.txt" ]; then
+    INSTANCE_SIZE=$(cat /etc/app-info/instance_size.txt)
     echo "Instance size detected: $INSTANCE_SIZE"
 
     if [ "$INSTANCE_SIZE" == "small" ]; then
