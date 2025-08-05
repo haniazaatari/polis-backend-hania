@@ -1856,13 +1856,6 @@ helpersInitialized.then(
       /^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       fetchIndexForReportPage
     );
-    // Topic Prioritize route for dense comment view and hierarchy analysis
-    app.get(
-      /^\/topicPrioritize\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
-      function (req, res, next) {
-        return fetchIndexForReportPage(req, res, next);
-      }
-    );
     // Topic Hierarchy route for circle pack visualization
     app.get(
       /^\/topicHierarchy\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
@@ -1885,12 +1878,6 @@ helpersInitialized.then(
     );
     app.get(
       /^\/topicStats\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
-      function (req, res, next) {
-        return fetchIndexForReportPage(req, res, next);
-      }
-    );
-    app.get(
-      /^\/topicPrioritizeSimple\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       function (req, res, next) {
         return fetchIndexForReportPage(req, res, next);
       }
