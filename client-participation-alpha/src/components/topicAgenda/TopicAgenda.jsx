@@ -6,11 +6,14 @@ import ScrollableTopicsGrid from "./components/ScrollableTopicsGrid";
 import TopicAgendaStyles from "./components/TopicAgendaStyles";
 
 const TopicAgenda = ({ conversation, conversation_id }) => {
-  
+  const [loadWidget, setLoadWidget] = useState(false);
   const [selections, setSelections] = useState(new Set());
   const [commentMap, setCommentMap] = useState(new Map());
   const [comments, setComments] = useState([]);
   const [reportData, setReportData] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [err, setError] = useState(null);
+
   const {
     loading,
     error,
@@ -18,7 +21,7 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
     hierarchyAnalysis,
     clusterGroups,
     fetchUMAPData
-  } = useTopicData(reportData?.report_id);
+  } = useTopicData(reportData?.report_id, loadWidget);
 
   useEffect(() => {
     const f = async () => {
@@ -63,12 +66,14 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
         console.error("Failed to check topic prioritization availability:", err);
       }
     }
-    f();
-  }, []);
+    if (loadWidget) {
+      f();
+    }
+  }, [loadWidget]);
 
   // Build comment map for easy lookup
   useEffect(() => {
-    if (comments && comments.length > 0) {
+    if (comments && comments.length > 0 && loadWidget) {
       const map = new Map();
       comments.forEach(comment => {
         // Store by both tid (as number) and as string for flexibility
@@ -78,21 +83,66 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
       setCommentMap(map);
       console.log(`Built comment map with ${map.size / 2} comments`);
     }
-  }, [comments]);
+  }, [comments, loadWidget]);
 
   // Fetch UMAP data when topic data is loaded
   useEffect(() => {
-    if (topicData && conversation) {
+    if (topicData && conversation && loadWidget) {
       fetchUMAPData(conversation);
     }
-  }, [topicData, conversation, fetchUMAPData]);
+  }, [topicData, conversation, fetchUMAPData, loadWidget]);
 
   // Load previous selections when component mounts
   useEffect(() => {
     if (conversation && conversation.conversation_id) {
       loadPreviousSelections();
     }
-  }, [conversation]);
+  }, [conversation, loadWidget]);
+
+  useEffect(() => {
+    const checkForData = async () => {
+      try {
+        const topicPrioritizeResponse = await fetch(
+          `${import.meta.env.PUBLIC_SERVICE_URL}/participation/topicPrioritize?conversation_id=${conversation_id}`, 
+          {
+            method: 'GET',
+            credentials: 'include'
+          }
+        );
+        
+        if (topicPrioritizeResponse.ok) {
+          const topicPrioritizeData = await topicPrioritizeResponse.json();
+          if (topicPrioritizeData.has_report && topicPrioritizeData.report_id) {
+            fetch(`${import.meta.env.PUBLIC_SERVICE_URL}/delphi?report_id=${topicPrioritizeData.report_id}`)
+              .then((response) => response.json())
+              .then((response) => {
+                if (response && response.status === "success") {
+                  if (response.runs && Object.keys(response.runs).length > 0) {
+                    // do nothing
+                  } else {
+                    setError("No LLM topic data available yet. Run Delphi analysis first.");
+                  }
+                } else {
+                  setError("Failed to retrieve topic data");
+                }
+    
+                setIsLoading(false);
+              })
+              .catch((err) => {
+                console.error("Error fetching topic data:", err);
+                setError("Failed to connect to the topicMod endpoint");
+                setIsLoading(false);
+              });
+            }
+        }
+      } catch (error) {
+        setError("Failed to retrieve topic data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    checkForData();
+  }, []);
 
   const loadPreviousSelections = async () => {
     try {
@@ -187,6 +237,46 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
       // TODO: Show error UI feedback
     }
   };
+
+  console.log(`isLoading: ${isLoading}, err: ${err}, loadWidget: ${loadWidget}`)
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (!isLoading && err) {
+    return null;
+  }
+
+  if (!loadWidget && !isLoading && !err) {
+    return (
+      <div 
+        style={{ 
+          width: '800px', 
+          height: '195px', 
+          border: '1px solid #e0e0e0', 
+          borderRadius: '8px',
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          backgroundColor: '#f9f9f9'
+        }}
+      >
+        <button 
+          onClick={() => setLoadWidget(true)}
+          style={{ 
+            padding: '12px 24px', 
+            fontSize: '16px',
+            cursor: 'pointer',
+            border: '1px solid #ccc',
+            borderRadius: '4px'
+          }}
+        >
+          Select Topics
+        </button>
+      </div>
+    );
+  }
 
 
   if (error) {

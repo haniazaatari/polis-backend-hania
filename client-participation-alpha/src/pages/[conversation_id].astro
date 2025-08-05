@@ -100,6 +100,11 @@ if (initialData) {
 
         {isConversationActive ? (
           <>
+            <TopicAgenda 
+              client:only="react"
+              conversation={initialData.conversation}
+              conversation_id={conversation_id}
+            />
             <p class="conversation-intro" set:html={s.participantHelpWelcomeText}></p>
             <Survey 
               client:load 
@@ -108,12 +113,6 @@ if (initialData) {
               s={s} 
             />
             <SurveyForm client:load s={s} conversation_id={conversation_id} />
-            
-            <TopicAgenda 
-                client:only="react"
-                conversation={initialData.conversation}
-                conversation_id={conversation_id}
-              />
           </>
         ) : (
           <div class="footer-spacer"></div>

@@ -80,7 +80,7 @@ export default function SurveyForm({ s, conversation_id }) {
         <h2>{s.helpWriteListIntro}</h2>
         <ul>
           <li>{s.helpWriteListStandalone}</li>
-          <li>{s.helpWriteListRaiseNew}</li>
+          <li>{s.helpWriteListRaisNew}</li>
           <li>{s.helpWriteListShort}</li>
         </ul>
         <p dangerouslySetInnerHTML={{ __html: s.tipCommentsRandom }}></p>

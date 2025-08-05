@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 
-export const useTopicData = (reportId) => {
+export const useTopicData = (reportId, load) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [topicData, setTopicData] = useState(null);
@@ -137,7 +137,7 @@ export const useTopicData = (reportId) => {
   }, [reportId]);
 
   useEffect(() => {
-    if (!reportId) return;
+    if (!reportId || load === false) return;
 
     setLoading(true);
     fetch(`${import.meta.env.PUBLIC_SERVICE_URL}/delphi?report_id=${reportId}`)
@@ -163,7 +163,7 @@ export const useTopicData = (reportId) => {
         setError("Failed to connect to the topicMod endpoint");
         setLoading(false);
       });
-  }, [reportId]);
+  }, [reportId, load]);
 
   return {
     loading,
