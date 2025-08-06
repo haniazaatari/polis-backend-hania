@@ -682,7 +682,14 @@ class JobProcessor:
                 cmd_job_id = job.get('batch_job_id', job_id)
                 cmd = ['python', '/app/umap_narrative/803_check_batch_status.py', f'--job-id={cmd_job_id}']
             else: # FULL_PIPELINE
+                # Base command
                 cmd = ['python', '/app/run_delphi.py', f'--zid={conversation_id}']
+                # Check for report_id and append if it exists
+                report_id = job.get('report_id')
+                if report_id:
+                    cmd.append(f'--rid={report_id}')
+                    self.update_job_logs(job, {'level': 'INFO', 'message': f"Passing report_id {report_id} to run_delphi.py"})
+
 
             # 2. Execute the command and stream logs to prevent deadlocks
             self.update_job_logs(job, {'level': 'INFO', 'message': f'Executing command: {" ".join(cmd)}'})
