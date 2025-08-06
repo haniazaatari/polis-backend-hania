@@ -30,6 +30,7 @@ import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
 import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
 import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
 import TopicStats from "./topicStats/TopicStats.jsx";
+import { enrichMathWithNormalizedConsensus } from "../util/normalizeConsensus.js";
 
 const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicHierarchy/2arcefpshi" or "/topicStats/2arcefpshi"
 const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicHierarchy", or "topicStats"
@@ -542,7 +543,10 @@ const App = (props) => {
         var uniqueCommenters = {};
         var voteTotals = DataUtils.getVoteTotals(mathResult);
         _comments = _comments.map((c) => {
-          c["group-aware-consensus"] = mathResult["group-aware-consensus"][c.tid];
+          // Use normalized consensus if available, fall back to raw
+          c["group-aware-consensus"] = mathResult["group-consensus-normalized"] ? 
+            mathResult["group-consensus-normalized"][c.tid] : 
+            mathResult["group-aware-consensus"][c.tid];
           uniqueCommenters[c.pid] = 1;
           c = Object.assign(c, voteTotals[c.tid]);
           return c;
@@ -556,6 +560,9 @@ const App = (props) => {
           votesPerVoterAvg: totalVotes / _ptptCountTotal,
           commentsPerCommenterAvg: _comments.length / numUniqueCommenters,
         };
+
+        // Enrich math results with normalized consensus values
+        mathResult = enrichMathWithNormalizedConsensus(mathResult);
 
         setLoading(false);
         setMath(mathResult);

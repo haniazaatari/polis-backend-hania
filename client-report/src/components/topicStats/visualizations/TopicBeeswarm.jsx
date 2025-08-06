@@ -73,14 +73,18 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
   }
 
   const setup = () => {
-    if (!comments || !commentTids || !math || !math["group-aware-consensus"]) return;
+    if (!comments || !commentTids || !math) return;
+    
+    // Use normalized consensus if available, fall back to raw consensus
+    const consensusData = math["group-consensus-normalized"] || math["group-aware-consensus"];
+    if (!consensusData) return;
 
     // Filter to only topic comments and add group consensus
     const commentsWithConsensusData = [];
     comments.forEach((comment) => {
       if (commentTids.includes(comment.tid)) {
         const totalVotes = (comment.agree_count || 0) + (comment.disagree_count || 0) + (comment.pass_count || 0);
-        const groupConsensus = math["group-aware-consensus"][comment.tid];
+        const groupConsensus = consensusData[comment.tid];
         // Apply vote filter - remove comments with 0 or 1 votes if filter is on
         const minVotes = filterLowVotes ? 2 : 0;
         if (groupConsensus !== undefined && totalVotes >= minVotes) {
@@ -95,21 +99,12 @@ const TopicBeeswarm = ({ comments, commentTids, math, conversation, ptptCount, f
 
     if (commentsWithConsensusData.length === 0) return;
 
-    // Find actual data extent with some padding
-    const consensusValues = commentsWithConsensusData.map(d => d.groupConsensus);
-    const minConsensus = Math.min(...consensusValues);
-    const maxConsensus = Math.max(...consensusValues);
-    
-    // Add 5% padding to show all points clearly
-    const padding = (maxConsensus - minConsensus) * 0.05;
-    const paddedMin = Math.max(0, minConsensus - padding);
-    const paddedMax = Math.min(1, maxConsensus + padding);
-    
-    setDataExtent([paddedMin, paddedMax]);
+    // Always use fixed scale from 0 to 1
+    setDataExtent([0, 1]);
 
-    // Create x scale based on actual data range
+    // Create x scale with fixed domain [0, 1]
     const x = window.d3.scaleLinear()
-      .domain([paddedMin, paddedMax])
+      .domain([0, 1])
       .rangeRound([0, widthMinusMargins]);
 
     // Run force simulation
