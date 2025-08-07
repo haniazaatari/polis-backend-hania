@@ -59,6 +59,7 @@ const embedScriptTemplate = `
     const params = new URLSearchParams();
     params.append("parent_url", window.location.href);
     params.append("referrer", document.referrer);
+    params.append("hide_header", true);
 
     ['xid', 'x_name', 'x_profile_image_url', 'ui_lang', 'topic', 'auth_needed_to_vote', 'auth_needed_to_write'].forEach(key => {
       if (config[key]) {
