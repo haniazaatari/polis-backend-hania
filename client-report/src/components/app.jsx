@@ -41,9 +41,12 @@ const route_type = pathParts[1]; // "report", "narrativeReport", "commentsReport
 const report_id = pathParts[2];
 
 // For topic detail pages: /topicStats/report_id/topic_key
+// Topic key can be in format: uuid#layer#cluster or layer_cluster
 let topic_key = null;
 if (route_type === "topicStats" && pathParts.length > 3) {
-  topic_key = pathParts[3];
+  // Get the topic key from the URL path and decode it
+  // Replace %23 with # to restore the original format
+  topic_key = pathParts[3].replace(/%23/g, '#');
 }
 
 // Debug the route

@@ -176,7 +176,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
               math={math}
               voteColors={voteColors}
               onTopicClick={(topic) => {
-                window.location.href = `/topicStats/${report_id}/${topic.topic_key}`;
+                window.location.href = `/topicStats/${report_id}/${topic.topic_key.replace(/#/g, '%23')}`;
               }}
             />
             
@@ -203,7 +203,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                 setLayerModalOpen(true);
               }}
               onViewTopic={(topic) => {
-                window.location.href = `/topicStats/${report_id}/${topic.key}`;
+                window.location.href = `/topicStats/${report_id}/${topic.key.replace(/#/g, '%23')}`;
               }}
             />
           </div>

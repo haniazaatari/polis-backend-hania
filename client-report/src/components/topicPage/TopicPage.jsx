@@ -309,7 +309,7 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
       
       <div style={{ marginTop: 40 }}>
         <button 
-          onClick={onBack}
+          onClick={() => window.location.href = `/topicStats/${report_id}`}
           style={{
             background: "none",
             border: "none",

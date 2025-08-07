@@ -10,7 +10,8 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
   const [statements, setStatements] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const carouselRef = useRef(null);
-  const [cardWidth, setCardWidth] = useState(0);
+  const containerRef = useRef(null);
+  const [cardWidth, setCardWidth] = useState(1400); // Default width - wider for better content display
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
@@ -86,9 +87,9 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
   // Update card width on resize
   useEffect(() => {
     const updateCardWidth = () => {
-      if (carouselRef.current) {
-        const containerWidth = carouselRef.current.offsetWidth;
-        setCardWidth(Math.min(containerWidth * 0.9, 1200)); // 90% of container or max 1200px
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.offsetWidth;
+        setCardWidth(Math.min(containerWidth * 0.9, 1600)); // 90% of container or max 1600px
       }
     };
 
@@ -96,6 +97,18 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
     window.addEventListener('resize', updateCardWidth);
     return () => window.removeEventListener('resize', updateCardWidth);
   }, []);
+  
+  // Recalculate card width when statements are loaded
+  useEffect(() => {
+    if (statements.length > 0 && containerRef.current) {
+      const containerWidth = containerRef.current.offsetWidth;
+      setCardWidth(Math.min(containerWidth * 0.9, 1600));
+      // Force a re-render by scrolling to current index
+      if (carouselRef.current) {
+        carouselRef.current.style.transform = `translateX(-${currentIndex * (cardWidth + 40)}px)`;
+      }
+    }
+  }, [statements]);
 
   const scrollToIndex = (index) => {
     if (isTransitioning || index === currentIndex) return;
@@ -150,8 +163,8 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
       <div
         key={statement.zid_topic_jobid}
         style={{
-          minWidth: cardWidth + "px",
-          maxWidth: cardWidth + "px",
+          minWidth: (cardWidth || 1400) + "px",
+          maxWidth: (cardWidth || 1400) + "px",
           marginRight: "40px",
           opacity: isActive ? 1 : 0.5,
           transform: isActive ? "scale(1)" : "scale(0.95)",
@@ -201,11 +214,12 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
         <div style={{
           flex: 1,
           display: "flex",
-          overflow: "hidden"
+          overflow: "hidden",
+          maxHeight: "600px"
         }}>
           {/* Statement Text */}
           <div style={{
-            flex: "0 0 50%",
+            flex: "0 0 40%",
             padding: "30px",
             overflowY: "auto",
             borderRight: "1px solid #e0e0e0"
@@ -249,7 +263,7 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
 
           {/* Cited Comments */}
           <div style={{
-            flex: "0 0 50%",
+            flex: "0 0 60%",
             padding: "30px",
             overflowY: "auto",
             backgroundColor: "#fafafa"
@@ -341,6 +355,15 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
         padding: "40px 0",
         overflow: "hidden"
       }}>
+        {/* Statement Counter - moved to top */}
+        <div style={{
+          textAlign: "center",
+          marginBottom: "20px",
+          color: "#666",
+          fontSize: "0.9em"
+        }}>
+          {currentIndex + 1} of {statements.length} statements
+        </div>
         {/* Navigation Buttons */}
         <button
           onClick={handlePrevious}
@@ -402,6 +425,7 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
 
         {/* Carousel Container */}
         <div 
+          ref={containerRef}
           style={{
             overflow: "hidden",
             margin: "0 80px",
@@ -446,16 +470,6 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
               }}
             />
           ))}
-        </div>
-
-        {/* Statement Counter */}
-        <div style={{
-          textAlign: "center",
-          marginTop: "20px",
-          color: "#666",
-          fontSize: "0.9em"
-        }}>
-          {currentIndex + 1} of {statements.length} statements
         </div>
       </div>
 

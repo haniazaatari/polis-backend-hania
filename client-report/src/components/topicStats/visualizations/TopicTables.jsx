@@ -175,7 +175,7 @@ const TopicTables = ({ latestRun, statsData, math, report_id, onTopicSelect, onS
                   <tr key={clusterId} style={{ borderBottom: "1px solid #ccc" }}>
                     <td style={{ padding: "10px" }}>
                       <a 
-                        href={`/topicStats/${report_id}/${topic.topic_key}`}
+                        href={`/topicStats/${report_id}/${topic.topic_key.replace(/#/g, '%23')}`}
                         style={{
                           color: "#0066cc",
                           textDecoration: "none",
