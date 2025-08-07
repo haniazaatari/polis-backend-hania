@@ -12,7 +12,7 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
   const carouselRef = useRef(null);
   const containerRef = useRef(null);
   const [cardWidth, setCardWidth] = useState(1400); // Default width - wider for better content display
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [cardHeight, setCardHeight] = useState('600px'); // Default height
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
 
@@ -84,44 +84,60 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
     }
   }, [report_id]);
 
-  // Update card width on resize
+  // Update card width and height on resize
   useEffect(() => {
-    const updateCardWidth = () => {
+    const updateCardDimensions = () => {
       if (containerRef.current) {
         const containerWidth = containerRef.current.offsetWidth;
         setCardWidth(Math.min(containerWidth * 0.9, 1600)); // 90% of container or max 1600px
+        
+        // Calculate available height
+        const windowHeight = window.innerHeight;
+        const containerTop = containerRef.current.getBoundingClientRect().top;
+        const footerHeight = 80; // Approximate footer height
+        const availableHeight = windowHeight - containerTop - footerHeight - 40; // Less padding needed now
+        
+        // On mobile (width < 768px), use fixed height. On desktop, use available space
+        // Subtract extra space for scale (5% = 50px on a 1000px card)
+        const scaleBuffer = 50;
+        if (window.innerWidth < 768) {
+          setCardHeight('600px');
+        } else {
+          setCardHeight(Math.max(600, availableHeight - scaleBuffer) + 'px'); // No max limit on desktop
+        }
       }
     };
 
-    updateCardWidth();
-    window.addEventListener('resize', updateCardWidth);
-    return () => window.removeEventListener('resize', updateCardWidth);
+    updateCardDimensions();
+    window.addEventListener('resize', updateCardDimensions);
+    return () => window.removeEventListener('resize', updateCardDimensions);
   }, []);
   
-  // Recalculate card width when statements are loaded
+  // Recalculate card dimensions when statements are loaded
   useEffect(() => {
     if (statements.length > 0 && containerRef.current) {
       const containerWidth = containerRef.current.offsetWidth;
       setCardWidth(Math.min(containerWidth * 0.9, 1600));
-      // Force a re-render by scrolling to current index
-      if (carouselRef.current) {
-        carouselRef.current.style.transform = `translateX(-${currentIndex * (cardWidth + 40)}px)`;
+      
+      // Recalculate height too
+      const windowHeight = window.innerHeight;
+      const containerTop = containerRef.current.getBoundingClientRect().top;
+      const footerHeight = 80;
+      const availableHeight = windowHeight - containerTop - footerHeight - 40;
+      
+      const scaleBuffer = 50;
+      if (window.innerWidth < 768) {
+        setCardHeight('600px');
+      } else {
+        setCardHeight(Math.max(600, availableHeight - scaleBuffer) + 'px'); // No max limit on desktop
       }
     }
   }, [statements]);
 
   const scrollToIndex = (index) => {
-    if (isTransitioning || index === currentIndex) return;
+    if (index === currentIndex) return;
     
-    setIsTransitioning(true);
     setCurrentIndex(index);
-    
-    if (carouselRef.current) {
-      const scrollPosition = index * (cardWidth + 40); // 40px gap between cards
-      carouselRef.current.style.transform = `translateX(-${scrollPosition}px)`;
-    }
-    
-    setTimeout(() => setIsTransitioning(false), 300);
   };
 
   const handlePrevious = () => {
@@ -167,14 +183,15 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
           maxWidth: (cardWidth || 1400) + "px",
           marginRight: "40px",
           opacity: isActive ? 1 : 0.5,
-          transform: isActive ? "scale(1)" : "scale(0.95)",
+          transform: isActive ? "scale(1) translateY(0)" : "scale(0.95) translateY(0)",
           transition: "all 0.3s ease",
           backgroundColor: "white",
           borderRadius: "12px",
           boxShadow: isActive ? "0 10px 40px rgba(0, 0, 0, 0.15)" : "0 5px 20px rgba(0, 0, 0, 0.1)",
           overflow: "hidden",
           display: "flex",
-          flexDirection: "column"
+          flexDirection: "column",
+          height: "100%"
         }}
       >
         {/* Header */}
@@ -215,7 +232,7 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
           flex: 1,
           display: "flex",
           overflow: "hidden",
-          maxHeight: "600px"
+          height: cardHeight
         }}>
           {/* Statement Text */}
           <div style={{
@@ -353,26 +370,52 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
       <div style={{ 
         position: "relative",
         padding: "40px 0",
-        overflow: "hidden"
+        overflow: "visible"
       }}>
-        {/* Statement Counter - moved to top */}
+        {/* Statement Counter and Dots - moved to top */}
         <div style={{
           textAlign: "center",
-          marginBottom: "20px",
-          color: "#666",
-          fontSize: "0.9em"
+          marginBottom: "20px"
         }}>
-          {currentIndex + 1} of {statements.length} statements
+          <div style={{
+            color: "#666",
+            fontSize: "0.9em",
+            marginBottom: "10px"
+          }}>
+            {currentIndex + 1} of {statements.length} statements
+          </div>
+          
+          {/* Dots Indicator */}
+          <div style={{
+            display: "flex",
+            justifyContent: "center",
+            gap: "8px"
+          }}>
+            {statements.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => scrollToIndex(index)}
+                style={{
+                  width: index === currentIndex ? "24px" : "8px",
+                  height: "8px",
+                  borderRadius: "4px",
+                  border: "none",
+                  backgroundColor: index === currentIndex ? "#007bff" : "#ccc",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  padding: 0
+                }}
+              />
+            ))}
+          </div>
         </div>
         {/* Navigation Buttons */}
         <button
           onClick={handlePrevious}
-          disabled={isTransitioning}
           style={{
             position: "absolute",
             left: "20px",
-            top: "50%",
-            transform: "translateY(-50%)",
+            top: "200px", // Fixed position near top of cards
             zIndex: 10,
             width: "50px",
             height: "50px",
@@ -380,7 +423,7 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
             border: "none",
             backgroundColor: "white",
             boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-            cursor: isTransitioning ? "not-allowed" : "pointer",
+            cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -388,20 +431,18 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
             color: "#333",
             transition: "all 0.2s ease"
           }}
-          onMouseEnter={(e) => !isTransitioning && (e.target.style.transform = "translateY(-50%) scale(1.1)")}
-          onMouseLeave={(e) => e.target.style.transform = "translateY(-50%) scale(1)"}
+          onMouseEnter={(e) => e.target.style.transform = "scale(1.1)"}
+          onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
         >
           ←
         </button>
 
         <button
           onClick={handleNext}
-          disabled={isTransitioning}
           style={{
             position: "absolute",
             right: "20px",
-            top: "50%",
-            transform: "translateY(-50%)",
+            top: "200px", // Fixed position near top of cards
             zIndex: 10,
             width: "50px",
             height: "50px",
@@ -409,7 +450,7 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
             border: "none",
             backgroundColor: "white",
             boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
-            cursor: isTransitioning ? "not-allowed" : "pointer",
+            cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -417,8 +458,8 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
             color: "#333",
             transition: "all 0.2s ease"
           }}
-          onMouseEnter={(e) => !isTransitioning && (e.target.style.transform = "translateY(-50%) scale(1.1)")}
-          onMouseLeave={(e) => e.target.style.transform = "translateY(-50%) scale(1)"}
+          onMouseEnter={(e) => e.target.style.transform = "scale(1.1)"}
+          onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
         >
           →
         </button>
@@ -439,37 +480,12 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
             ref={carouselRef}
             style={{
               display: "flex",
-              transition: isTransitioning ? "transform 0.3s ease" : "none",
+              transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
               transform: `translateX(-${currentIndex * (cardWidth + 40)}px)`
             }}
           >
             {statements.map((statement, index) => renderStatement(statement, index))}
           </div>
-        </div>
-
-        {/* Dots Indicator */}
-        <div style={{
-          display: "flex",
-          justifyContent: "center",
-          gap: "8px",
-          marginTop: "40px"
-        }}>
-          {statements.map((_, index) => (
-            <button
-              key={index}
-              onClick={() => scrollToIndex(index)}
-              style={{
-                width: index === currentIndex ? "24px" : "8px",
-                height: "8px",
-                borderRadius: "4px",
-                border: "none",
-                backgroundColor: index === currentIndex ? "#007bff" : "#ccc",
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-                padding: 0
-              }}
-            />
-          ))}
         </div>
       </div>
 
