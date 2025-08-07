@@ -42,9 +42,9 @@ if [ -d "$DEPLOY_DIR" ]; then
   fi
 
   if [ "$SERVICE_TYPE" == "server" ]; then
-    echo "Stopping server-related services (server, nginx-proxy, file-server)..."
+    echo "Stopping server-related services (server, nginx-proxy, file-server, client-participation-alpha)..."
     # Stop services related to the 'server' type instance (as started in AfterInstall)
-    /usr/local/bin/docker-compose stop server nginx-proxy file-server || echo "Warning: Failed to stop server component(s), might already be stopped."
+    /usr/local/bin/docker-compose stop server nginx-proxy file-server client-participation-alpha || echo "Warning: Failed to stop server component(s), might already be stopped."
     # Optional: Use 'down' if you want to remove networks etc. during stop, but 'stop' is usually sufficient here.
     # /usr/local/bin/docker-compose down --remove-orphans server nginx-proxy file-server || echo "Warning..."
 
