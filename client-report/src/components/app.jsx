@@ -31,6 +31,7 @@ import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
 import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
 import TopicStats from "./topicStats/TopicStats.jsx";
 import TopicPage from "./topicPage/TopicPage.jsx";
+import CollectiveStatementsReport from "./collectiveStatementsReport/CollectiveStatementsReport.jsx";
 import { enrichMathWithNormalizedConsensus } from "../util/normalizeConsensus.js";
 
 const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicHierarchy/2arcefpshi" or "/topicStats/2arcefpshi"
@@ -887,6 +888,21 @@ const App = (props) => {
     console.log("RENDERING: TopicStats");
     return (
       <TopicStats
+        conversation={conversation}
+        report_id={report_id}
+        math={math}
+        comments={comments}
+        ptptCount={ptptCount}
+        formatTid={formatTid}
+        voteColors={voteColors}
+      />
+    )
+  }
+
+  if (route_type === "collectiveStatements") {
+    console.log("RENDERING: CollectiveStatementsReport");
+    return (
+      <CollectiveStatementsReport
         conversation={conversation}
         report_id={report_id}
         math={math}

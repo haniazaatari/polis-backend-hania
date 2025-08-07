@@ -1,0 +1,469 @@
+import React, { useState, useEffect, useRef } from "react";
+import net from "../../util/net";
+import Heading from "../framework/heading.jsx";
+import Footer from "../framework/Footer.jsx";
+import CommentList from "../lists/commentList.jsx";
+import * as globals from "../globals";
+
+const CollectiveStatementsReport = ({ conversation, report_id, math, comments, ptptCount, formatTid, voteColors }) => {
+  const [loading, setLoading] = useState(true);
+  const [statements, setStatements] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const carouselRef = useRef(null);
+  const [cardWidth, setCardWidth] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+
+  // Minimum swipe distance (in px)
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      handleNext();
+    }
+    if (isRightSwipe) {
+      handlePrevious();
+    }
+  };
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowLeft') {
+        handlePrevious();
+      } else if (e.key === 'ArrowRight') {
+        handleNext();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, statements.length]);
+
+  useEffect(() => {
+    const fetchStatements = async () => {
+      try {
+        setLoading(true);
+        const response = await net.polisGet("/api/v3/collectiveStatement", {
+          report_id: report_id
+        });
+        
+        if (response.status === "success" && response.statements) {
+          // Sort by created_at descending (most recent first)
+          const sortedStatements = response.statements.sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+          setStatements(sortedStatements);
+        }
+      } catch (err) {
+        console.error("Error fetching collective statements:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (report_id) {
+      fetchStatements();
+    }
+  }, [report_id]);
+
+  // Update card width on resize
+  useEffect(() => {
+    const updateCardWidth = () => {
+      if (carouselRef.current) {
+        const containerWidth = carouselRef.current.offsetWidth;
+        setCardWidth(Math.min(containerWidth * 0.9, 1200)); // 90% of container or max 1200px
+      }
+    };
+
+    updateCardWidth();
+    window.addEventListener('resize', updateCardWidth);
+    return () => window.removeEventListener('resize', updateCardWidth);
+  }, []);
+
+  const scrollToIndex = (index) => {
+    if (isTransitioning || index === currentIndex) return;
+    
+    setIsTransitioning(true);
+    setCurrentIndex(index);
+    
+    if (carouselRef.current) {
+      const scrollPosition = index * (cardWidth + 40); // 40px gap between cards
+      carouselRef.current.style.transform = `translateX(-${scrollPosition}px)`;
+    }
+    
+    setTimeout(() => setIsTransitioning(false), 300);
+  };
+
+  const handlePrevious = () => {
+    const newIndex = currentIndex > 0 ? currentIndex - 1 : statements.length - 1;
+    scrollToIndex(newIndex);
+  };
+
+  const handleNext = () => {
+    const newIndex = currentIndex < statements.length - 1 ? currentIndex + 1 : 0;
+    scrollToIndex(newIndex);
+  };
+
+  // Extract citations from statement data
+  const extractCitations = (statementData) => {
+    const citations = [];
+    if (statementData && statementData.paragraphs) {
+      statementData.paragraphs.forEach((paragraph) => {
+        if (paragraph.sentences) {
+          paragraph.sentences.forEach((sentence) => {
+            if (sentence.clauses) {
+              sentence.clauses.forEach((clause) => {
+                if (clause.citations && Array.isArray(clause.citations)) {
+                  citations.push(...clause.citations.filter((c) => typeof c === "number"));
+                }
+              });
+            }
+          });
+        }
+      });
+    }
+    return [...new Set(citations)];
+  };
+
+  const renderStatement = (statement, index) => {
+    const uniqueCitations = extractCitations(statement.statement_data);
+    const isActive = index === currentIndex;
+    
+    return (
+      <div
+        key={statement.zid_topic_jobid}
+        style={{
+          minWidth: cardWidth + "px",
+          maxWidth: cardWidth + "px",
+          marginRight: "40px",
+          opacity: isActive ? 1 : 0.5,
+          transform: isActive ? "scale(1)" : "scale(0.95)",
+          transition: "all 0.3s ease",
+          backgroundColor: "white",
+          borderRadius: "12px",
+          boxShadow: isActive ? "0 10px 40px rgba(0, 0, 0, 0.15)" : "0 5px 20px rgba(0, 0, 0, 0.1)",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column"
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          padding: "30px",
+          borderBottom: "1px solid #e0e0e0",
+          background: "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)"
+        }}>
+          <h2 style={{ 
+            margin: 0, 
+            fontSize: "1.8em",
+            color: "#333",
+            marginBottom: "10px"
+          }}>
+            {statement.topic_name}
+          </h2>
+          <p style={{ 
+            margin: 0, 
+            color: "#666", 
+            fontSize: "0.95em",
+            fontStyle: "italic" 
+          }}>
+            Candidate Collective Statement
+          </p>
+          <p style={{ 
+            margin: 0, 
+            marginTop: "8px",
+            fontSize: "0.85em", 
+            color: "#888" 
+          }}>
+            Generated {new Date(statement.created_at).toLocaleDateString()} at {new Date(statement.created_at).toLocaleTimeString()}
+            {statement.model && ` • ${statement.model.includes('claude') ? 'Claude Opus 4' : statement.model}`}
+          </p>
+        </div>
+
+        {/* Content */}
+        <div style={{
+          flex: 1,
+          display: "flex",
+          overflow: "hidden"
+        }}>
+          {/* Statement Text */}
+          <div style={{
+            flex: "0 0 50%",
+            padding: "30px",
+            overflowY: "auto",
+            borderRight: "1px solid #e0e0e0"
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: "20px", color: "#333" }}>Statement</h3>
+            {statement.statement_data && statement.statement_data.paragraphs && 
+              statement.statement_data.paragraphs.map((paragraph, idx) => (
+                <div key={idx} style={{ marginBottom: "20px" }}>
+                  {paragraph.title && (
+                    <h4 style={{ marginTop: 0, marginBottom: "10px", color: "#444" }}>
+                      {paragraph.title}
+                    </h4>
+                  )}
+                  {paragraph.sentences && paragraph.sentences.map((sentence, sIdx) => (
+                    <p key={sIdx} style={{ 
+                      marginBottom: "10px", 
+                      lineHeight: 1.6,
+                      color: "#555"
+                    }}>
+                      {sentence.clauses && sentence.clauses.map((clause, cIdx) => (
+                        <span key={cIdx}>
+                          {clause.text}
+                          {clause.citations && clause.citations.length > 0 && (
+                            <sup style={{
+                              color: "#007bff",
+                              fontSize: "0.8em",
+                              marginLeft: "2px"
+                            }}>
+                              [{clause.citations.join(", ")}]
+                            </sup>
+                          )}
+                          {cIdx < sentence.clauses.length - 1 && " "}
+                        </span>
+                      ))}
+                    </p>
+                  ))}
+                </div>
+              ))
+            }
+          </div>
+
+          {/* Cited Comments */}
+          <div style={{
+            flex: "0 0 50%",
+            padding: "30px",
+            overflowY: "auto",
+            backgroundColor: "#fafafa"
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: "20px", color: "#333" }}>
+              Cited Comments ({uniqueCitations.length})
+            </h3>
+            {uniqueCitations.length > 0 ? (
+              <CommentList
+                conversation={conversation}
+                ptptCount={ptptCount}
+                math={math}
+                formatTid={formatTid}
+                tidsToRender={uniqueCitations}
+                comments={comments}
+                voteColors={voteColors}
+              />
+            ) : (
+              <p style={{ color: "#999", fontStyle: "italic" }}>No comments cited</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div style={{ 
+        maxWidth: "100%", 
+        margin: "0 auto",
+        backgroundColor: "#f5f6fa",
+        minHeight: "100vh"
+      }}>
+        <div style={{ padding: "20px" }}>
+          <Heading conversation={conversation} />
+        </div>
+        <div style={{ 
+          marginTop: 100, 
+          textAlign: "center",
+          padding: "40px"
+        }}>
+          <div style={{
+            display: "inline-block",
+            width: "50px",
+            height: "50px",
+            border: "3px solid #e0e0e0",
+            borderTop: "3px solid #007bff",
+            borderRadius: "50%",
+            animation: "spin 1s linear infinite"
+          }}></div>
+          <p style={{ marginTop: "20px", color: "#666" }}>Loading collective statements...</p>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      </div>
+    );
+  }
+
+  if (statements.length === 0) {
+    return (
+      <div style={{ maxWidth: "100%", margin: "0 auto", padding: "20px" }}>
+        <Heading conversation={conversation} />
+        <div style={{ marginTop: 40, textAlign: "center" }}>
+          <p>No collective statements have been generated yet.</p>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ 
+      maxWidth: "100%", 
+      margin: "0 auto",
+      backgroundColor: "#f5f6fa",
+      minHeight: "100vh"
+    }}>
+      <div style={{ padding: "20px" }}>
+        <Heading conversation={conversation} />
+      </div>
+      
+      <div style={{ 
+        position: "relative",
+        padding: "40px 0",
+        overflow: "hidden"
+      }}>
+        {/* Navigation Buttons */}
+        <button
+          onClick={handlePrevious}
+          disabled={isTransitioning}
+          style={{
+            position: "absolute",
+            left: "20px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            zIndex: 10,
+            width: "50px",
+            height: "50px",
+            borderRadius: "50%",
+            border: "none",
+            backgroundColor: "white",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            cursor: isTransitioning ? "not-allowed" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "20px",
+            color: "#333",
+            transition: "all 0.2s ease"
+          }}
+          onMouseEnter={(e) => !isTransitioning && (e.target.style.transform = "translateY(-50%) scale(1.1)")}
+          onMouseLeave={(e) => e.target.style.transform = "translateY(-50%) scale(1)"}
+        >
+          ←
+        </button>
+
+        <button
+          onClick={handleNext}
+          disabled={isTransitioning}
+          style={{
+            position: "absolute",
+            right: "20px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            zIndex: 10,
+            width: "50px",
+            height: "50px",
+            borderRadius: "50%",
+            border: "none",
+            backgroundColor: "white",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+            cursor: isTransitioning ? "not-allowed" : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "20px",
+            color: "#333",
+            transition: "all 0.2s ease"
+          }}
+          onMouseEnter={(e) => !isTransitioning && (e.target.style.transform = "translateY(-50%) scale(1.1)")}
+          onMouseLeave={(e) => e.target.style.transform = "translateY(-50%) scale(1)"}
+        >
+          →
+        </button>
+
+        {/* Carousel Container */}
+        <div 
+          style={{
+            overflow: "hidden",
+            margin: "0 80px",
+            position: "relative"
+          }}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
+          <div
+            ref={carouselRef}
+            style={{
+              display: "flex",
+              transition: isTransitioning ? "transform 0.3s ease" : "none",
+              transform: `translateX(-${currentIndex * (cardWidth + 40)}px)`
+            }}
+          >
+            {statements.map((statement, index) => renderStatement(statement, index))}
+          </div>
+        </div>
+
+        {/* Dots Indicator */}
+        <div style={{
+          display: "flex",
+          justifyContent: "center",
+          gap: "8px",
+          marginTop: "40px"
+        }}>
+          {statements.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => scrollToIndex(index)}
+              style={{
+                width: index === currentIndex ? "24px" : "8px",
+                height: "8px",
+                borderRadius: "4px",
+                border: "none",
+                backgroundColor: index === currentIndex ? "#007bff" : "#ccc",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                padding: 0
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Statement Counter */}
+        <div style={{
+          textAlign: "center",
+          marginTop: "20px",
+          color: "#666",
+          fontSize: "0.9em"
+        }}>
+          {currentIndex + 1} of {statements.length} statements
+        </div>
+      </div>
+
+      <div style={{ padding: "20px" }}>
+        <Footer />
+      </div>
+    </div>
+  );
+};
+
+export default CollectiveStatementsReport;

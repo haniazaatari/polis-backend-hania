@@ -1863,6 +1863,13 @@ helpersInitialized.then(
         return fetchIndexForReportPage(req, res, next);
       }
     );
+    // Collective Statements carousel route
+    app.get(
+      /^\/collectiveStatements\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      function (req, res, next) {
+        return fetchIndexForReportPage(req, res, next);
+      }
+    );
     // Export Report route for data export interface
     app.get(
       /^\/exportReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
