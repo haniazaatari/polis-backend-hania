@@ -2,7 +2,13 @@ import React from 'react';
 import TopicScatterplot from '../../topicScatterplot/TopicScatterplot.jsx';
 
 const TopicOverviewScatterplot = ({ latestRun, statsData, math, voteColors, onTopicClick }) => {
-  if (!statsData || !math || !math["group-aware-consensus"]) {
+  if (!statsData || !math) {
+    return null;
+  }
+  
+  // Use normalized consensus if available, fall back to raw
+  const consensusData = math["group-consensus-normalized"] || math["group-aware-consensus"];
+  if (!consensusData) {
     return null;
   }
 
@@ -19,7 +25,7 @@ const TopicOverviewScatterplot = ({ latestRun, statsData, math, voteColors, onTo
         let groupConsensus = null;
         if (stats.comment_tids) {
           const consensusValues = stats.comment_tids
-            .map(tid => math["group-aware-consensus"][tid])
+            .map(tid => consensusData[tid])
             .filter(val => val !== undefined);
           
           if (consensusValues.length > 0) {

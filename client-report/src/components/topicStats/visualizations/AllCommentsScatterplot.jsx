@@ -2,7 +2,13 @@ import React from 'react';
 import TopicScatterplot from '../../topicScatterplot/TopicScatterplot.jsx';
 
 const AllCommentsScatterplot = ({ comments, math, voteColors }) => {
-  if (!comments || !math || !math["group-aware-consensus"]) {
+  if (!comments || !math) {
+    return null;
+  }
+  
+  // Use normalized consensus if available, fall back to raw
+  const consensusData = math["group-consensus-normalized"] || math["group-aware-consensus"];
+  if (!consensusData) {
     return null;
   }
 
@@ -12,7 +18,7 @@ const AllCommentsScatterplot = ({ comments, math, voteColors }) => {
     let maxConsensus = -Infinity;
     
     comments.forEach(comment => {
-      const groupConsensus = math["group-aware-consensus"][comment.tid];
+      const groupConsensus = consensusData[comment.tid];
       if (groupConsensus !== undefined) {
         const totalVotes = (comment.agree_count || 0) + (comment.disagree_count || 0) + (comment.pass_count || 0);
         

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { canGenerateCollectiveStatement, THRESHOLDS } from '../../../util/consensusThreshold';
 
 const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot, onBeeswarm, onLayerDistribution, onViewTopic }) => {
   const [sortConfig, setSortConfig] = useState({ key: 'comment_count', direction: 'desc' });
@@ -13,7 +14,30 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
   const layerEntries = Object.entries(latestRun.topics_by_layer || {});
   const totalLayers = layerEntries.length;
   
-  return layerEntries
+  return (
+    <div>
+      {/* Threshold explanation note */}
+      <div style={{ 
+        textAlign: 'right', 
+        marginBottom: 20, 
+        fontSize: '0.85em', 
+        color: '#666',
+        fontStyle: 'italic'
+      }}>
+        <span style={{ 
+          display: 'inline-block',
+          padding: '8px 12px',
+          backgroundColor: '#f0f0f0',
+          borderRadius: '4px',
+          lineHeight: 1.4
+        }}>
+          Collective statements require at least {THRESHOLDS.MIN_COMMENTS} comments with 
+          ≥{(THRESHOLDS.MIN_CONSENSUS * 100)}% consensus and 
+          ≥{(THRESHOLDS.MIN_GROUP_PARTICIPATION * 100)}% participation from every group
+        </span>
+      </div>
+      
+      {layerEntries
     .sort(([a], [b]) => parseInt(b) - parseInt(a)) // Sort layers in descending order
     .map(([layerId, topics]) => {
       const topicCount = Object.keys(topics).length;
@@ -90,9 +114,11 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                   
                   // Calculate average group consensus for this topic
                   let groupConsensus = null;
-                  if (math && math["group-aware-consensus"] && stats.comment_tids) {
+                  // Use normalized consensus if available, fall back to raw
+                  const consensusData = math?.["group-consensus-normalized"] || math?.["group-aware-consensus"];
+                  if (consensusData && stats.comment_tids) {
                     const consensusValues = stats.comment_tids
-                      .map(tid => math["group-aware-consensus"][tid])
+                      .map(tid => consensusData[tid])
                       .filter(val => val !== undefined);
                     
                     if (consensusValues.length > 0) {
@@ -100,10 +126,14 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                     }
                   }
                   
+                  // Check if this topic can generate a collective statement
+                  const statementCheck = canGenerateCollectiveStatement(stats.comment_tids, math);
+                  
                   return {
                     clusterId,
                     topic,
-                    stats: { ...stats, group_consensus: groupConsensus }
+                    stats: { ...stats, group_consensus: groupConsensus },
+                    statementCheck
                   };
                 })
                 .sort((a, b) => {
@@ -141,7 +171,7 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                     return aValue < bValue ? 1 : aValue > bValue ? -1 : 0;
                   }
                 })
-                .map(({ clusterId, topic, stats }) => (
+                .map(({ clusterId, topic, stats, statementCheck }) => (
                   <tr key={clusterId} style={{ borderBottom: "1px solid #ccc" }}>
                     <td style={{ padding: "10px" }}>
                       <a 
@@ -173,18 +203,27 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                       <div style={{ display: 'flex', gap: '5px', justifyContent: 'center', alignItems: 'center' }}>
                         <button 
                           style={{
-                            backgroundColor: "transparent",
-                            color: "#666",
-                            border: "1px solid #ccc",
+                            backgroundColor: statementCheck.canGenerate ? "#4CAF50" : "#f5f5f5",
+                            color: statementCheck.canGenerate ? "white" : "#ccc",
+                            border: statementCheck.canGenerate ? "1px solid #45a049" : "1px solid #ccc",
                             padding: "3px 6px",
                             borderRadius: "3px",
-                            cursor: "pointer",
+                            cursor: statementCheck.canGenerate ? "pointer" : "not-allowed",
                             fontSize: "0.8em",
-                            whiteSpace: "nowrap"
+                            whiteSpace: "nowrap",
+                            fontWeight: statementCheck.canGenerate ? "500" : "normal"
                           }}
-                          onClick={() => onTopicSelect({ name: topic.topic_name, key: topic.topic_key })}
+                          onClick={() => {
+                            if (statementCheck.canGenerate) {
+                              onTopicSelect({ name: topic.topic_name, key: topic.topic_key });
+                            }
+                          }}
+                          title={statementCheck.canGenerate ? 
+                            `Generate collective statement (${statementCheck.count} high-consensus comments)` : 
+                            statementCheck.message
+                          }
                         >
-                          Collective Statement
+                          Collective Statement{statementCheck.canGenerate && ` (${statementCheck.count})`}
                         </button>
                         
                         <button 
@@ -228,7 +267,9 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
           </table>
         </div>
       );
-    });
+    })}
+    </div>
+  );
 };
 
 export default TopicTables;

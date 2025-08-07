@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import net from "../../util/net";
 import CommentList from "../lists/commentList.jsx";
+import { canGenerateCollectiveStatement, getTopicConsensusValues } from "../../util/consensusThreshold";
 
 const CollectiveStatementModal = ({
   isOpen,
@@ -52,21 +53,33 @@ const CollectiveStatementModal = ({
         topicCommentIds = topicStats.stats[topicKey].comment_tids || [];
       }
       
-      // Extract only the group consensus values we need
-      const relevantConsensus = {};
-      if (math && math["group-aware-consensus"]) {
-        topicCommentIds.forEach(tid => {
-          if (math["group-aware-consensus"][tid] !== undefined) {
-            relevantConsensus[tid] = math["group-aware-consensus"][tid];
-          }
-        });
+      // Check if this topic can generate a collective statement
+      const statementCheck = canGenerateCollectiveStatement(topicCommentIds, math);
+      
+      if (!statementCheck.canGenerate) {
+        setError(statementCheck.message);
+        setLoading(false);
+        return;
       }
+      
+      // Get only the qualifying comment IDs
+      const qualifyingTids = statementCheck.details.map(comment => comment.tid);
+      
+      // Get the consensus values only for qualifying comments
+      const relevantConsensus = {};
+      const consensusData = math["group-consensus-normalized"] || math["group-aware-consensus"];
+      qualifyingTids.forEach(tid => {
+        if (consensusData[tid] !== undefined) {
+          relevantConsensus[tid] = consensusData[tid];
+        }
+      });
 
       const response = await net.polisPost("/api/v3/collectiveStatement", {
         report_id: reportId,
         topic_key: topicKey,
         topic_name: topicName,
         group_consensus: relevantConsensus,
+        qualifying_tids: qualifyingTids  // Send the list of qualifying comment IDs
       });
 
       if (response.status === "success") {
@@ -176,8 +189,9 @@ const CollectiveStatementModal = ({
               overflow: "visible",
               maxHeight: "80vh"
             }}>
-              <h2 style={{ margin: 0, marginBottom: "20px", fontSize: "1.4em" }}>{topicName}</h2>
-              <p style={{ margin: 0, color: "#666", fontSize: "0.9em" }}>Candidate Collective Statement</p>
+              <h2 style={{ margin: 0, marginBottom: "10px", fontSize: "1.4em" }}>{topicName}</h2>
+              <p style={{ margin: 0, color: "#333", fontSize: "0.95em", fontWeight: "500" }}>Candidate Collective Statement</p>
+              <p style={{ margin: 0, marginTop: "8px", color: "#666", fontSize: "0.85em", fontStyle: "italic" }}>Based on voting trends thus far</p>
             </div>
           </div>
           

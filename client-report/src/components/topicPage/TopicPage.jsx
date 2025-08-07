@@ -6,6 +6,7 @@ import TopicBeeswarm from "../topicStats/visualizations/TopicBeeswarm.jsx";
 import AllCommentsScatterplot from "../topicStats/visualizations/AllCommentsScatterplot.jsx";
 import CommentList from "../lists/commentList.jsx";
 import * as globals from "../globals";
+import { canGenerateCollectiveStatement, getTopicConsensusValues } from "../../util/consensusThreshold";
 
 const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCount, formatTid, voteColors, onBack }) => {
   const [loading, setLoading] = useState(true);
@@ -90,11 +91,12 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
             setTopicComments(topicCommentsData);
             
             // Sort by group consensus
-            if (math && math["group-aware-consensus"]) {
+            const consensusData = math?.["group-consensus-normalized"] || math?.["group-aware-consensus"];
+            if (consensusData) {
               const sorted = topicCommentsData
                 .map(comment => ({
                   ...comment,
-                  groupConsensus: math["group-aware-consensus"][comment.tid] || 0
+                  groupConsensus: consensusData[comment.tid] || 0
                 }))
                 .sort((a, b) => b.groupConsensus - a.groupConsensus);
               setSortedComments(sorted);
@@ -120,28 +122,45 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
     try {
       setLoadingStatement(true);
       
-      // Get group consensus values for filtering
-      const relevantConsensus = {};
-      if (math && math["group-aware-consensus"] && topicStats.comment_tids) {
-        topicStats.comment_tids.forEach(tid => {
-          if (math["group-aware-consensus"][tid] !== undefined) {
-            relevantConsensus[tid] = math["group-aware-consensus"][tid];
-          }
+      // Check if this topic can generate a collective statement
+      const statementCheck = canGenerateCollectiveStatement(topicStats.comment_tids, math);
+      
+      if (!statementCheck.canGenerate) {
+        console.log(`Skipping collective statement generation: ${statementCheck.message}`);
+        setLoadingStatement(false);
+        setCollectiveStatement({
+          insufficient: true,
+          message: statementCheck.message
         });
+        return;
       }
+      
+      // Get only the qualifying comment IDs
+      const qualifyingTids = statementCheck.details.map(comment => comment.tid);
+      
+      // Get the consensus values only for qualifying comments
+      const relevantConsensus = {};
+      const consensusData = math["group-consensus-normalized"] || math["group-aware-consensus"];
+      qualifyingTids.forEach(tid => {
+        if (consensusData[tid] !== undefined) {
+          relevantConsensus[tid] = consensusData[tid];
+        }
+      });
       
       console.log("Generating collective statement with:", {
         report_id: report_id,
         topic_key: topic_key,
         topic_name: topicData?.topic_name,
-        consensusCount: Object.keys(relevantConsensus).length
+        qualifyingCount: qualifyingTids.length,
+        qualifyingTids: qualifyingTids
       });
       
       const response = await net.polisPost("/api/v3/collectiveStatement", {
         report_id: report_id,
         topic_key: topic_key,
         topic_name: topicData?.topic_name || "",
-        group_consensus: relevantConsensus
+        group_consensus: relevantConsensus,
+        qualifying_tids: qualifyingTids  // Send the list of qualifying comment IDs
       });
       
       console.log("Collective statement response:", response);
@@ -382,11 +401,21 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
         }}>
           <p style={{
             ...globals.secondaryHeading,
-            marginBottom: 8,
+            marginBottom: 4,
             fontSize: "18px",
             letterSpacing: "0.5px",
             textTransform: "uppercase"
-          }}>Collective Statement</p>
+          }}>Candidate Collective Statement</p>
+          <p style={{
+            ...globals.paragraph,
+            fontSize: "14px",
+            lineHeight: 1.6,
+            color: "#666",
+            marginBottom: 20,
+            fontStyle: "italic"
+          }}>
+            Based on voting trends thus far
+          </p>
           
           {loadingStatement && (
             <div style={{ 
@@ -399,7 +428,24 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
             </div>
           )}
           
-          {collectiveStatement && !collectiveStatement.error && (() => {
+          {collectiveStatement && collectiveStatement.insufficient && (
+            <div style={{ 
+              padding: "20px",
+              backgroundColor: "#fff3cd",
+              border: "1px solid #ffeaa7",
+              borderRadius: "8px",
+              marginTop: 20
+            }}>
+              <p style={{ color: "#856404", margin: 0 }}>
+                <strong>Insufficient consensus:</strong> {collectiveStatement.message}
+              </p>
+              <p style={{ color: "#856404", margin: "10px 0 0 0", fontSize: "14px" }}>
+                Collective statements require topics with strong cross-group agreement to ensure meaningful representation.
+              </p>
+            </div>
+          )}
+          
+          {collectiveStatement && !collectiveStatement.error && !collectiveStatement.insufficient && (() => {
             // Extract all citations from the collective statement
             const citationIds = [];
             const paragraphs = collectiveStatement.paragraphs || collectiveStatement.content?.paragraphs || [];

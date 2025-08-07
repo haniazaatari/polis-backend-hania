@@ -67,10 +67,14 @@ async function generateCollectiveStatement(
   const systemPrompt = `You are a professional facilitator analyzing voting patterns across different participant groups. Your primary focus is on understanding how different groups voted on comments - looking for patterns of agreement within and between groups. Use the voting data to identify shared perspectives and create collective statements that reflect the actual voting consensus.`;
 
   const userPrompt = `<task>
-Analyze the voting patterns in this topic to write a collective statement. Focus on:
-1. Comments with HIGH agreement rates (>70% agree) - these show consensus
-2. Comments with MANY total votes - these engaged many participants
-3. Voting patterns BETWEEN groups - look for comments where multiple groups voted similarly
+Analyze the voting patterns in this topic to write a collective statement. 
+
+IMPORTANT CONTEXT: All comments provided have already been filtered to meet strict criteria:
+- Each has ≥80% consensus (normalized group-aware consensus)
+- Each has ≥5% participation from EVERY group
+- These represent the highest consensus comments from the topic
+
+Since all comments already meet high consensus thresholds, focus on synthesizing them into a coherent statement rather than filtering further.
 
 CRITICAL WRITING RULES:
 - Write ONLY in first person plural ("We believe...", "We agree...", "We support...")
@@ -195,7 +199,7 @@ You MUST respond with valid JSON that follows the exact schema above. Each claus
 export async function handle_POST_collectiveStatement(req: Request, res: Response) {
   logger.info("CollectiveStatement API request received");
 
-  const { report_id, topic_key, topic_name } = req.body;
+  const { report_id, topic_key, topic_name, qualifying_tids } = req.body;
   
   if (!report_id || !topic_key || !topic_name) {
     return res.status(400).json({
@@ -228,21 +232,50 @@ export async function handle_POST_collectiveStatement(req: Request, res: Respons
       });
     }
     
-    // Filter and rank comments by group-aware consensus
+    // Filter comments based on client-side validation
     const groupConsensus = req.body.group_consensus;
     let filteredComments = topicComments;
     
-    if (groupConsensus && Object.keys(groupConsensus).length > 0) {
+    if (qualifying_tids && qualifying_tids.length > 0) {
+      // Use the pre-filtered qualifying comment IDs from the client
+      // These have already passed the 0.8 consensus threshold and 5% group participation requirement
+      const qualifyingSet = new Set(qualifying_tids);
+      filteredComments = topicComments.filter(comment => 
+        qualifyingSet.has(comment.comment_id)
+      );
+      
+      // Add group consensus to filtered comments
+      filteredComments = filteredComments.map(comment => ({
+        ...comment,
+        group_consensus: groupConsensus[comment.comment_id] || 0
+      }));
+      
+      // Sort by group consensus (descending) to prioritize highest consensus comments
+      filteredComments.sort((a, b) => b.group_consensus - a.group_consensus);
+      
+      logger.info(`Using ${filteredComments.length} pre-qualified comments from client (from ${topicComments.length} total)`);
+      
+      if (filteredComments.length > 0) {
+        logger.info(`Consensus range: ${filteredComments[0].group_consensus.toFixed(3)} to ${filteredComments[filteredComments.length - 1].group_consensus.toFixed(3)}`);
+      }
+      
+      // Validate minimum comment requirement (should match client-side threshold)
+      const MIN_COMMENTS = 3;
+      if (filteredComments.length < MIN_COMMENTS) {
+        return res.json({
+          status: "error",
+          message: `Not enough qualifying comments. Need at least ${MIN_COMMENTS} comments with ≥0.8 consensus and ≥5% participation from every group. Only ${filteredComments.length} qualify.`,
+        });
+      }
+    } else if (groupConsensus && Object.keys(groupConsensus).length > 0) {
+      // Fallback to old logic if no qualifying_tids provided (for backwards compatibility)
+      logger.warn(`No qualifying_tids provided, using legacy filtering logic`);
+      
       // Add group consensus to each comment
       filteredComments = topicComments.map(comment => ({
         ...comment,
         group_consensus: groupConsensus[comment.comment_id] || 0
       }));
-      
-      // Debug: Log a sample to verify mapping
-      if (filteredComments.length > 0) {
-        logger.info(`Sample comment with consensus: ID ${filteredComments[0].comment_id}, consensus: ${filteredComments[0].group_consensus}`);
-      }
       
       // Filter out comments with less than 20 votes
       filteredComments = filteredComments.filter(c => c.total_votes >= 20);
@@ -255,11 +288,6 @@ export async function handle_POST_collectiveStatement(req: Request, res: Respons
       filteredComments = filteredComments.slice(0, quartileSize);
       
       logger.info(`Filtered from ${topicComments.length} to ${filteredComments.length} comments (min 20 votes, top quartile by consensus)`);
-      
-      // Debug: Log the consensus values of top and bottom comments
-      if (filteredComments.length > 0) {
-        logger.info(`Top comment consensus: ${filteredComments[0].group_consensus}, Bottom comment consensus: ${filteredComments[filteredComments.length - 1].group_consensus}`);
-      }
     }
     
     // Generate the collective statement

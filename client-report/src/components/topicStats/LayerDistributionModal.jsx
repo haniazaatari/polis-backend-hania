@@ -24,7 +24,11 @@ const LayerDistributionModal = ({
   }, [isOpen, onClose]);
 
   useEffect(() => {
-    if (!isOpen || !topics || !statsData || !math || !math["group-aware-consensus"] || !comments) return;
+    if (!isOpen || !topics || !statsData || !math || !comments) return;
+    
+    // Use normalized consensus if available, fall back to raw
+    const consensusData = math["group-consensus-normalized"] || math["group-aware-consensus"];
+    if (!consensusData) return;
 
     // Prepare data for boxplot
     const traces = [];
@@ -38,7 +42,7 @@ const LayerDistributionModal = ({
       const commentsData = [];
       
       stats.comment_tids.forEach(tid => {
-        const consensus = math["group-aware-consensus"][tid];
+        const consensus = consensusData[tid];
         if (consensus !== undefined) {
           // Find the comment to check vote count
           const comment = comments?.find(c => c.tid === tid);
