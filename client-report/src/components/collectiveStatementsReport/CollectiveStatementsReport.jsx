@@ -13,6 +13,8 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
   const containerRef = useRef(null);
   const [cardWidth, setCardWidth] = useState(1400); // Default width - wider for better content display
   const [cardHeight, setCardHeight] = useState('600px'); // Default height
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [isEmbedded, setIsEmbedded] = useState(false);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
 
@@ -42,6 +44,13 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
       handlePrevious();
     }
   };
+
+  // Check if embedded
+  useEffect(() => {
+    // Check if we're in an iframe
+    const embedded = window.self !== window.top;
+    setIsEmbedded(embedded);
+  }, []);
 
   // Keyboard navigation
   useEffect(() => {
@@ -87,6 +96,7 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
   // Update card width and height on resize
   useEffect(() => {
     const updateCardDimensions = () => {
+      setWindowWidth(window.innerWidth);
       if (containerRef.current) {
         const containerWidth = containerRef.current.offsetWidth;
         setCardWidth(Math.min(containerWidth * 0.9, 1600)); // 90% of container or max 1600px
@@ -231,15 +241,18 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
         <div style={{
           flex: 1,
           display: "flex",
+          flexDirection: windowWidth < 992 ? "column" : "row",
           overflow: "hidden",
           height: cardHeight
         }}>
           {/* Statement Text */}
           <div style={{
-            flex: "0 0 40%",
+            flex: windowWidth < 992 ? "0 0 auto" : "0 0 40%",
             padding: "30px",
             overflowY: "auto",
-            borderRight: "1px solid #e0e0e0"
+            borderRight: windowWidth < 992 ? "none" : "1px solid #e0e0e0",
+            borderBottom: windowWidth < 992 ? "1px solid #e0e0e0" : "none",
+            maxHeight: windowWidth < 992 ? "40%" : "none"
           }}>
             <h3 style={{ marginTop: 0, marginBottom: "20px", color: "#333" }}>Statement</h3>
             {statement.statement_data && statement.statement_data.paragraphs && 
@@ -280,24 +293,31 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
 
           {/* Cited Comments */}
           <div style={{
-            flex: "0 0 60%",
+            flex: windowWidth < 992 ? "1 1 auto" : "0 0 60%",
             padding: "30px",
-            overflowY: "auto",
-            backgroundColor: "#fafafa"
+            overflowY: windowWidth < 992 ? "hidden" : "auto",
+            overflowX: windowWidth < 992 ? "auto" : "hidden",
+            backgroundColor: "#fafafa",
+            minHeight: 0
           }}>
             <h3 style={{ marginTop: 0, marginBottom: "20px", color: "#333" }}>
               Cited Comments ({uniqueCitations.length})
             </h3>
             {uniqueCitations.length > 0 ? (
-              <CommentList
-                conversation={conversation}
-                ptptCount={ptptCount}
-                math={math}
-                formatTid={formatTid}
-                tidsToRender={uniqueCitations}
-                comments={comments}
-                voteColors={voteColors}
-              />
+              <div style={{
+                display: windowWidth < 992 ? "flex" : "block",
+                width: windowWidth < 992 ? "max-content" : "auto"
+              }}>
+                <CommentList
+                  conversation={conversation}
+                  ptptCount={ptptCount}
+                  math={math}
+                  formatTid={formatTid}
+                  tidsToRender={uniqueCitations}
+                  comments={comments}
+                  voteColors={voteColors}
+                />
+              </div>
             ) : (
               <p style={{ color: "#999", fontStyle: "italic" }}>No comments cited</p>
             )}
@@ -315,9 +335,11 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
         backgroundColor: "#f5f6fa",
         minHeight: "100vh"
       }}>
-        <div style={{ padding: "20px" }}>
-          <Heading conversation={conversation} />
-        </div>
+        {!isEmbedded && (
+          <div style={{ padding: "20px" }}>
+            <Heading conversation={conversation} />
+          </div>
+        )}
         <div style={{ 
           marginTop: 100, 
           textAlign: "center",
@@ -347,11 +369,11 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
   if (statements.length === 0) {
     return (
       <div style={{ maxWidth: "100%", margin: "0 auto", padding: "20px" }}>
-        <Heading conversation={conversation} />
+        {!isEmbedded && <Heading conversation={conversation} />}
         <div style={{ marginTop: 40, textAlign: "center" }}>
           <p>No collective statements have been generated yet.</p>
         </div>
-        <Footer />
+        {!isEmbedded && <Footer />}
       </div>
     );
   }
@@ -363,9 +385,11 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
       backgroundColor: "#f5f6fa",
       minHeight: "100vh"
     }}>
-      <div style={{ padding: "20px" }}>
-        <Heading conversation={conversation} />
-      </div>
+      {!isEmbedded && (
+        <div style={{ padding: "20px" }}>
+          <Heading conversation={conversation} />
+        </div>
+      )}
       
       <div style={{ 
         position: "relative",
@@ -489,9 +513,11 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
         </div>
       </div>
 
-      <div style={{ padding: "20px" }}>
-        <Footer />
-      </div>
+      {!isEmbedded && (
+        <div style={{ padding: "20px" }}>
+          <Footer />
+        </div>
+      )}
     </div>
   );
 };
