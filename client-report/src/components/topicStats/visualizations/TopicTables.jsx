@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { canGenerateCollectiveStatement, THRESHOLDS } from '../../../util/consensusThreshold';
 
-const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot, onBeeswarm, onLayerDistribution, onViewTopic }) => {
+const TopicTables = ({ latestRun, statsData, math, report_id, onTopicSelect, onScatterplot, onBeeswarm, onLayerDistribution, onViewTopic }) => {
   const [sortConfig, setSortConfig] = useState({ key: 'comment_count', direction: 'desc' });
   
   const handleSort = (key) => {
@@ -31,7 +31,7 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
           borderRadius: '4px',
           lineHeight: 1.4
         }}>
-          Collective statements require at least {THRESHOLDS.MIN_COMMENTS} comments with 
+          Candidate collective statements require at least {THRESHOLDS.MIN_COMMENTS} comments with 
           ≥{(THRESHOLDS.MIN_CONSENSUS * 100)}% consensus and 
           ≥{(THRESHOLDS.MIN_GROUP_PARTICIPATION * 100)}% participation from every group
         </span>
@@ -175,11 +175,7 @@ const TopicTables = ({ latestRun, statsData, math, onTopicSelect, onScatterplot,
                   <tr key={clusterId} style={{ borderBottom: "1px solid #ccc" }}>
                     <td style={{ padding: "10px" }}>
                       <a 
-                        href="#"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          onViewTopic({ name: topic.topic_name, key: topic.topic_key });
-                        }}
+                        href={`/topicStats/${report_id}/${topic.topic_key}`}
                         style={{
                           color: "#0066cc",
                           textDecoration: "none",

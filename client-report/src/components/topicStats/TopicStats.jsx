@@ -23,8 +23,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
   const [layerModalOpen, setLayerModalOpen] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState(null);
-  const [showTopicPage, setShowTopicPage] = useState(false);
-  const [selectedTopicKey, setSelectedTopicKey] = useState(null);
+  // Removed showTopicPage and selectedTopicKey state - now using URL routing
   
   // Calculate metrics from comments data
   const calculateMetricsFromComments = (commentTids, allComments) => {
@@ -159,26 +158,6 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
   const latestRunKey = Object.keys(topicsData || {}).sort().reverse()[0];
   const latestRun = topicsData?.[latestRunKey];
 
-  // If showing a topic page, render that instead
-  if (showTopicPage && selectedTopicKey) {
-    return (
-      <TopicPage
-        conversation={conversation}
-        report_id={report_id}
-        topic_key={selectedTopicKey}
-        math={math}
-        comments={comments}
-        ptptCount={ptptCount}
-        formatTid={formatTid}
-        voteColors={voteColors}
-        onBack={() => {
-          setShowTopicPage(false);
-          setSelectedTopicKey(null);
-        }}
-      />
-    );
-  }
-
   return (
     <div style={{ margin: "0px 10px", maxWidth: "1200px", padding: "20px" }} data-testid="topic-stats">
       <Heading conversation={conversation} />
@@ -197,8 +176,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
               math={math}
               voteColors={voteColors}
               onTopicClick={(topic) => {
-                setSelectedTopicKey(topic.topic_key);
-                setShowTopicPage(true);
+                window.location.href = `/topicStats/${report_id}/${topic.topic_key}`;
               }}
             />
             
@@ -207,6 +185,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
               latestRun={latestRun}
               statsData={statsData}
               math={math}
+              report_id={report_id}
               onTopicSelect={(topic) => {
                 setSelectedTopic(topic);
                 setModalOpen(true);
@@ -224,8 +203,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
                 setLayerModalOpen(true);
               }}
               onViewTopic={(topic) => {
-                setSelectedTopicKey(topic.key);
-                setShowTopicPage(true);
+                window.location.href = `/topicStats/${report_id}/${topic.key}`;
               }}
             />
           </div>

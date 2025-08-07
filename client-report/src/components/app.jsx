@@ -30,15 +30,23 @@ import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
 import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
 import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
 import TopicStats from "./topicStats/TopicStats.jsx";
+import TopicPage from "./topicPage/TopicPage.jsx";
 import { enrichMathWithNormalizedConsensus } from "../util/normalizeConsensus.js";
 
 const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicHierarchy/2arcefpshi" or "/topicStats/2arcefpshi"
-const route_type = pathname.split("/")[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicHierarchy", or "topicStats"
+const pathParts = pathname.split("/");
+const route_type = pathParts[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicHierarchy", or "topicStats"
 
-const report_id = pathname.split("/")[2];
+const report_id = pathParts[2];
+
+// For topic detail pages: /topicStats/report_id/topic_key
+let topic_key = null;
+if (route_type === "topicStats" && pathParts.length > 3) {
+  topic_key = pathParts[3];
+}
 
 // Debug the route
-console.log("ROUTE CHECK:", { pathname, route_type, report_id });
+console.log("ROUTE CHECK:", { pathname, route_type, report_id, topic_key });
 
 function assertExists(obj, key) {
   if (typeof obj[key] === "undefined") {
@@ -854,6 +862,28 @@ const App = (props) => {
   }
 
   if (route_type === "topicStats") {
+    // If we have a topic_key, render the individual topic page
+    if (topic_key) {
+      console.log("RENDERING: TopicPage for topic", topic_key);
+      return (
+        <TopicPage
+          conversation={conversation}
+          report_id={report_id}
+          topic_key={topic_key}
+          math={math}
+          comments={comments}
+          ptptCount={ptptCount}
+          formatTid={formatTid}
+          voteColors={voteColors}
+          onBack={() => {
+            // Navigate back to the topic stats overview
+            window.location.href = `/topicStats/${report_id}`;
+          }}
+        />
+      );
+    }
+    
+    // Otherwise render the topic stats overview
     console.log("RENDERING: TopicStats");
     return (
       <TopicStats

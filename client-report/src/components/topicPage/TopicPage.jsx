@@ -15,6 +15,7 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
   const [collectiveStatement, setCollectiveStatement] = useState(null);
   const [loadingStatement, setLoadingStatement] = useState(false);
   const [statementGenerated, setStatementGenerated] = useState(false);
+  const [statementMetadata, setStatementMetadata] = useState(null);
   const [topicComments, setTopicComments] = useState([]);
   const [sortedComments, setSortedComments] = useState([]);
   const [topicNarrative, setTopicNarrative] = useState(null);
@@ -116,11 +117,54 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
     }
   }, [report_id, topic_key, comments, math]);
 
+  const checkExistingStatements = async () => {
+    try {
+      const response = await net.polisGet("/api/v3/collectiveStatement", {
+        report_id: report_id
+      });
+      
+      if (response.status === "success" && response.statements && response.statements.length > 0) {
+        // Find statements for this topic
+        const topicStatements = response.statements.filter(stmt => 
+          stmt.topic_key === topic_key
+        );
+        
+        if (topicStatements.length > 0) {
+          // Use the most recent statement
+          const mostRecent = topicStatements.sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )[0];
+          
+          return mostRecent;
+        }
+      }
+      return null;
+    } catch (err) {
+      console.log("Error checking existing statements:", err);
+      return null;
+    }
+  };
+
   const generateCollectiveStatement = async () => {
     if (loadingStatement || statementGenerated) return;
     
     try {
       setLoadingStatement(true);
+      
+      // First check if we have an existing statement
+      const existingStatement = await checkExistingStatements();
+      
+      if (existingStatement) {
+        console.log("Using existing collective statement from", existingStatement.created_at);
+        setCollectiveStatement(existingStatement.statement_data);
+        setStatementGenerated(true);
+        setStatementMetadata({
+          created_at: existingStatement.created_at,
+          model: existingStatement.model
+        });
+        setLoadingStatement(false);
+        return;
+      }
       
       // Check if this topic can generate a collective statement
       const statementCheck = canGenerateCollectiveStatement(topicStats.comment_tids, math);
@@ -168,6 +212,10 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
       if (response.status === "success" && response.statementData) {
         setCollectiveStatement(response.statementData);
         setStatementGenerated(true);
+        setStatementMetadata({
+          created_at: response.created_at,
+          model: response.model
+        });
       } else if (response.statement) {
         setCollectiveStatement(response.statement);
         setStatementGenerated(true);
@@ -183,7 +231,7 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
       // Show user-friendly error message
       setCollectiveStatement({ 
         error: true, 
-        message: "Unable to generate collective statement. Please try again later." 
+        message: "Unable to generate candidate collective statement. Please try again later." 
       });
     } finally {
       setLoadingStatement(false);
@@ -320,7 +368,7 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
                 letterSpacing: "1px", 
                 color: "#666",
                 marginBottom: "8px"
-              }}>Agree</p>
+              }}>Total Agree Votes</p>
               <p style={{ 
                 fontFamily: "Georgia, serif", 
                 fontSize: "3rem", 
@@ -341,7 +389,7 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
                 letterSpacing: "1px", 
                 color: "#666",
                 marginBottom: "8px"
-              }}>Disagree</p>
+              }}>Total Disagree Votes</p>
               <p style={{ 
                 fontFamily: "Georgia, serif", 
                 fontSize: "3rem", 
@@ -415,6 +463,12 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
             fontStyle: "italic"
           }}>
             Based on voting trends thus far
+            {statementMetadata && (
+              <span style={{ marginLeft: "10px", fontSize: "13px", color: "#888", fontStyle: "normal" }}>
+                • Generated {new Date(statementMetadata.created_at).toLocaleDateString()} at {new Date(statementMetadata.created_at).toLocaleTimeString()} 
+                {statementMetadata.model && ` (${statementMetadata.model.includes('claude') ? 'Claude Opus 4' : statementMetadata.model})`}
+              </span>
+            )}
           </p>
           
           {loadingStatement && (
@@ -424,7 +478,7 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
               border: "1px solid #e0e0e0",
               borderRadius: "8px"
             }}>
-              <p style={{ color: "#666", fontStyle: "italic", margin: 0 }}>Generating collective statement...</p>
+              <p style={{ color: "#666", fontStyle: "italic", margin: 0 }}>Generating candidate collective statement...</p>
             </div>
           )}
           
@@ -440,7 +494,7 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
                 <strong>Insufficient consensus:</strong> {collectiveStatement.message}
               </p>
               <p style={{ color: "#856404", margin: "10px 0 0 0", fontSize: "14px" }}>
-                Collective statements require topics with strong cross-group agreement to ensure meaningful representation.
+                Candidate collective statements require topics with strong cross-group agreement to ensure meaningful representation.
               </p>
             </div>
           )}
@@ -557,7 +611,7 @@ const TopicPage = ({ conversation, report_id, topic_key, math, comments, ptptCou
               borderRadius: "8px"
             }}>
               <p style={{ color: "#666", fontStyle: "italic", margin: 0 }}>
-                Unable to generate collective statement. Please try refreshing the page.
+                Unable to generate candidate collective statement. Please try refreshing the page.
               </p>
             </div>
           )}

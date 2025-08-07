@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import logger from "../utils/logger";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, ScanCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { getZidFromReport } from "../utils/parameter";
 import Config from "../config";
 import Anthropic from "@anthropic-ai/sdk";
@@ -77,7 +77,7 @@ IMPORTANT CONTEXT: All comments provided have already been filtered to meet stri
 Since all comments already meet high consensus thresholds, focus on synthesizing them into a coherent statement rather than filtering further.
 
 CRITICAL WRITING RULES:
-- Write ONLY in first person plural ("We believe...", "We agree...", "We support...")
+- Write ONLY in first person plural ("We found consensus on...", "We agree...", "We support...")
 - NEVER say "of participants", "of those voting", "of those who expressed an opinion"
 - DO NOT include percentages or voting statistics in the text
 - DO NOT qualify statements with voting data
@@ -334,16 +334,78 @@ export async function handle_POST_collectiveStatement(req: Request, res: Respons
   }
 }
 
+
 /**
  * Handler for GET /api/v3/collectiveStatement
+ * Can get a single statement by ID or all statements for a report
  */
 export async function handle_GET_collectiveStatement(req: Request, res: Response) {
-  const { statement_id } = req.query;
+  const { statement_id, report_id } = req.query;
   
+  // If report_id is provided, get all statements for that conversation
+  if (report_id) {
+    try {
+      const zid = await getZidFromReport(report_id as string);
+      if (!zid) {
+        return res.status(404).json({
+          status: "error",
+          message: "Could not find conversation for report_id",
+        });
+      }
+
+      // Query all items where zid matches
+      const params = {
+        TableName: "Delphi_CollectiveStatement",
+        FilterExpression: "zid = :zid",
+        ExpressionAttributeValues: {
+          ":zid": zid.toString()
+        }
+      };
+
+      const statements: any[] = [];
+      let lastEvaluatedKey;
+
+      do {
+        const command: any = {
+          ...params,
+          ExclusiveStartKey: lastEvaluatedKey
+        };
+        
+        const data = await docClient.send(new ScanCommand(command));
+        if (data.Items) {
+          statements.push(...data.Items);
+        }
+        lastEvaluatedKey = data.LastEvaluatedKey;
+      } while (lastEvaluatedKey);
+
+      // Parse the JSON data in each statement
+      const parsedStatements = statements.map(stmt => ({
+        ...stmt,
+        statement_data: stmt.statement_data ? JSON.parse(stmt.statement_data) : null,
+        comments_data: stmt.comments_data ? JSON.parse(stmt.comments_data) : null
+      }));
+
+      return res.json({
+        status: "success",
+        statements: parsedStatements,
+        count: parsedStatements.length
+      });
+
+    } catch (err: any) {
+      logger.error(`Error getting statements for report: ${err.message}`);
+      return res.status(500).json({
+        status: "error",
+        message: "Error retrieving collective statements",
+        error: err.message
+      });
+    }
+  }
+  
+  // Original single statement logic
   if (!statement_id) {
     return res.status(400).json({
       status: "error",
-      message: "statement_id is required",
+      message: "statement_id or report_id is required",
     });
   }
 

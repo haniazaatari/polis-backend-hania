@@ -20,6 +20,7 @@ const CollectiveStatementModal = ({
   const [statementData, setStatementData] = useState(null);
   const [commentsData, setCommentsData] = useState(null);
   const [error, setError] = useState(null);
+  const [statementMetadata, setStatementMetadata] = useState(null);
 
   useEffect(() => {
     if (isOpen && topicKey && reportId) {
@@ -38,10 +39,53 @@ const CollectiveStatementModal = ({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
+  const checkExistingStatements = async () => {
+    try {
+      const response = await net.polisGet("/api/v3/collectiveStatement", {
+        report_id: reportId
+      });
+      
+      if (response.status === "success" && response.statements && response.statements.length > 0) {
+        // Find statements for this topic
+        const topicStatements = response.statements.filter(stmt => 
+          stmt.topic_key === topicKey
+        );
+        
+        if (topicStatements.length > 0) {
+          // Use the most recent statement
+          const mostRecent = topicStatements.sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )[0];
+          
+          return mostRecent;
+        }
+      }
+      return null;
+    } catch (err) {
+      console.log("Error checking existing statements:", err);
+      return null;
+    }
+  };
+
   const generateStatement = async () => {
     try {
       setLoading(true);
       setError(null);
+      
+      // First check if we have an existing statement
+      const existingStatement = await checkExistingStatements();
+      
+      if (existingStatement) {
+        console.log("Using existing collective statement from", existingStatement.created_at);
+        setStatementData(existingStatement.statement_data);
+        setCommentsData(existingStatement.comments_data);
+        setStatementMetadata({
+          created_at: existingStatement.created_at,
+          model: existingStatement.model
+        });
+        setLoading(false);
+        return;
+      }
 
       // Only send group-aware consensus for comments in this topic
       const topicStats = await net.polisGet("/api/v3/topicStats", {
@@ -86,6 +130,10 @@ const CollectiveStatementModal = ({
         console.log("Collective statement response:", response);
         setStatementData(response.statementData);
         setCommentsData(response.commentsData);
+        setStatementMetadata({
+          created_at: response.created_at,
+          model: response.model
+        });
       } else {
         setError(response.message || "Failed to generate statement");
       }
@@ -124,6 +172,7 @@ const CollectiveStatementModal = ({
       setStatementData(null);
       setCommentsData(null);
       setError(null);
+      setStatementMetadata(null);
     }
   }, [isOpen]);
 
@@ -211,7 +260,7 @@ const CollectiveStatementModal = ({
                 height: "100%",
                 flexDirection: "column"
               }}>
-                <p>Generating collective statement...</p>
+                <p>Generating candidate collective statement...</p>
                 <p style={{ fontSize: "0.85em", color: "#666", marginTop: "10px" }}>
                   This may take a moment as we analyze voting patterns and comments.
                 </p>
@@ -252,7 +301,15 @@ const CollectiveStatementModal = ({
                     padding: "30px",
                     overflowY: "auto"
                   }}>
-                    <h3 style={{ marginTop: 0, marginBottom: "20px", fontSize: "1.2em" }}>Statement</h3>
+                    <div style={{ marginBottom: "20px" }}>
+                      <h3 style={{ marginTop: 0, marginBottom: "5px", fontSize: "1.2em" }}>Candidate Collective Statement</h3>
+                      {statementMetadata && (
+                        <p style={{ margin: 0, fontSize: "0.85em", color: "#666" }}>
+                          Generated {new Date(statementMetadata.created_at).toLocaleDateString()} at {new Date(statementMetadata.created_at).toLocaleTimeString()} 
+                          {statementMetadata.model && ` (${statementMetadata.model.includes('claude') ? 'Claude Opus 4' : statementMetadata.model})`}
+                        </p>
+                      )}
+                    </div>
                     <div
                       style={{
                         lineHeight: "1.8",
@@ -303,8 +360,7 @@ const CollectiveStatementModal = ({
                     }}
                   >
                     <p style={{ margin: 0, fontSize: "0.85em", color: "#666", marginBottom: "15px" }}>
-                      <strong>Note:</strong> This candidate collective statement was generated using AI (Claude Opus
-                      4) based on the voting patterns and comments from all participants. It represents
+                      <strong>Note:</strong> This candidate collective statement was generated using AI based on the voting patterns and comments from all participants. It represents
                       areas of shared understanding and consensus on this topic.
                     </p>
                     <button
