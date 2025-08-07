@@ -12,12 +12,13 @@ let fetchError = null;
 
 try {
   const apiParams = new URLSearchParams({
-    conversation_id: conversation_id,
+    conversation_id: conversation_id as string,
   });
 
   const xid = Astro.url.searchParams.get('xid');
   const x_name = Astro.url.searchParams.get('x_name');
   const x_profile_image_url = Astro.url.searchParams.get('x_profile_image_url');
+
 
   if (xid) {
     apiParams.append('xid', xid);
@@ -28,6 +29,7 @@ try {
   if (x_profile_image_url) {
     apiParams.append('x_profile_image_url', x_profile_image_url);
   }
+
 
   const apiUrl = `${import.meta.env.INTERNAL_SERVICE_URL}/participationInit?conversation_id=${conversation_id}`;
   
@@ -80,10 +82,12 @@ if (initialData) {
 
   isConversationActive = initialData.conversation.is_active;
 }
+
+const hideHeader = Astro.url.searchParams.get('hide_header');
 ---
 <Layout title={surveyDetails?.title ?? 'Loading Conversation...'}>
   <div class="container">
-    <Header />
+    {hideHeader ? null : <Header />}
 
     {fetchError ? (
       <div class="error-message">
