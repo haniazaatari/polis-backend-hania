@@ -378,8 +378,49 @@ export async function handle_GET_collectiveStatement(req: Request, res: Response
         lastEvaluatedKey = data.LastEvaluatedKey;
       } while (lastEvaluatedKey);
 
-      // Parse the JSON data in each statement
-      const parsedStatements = statements.map(stmt => ({
+      // Deduplicate by layer_cluster - keep only the most recent statement for each topic
+      const deduplicated = new Map();
+      statements.forEach(stmt => {
+        // Extract layer_cluster from topic_key (e.g., "0_5" or from topic_name like "0_5: Topic Name")
+        let layerCluster = null;
+        
+        // Try to extract from topic_key first
+        if (stmt.topic_key) {
+          // Handle both formats: "uuid#0#5" or "0_5"
+          if (stmt.topic_key.includes('#')) {
+            const parts = stmt.topic_key.split('#');
+            if (parts.length >= 3) {
+              layerCluster = `${parts[1]}_${parts[2]}`;
+            }
+          } else if (stmt.topic_key.includes('_')) {
+            layerCluster = stmt.topic_key;
+          }
+        }
+        
+        // Fallback: try to extract from topic_name (e.g., "0_5: Topic Name")
+        if (!layerCluster && stmt.topic_name) {
+          const match = stmt.topic_name.match(/^(\d+_\d+):/);
+          if (match) {
+            layerCluster = match[1];
+          }
+        }
+        
+        if (layerCluster) {
+          // Keep the most recent statement for this layer_cluster
+          if (!deduplicated.has(layerCluster) || 
+              new Date(stmt.created_at) > new Date(deduplicated.get(layerCluster).created_at)) {
+            deduplicated.set(layerCluster, stmt);
+          }
+        } else {
+          // If we can't extract layer_cluster, keep the statement with full key
+          deduplicated.set(stmt.zid_topic_jobid, stmt);
+        }
+      });
+
+      const uniqueStatements = Array.from(deduplicated.values());
+
+      // Parse the JSON data in each unique statement
+      const parsedStatements = uniqueStatements.map(stmt => ({
         ...stmt,
         statement_data: stmt.statement_data ? JSON.parse(stmt.statement_data) : null,
         comments_data: stmt.comments_data ? JSON.parse(stmt.comments_data) : null

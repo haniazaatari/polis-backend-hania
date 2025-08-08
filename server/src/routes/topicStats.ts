@@ -168,8 +168,12 @@ export async function handle_GET_topicStats(req: Request, res: Response) {
     allAssignments.forEach((assignment) => {
       const commentId = parseInt(assignment.comment_id);
       
-      // Check each layer
-      for (let layer = 0; layer < 4; layer++) {
+      // Check each layer - dynamically determine max layers from the data
+      // Look for all layer fields in the assignment
+      const layerFields = Object.keys(assignment).filter(key => key.match(/^layer\d+_cluster_id$/));
+      const maxLayer = Math.max(...layerFields.map(field => parseInt(field.match(/layer(\d+)/)[1])));
+      
+      for (let layer = 0; layer <= maxLayer; layer++) {
         const clusterId = assignment[`layer${layer}_cluster_id`];
         if (clusterId !== undefined && clusterId !== -1) {
           const topicLookupKey = `${layer}_${clusterId}`;
