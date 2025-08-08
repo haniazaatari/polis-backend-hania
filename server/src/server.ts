@@ -231,7 +231,9 @@ function initializePolisHelpers() {
       };
     },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: {}): any; new (): any };
@@ -294,7 +296,9 @@ function initializePolisHelpers() {
     res: {
       writeHead: (arg0: number) => void;
       json: (arg0: { status: number }) => void;
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: { codes: any }): void; new (): any };
@@ -354,7 +358,9 @@ function initializePolisHelpers() {
   function handle_POST_zinvites(
     req: { p: { short_url: any; zid: number; uid?: number } },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: { zinvite: string }): void; new (): any };
@@ -498,7 +504,9 @@ Email verified! You can close this tab or hit the back button.
   function handle_GET_dummyButton(
     req: { p: { button: string; uid: string } },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         end: { (): void; new (): any };
@@ -525,7 +533,9 @@ Email verified! You can close this tab or hit the back button.
   function handle_POST_tutorial(
     req: { p: { uid?: any; step: any } },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: {}): void; new (): any };
@@ -649,7 +659,9 @@ Email verified! You can close this tab or hit the back button.
   function handle_POST_upvotes(
     req: { p: { uid?: number; zid: number } },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: {}): void; new (): any };
@@ -699,7 +711,9 @@ Email verified! You can close this tab or hit the back button.
   function handle_POST_stars(
     req: { p: { zid: number; tid: number; pid: number; starred: any } },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: {}): void; new (): any };
@@ -728,7 +742,9 @@ Email verified! You can close this tab or hit the back button.
   function handle_POST_trashes(
     req: { p: { pid: number; zid: number; tid: number; trashed: any } },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: {}): void; new (): any };
@@ -885,7 +901,9 @@ Email verified! You can close this tab or hit the back button.
       };
     },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: {}): void; new (): any };
@@ -982,7 +1000,9 @@ Thanks for using Polis!
   function handle_GET_locations(
     req: { p: { zid: number; gid: any } },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: any): void; new (): any };
@@ -1026,7 +1046,9 @@ Thanks for using Polis!
   function handle_PUT_ptptois(
     req: { p: { zid: number; uid?: number; pid: number; mod: any } },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: {}): void; new (): any };
@@ -1061,7 +1083,9 @@ Thanks for using Polis!
       p: { zid: number; mod: any; uid?: number; conversation_id: string };
     },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: any): void; new (): any };
@@ -1117,7 +1141,9 @@ Thanks for using Polis!
   function handle_POST_einvites(
     req: { p: { email: any } },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: {}): void; new (): any };
@@ -1137,7 +1163,9 @@ Thanks for using Polis!
   function handle_GET_einvites(
     req: { p: { einvite: any } },
     res: {
-      status: (arg0: number) => {
+      status: (
+        arg0: number
+      ) => {
         (): any;
         new (): any;
         json: { (arg0: any): void; new (): any };

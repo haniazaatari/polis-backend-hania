@@ -1,0 +1,137 @@
+---
+import Layout from '../pages/layouts/Layout.astro';
+import Header from '../components/Header.astro';
+import Survey from '../components/Survey.jsx';
+import SurveyForm from '../components/SurveyForm.jsx'; 
+import TopicAgenda from '../components/topicAgenda/TopicAgenda.jsx';
+import { getTranslations } from '../strings/strings.js';
+
+const { conversation_id } = Astro.params;
+let initialData;
+let fetchError = null;
+
+try {
+  const apiParams = new URLSearchParams({
+    conversation_id: conversation_id as string,
+  });
+
+  const xid = Astro.url.searchParams.get('xid');
+  const x_name = Astro.url.searchParams.get('x_name');
+  const x_profile_image_url = Astro.url.searchParams.get('x_profile_image_url');
+
+
+  if (xid) {
+    apiParams.append('xid', xid);
+  }
+  if (x_name) {
+    apiParams.append('x_name', x_name);
+  }
+  if (x_profile_image_url) {
+    apiParams.append('x_profile_image_url', x_profile_image_url);
+  }
+
+
+  const apiUrl = `${import.meta.env.INTERNAL_SERVICE_URL}/participationInit?conversation_id=${conversation_id}`;
+  
+  const response = await fetch(apiUrl);
+  if (!response.ok) {
+    throw new Error(`API request failed with status: ${response.status}`);
+  }
+  initialData = await response.json();
+  if (initialData?.auth?.token) {
+    // Store the token for later use
+    try {
+      const token = initialData.auth.token;
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        if (payload.conversation_id) {
+          const tokenKey = "participant_token_" + payload.conversation_id;
+            if (window.localStorage) {
+            window.localStorage.setItem(tokenKey, token);
+          } else if (window.sessionStorage) {
+            window.sessionStorage.setItem(tokenKey, token);
+          }
+        } else {
+          console.warn("[Index] No conversation_id in JWT payload, not storing token.");
+        }
+      }
+    } catch (e) {
+      console.error("[Index] Failed to store JWT token:", e);
+    }
+  }
+} catch (error) {
+  console.error("Failed to fetch conversation data:", error);
+  fetchError = "Could not load this conversation. Please check the ID and try again.";
+}
+
+const s = await getTranslations();
+
+let surveyDetails, firstStatement, isConversationActive;
+if (initialData) {
+  surveyDetails = {
+    title: initialData.conversation.topic,
+    description: initialData.conversation.description,
+  };
+  
+  firstStatement = {
+    tid: initialData.nextComment?.tid,
+    txt: initialData.nextComment?.txt,
+    remaining: initialData.nextComment?.remaining,
+  };
+
+  isConversationActive = initialData.conversation.is_active;
+}
+
+const hideHeader = Astro.url.searchParams.get('hide_header');
+---
+<Layout title={surveyDetails?.title ?? 'Loading Conversation...'}>
+  <div class="container">
+    {hideHeader ? null : <Header />}
+
+    {fetchError ? (
+      <div class="error-message">
+        <h2>Oops!</h2>
+        <p>{fetchError}</p>
+      </div>
+    ) : initialData ? (
+      <>
+        <h1>
+          {surveyDetails?.title}
+          {!isConversationActive && <span class="closed-badge">closed</span>}
+        </h1>
+        <p class="description" set:html={surveyDetails?.description}></p>
+
+        {isConversationActive ? (
+          <>
+            <TopicAgenda 
+              client:only="react"
+              conversation={initialData.conversation}
+              conversation_id={conversation_id}
+            />
+            <p class="conversation-intro" set:html={s.participantHelpWelcomeText}></p>
+            <Survey 
+              client:load 
+              initialStatement={firstStatement}
+              conversation_id={initialData.conversation.conversation_id}
+              s={s} 
+            />
+            <SurveyForm client:load s={s} conversation_id={conversation_id} />
+          </>
+        ) : (
+          <div class="footer-spacer"></div>
+        )}
+      </>
+    ) : (
+      <p>Loading...</p>
+    )}
+
+    <div style="margin-top: 3rem;">
+      <div class="logo">p</div>
+      <div class="footer-links">
+        <a href="/privacy" target="_blank" rel="noopener noreferrer">{s.privacy}</a>
+        <a href="/tos" target="_blank" rel="noopener noreferrer">{s.TOS}</a>
+      </div>
+    </div>
+  </div>
+</Layout>
