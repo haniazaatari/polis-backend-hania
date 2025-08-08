@@ -148,7 +148,11 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
     try {
       const response = await fetch(`${import.meta.env.PUBLIC_SERVICE_URL}/topicAgenda/selections?conversation_id=${conversation.conversation_id}`, {
         method: 'GET',
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${window.localStorage.getItem(participant_token_conversation.conversation_id)}`
+        }
       });
       
       const result = await response.json();
