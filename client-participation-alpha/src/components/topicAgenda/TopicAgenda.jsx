@@ -4,6 +4,7 @@ import { extractArchetypalComments } from "./utils/archetypeExtraction";
 import LayerHeader from "./components/LayerHeader";
 import ScrollableTopicsGrid from "./components/ScrollableTopicsGrid";
 import TopicAgendaStyles from "./components/TopicAgendaStyles";
+import { getOidcToken } from "../../lib/auth";
 
 const TopicAgenda = ({ conversation, conversation_id }) => {
   const [loadWidget, setLoadWidget] = useState(false);
@@ -146,9 +147,14 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
 
   const loadPreviousSelections = async () => {
     try {
+      const token = getOidcToken();
       const response = await fetch(`${import.meta.env.PUBLIC_SERVICE_URL}/topicAgenda/selections?conversation_id=${conversation.conversation_id}`, {
         method: 'GET',
-        credentials: 'include'
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       });
       
       const result = await response.json();

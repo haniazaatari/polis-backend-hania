@@ -95,8 +95,8 @@ echo "Docker cache cleared"
 sudo /usr/local/bin/docker-compose config
 
 if [ "$SERVICE_FROM_FILE" == "server" ]; then
-  echo "Starting docker-compose up for 'server' and 'nginx-proxy' services"
-  sudo /usr/local/bin/docker-compose up -d server nginx-proxy --build --force-recreate
+  echo "Starting docker-compose up for 'server', 'nginx-proxy', and 'client-participation-alpha' services"
+  sudo /usr/local/bin/docker-compose up -d server nginx-proxy client-participation-alpha  --build --force-recreate
 elif [ "$SERVICE_FROM_FILE" == "math" ]; then
   echo "Starting docker-compose up for 'math' service"
   sudo /usr/local/bin/docker-compose up -d math --build --force-recreate
