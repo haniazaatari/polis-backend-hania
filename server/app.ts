@@ -1045,6 +1045,7 @@ helpersInitialized.then(
       }
     );
 
+            error: err.message || "Unknown error",
     // RSS Feeds routes
     app.get("/feeds/:reportId", function (req, res) {
       try {
