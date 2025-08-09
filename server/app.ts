@@ -47,6 +47,13 @@ import {
   handle_GET_topicMod_stats,
 } from "./src/routes/delphi/topicMod";
 
+import { handle_GET_topicStats } from "./src/routes/topicStats";
+
+import {
+  handle_POST_collectiveStatement,
+  handle_GET_collectiveStatement,
+} from "./src/routes/collectiveStatement";
+
 import {
   handle_POST_topicAgenda_selections,
   handle_GET_topicAgenda_selections,
@@ -910,6 +917,43 @@ helpersInitialized.then(
       handle_GET_topicMod_hierarchy
     );
 
+    app.get("/api/v3/topicStats", moveToBody, function (req, res) {
+      try {
+        handle_GET_topicStats(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in topicStats endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
+    // Collective Statement routes
+    app.post("/api/v3/collectiveStatement", moveToBody, function (req, res) {
+      try {
+        handle_POST_collectiveStatement(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in collectiveStatement endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
+    app.get("/api/v3/collectiveStatement", moveToBody, function (req, res) {
+      try {
+        handle_GET_collectiveStatement(req, res);
+      } catch (err) {
+        res.json({
+          status: "error",
+          message: "Internal server error in collectiveStatement endpoint",
+          error: err.message || "Unknown error",
+        });
+      }
+    });
+
     // Topic Agenda routes
     app.post(
       "/api/v3/topicAgenda/selections",
@@ -1028,6 +1072,7 @@ helpersInitialized.then(
         getConversationIdFetchZid,
         assignToPCustom("zid")
       ),
+      want("includePCA", getBool, assignToP),
       want("conversation_id", getStringLimitLength(1, 1000), assignToP), // we actually need conversation_id to build a url
       want("lang", getStringLimitLength(1, 10), assignToP), // preferred language of nextComment
       want(
@@ -1782,16 +1827,16 @@ helpersInitialized.then(
       /^\/topicsVizReport\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       fetchIndexForReportPage
     );
-    // Topic Prioritize route for dense comment view and hierarchy analysis
+    // Topic Hierarchy route for circle pack visualization
     app.get(
-      /^\/topicPrioritize\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      /^\/topicHierarchy\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       function (req, res, next) {
         return fetchIndexForReportPage(req, res, next);
       }
     );
-    // Topic Hierarchy route for circle pack visualization
+    // Collective Statements carousel route
     app.get(
-      /^\/topicHierarchy\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      /^\/collectiveStatements\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       function (req, res, next) {
         return fetchIndexForReportPage(req, res, next);
       }
@@ -1810,13 +1855,7 @@ helpersInitialized.then(
       }
     );
     app.get(
-      /^\/topicPrioritizeSimple\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
-      function (req, res, next) {
-        return fetchIndexForReportPage(req, res, next);
-      }
-    );
-    app.get(
-      /^\/topicAgenda\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
+      /^\/topicStats\/r?[0-9][0-9A-Za-z]+(\/.*)?/,
       function (req, res, next) {
         return fetchIndexForReportPage(req, res, next);
       }

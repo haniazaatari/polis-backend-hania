@@ -13,12 +13,7 @@ import { sql_participants_extended } from "../db/sql";
 import { userHasAnsweredZeQuestions } from "../server-helpers";
 import logger from "../utils/logger";
 import pg from "../db/pg-query";
-import {
-  ParticipantFields,
-  ParticipantInfo,
-  ExpressResponse,
-  RequestWithP,
-} from "../d";
+import { ParticipantFields, ParticipantInfo, ExpressResponse } from "../d";
 import {
   doFamousQuery,
   updateLastInteractionTimeForConversation,
@@ -289,7 +284,31 @@ function handle_GET_participation(
 }
 
 async function handle_GET_participationInit(
-  req: RequestWithP,
+  req: {
+    p: {
+      participantInfo: any;
+      ptptoiLimit: number;
+      authToken: any;
+      anonymous_participant?: boolean;
+      oidc_sub?: string;
+      oidcUser?: any;
+      conversation_id: string;
+      jwt_conversation_id?: string;
+      jwt_conversation_mismatch?: boolean;
+      jwt_xid?: string;
+      lang: string;
+      owner_uid?: number;
+      pid: number;
+      requested_conversation_id?: string;
+      standard_user_participant?: boolean;
+      uid?: number;
+      xid_participant?: boolean;
+      xid: string;
+      zid: number;
+      includePCA: boolean;
+    };
+    headers?: Headers;
+  },
   res: ExpressResponse
 ) {
   try {
@@ -367,7 +386,10 @@ async function handle_GET_participationInit(
     response.user = user;
     response.ptpt = ptpt;
     response.conversation = conv;
-    response.pca = pcaData?.asPOJO ? pcaData : null;
+
+    if (req.p.includePCA !== false) {
+      response.pca = pcaData?.asPOJO ? pcaData : null;
+    }
 
     // Determine the effective pid for fetching votes and comments
     let effectivePid = pid;

@@ -44,7 +44,7 @@ try {
   }
 
 
-  initialData = await PolisNet.polisGet('/participationInit', { conversation_id });
+  initialData = await PolisNet.polisGet('/participationInit', { conversation_id, includePCA: false });
   // Note: JWT token handling will be done client-side since this is SSR
   // The handleJwtFromResponse function will be called when the page hydrates
 } catch (error: unknown) {
@@ -118,7 +118,6 @@ const hideHeader = Astro.url.searchParams.get('hide_header');
           <>
             <TopicAgenda 
               client:only="react"
-              conversation={initialData.conversation}
               conversation_id={conversation_id}
             />
             <p class="conversation-intro" set:html={s.participantHelpWelcomeText}></p>
