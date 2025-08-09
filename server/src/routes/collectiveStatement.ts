@@ -1,7 +1,12 @@
 import { Request, Response } from "express";
 import logger from "../utils/logger";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, GetCommand, QueryCommand, ScanCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  DynamoDBDocumentClient,
+  PutCommand,
+  GetCommand,
+  QueryCommand,
+} from "@aws-sdk/lib-dynamodb";
 import { getZidFromReport } from "../utils/parameter";
 import Config from "../config";
 import Anthropic from "@anthropic-ai/sdk";
@@ -154,11 +159,13 @@ You MUST respond with valid JSON that follows the exact schema above. Each claus
     });
 
     // Parse the JSON response
-    const responseText = "{" + (response.content[0].type === 'text' ? response.content[0].text : '');
-    
+    const responseText =
+      "{" +
+      (response.content[0].type === "text" ? response.content[0].text : "");
+
     try {
       const statementData = JSON.parse(responseText);
-      
+
       // Return both the structured data and the original comments for citation display
       return {
         statementData,
@@ -167,22 +174,28 @@ You MUST respond with valid JSON that follows the exact schema above. Each claus
     } catch (parseError) {
       logger.error(`Error parsing Claude response: ${parseError}`);
       logger.error(`Response text: ${responseText.substring(0, 500)}...`);
-      
+
       // Fallback: If JSON parsing fails, return a simple text response
       return {
         statementData: {
           id: "collective_statement",
           title: `Collective Statement: ${topicName}`,
-          paragraphs: [{
-            id: "fallback",
-            title: "Generated Statement",
-            sentences: [{
-              clauses: [{
-                text: responseText,
-                citations: []
-              }]
-            }]
-          }]
+          paragraphs: [
+            {
+              id: "fallback",
+              title: "Generated Statement",
+              sentences: [
+                {
+                  clauses: [
+                    {
+                      text: responseText,
+                      citations: [],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
         },
         commentsData: formattedComments,
       };
@@ -196,11 +209,14 @@ You MUST respond with valid JSON that follows the exact schema above. Each claus
 /**
  * Handler for POST /api/v3/collectiveStatement
  */
-export async function handle_POST_collectiveStatement(req: Request, res: Response) {
+export async function handle_POST_collectiveStatement(
+  req: Request,
+  res: Response
+) {
   logger.info("CollectiveStatement API request received");
 
   const { report_id, topic_key, topic_name, qualifying_tids } = req.body;
-  
+
   if (!report_id || !topic_key || !topic_name) {
     return res.status(400).json({
       status: "error",
@@ -219,46 +235,56 @@ export async function handle_POST_collectiveStatement(req: Request, res: Respons
 
     // Generate unique key for this statement
     const statementKey = `${zid}#${topic_key}#${uuidv4()}`;
-    
+
     // Get comments for this topic with voting data
     const topicComments = await getCommentsForTopic(zid, topic_key);
-    
-    logger.info(`Found ${topicComments.length} comments for topic ${topic_key}`);
-    
+
+    logger.info(
+      `Found ${topicComments.length} comments for topic ${topic_key}`
+    );
+
     if (topicComments.length === 0) {
       return res.json({
         status: "error",
         message: "No comments found for this topic",
       });
     }
-    
+
     // Filter comments based on client-side validation
     const groupConsensus = req.body.group_consensus;
     let filteredComments = topicComments;
-    
+
     if (qualifying_tids && qualifying_tids.length > 0) {
       // Use the pre-filtered qualifying comment IDs from the client
       // These have already passed the 0.8 consensus threshold and 5% group participation requirement
       const qualifyingSet = new Set(qualifying_tids);
-      filteredComments = topicComments.filter(comment => 
+      filteredComments = topicComments.filter((comment) =>
         qualifyingSet.has(comment.comment_id)
       );
-      
+
       // Add group consensus to filtered comments
-      filteredComments = filteredComments.map(comment => ({
+      filteredComments = filteredComments.map((comment) => ({
         ...comment,
-        group_consensus: groupConsensus[comment.comment_id] || 0
+        group_consensus: groupConsensus[comment.comment_id] || 0,
       }));
-      
+
       // Sort by group consensus (descending) to prioritize highest consensus comments
       filteredComments.sort((a, b) => b.group_consensus - a.group_consensus);
-      
-      logger.info(`Using ${filteredComments.length} pre-qualified comments from client (from ${topicComments.length} total)`);
-      
+
+      logger.info(
+        `Using ${filteredComments.length} pre-qualified comments from client (from ${topicComments.length} total)`
+      );
+
       if (filteredComments.length > 0) {
-        logger.info(`Consensus range: ${filteredComments[0].group_consensus.toFixed(3)} to ${filteredComments[filteredComments.length - 1].group_consensus.toFixed(3)}`);
+        logger.info(
+          `Consensus range: ${filteredComments[0].group_consensus.toFixed(
+            3
+          )} to ${filteredComments[
+            filteredComments.length - 1
+          ].group_consensus.toFixed(3)}`
+        );
       }
-      
+
       // Validate minimum comment requirement (should match client-side threshold)
       const MIN_COMMENTS = 3;
       if (filteredComments.length < MIN_COMMENTS) {
@@ -270,26 +296,28 @@ export async function handle_POST_collectiveStatement(req: Request, res: Respons
     } else if (groupConsensus && Object.keys(groupConsensus).length > 0) {
       // Fallback to old logic if no qualifying_tids provided (for backwards compatibility)
       logger.warn(`No qualifying_tids provided, using legacy filtering logic`);
-      
+
       // Add group consensus to each comment
-      filteredComments = topicComments.map(comment => ({
+      filteredComments = topicComments.map((comment) => ({
         ...comment,
-        group_consensus: groupConsensus[comment.comment_id] || 0
+        group_consensus: groupConsensus[comment.comment_id] || 0,
       }));
-      
+
       // Filter out comments with less than 20 votes
-      filteredComments = filteredComments.filter(c => c.total_votes >= 20);
-      
+      filteredComments = filteredComments.filter((c) => c.total_votes >= 20);
+
       // Sort by group consensus (descending)
       filteredComments.sort((a, b) => b.group_consensus - a.group_consensus);
-      
+
       // Take top quartile
       const quartileSize = Math.ceil(filteredComments.length / 4);
       filteredComments = filteredComments.slice(0, quartileSize);
-      
-      logger.info(`Filtered from ${topicComments.length} to ${filteredComments.length} comments (min 20 votes, top quartile by consensus)`);
+
+      logger.info(
+        `Filtered from ${topicComments.length} to ${filteredComments.length} comments (min 20 votes, top quartile by consensus)`
+      );
     }
-    
+
     // Generate the collective statement
     const result = await generateCollectiveStatement(
       zid,
@@ -310,10 +338,12 @@ export async function handle_POST_collectiveStatement(req: Request, res: Respons
       model: "claude-opus-4-20250514",
     };
 
-    await docClient.send(new PutCommand({
-      TableName: "Delphi_CollectiveStatement",
-      Item: item,
-    }));
+    await docClient.send(
+      new PutCommand({
+        TableName: "Delphi_CollectiveStatement",
+        Item: item,
+      })
+    );
 
     return res.json({
       status: "success",
@@ -321,11 +351,10 @@ export async function handle_POST_collectiveStatement(req: Request, res: Respons
       commentsData: result.commentsData,
       id: statementKey,
     });
-
   } catch (err: any) {
     logger.error(`Error in handle_POST_collectiveStatement: ${err.message}`);
     logger.error(`Error stack: ${err.stack}`);
-    
+
     return res.status(500).json({
       status: "error",
       message: "Error generating collective statement",
@@ -334,14 +363,16 @@ export async function handle_POST_collectiveStatement(req: Request, res: Respons
   }
 }
 
-
 /**
  * Handler for GET /api/v3/collectiveStatement
  * Can get a single statement by ID or all statements for a report
  */
-export async function handle_GET_collectiveStatement(req: Request, res: Response) {
+export async function handle_GET_collectiveStatement(
+  req: Request,
+  res: Response
+) {
   const { statement_id, report_id } = req.query;
-  
+
   // If report_id is provided, get all statements for that conversation
   if (report_id) {
     try {
@@ -356,10 +387,11 @@ export async function handle_GET_collectiveStatement(req: Request, res: Response
       // Query all items where zid matches
       const params = {
         TableName: "Delphi_CollectiveStatement",
-        FilterExpression: "zid = :zid",
+        IndexName: "zid-created_at-index",
+        KeyConditionExpression: "zid = :zid",
         ExpressionAttributeValues: {
-          ":zid": zid.toString()
-        }
+          ":zid": zid.toString(),
+        },
       };
 
       const statements: any[] = [];
@@ -368,10 +400,10 @@ export async function handle_GET_collectiveStatement(req: Request, res: Response
       do {
         const command: any = {
           ...params,
-          ExclusiveStartKey: lastEvaluatedKey
+          ExclusiveStartKey: lastEvaluatedKey,
         };
-        
-        const data = await docClient.send(new ScanCommand(command));
+
+        const data = await docClient.send(new QueryCommand(command));
         if (data.Items) {
           statements.push(...data.Items);
         }
@@ -380,23 +412,23 @@ export async function handle_GET_collectiveStatement(req: Request, res: Response
 
       // Deduplicate by layer_cluster - keep only the most recent statement for each topic
       const deduplicated = new Map();
-      statements.forEach(stmt => {
+      statements.forEach((stmt) => {
         // Extract layer_cluster from topic_key (e.g., "0_5" or from topic_name like "0_5: Topic Name")
         let layerCluster = null;
-        
+
         // Try to extract from topic_key first
         if (stmt.topic_key) {
           // Handle both formats: "uuid#0#5" or "0_5"
-          if (stmt.topic_key.includes('#')) {
-            const parts = stmt.topic_key.split('#');
+          if (stmt.topic_key.includes("#")) {
+            const parts = stmt.topic_key.split("#");
             if (parts.length >= 3) {
               layerCluster = `${parts[1]}_${parts[2]}`;
             }
-          } else if (stmt.topic_key.includes('_')) {
+          } else if (stmt.topic_key.includes("_")) {
             layerCluster = stmt.topic_key;
           }
         }
-        
+
         // Fallback: try to extract from topic_name (e.g., "0_5: Topic Name")
         if (!layerCluster && stmt.topic_name) {
           const match = stmt.topic_name.match(/^(\d+_\d+):/);
@@ -404,11 +436,14 @@ export async function handle_GET_collectiveStatement(req: Request, res: Response
             layerCluster = match[1];
           }
         }
-        
+
         if (layerCluster) {
           // Keep the most recent statement for this layer_cluster
-          if (!deduplicated.has(layerCluster) || 
-              new Date(stmt.created_at) > new Date(deduplicated.get(layerCluster).created_at)) {
+          if (
+            !deduplicated.has(layerCluster) ||
+            new Date(stmt.created_at) >
+              new Date(deduplicated.get(layerCluster).created_at)
+          ) {
             deduplicated.set(layerCluster, stmt);
           }
         } else {
@@ -420,28 +455,31 @@ export async function handle_GET_collectiveStatement(req: Request, res: Response
       const uniqueStatements = Array.from(deduplicated.values());
 
       // Parse the JSON data in each unique statement
-      const parsedStatements = uniqueStatements.map(stmt => ({
+      const parsedStatements = uniqueStatements.map((stmt) => ({
         ...stmt,
-        statement_data: stmt.statement_data ? JSON.parse(stmt.statement_data) : null,
-        comments_data: stmt.comments_data ? JSON.parse(stmt.comments_data) : null
+        statement_data: stmt.statement_data
+          ? JSON.parse(stmt.statement_data)
+          : null,
+        comments_data: stmt.comments_data
+          ? JSON.parse(stmt.comments_data)
+          : null,
       }));
 
       return res.json({
         status: "success",
         statements: parsedStatements,
-        count: parsedStatements.length
+        count: parsedStatements.length,
       });
-
     } catch (err: any) {
       logger.error(`Error getting statements for report: ${err.message}`);
       return res.status(500).json({
         status: "error",
         message: "Error retrieving collective statements",
-        error: err.message
+        error: err.message,
       });
     }
   }
-  
+
   // Original single statement logic
   if (!statement_id) {
     return res.status(400).json({
@@ -451,12 +489,14 @@ export async function handle_GET_collectiveStatement(req: Request, res: Response
   }
 
   try {
-    const result = await docClient.send(new GetCommand({
-      TableName: "Delphi_CollectiveStatement",
-      Key: {
-        zid_topic_jobid: statement_id as string,
-      },
-    }));
+    const result = await docClient.send(
+      new GetCommand({
+        TableName: "Delphi_CollectiveStatement",
+        Key: {
+          zid_topic_jobid: statement_id as string,
+        },
+      })
+    );
 
     if (!result.Item) {
       return res.status(404).json({
@@ -469,10 +509,9 @@ export async function handle_GET_collectiveStatement(req: Request, res: Response
       status: "success",
       statement: result.Item,
     });
-
   } catch (err: any) {
     logger.error(`Error in handle_GET_collectiveStatement: ${err.message}`);
-    
+
     return res.status(500).json({
       status: "error",
       message: "Error retrieving collective statement",
@@ -482,28 +521,31 @@ export async function handle_GET_collectiveStatement(req: Request, res: Response
 }
 
 // Helper function to get comments for a specific topic
-async function getCommentsForTopic(zid: number, topicKey: string): Promise<any[]> {
+async function getCommentsForTopic(
+  zid: number,
+  topicKey: string
+): Promise<any[]> {
   try {
     // First, get comment IDs assigned to this topic from DynamoDB
     const conversation_id = zid.toString();
-    
+
     // Parse topic key to get layer and cluster
     let layer: number, cluster: number;
-    
-    if (topicKey.includes('#')) {
+
+    if (topicKey.includes("#")) {
       // New format: uuid#layer#cluster
-      const parts = topicKey.split('#');
+      const parts = topicKey.split("#");
       if (parts.length >= 3) {
         layer = parseInt(parts[1]);
         cluster = parseInt(parts[2]);
       } else {
         throw new Error(`Invalid topic key format: ${topicKey}`);
       }
-    } else if (topicKey.includes('_')) {
+    } else if (topicKey.includes("_")) {
       // Old format: layer0_5
-      const parts = topicKey.split('_');
-      if (parts.length >= 2 && parts[0].startsWith('layer')) {
-        layer = parseInt(parts[0].replace('layer', ''));
+      const parts = topicKey.split("_");
+      if (parts.length >= 2 && parts[0].startsWith("layer")) {
+        layer = parseInt(parts[0].replace("layer", ""));
         cluster = parseInt(parts[1]);
       } else {
         throw new Error(`Invalid topic key format: ${topicKey}`);
@@ -539,9 +581,11 @@ async function getCommentsForTopic(zid: number, topicKey: string): Promise<any[]
 
     // Log first assignment to see structure
     if (allAssignments.length > 0) {
-      logger.info(`Sample assignment structure: ${JSON.stringify(allAssignments[0])}`);
+      logger.info(
+        `Sample assignment structure: ${JSON.stringify(allAssignments[0])}`
+      );
     }
-    
+
     // Filter comments for this specific topic
     const commentIds: number[] = [];
     allAssignments.forEach((assignment) => {
@@ -551,12 +595,18 @@ async function getCommentsForTopic(zid: number, topicKey: string): Promise<any[]
         commentIds.push(parseInt(assignment.comment_id));
       }
     });
-    
-    logger.info(`Topic ${topicKey} - Layer: ${layer}, Cluster: ${cluster}, Found ${commentIds.length} comment assignments`);
-    
+
+    logger.info(
+      `Topic ${topicKey} - Layer: ${layer}, Cluster: ${cluster}, Found ${commentIds.length} comment assignments`
+    );
+
     // Debug: Log the comment IDs found
     if (commentIds.length > 0) {
-      logger.info(`Comment IDs for topic ${topicKey}: ${JSON.stringify(commentIds.slice(0, 20))}`);
+      logger.info(
+        `Comment IDs for topic ${topicKey}: ${JSON.stringify(
+          commentIds.slice(0, 20)
+        )}`
+      );
     }
 
     if (commentIds.length === 0) {
@@ -579,14 +629,21 @@ async function getCommentsForTopic(zid: number, topicKey: string): Promise<any[]
       ORDER BY total_votes DESC
     `;
 
-    const commentsData = await pgQuery.queryP(commentsQuery, [zid, commentIds]) as any[];
-    
+    const commentsData = (await pgQuery.queryP(commentsQuery, [
+      zid,
+      commentIds,
+    ])) as any[];
+
     // Debug: Log the results
-    logger.info(`SQL query returned ${commentsData.length} comments for topic ${topicKey}`);
+    logger.info(
+      `SQL query returned ${commentsData.length} comments for topic ${topicKey}`
+    );
     if (commentsData.length !== commentIds.length) {
-      logger.warn(`Mismatch: Found ${commentIds.length} comment IDs in DynamoDB but only ${commentsData.length} in PostgreSQL`);
+      logger.warn(
+        `Mismatch: Found ${commentIds.length} comment IDs in DynamoDB but only ${commentsData.length} in PostgreSQL`
+      );
     }
-    
+
     // Return comments with basic voting data
     // Group-level analysis would require participant_group_associations table which doesn't exist yet
     return commentsData;
