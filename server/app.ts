@@ -1109,6 +1109,7 @@ helpersInitialized.then(
         getConversationIdFetchZid,
         assignToPCustom("zid")
       ),
+      want("includePCA", getBool, assignToP),
       want("conversation_id", getStringLimitLength(1, 1000), assignToP), // we actually need conversation_id to build a url
       want("lang", getStringLimitLength(1, 10), assignToP), // preferred language of nextComment
       want(

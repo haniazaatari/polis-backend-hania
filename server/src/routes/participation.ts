@@ -309,6 +309,7 @@ async function handle_GET_participationInit(
       xid_participant?: boolean;
       xid: string;
       zid: number;
+      includePCA: boolean;
     };
     headers?: Headers;
   },
@@ -459,7 +460,10 @@ async function handle_GET_participationInit(
     response.user = user;
     response.ptpt = ptpt;
     response.conversation = conv;
-    response.pca = pcaData?.asPOJO ? pcaData : null;
+
+    if (req.p.includePCA !== false) {
+      response.pca = pcaData?.asPOJO ? pcaData : null;
+    }
 
     // Determine the correct pid for this user
     let effectivePid = req.p.pid;
