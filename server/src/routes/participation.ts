@@ -13,12 +13,7 @@ import { sql_participants_extended } from "../db/sql";
 import { userHasAnsweredZeQuestions } from "../server-helpers";
 import logger from "../utils/logger";
 import pg from "../db/pg-query";
-import {
-  ParticipantFields,
-  ParticipantInfo,
-  ExpressResponse,
-  RequestWithP,
-} from "../d";
+import { ParticipantFields, ParticipantInfo, ExpressResponse } from "../d";
 import {
   doFamousQuery,
   updateLastInteractionTimeForConversation,
@@ -291,6 +286,9 @@ function handle_GET_participation(
 async function handle_GET_participationInit(
   req: {
     p: {
+      participantInfo: any;
+      ptptoiLimit: number;
+      authToken: any;
       anonymous_participant?: boolean;
       oidc_sub?: string;
       oidcUser?: any;
