@@ -6,7 +6,7 @@ import ScrollableTopicsGrid from "./components/ScrollableTopicsGrid";
 import TopicAgendaStyles from "./components/TopicAgendaStyles";
 import PolisNet from "../../lib/net";
 
-const TopicAgenda = ({ conversation, conversation_id }) => {
+const TopicAgenda = ({ conversation_id }) => {
   const [loadWidget, setLoadWidget] = useState(false);
   const [selections, setSelections] = useState(new Set());
   const [commentMap, setCommentMap] = useState(new Map());
@@ -14,6 +14,7 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
   const [reportData, setReportData] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [err, setError] = useState(null);
+  const [conversation, setConversation] = useState(null);
 
   const {
     loading,
@@ -42,6 +43,11 @@ const TopicAgenda = ({ conversation, conversation_id }) => {
               report_id: topicPrioritizeData.report_id,
               conversation_id: topicPrioritizeData.conversation_id
             });
+            // Also fetch full convo with PCA (large query)
+            const convoFetcher = await PolisNet.polisGet('/participationInit', { conversation_id, includePCA: true });
+            if (convoFetcher) {
+              setConversation(convoFetcher);
+            }
             
             // Also fetch comments for the TopicAgenda
             // Use the original zinvite for the comments API, not the numeric conversation_id
