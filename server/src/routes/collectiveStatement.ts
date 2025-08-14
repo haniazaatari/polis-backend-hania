@@ -225,6 +225,9 @@ export async function handle_POST_collectiveStatement(
   }
 
   try {
+    if (!req.p.delphiEnabled) {
+      throw new Error("Unauthorized");
+    }
     const zid = await getZidFromReport(report_id);
     if (!zid) {
       return res.status(404).json({
