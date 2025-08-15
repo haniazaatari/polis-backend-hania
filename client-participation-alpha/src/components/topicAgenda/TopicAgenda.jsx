@@ -89,7 +89,7 @@ const TopicAgenda = ({ conversation_id }) => {
   // Fetch UMAP data when topic data is loaded
   useEffect(() => {
     if (topicData && conversation && loadWidget) {
-      fetchUMAPData(conversation);
+      fetchUMAPData(conversation_id);
     }
   }, [topicData, conversation, fetchUMAPData, loadWidget]);
 

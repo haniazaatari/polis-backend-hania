@@ -27,16 +27,15 @@ import CommentsReport from "./commentsReport/CommentsReport.jsx";
 import TopicReport from "./topicReport/TopicReport.jsx";
 import ExportReport from "./exportReport/ExportReport.jsx";
 import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
-import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
 import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
 import TopicStats from "./topicStats/TopicStats.jsx";
 import TopicPage from "./topicPage/TopicPage.jsx";
 import CollectiveStatementsReport from "./collectiveStatementsReport/CollectiveStatementsReport.jsx";
 import { enrichMathWithNormalizedConsensus } from "../util/normalizeConsensus.js";
 
-const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicHierarchy/2arcefpshi" or "/topicStats/2arcefpshi"
+const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicStats/2arcefpshi"
 const pathParts = pathname.split("/");
-const route_type = pathParts[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicHierarchy", or "topicStats"
+const route_type = pathParts[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", or "topicStats"
 
 const report_id = pathParts[2];
 
@@ -770,7 +769,6 @@ const App = (props) => {
     shouldShowNarrativeReport: route_type === "narrativeReport",
     shouldShowTopicReport: route_type === "topicReport",
     shouldShowExportReport: route_type === "exportReport",
-    shouldShowTopicHierarchy: route_type === "topicHierarchy",
   });
 
   // Directly render ExportReport if the URL starts with /exportReport
@@ -778,20 +776,6 @@ const App = (props) => {
     console.log("RENDERING: ExportReport");
     return (
       <ExportReport
-        report_id={report_id}
-        conversation={conversation}
-      />
-    );
-  }
-
-
-
-
-  // Directly render TopicHierarchy if the URL starts with /topicHierarchy
-  if (route_type === "topicHierarchy") {
-    console.log("RENDERING: TopicHierarchy");
-    return (
-      <TopicHierarchy
         report_id={report_id}
         conversation={conversation}
       />

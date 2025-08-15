@@ -111,9 +111,8 @@ export const useTopicData = (reportId, load) => {
     return groups;
   };
 
-    const fetchUMAPData = useCallback(async (conversation) => {
+    const fetchUMAPData = useCallback(async (conversationId) => {
     try {
-      const conversationId = conversation?.conversation_id || reportId;
       console.log("Fetching UMAP data for spatial filtering...");
 
       const data = await PolisNet.polisGet(
