@@ -875,6 +875,7 @@ const App = (props) => {
       return (
         <TopicPage
           conversation={conversation}
+          token={token}
           report_id={report_id}
           topic_key={topic_key}
           math={math}
@@ -901,6 +902,7 @@ const App = (props) => {
         ptptCount={ptptCount}
         formatTid={formatTid}
         voteColors={voteColors}
+        token={token}
       />
     )
   }
@@ -916,6 +918,7 @@ const App = (props) => {
         ptptCount={ptptCount}
         formatTid={formatTid}
         voteColors={voteColors}
+        token={token}
       />
     )
   }
