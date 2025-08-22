@@ -513,7 +513,7 @@ const CollectiveStatementsReport = ({ conversation, report_id, math, comments, p
           ref={containerRef}
           style={{
             overflow: "hidden",
-            margin: window.innerWidth > 779 ? "0 auto" : "0 80px",
+            margin: window.innerWidth < 779 ? "0 auto" : "0 80px",
             position: "relative"
           }}
           onTouchStart={onTouchStart}
