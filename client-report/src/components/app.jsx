@@ -27,16 +27,15 @@ import CommentsReport from "./commentsReport/CommentsReport.jsx";
 import TopicReport from "./topicReport/TopicReport.jsx";
 import ExportReport from "./exportReport/ExportReport.jsx";
 import TopicsVizReport from "./topicsVizReport/TopicsVizReport.jsx";
-import TopicHierarchy from "./topicHierarchy/TopicHierarchy.jsx";
 import TopicMapNarrativeReport from "./topicMapNarrativeReport.jsx";
 import TopicStats from "./topicStats/TopicStats.jsx";
 import TopicPage from "./topicPage/TopicPage.jsx";
 import CollectiveStatementsReport from "./collectiveStatementsReport/CollectiveStatementsReport.jsx";
 import { enrichMathWithNormalizedConsensus } from "../util/normalizeConsensus.js";
 
-const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicHierarchy/2arcefpshi" or "/topicStats/2arcefpshi"
+const pathname = window.location.pathname; // "/report/2arcefpshi" or "/commentsReport/2arcefpshi" or "/topicReport/2arcefpshi" or "/topicsVizReport/2arcefpshi" or "/exportReport/2arcefpshi" or "/topicStats/2arcefpshi"
 const pathParts = pathname.split("/");
-const route_type = pathParts[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", "topicHierarchy", or "topicStats"
+const route_type = pathParts[1]; // "report", "narrativeReport", "commentsReport", "topicReport", "topicsVizReport", "exportReport", or "topicStats"
 
 const report_id = pathParts[2];
 
@@ -743,24 +742,37 @@ const App = (props) => {
 
   if (isStatsOnly) {
     return (
-      <section style={{ maxWidth: 1200, display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-          <h3>Participants</h3>
-          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{ptptCountTotal}</p>
+      <>
+        <style>
+        {`
+          @container stats (width < 490px) {
+            .polis_standalone-statsContainer {
+              flex-direction: column;
+            }
+          }
+        `}
+        </style>
+        <div style={{ container: "stats / inline-size" }}>
+          <section className="polis_standalone-statsContainer" style={{ maxWidth: 1200, display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+            <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+              <h3>Participants</h3>
+              <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{ptptCountTotal}</p>
+            </div>
+            <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+              <h3>Comments</h3>
+              <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["n-cmts"]}</p>
+            </div>
+            <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+              <h3>Votes</h3>
+              <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{computeVoteTotal(math["user-vote-counts"])}</p>
+            </div>
+            <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
+              <h3>Opinion Groups</h3>
+              <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["group-clusters"].length}</p>
+            </div>
+          </section>
         </div>
-        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-          <h3>Comments</h3>
-          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["n-cmts"]}</p>
-        </div>
-        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-          <h3>Votes</h3>
-          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{computeVoteTotal(math["user-vote-counts"])}</p>
-        </div>
-        <div style={{ flex: 1, minWidth: "200px", border: "1px solid #333", padding: "1rem", textAlign: "center"}}>
-          <h3>Opinion Groups</h3>
-          <p style={{ fontFamily: "'VT323', monospace", fontSize: "2.5rem", margin: 0}}>{math["group-clusters"].length}</p>
-        </div>
-      </section>
+      </>
     );
   }
   // Debug what's going to be rendered
@@ -770,7 +782,6 @@ const App = (props) => {
     shouldShowNarrativeReport: route_type === "narrativeReport",
     shouldShowTopicReport: route_type === "topicReport",
     shouldShowExportReport: route_type === "exportReport",
-    shouldShowTopicHierarchy: route_type === "topicHierarchy",
   });
 
   // Directly render ExportReport if the URL starts with /exportReport
@@ -778,20 +789,6 @@ const App = (props) => {
     console.log("RENDERING: ExportReport");
     return (
       <ExportReport
-        report_id={report_id}
-        conversation={conversation}
-      />
-    );
-  }
-
-
-
-
-  // Directly render TopicHierarchy if the URL starts with /topicHierarchy
-  if (route_type === "topicHierarchy") {
-    console.log("RENDERING: TopicHierarchy");
-    return (
-      <TopicHierarchy
         report_id={report_id}
         conversation={conversation}
       />
@@ -878,6 +875,7 @@ const App = (props) => {
       return (
         <TopicPage
           conversation={conversation}
+          token={token}
           report_id={report_id}
           topic_key={topic_key}
           math={math}
@@ -904,6 +902,7 @@ const App = (props) => {
         ptptCount={ptptCount}
         formatTid={formatTid}
         voteColors={voteColors}
+        token={token}
       />
     )
   }
@@ -919,6 +918,7 @@ const App = (props) => {
         ptptCount={ptptCount}
         formatTid={formatTid}
         voteColors={voteColors}
+        token={token}
       />
     )
   }
