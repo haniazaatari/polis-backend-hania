@@ -1498,6 +1498,7 @@ helpersInitialized.then(
         getConversationIdFetchZid,
         assignToPCustom("zid")
       ),
+      want("mod_level", getInt, assignToPCustom("mod_level")),
       handle_POST_reports
     );
 

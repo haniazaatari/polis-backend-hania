@@ -202,7 +202,7 @@ class PolisConverter:
 class BatchReportGenerator:
     """Generate batch reports for Polis conversations."""
 
-    def __init__(self, conversation_id, model=None, no_cache=False, max_batch_size=20, job_id=None, layers=None):
+    def __init__(self, conversation_id, model=None, no_cache=False, max_batch_size=20, job_id=None, layers=None, include_moderation=False):
         """Initialize the batch report generator."""
         self.conversation_id = str(conversation_id)
         if not model:
@@ -216,6 +216,9 @@ class BatchReportGenerator:
         self.job_id = job_id or os.environ.get('DELPHI_JOB_ID')
         self.report_id = os.environ.get('DELPHI_REPORT_ID')
         self.postgres_client = PostgresClient()
+        self.include_moderation = include_moderation
+
+        logger.info(f"include_moderation: {include_moderation}")
 
         endpoint_url = os.environ.get('DYNAMODB_ENDPOINT') or None
         self.dynamodb = boto3.resource(
@@ -291,6 +294,9 @@ class BatchReportGenerator:
             # Get comments
             comments = self.postgres_client.get_comments_by_conversation(int(self.conversation_id))
             logger.info(f"Retrieved {len(comments)} comments from conversation {self.conversation_id}")
+
+            if self.include_moderation:
+                comments = [comment for comment in comments if comment['mod'] > -1]
             
             # Get math data from the Clojure math pipeline (stored in math_main table)
             math_data = self._get_math_main_data(int(self.conversation_id))
@@ -316,7 +322,7 @@ class BatchReportGenerator:
                     consensus_map[str(tid)] = consensus_object[str(tid)]
             
             # Get basic comment and vote data (without recalculating metrics)
-            export_data = self.group_processor.get_export_data(int(self.conversation_id))
+            export_data = self.group_processor.get_export_data(int(self.conversation_id), self.include_moderation)
             processed_comments = export_data.get('comments', [])
             
             # Enrich comments with pre-calculated Clojure metrics
@@ -1497,6 +1503,7 @@ async def main():
                         help='Maximum number of topics to include in a single batch (default: 5)')
     parser.add_argument('--layers', type=int, nargs='+', default=None,
                         help='Specific layer numbers to process (e.g., --layers 0 1 2). If not specified, all layers will be processed.')
+    parser.add_argument('--include_moderation', type=bool, default=False, help='Whether or not to include moderated comments in reports. If false, moderated comments will appear.')
     args = parser.parse_args()
 
     # Get environment variables for job
@@ -1539,7 +1546,8 @@ async def main():
         no_cache=args.no_cache,
         max_batch_size=args.max_batch_size,
         job_id=job_id,
-        layers=args.layers
+        layers=args.layers,
+        include_moderation=args.include_moderation
     )
 
     # Process reports

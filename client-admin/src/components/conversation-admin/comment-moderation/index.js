@@ -94,7 +94,7 @@ const CommentModeration = () => {
             mr: [4],
             variant: url ? 'links.nav' : 'links.activeNav'
           }}
-          to=".">
+          to="../comments">
           Unmoderated{' '}
           {Array.isArray(unmoderated.unmoderated_comments)
             ? unmoderated.unmoderated_comments.length
@@ -106,7 +106,7 @@ const CommentModeration = () => {
             mr: [4],
             variant: url === 'accepted' ? 'links.activeNav' : 'links.nav'
           }}
-          to="accepted">
+          to="../comments/accepted">
           Accepted{' '}
           {Array.isArray(accepted.accepted_comments) ? accepted.accepted_comments.length : null}
         </Link>
@@ -116,7 +116,7 @@ const CommentModeration = () => {
             mr: [4],
             variant: url === 'rejected' ? 'links.activeNav' : 'links.nav'
           }}
-          to="rejected">
+          to="../comments/rejected">
           Rejected{' '}
           {Array.isArray(rejected.rejected_comments) ? rejected.rejected_comments.length : null}
         </Link>

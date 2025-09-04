@@ -234,12 +234,12 @@ const App = (props) => {
       });
   };
 
-  const getComments = (conversation_id, isStrictMod, authToken = null) => {
+  const getComments = (conversation_id, isStrictMod, authToken = null, level = -2) => {
     return net.polisGet("/api/v3/comments", {
       conversation_id: conversation_id,
       report_id: report_id,
       moderation: true,
-      mod_gt: -2,
+      mod_gt: level, // -2 = all, -1 = unmoderated, 0 = positive
       include_voting_patterns: true,
     }, authToken);
   };
@@ -386,7 +386,7 @@ const App = (props) => {
     });
     const commentsPromise = reportPromise.then((report) => {
       return conversationPromise.then((conv) => {
-        return getComments(report.conversation_id, conv.strict_moderation, authToken);
+        return getComments(report.conversation_id, conv.strict_moderation, authToken, report.mod_level);
       });
     });
     const participantsOfInterestPromise = reportPromise.then((report) => {
@@ -823,6 +823,7 @@ const App = (props) => {
         formatTid={formatTid}
         voteColors={voteColors}
         authToken={token}
+        reportModLevel={report?.mod_level}
       />
     );
   }

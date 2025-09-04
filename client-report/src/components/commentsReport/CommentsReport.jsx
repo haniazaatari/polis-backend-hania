@@ -5,7 +5,7 @@ import { useReportId } from "../framework/useReportId";
 import CommentList from "../lists/commentList.jsx";
 import "./CommentsReport.css";
 
-const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, voteColors, showControls = true, authToken }) => {
+const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, voteColors, showControls = true, authToken, reportModLevel }) => {
   const { report_id } = useReportId();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -26,6 +26,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     batch_size: "",
     model: "claude-opus-4-20250514",
     include_topics: true,
+    include_moderation: reportModLevel !== -2,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jobCreationResult, setJobCreationResult] = useState(null);
@@ -239,6 +240,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         report_id: report_id,
         model: "claude-opus-4-20250514",
         no_cache: false,
+        include_moderation: reportModLevel !== -2,
       }, authToken)
       .then((response) => {
         console.log("Batch report response:", response);
