@@ -71,7 +71,7 @@ function handle_POST_reports(
         return failJson(res, 403, "polis_err_post_reports_permissions");
       }
       return createReport(zid, mod_level).then(() => {
-        res.json({ mod_level });
+        res.json({});
       });
     })
     .catch((err: any) => {
