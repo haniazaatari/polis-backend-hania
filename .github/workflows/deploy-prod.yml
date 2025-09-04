@@ -38,6 +38,7 @@ jobs:
           NODE_ENV: production
           OIDC_CACHE_KEY_PREFIX: oidc.user
           OIDC_CACHE_KEY_ID_TOKEN_SUFFIX: "@@user@@"
+          AUTH_NAMESPACE: https://pol.is/
         run: |
           docker compose create --build --force-recreate file-server
           CONTAINER_ID=$(docker ps -qaf name=file-server)
