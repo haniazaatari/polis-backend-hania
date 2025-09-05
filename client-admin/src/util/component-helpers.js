@@ -3,7 +3,7 @@
 const helpers = {}
 
 helpers.shouldShowPermissionsError = (props) => {
-  const isSiteAdmin = JSON.parse(process.env.ADMIN_UIDS || []).indexOf(props.user.id) !== -1
+  const isSiteAdmin = JSON.parse(process.env.ADMIN_UIDS || []).indexOf(props.user?.user?.uid) !== -1
   if (isSiteAdmin) return false
   const hasMetadata = !!props.zid_metadata
 
