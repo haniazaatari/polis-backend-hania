@@ -3,6 +3,9 @@
 const helpers = {}
 
 helpers.shouldShowPermissionsError = (props) => {
+  const isSuperAdminUser =
+    JSON.parse(process.env.ADMIN_UIDS || []).indexOf(props.user?.user?.uid) !== -1
+  if (isSuperAdminUser) return false
   const hasMetadata = !!props.zid_metadata
 
   // Check if metadata is an empty object (not loaded yet)
