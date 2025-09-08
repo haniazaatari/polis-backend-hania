@@ -294,6 +294,8 @@ services:
   datadog-agent:
     image: datadog/agent:7
     container_name: dd-agent
+    networks:
+      - "polis-net"
     ports:
       - "8126:8126/tcp"
     environment:
@@ -306,6 +308,9 @@ services:
       - DD_LOGS_ENABLED=true
       - DD_SYSTEM_PROBE_NETWORK_ENABLED=true
       - DD_PROCESS_AGENT_ENABLED=true
+      - DD_APM_INSTRUMENTATION_ENABLED=host
+      - DD_APM_ERROR_TRACKING_STANDALONE=true
+      - DD_APM_INSTRUMENTATION_LIBRARIES=js:5,python:3,java:1
     volumes:
       # These volumes are essential for the agent to monitor the host and other containers
       - /var/run/docker.sock:/var/run/docker.sock:ro
