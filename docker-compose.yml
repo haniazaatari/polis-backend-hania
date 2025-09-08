@@ -295,11 +295,25 @@ services:
       - DD_APM_NON_LOCAL_TRAFFIC=true
       - DD_PROCESS_CONFIG_PROCESS_COLLECTION_ENABLED=true
       - DD_LOGS_ENABLED=true
+      - DD_SYSTEM_PROBE_NETWORK_ENABLED=true
+      - DD_PROCESS_AGENT_ENABLED=true
     volumes:
       # These volumes are essential for the agent to monitor the host and other containers
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /proc/:/host/proc/:ro
       - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /sys/kernel/debug:/sys/kernel/debug
+    cap_add:
+      - SYS_ADMIN
+      - SYS_RESOURCE
+      - SYS_PTRACE
+      - NET_ADMIN
+      - NET_BROADCAST
+      - NET_RAW
+      - IPC_LOCK
+      - CHOWN
+    security_opt:
+      - apparmor:unconfined
     profiles:
       - prod
 
