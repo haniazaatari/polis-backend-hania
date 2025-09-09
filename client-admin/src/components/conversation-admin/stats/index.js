@@ -21,6 +21,7 @@ const ConversationStats = () => {
   const stats = useSelector((state) => state.stats)
   const zid_metadata = useSelector((state) => state.zid_metadata)
   const { conversation_stats } = stats
+  const user = useSelector((state) => state.user)
 
   const times = dateSetupUtil()
   const chartSize = 500
@@ -107,6 +108,7 @@ const ConversationStats = () => {
 
   if (
     ComponentHelpers.shouldShowPermissionsError({
+      user,
       zid_metadata: zid_metadata.zid_metadata,
       loading: zid_metadata.loading || stats.loading
     })

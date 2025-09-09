@@ -22,6 +22,7 @@ const ReportsList = () => {
   const dispatch = useDispatch()
   const params = useParams()
   const { isAuthenticated, user } = useAuth()
+  const userState = useSelector((state) => state.user)
   const zid_metadata = useSelector((state) => state.zid_metadata)
   const [mod_level, setModLevel] = useState(-2)
 
@@ -83,6 +84,7 @@ const ReportsList = () => {
 
   if (
     ComponentHelpers.shouldShowPermissionsError({
+      user: userState,
       zid_metadata: zid_metadata.zid_metadata,
       loading: zid_metadata.loading
     })

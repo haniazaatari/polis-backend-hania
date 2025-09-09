@@ -27,6 +27,7 @@ const CommentModeration = () => {
   const unmoderated = useSelector((state) => state.mod_comments_unmoderated)
   const accepted = useSelector((state) => state.mod_comments_accepted)
   const rejected = useSelector((state) => state.mod_comments_rejected)
+  const user = useSelector((state) => state.user)
 
   const getCommentsRepeatedlyRef = useRef(null)
 
@@ -67,6 +68,7 @@ const CommentModeration = () => {
 
   if (
     ComponentHelpers.shouldShowPermissionsError({
+      user,
       zid_metadata: zid_metadata.zid_metadata,
       loading: zid_metadata.loading
     })
