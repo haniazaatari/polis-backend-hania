@@ -7,6 +7,23 @@ import { WebStorageStateStore } from 'oidc-client-ts';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from "./components/app.jsx";
+import { datadogRum } from '@datadog/browser-rum';
+import { reactPlugin } from '@datadog/browser-rum-react';
+
+if (process.env.node_env === 'production') {
+  datadogRum.init({
+      applicationId: 'bfa71c59-0473-4cc0-af24-3607529b690f',
+      clientToken: 'pubca7f154518abacbbdebca40002ac88b6',
+      site: 'us5.datadoghq.com',
+      service:'client-report',
+      env: 'prod',
+      version: '1.0.0',
+      sessionSampleRate:  100,
+      sessionReplaySampleRate: 20,
+      defaultPrivacyLevel: 'allow',
+      plugins: [reactPlugin({ router: false })],
+  });
+}
 
 class Root extends React.Component {
   render() {
