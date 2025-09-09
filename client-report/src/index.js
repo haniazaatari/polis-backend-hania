@@ -9,7 +9,7 @@ import './index.css';
 import App from "./components/app.jsx";
 import { datadogRum } from '@datadog/browser-rum';
 
-if (process.env.node_env === 'production') {
+if (process.env.NODE_ENV === 'production') {
   datadogRum.init({
     applicationId: 'bfa71c59-0473-4cc0-af24-3607529b690f',
     clientToken: 'pubca7f154518abacbbdebca40002ac88b6',
