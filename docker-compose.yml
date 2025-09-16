@@ -102,6 +102,7 @@ services:
       - DATABASE_POOL_SIZE=${MATH_DATABASE_POOL_SIZE:-10}
       - DD_AGENT_HOST=datadog-agent
       - DD_TRACE_ENABLED=true
+      - DD_TRACE_SAMPLE_RATE="1"
       - DD_SERVICE=math
       - DD_ENV=prod
       - DD_LOGS_INJECTION=true
