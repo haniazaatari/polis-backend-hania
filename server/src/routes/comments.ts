@@ -122,7 +122,7 @@ async function handle_GET_comments_translations(
     );
 
     const rows =
-      ((existingTranslations as unknown) as any[])?.length > 0
+      (existingTranslations as unknown as any[])?.length > 0
         ? existingTranslations
         : await translateAndStoreComment(zid, tid, comment.txt, lang);
 
@@ -323,7 +323,7 @@ async function handle_POST_comments(req: RequestWithP, res: any) {
     // 4. Moderate the comment
     const { active, mod } = (await isProConvo(conversation.owner))
       ? await moderateComment(txt, conversation, is_moderator, is_seed, ip)
-      : { active: true, mod: 0 };
+      : { active: true, mod: is_seed || is_moderator ? polisTypes.mod.ok : 0 };
 
     // 5. Detect language
     const detections = await detectLanguage(txt);
@@ -497,9 +497,7 @@ function handle_PUT_comments(
     };
   },
   res: {
-    status: (
-      arg0: number
-    ) => {
+    status: (arg0: number) => {
       (): any;
       new (): any;
       json: { (arg0: {}): void; new (): any };
