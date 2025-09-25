@@ -49,10 +49,18 @@ jobs:
       - name: Create deployment package
         run: |
           zip -r deployment.zip appspec.yml scripts/* docker-compose.yml
+
+      - name: Create deployment package (euro)
+        run: |
+          zip -r deployment-euro.zip appspec.yml euro-scripts/* docker-compose.yml
   
       - name: Upload deployment package to S3
         run: |
           aws s3 cp deployment.zip s3://polis-deployment-packages-050917022930-us-east-1/deployments/deployment.zip
+      
+      - name: Upload deployment package to S3 (euro)
+        run: |
+          aws s3 cp deployment-euro.zip s3://polis-deployment-packages-954495807218-eu-central-1/deployments/deployment.zip
   
       - name: Create CodeDeploy deployment
         run: |
@@ -62,3 +70,12 @@ jobs:
             --deployment-config-name CodeDeployDefault.OneAtATime \
             --revision revisionType=S3,s3Location="{bucket=polis-deployment-packages-050917022930-us-east-1,key=deployments/deployment.zip,bundleType=zip}" \
             --region us-east-1
+      
+      - name: Create CodeDeploy deployment (euro)
+        run: |
+          aws deploy create-deployment \
+            --application-name PolisApplication \
+            --deployment-group-name PolisDeploymentGroup \
+            --deployment-config-name CodeDeployDefault.OneAtATime \
+            --revision revisionType=S3,s3Location="{bucket=polis-deployment-packages-954495807218-eu-central-1,key=deployments/deployment.zip,bundleType=zip}" \
+            --region eu-central-1
