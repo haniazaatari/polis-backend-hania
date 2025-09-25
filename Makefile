@@ -47,6 +47,13 @@ define setup_env
 	$(eval COMPOSE_FILE_ARGS += $(if $(LOCAL_SERVICES_DOCKER),--profile local-services,))
 endef
 
+# Function to open psql shell
+define psql_shell
+	@docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} exec postgres \
+	psql -U $(call parse_env_value,POSTGRES_USER) \
+	-d $(call parse_env_value,POSTGRES_DB)
+endef
+
 PROD:
 	$(call setup_env,prod.env,-f docker-compose.yml)
 
@@ -108,6 +115,9 @@ rebuild-web: echo_vars ## Rebuild and restart just the file-server container and
 rebuild-server: echo_vars ## Rebuild and restart just the server container
 	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} up ${DETACH_ARG} --build --force-recreate server
 
+rebuild-delphi: echo_vars ## Rebuild and restart just the delphi container
+	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} up ${DETACH_ARG} --build --force-recreate delphi
+
 build-web-assets: ## Build and extract static web assets for cloud deployment to `build` dir
 	docker compose ${COMPOSE_FILE_ARGS} --env-file ${ENV_FILE} create --build --force-recreate file-server
 	$(MAKE) extract-web-assets
@@ -141,6 +151,13 @@ e2e-run-all: ## Run E2E tests: all
 e2e-run-interactive: ## Run E2E tests: interactively
 	$(E2E_RUN) npx cypress open
 
+psql-shell: echo_vars ## Open psql shell for the default environment
+		@if [ "${POSTGRES_DOCKER}" != "true" ]; then \
+				echo "PostgreSQL is not running in Docker. Exiting."; \
+				exit 1; \
+		fi
+		$(call psql_shell)
+
 # Helpful CLI shortcuts
 rbs: start-rebuild
 
@@ -149,7 +166,8 @@ rbs: start-rebuild
 
 .PHONY: help pull start stop rm-containers rm-volumes rm-images rm-ALL hash build-no-cache start-rebuild \
 	start-recreate start-FULL-REBUILD rebuild-web rebuild-server e2e-install e2e-run e2e-run-all \
-	e2e-run-interactive build-web-assets extract-web-assets generate-jwt-keys regenerate-jwt-keys
+	e2e-run-interactive build-web-assets extract-web-assets generate-jwt-keys regenerate-jwt-keys \
+	psql-shell
 
 
 help:
