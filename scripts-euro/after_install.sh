@@ -96,6 +96,8 @@ sudo /usr/local/bin/docker-compose config
 
 if [ "$SERVICE_FROM_FILE" == "server" ]; then
   echo "Starting docker-compose up for 'server', 'nginx-proxy', and 'client-participation-alpha' services"
+  #  disable nginx for now
+  sudo systemctl disable nginx
   sudo /usr/local/bin/docker-compose up -d server nginx-proxy client-participation-alpha  --build --force-recreate
 elif [ "$SERVICE_FROM_FILE" == "math" ]; then
   echo "Starting docker-compose up for 'math' service"
