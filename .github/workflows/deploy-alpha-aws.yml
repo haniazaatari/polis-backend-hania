@@ -104,7 +104,7 @@ jobs:
           cp appspec-euro.yml staging_dir/appspec.yml
 
           # 3. Copy the other necessary files and directories into the staging dir
-          cp -r euro-scripts staging_dir/
+          cp -r scripts-euro staging_dir/
           cp docker-compose.yml staging_dir/
 
           # 4. Go into the staging directory and create the zip from there
