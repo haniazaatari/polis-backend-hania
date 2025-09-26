@@ -96,7 +96,7 @@ jobs:
           aws-region: eu-central-1
 
       - name: Create Euro deployment package
-        run: zip -r deployment-euro.zip appspec.yml scripts-euro/* docker-compose.yml
+        run: zip -r deployment-euro.zip appspec-euro.yml scripts-euro/* docker-compose.yml
 
       - name: Upload Euro deployment package to S3
         run: aws s3 cp deployment-euro.zip s3://polis-deployment-packages-954495807218-eu-central-1/deployments/deployment.zip
