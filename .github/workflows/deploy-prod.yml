@@ -67,7 +67,6 @@ jobs:
   deploy-static-euro:
     name: Deploy Static Assets (Europe)
     runs-on: ubuntu-latest
-    environment: europe
     permissions:
       contents: read
       id-token: write
