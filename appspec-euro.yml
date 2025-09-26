@@ -3,7 +3,7 @@ os: linux
 files:
   - source: appspec-euro.yml
     destination: /opt/polis/appspec.yml
-  - source: euro-scripts/
+  - source: scripts-euro/
     destination: /opt/polis/scripts/
   - source: docker-compose.yml
     destination: /opt/polis/docker-compose.yml
