@@ -318,14 +318,16 @@ export class CdkStack extends cdk.Stack {
 
     const lambda = createDBBackupLambda(this, db, vpc, dbBackupBucket, dbBackupLambdaRole);
 
-  new events.Rule(this, 'DBBackupScheduleRule', {
-    schedule: events.Schedule.cron({
-      minute: '23',
-      hour: '0',
-      weekDay: 'TUE',
-    }),
-    targets: [new targets.LambdaFunction(lambda)],
-  });
+    new events.Rule(this, 'DBBackupScheduleRule', {
+      schedule: events.Schedule.cron({
+        minute: '23',
+        hour: '0',
+        weekDay: 'TUE',
+      }),
+      targets: [new targets.LambdaFunction(lambda)],
+    });
+
+    db.connections.allowFrom(lambda, ec2.Port.tcp(5432), 'Allow connection from backup Lambda');
 
     // ALB & DNS
     const {
