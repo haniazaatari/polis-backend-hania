@@ -20,6 +20,10 @@ const createDBBackupLambda = (self: Construct, db: cdk.aws_rds.DatabaseInstance,
     environment: {
       BACKUP_BUCKET_NAME: dbBackupBucket.bucketName,
     },
+    layers: [
+      lambda.LayerVersion.fromLayerVersionArn(self, 'PostgresLayer', 
+        'arn:aws:lambda:us-east-1:770693421928:layer:Klayers-p39-postgresql-lib:1')
+    ],
   });
 }
 

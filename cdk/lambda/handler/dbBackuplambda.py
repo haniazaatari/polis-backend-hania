@@ -41,7 +41,7 @@ def lambda_handler(event, context):
     env['PGPASSWORD'] = db_password
     
     command = [
-        '/usr/bin/pg_dump',
+        '/opt/bin/pg_dump',
         '-h', db_host,
         '-U', db_user,
         '-d', db_name,
