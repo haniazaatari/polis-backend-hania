@@ -110,6 +110,6 @@
     else \
       echo 'DYNAMODB_ENDPOINT is not set, assuming production-like environment. Skipping local setup scripts.'; \
       echo 'Starting job poller WITH ddtrace...' && \
-      ddtrace-run python scripts/job_poller.py --interval=2; \
+      ddtrace-run python scripts/job_poller.py --interval=2 --region ${AWS_REGION}; \
     fi \
   "]
