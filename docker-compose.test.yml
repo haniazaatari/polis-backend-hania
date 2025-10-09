@@ -77,7 +77,7 @@ services:
     ports:
       - "8005:8005"
     networks:
-      - "polis-net"
+      - "polis-test"
     environment:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-ses-local-key}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-ses-local-secret}
