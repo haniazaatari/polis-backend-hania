@@ -27,7 +27,6 @@ import {
   emailTeam,
   sendMultipleTextEmails,
   sendTextEmail,
-  sendTextEmailWithBackup,
 } from "./email/senders";
 
 AWS.config.update({ region: Config.awsRegion });
@@ -399,25 +398,6 @@ ${message}`;
 
     return emailTeam("Polis Bad Problems!!!", body);
   }
-
-  function trySendingBackupEmailTest() {
-    if (devMode) {
-      return;
-    }
-    const d = new Date();
-    if (d.getDay() === 1) {
-      // send the monday backup email system test
-      // If the sending fails, we should get an error ping.
-      sendTextEmailWithBackup(
-        polisFromAddress,
-        Config.adminEmailEmailTest,
-        "monday backup email system test",
-        "seems to be working"
-      );
-    }
-  }
-  setInterval(trySendingBackupEmailTest, 1000 * 60 * 60 * 23); // try every 23 hours (so it should only try roughly once a day)
-  trySendingBackupEmailTest();
 
   function handle_GET_verification(
     req: { p: { e: any } },

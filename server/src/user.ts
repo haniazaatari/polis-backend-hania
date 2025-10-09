@@ -34,6 +34,7 @@ async function getUserInfoForUid2(uid: number): Promise<UserInfo> {
       [uid],
       function (err: any, results: { rows: UserInfo[] }) {
         if (err) {
+          logger.error("getUserInfoForUid");
           return reject(err);
         }
         if (!results.rows || !results.rows.length) {

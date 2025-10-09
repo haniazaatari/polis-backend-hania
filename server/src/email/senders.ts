@@ -6,195 +6,118 @@
 // You should have received a copy of the GNU Affero General Public License along with this program.
 // If not, see < http://www.gnu.org/licenses/>.
 
-import AWS from "aws-sdk";
-import fs from "node:fs";
-import mg from "nodemailer-mailgun-transport";
-import nodemailer from "nodemailer";
+import {
+  SESClient,
+  SendEmailCommand,
+  SendEmailCommandOutput,
+} from "@aws-sdk/client-ses";
 import Config from "../config";
 import logger from "../utils/logger";
 
-AWS.config.update({ region: Config.awsRegion });
+const sesClient = new SESClient({ region: Config.awsRegion });
 
-function sendTextEmailWithBackup(
-  sender: any,
-  recipient: any,
-  subject: any,
-  text: any
-) {
-  const transportTypes = Config.emailTransportTypes
-    ? Config.emailTransportTypes.split(",")
-    : ["aws-ses", "mailgun"];
-  if (transportTypes.length < 2) {
-    logger.warn("No backup email transport available.");
-  }
-  const backupTransport = transportTypes[1];
-  sendTextEmail(sender, recipient, subject, text, backupTransport);
-}
-
-function isDocker() {
-  return fs.existsSync("/.dockerenv");
-}
-
-function getMailOptions(transportType: any) {
-  let mailgunAuth;
-
-  switch (transportType) {
-    case "maildev":
-      return {
-        host: isDocker() ? "maildev" : "localhost",
-        port: 1025,
-        ignoreTLS: true,
-      };
-    case "mailgun":
-      mailgunAuth = {
-        auth: {
-          api_key: Config.mailgunApiKey || "unset-value",
-          domain: Config.mailgunDomain || "unset-value",
-        },
-      };
-      return mg(mailgunAuth);
-    case "aws-ses":
-      return {
-        SES: new AWS.SES({ apiVersion: "2010-12-01" }),
-      };
-    default:
-      throw new Error(
-        `Unknown or undefined email transport type: ${transportType}`
-      );
-  }
-}
-
-function sendTextEmail(
-  sender: any,
-  recipient: any,
-  subject: any,
-  text: any,
-  transportTypes = Config.emailTransportTypes,
-  priority = 1
-): Promise<any> {
-  if (!transportTypes || transportTypes.length === 0) {
-    // Base case for recursion: If all transports have been tried and failed,
-    // create and throw a final, definitive error.
-    const finalError = new Error(
-      `All email transports failed for recipient: ${recipient}`
-    );
-    (finalError as any).code = "E_ALL_TRANSPORTS_FAILED";
-    return Promise.reject(finalError);
-  }
-
-  const transportTypesArray = transportTypes.split(",");
-  const thisTransportType = transportTypesArray.shift();
-  const nextTransportTypes = [...transportTypesArray];
-
-  try {
-    const mailOptions = getMailOptions(thisTransportType);
-    const transporter = nodemailer.createTransport(mailOptions);
-
-    return transporter
-      .sendMail({ from: sender, to: recipient, subject: subject, text: text })
-      .catch(function (originalError: any) {
-        const errorContext = {
-          message: `Email transport failed at priority ${priority}.`,
-          details: `Transport type '${thisTransportType}' failed for recipient '${recipient}'. Attempting failover.`,
-          priority,
-          transport: thisTransportType,
-          recipient,
-          timestamp: new Date().toISOString(),
-          cause: {
-            name: originalError.name,
-            message: originalError.message,
-            stack: originalError.stack,
-            code: originalError.code,
-          },
-        };
-
-        logger.error("polis_err_email_transport_failure", errorContext);
-
-        return sendTextEmail(
-          sender,
-          recipient,
-          subject,
-          text,
-          nextTransportTypes.join(","),
-          priority + 1
-        );
-      });
-  } catch (initializationError: any) {
-    const errorContext = {
-      message: `Failed to initialize email transporter at priority ${priority}.`,
-      transport: thisTransportType,
-      timestamp: new Date().toISOString(),
-      cause: {
-        name: initializationError.name,
-        message: initializationError.message,
-        stack: initializationError.stack,
-      },
-    };
-    logger.error("polis_err_email_init_failure", errorContext);
-
-    return sendTextEmail(
-      sender,
-      recipient,
-      subject,
-      text,
-      nextTransportTypes.join(","),
-      priority + 1
-    );
-  }
-}
-
-function sendMultipleTextEmails(
-  sender: string | undefined,
-  recipientArray: any[],
+async function sendTextEmail(
+  sender: string,
+  recipient: string,
   subject: string,
   text: string
-) {
-  recipientArray = recipientArray || [];
-  return Promise.all(
-    recipientArray.map(function (email: string) {
-      const promise = sendTextEmail(sender, email, subject, text);
-      promise.catch(function (finalError: any) {
-        logger.error("polis_err_failed_to_email_user_definitively", {
-          message: `Could not send email to user '${email}' after trying all available transports.`,
-          recipient: email,
-          timestamp: new Date().toISOString(),
-          finalError: {
-            name: finalError.name,
-            message: finalError.message,
-            stack: finalError.stack,
-            code: finalError.code,
-          },
-        });
-      });
-      return promise;
-    })
-  );
+): Promise<SendEmailCommandOutput | void> {
+  const params = {
+    Destination: {
+      ToAddresses: [recipient],
+    },
+    Message: {
+      Body: {
+        Html: {
+          Charset: "UTF-8",
+          Data: `${text} + <br><i>Polis is powered by donations from people like you. Donate at <a href="https://donorbox.org/geo-polis">https://donorbox.org/geo-polis</a>.</i><br>`,
+        },
+        Text: {
+          Charset: "UTF-8",
+          Data: `${text} - Polis is powered by donations from people like you. Donate at https://donorbox.org/geo-polis.`,
+        },
+      },
+      Subject: {
+        Charset: "UTF-8",
+        Data: subject,
+      },
+    },
+    Source: sender,
+  };
+
+  const command = new SendEmailCommand(params);
+  // eslint-disable-next-line no-console
+  return Config.isDevMode ? sesClient.send(command) : console.log(command);
 }
 
-function emailTeam(subject: string, body: string) {
-  const adminEmails = Config.adminEmails ? JSON.parse(Config.adminEmails) : [];
+async function sendMultipleTextEmails(
+  sender: string,
+  recipientArray: string[] = [],
+  subject: string,
+  text: string
+): Promise<PromiseSettledResult<SendEmailCommandOutput | void>[]> {
+  const emailPromises = recipientArray.map((email) =>
+    sendTextEmail(sender, email, subject, text)
+  );
 
-  return sendMultipleTextEmails(
-    Config.polisFromAddress,
-    adminEmails,
-    subject,
-    body
-  ).catch(function (err: any) {
-    logger.error("polis_err_uncaught_in_email_team", {
-      message: "An unexpected error occurred in the emailTeam function.",
+  const results = await Promise.allSettled(emailPromises);
+
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      const recipient = recipientArray[index];
+      const error = result.reason as Error;
+      logger.error("polis_err_failed_to_email_user_definitively", {
+        message: `Could not send email to user '${recipient}'.`,
+        recipient,
+        timestamp: new Date().toISOString(),
+        finalError: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        },
+      });
+    }
+  });
+
+  return results;
+}
+
+async function emailTeam(subject: string, body: string): Promise<void> {
+  let adminEmails: string[] = [];
+  try {
+    if (Config.adminEmails) {
+      adminEmails = JSON.parse(Config.adminEmails);
+    }
+  } catch (err) {
+    logger.error("polis_err_email_config_parse_failure", {
+      message: "Failed to parse JSON from Config.adminEmails.",
+      configValue: Config.adminEmails,
       timestamp: new Date().toISOString(),
       cause: {
-        name: err.name,
-        message: err.message,
-        stack: err.stack,
+        name: (err as Error).name,
+        message: (err as Error).message,
+        stack: (err as Error).stack,
       },
     });
-  });
+    return;
+  }
+
+  if (!Config.polisFromAddress) {
+    logger.error("polis_err_email_config_missing_sender", {
+      message: "The 'polisFromAddress' is not configured.",
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  if (adminEmails.length > 0) {
+    await sendMultipleTextEmails(
+      Config.polisFromAddress,
+      adminEmails,
+      subject,
+      body
+    );
+  }
 }
 
-export {
-  sendMultipleTextEmails,
-  sendTextEmail,
-  sendTextEmailWithBackup,
-  emailTeam,
-};
+export { sendMultipleTextEmails, sendTextEmail, emailTeam };

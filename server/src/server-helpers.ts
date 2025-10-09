@@ -633,7 +633,7 @@ function sendEmailByUid(uid?: any, subject?: string, body?: string | number) {
       Config.polisFromAddress,
       userInfo.hname ? `${userInfo.hname} <${userInfo.email}>` : userInfo.email,
       subject,
-      body
+      body as string
     );
   });
 }
