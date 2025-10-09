@@ -16,7 +16,7 @@ import logger from "../utils/logger";
 
 const sesClient = new SESClient({
   region: Config.awsRegion,
-  endpoint: Config.isDevMode ? "http://localhost:8005" : undefined,
+  endpoint: Config.SESEndpoint,
 });
 
 async function sendTextEmail(
