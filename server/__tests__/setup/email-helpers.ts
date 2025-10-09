@@ -1,6 +1,7 @@
 import http from "node:http";
 
-// Email interface types
+const SES_LOCAL_HOST = process.env.SES_LOCAL_HOST || "localhost";
+const SES_LOCAL_PORT = parseInt(process.env.SES_LOCAL_PORT || "8005", 10);
 interface EmailRecipient {
   address: string;
   name?: string;
@@ -29,116 +30,155 @@ interface PasswordResetResult {
   token: string | null;
 }
 
-// MailDev server settings
-const MAILDEV_HOST = process.env.MAILDEV_HOST || "localhost";
-const MAILDEV_PORT = process.env.MAILDEV_PORT || 1080;
+// --- Interfaces for the raw JSON response from ses-local ---
+interface SesContent {
+  Data: string;
+  Charset: string;
+}
+
+interface SesBody {
+  Text: SesContent;
+  Html: SesContent;
+}
+
+interface SesMessage {
+  Body: SesBody;
+  Subject: SesContent;
+}
+
+interface SesDestination {
+  ToAddresses: string[];
+}
+
+interface SesEmailObjectRaw {
+  MessageId: string;
+  Source: string;
+  Destination: SesDestination;
+  Timestamp: string;
+  Message: SesMessage;
+}
 
 /**
- * Get all emails from the MailDev server
+ * Maps the raw email format from ses-local to the consistent EmailObject format.
+ * @param {SesEmailObjectRaw} sesEmail - The raw email object from ses-local.
+ * @returns {EmailObject} The mapped email object.
+ */
+function mapSesToEmailObject(sesEmail: SesEmailObjectRaw): EmailObject {
+  return {
+    id: sesEmail.MessageId,
+    subject: sesEmail.Message.Subject.Data,
+    text: sesEmail.Message.Body.Text.Data,
+    html: sesEmail.Message.Body.Html.Data,
+    to: sesEmail.Destination.ToAddresses.map((address) => ({ address })),
+    from: { address: sesEmail.Source },
+    date: sesEmail.Timestamp,
+    time: new Date(sesEmail.Timestamp),
+  };
+}
+
+/**
+ * Get all emails from the ses-local server
  * @returns {Promise<EmailObject[]>} Array of email objects
  */
 async function getEmails(): Promise<EmailObject[]> {
   return new Promise((resolve, reject) => {
     const options = {
-      hostname: MAILDEV_HOST,
-      port: MAILDEV_PORT,
-      path: "/email",
+      hostname: SES_LOCAL_HOST,
+      port: SES_LOCAL_PORT,
+      path: "/emails",
       method: "GET",
     };
 
     const req = http.request(options, (res) => {
       let data = "";
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
+      res.on("data", (chunk) => (data += chunk));
       res.on("end", () => {
         try {
-          const emails = JSON.parse(data) as EmailObject[];
-          resolve(emails);
+          const rawEmails = JSON.parse(data) as SesEmailObjectRaw[];
+          resolve(rawEmails.map(mapSesToEmailObject));
         } catch (e) {
-          if (e instanceof Error) {
-            reject(new Error(`Failed to parse email response: ${e.message}`));
-          } else {
-            reject(new Error("Failed to parse email response"));
-          }
+          reject(
+            new Error(
+              `Failed to parse email response: ${
+                e instanceof Error ? e.message : String(e)
+              }`
+            )
+          );
         }
       });
     });
 
-    req.on("error", (error) => {
-      reject(new Error(`Failed to fetch emails: ${error.message}`));
-    });
-
+    req.on("error", (error) =>
+      reject(new Error(`Failed to fetch emails: ${error.message}`))
+    );
     req.end();
   });
 }
 
 /**
- * Get a specific email by its ID
+ * Get a specific email by its ID from the ses-local server
  * @param {string} id - Email ID
  * @returns {Promise<EmailObject>} Email object
  */
 async function getEmail(id: string): Promise<EmailObject> {
   return new Promise((resolve, reject) => {
     const options = {
-      hostname: MAILDEV_HOST,
-      port: MAILDEV_PORT,
-      path: `/email/${id}`,
+      hostname: SES_LOCAL_HOST,
+      port: SES_LOCAL_PORT,
+      path: `/emails/${id}`,
       method: "GET",
     };
 
     const req = http.request(options, (res) => {
       let data = "";
-      res.on("data", (chunk) => {
-        data += chunk;
-      });
+      res.on("data", (chunk) => (data += chunk));
       res.on("end", () => {
         try {
-          const email = JSON.parse(data) as EmailObject;
-          resolve(email);
+          const rawEmail = JSON.parse(data) as SesEmailObjectRaw;
+          resolve(mapSesToEmailObject(rawEmail));
         } catch (e) {
-          if (e instanceof Error) {
-            reject(new Error(`Failed to parse email response: ${e.message}`));
-          } else {
-            reject(new Error("Failed to parse email response"));
-          }
+          reject(
+            new Error(
+              `Failed to parse email response: ${
+                e instanceof Error ? e.message : String(e)
+              }`
+            )
+          );
         }
       });
     });
 
-    req.on("error", (error) => {
-      reject(new Error(`Failed to fetch email: ${error.message}`));
-    });
-
+    req.on("error", (error) =>
+      reject(new Error(`Failed to fetch email: ${error.message}`))
+    );
     req.end();
   });
 }
 
 /**
- * Delete all emails from the MailDev server
+ * Delete all emails from the ses-local server
  * @returns {Promise<void>}
  */
 async function deleteAllEmails(): Promise<void> {
   return new Promise((resolve, reject) => {
     const options = {
-      hostname: MAILDEV_HOST,
-      port: MAILDEV_PORT,
-      path: "/email/all",
+      hostname: SES_LOCAL_HOST,
+      port: SES_LOCAL_PORT,
+      path: "/emails",
       method: "DELETE",
     };
 
     const req = http.request(options, (res) => {
-      if (res.statusCode === 200) {
+      if (res.statusCode === 200 || res.statusCode === 204) {
         resolve();
       } else {
         reject(new Error(`Failed to delete emails: status ${res.statusCode}`));
       }
     });
 
-    req.on("error", (error) => {
-      reject(new Error(`Failed to delete emails: ${error.message}`));
-    });
-
+    req.on("error", (error) =>
+      reject(new Error(`Failed to delete emails: ${error.message}`))
+    );
     req.end();
   });
 }
@@ -199,7 +239,7 @@ async function findEmailByRecipient(
 
 /**
  * Extract the password reset URL and token from an email
- * @param {EmailObject} email - Email object from MailDev
+ * @param {EmailObject} email - Email object
  * @returns {PasswordResetResult} Object with url and token properties or null values if not found
  */
 function extractPasswordResetUrl(email: EmailObject): PasswordResetResult {

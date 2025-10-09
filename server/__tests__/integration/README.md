@@ -7,7 +7,7 @@ This directory contains integration tests for the Polis API. These tests verify 
 As of the OIDC JWT migration, the API supports multiple authentication methods in priority order:
 
 1. **OIDC JWT** (preferred for standard users)
-2. **XID JWT** (for external integrations)  
+2. **XID JWT** (for external integrations)
 3. **Anonymous JWT** (for anonymous participants)
 4. **Legacy methods** (cookies, API keys) - deprecated, used as fallback
 
@@ -50,10 +50,10 @@ Each test file focuses on a specific aspect of the API:
 For tests that need authenticated users, use the JWT authentication pattern:
 
 ```typescript
-import { getJwtAuthenticatedAgent } from '../setup/api-test-helpers';
-import { getPooledTestUser } from '../setup/test-user-helpers';
+import { getJwtAuthenticatedAgent } from "../setup/api-test-helpers";
+import { getPooledTestUser } from "../setup/test-user-helpers";
 
-describe('My Authenticated Test', () => {
+describe("My Authenticated Test", () => {
   let agent: Agent;
 
   beforeEach(async () => {
@@ -64,15 +64,15 @@ describe('My Authenticated Test', () => {
       hname: pooledUser.name,
       password: pooledUser.password,
     };
-    
+
     // Get JWT authenticated agent
     const { agent: jwtAgent } = await getJwtAuthenticatedAgent(testUser);
     agent = jwtAgent;
   });
 
-  test('should work with JWT auth', async () => {
-    const response = await agent.post('/api/v3/conversations').send({
-      topic: 'Test Conversation'
+  test("should work with JWT auth", async () => {
+    const response = await agent.post("/api/v3/conversations").send({
+      topic: "Test Conversation",
     });
     expect(response.status).toBe(200);
   });
@@ -84,16 +84,16 @@ describe('My Authenticated Test', () => {
 For external integration tests:
 
 ```typescript
-import { getXidAuthenticatedAgent } from '../setup/xid-jwt-test-helpers';
+import { getXidAuthenticatedAgent } from "../setup/xid-jwt-test-helpers";
 
-describe('XID Integration Test', () => {
-  test('should work with XID JWT', async () => {
+describe("XID Integration Test", () => {
+  test("should work with XID JWT", async () => {
     const { agent } = await getXidAuthenticatedAgent({
-      xid: 'test-external-user',
-      ownerUid: 1
+      xid: "test-external-user",
+      ownerUid: 1,
     });
-    
-    const response = await agent.get('/api/v3/some-endpoint');
+
+    const response = await agent.get("/api/v3/some-endpoint");
     expect(response.status).toBe(200);
   });
 });
@@ -104,14 +104,14 @@ describe('XID Integration Test', () => {
 For anonymous user tests:
 
 ```typescript
-import { initializeParticipant } from '../setup/api-test-helpers';
+import { initializeParticipant } from "../setup/api-test-helpers";
 
-describe('Anonymous Participation Test', () => {
-  test('should initialize anonymous participant', async () => {
+describe("Anonymous Participation Test", () => {
+  test("should initialize anonymous participant", async () => {
     const { agent, token } = await initializeParticipant(conversationId);
-    
+
     // Agent is automatically configured with JWT token
-    const response = await agent.post('/api/v3/votes').send(voteData);
+    const response = await agent.post("/api/v3/votes").send(voteData);
     expect(response.status).toBe(200);
   });
 });
@@ -126,7 +126,7 @@ describe('Anonymous Participation Test', () => {
 const auth = await registerAndLoginUser();
 const agent = auth.agent;
 
-// ✅ Use JWT authentication instead  
+// ✅ Use JWT authentication instead
 const { agent } = await getJwtAuthenticatedAgent(testUser);
 ```
 
@@ -166,7 +166,6 @@ To maintain consistency and reduce duplication, all test files use shared helper
 - `formatErrorMessage(response, prefix)` - Formats error messages consistently from API responses
 - `hasResponseProperty(response, propertyPath)` - Safely checks for properties in responses (handles falsy values correctly)
 
-
 ### Test Setup Helpers
 
 - `setupAuthAndConvo(options)` - **Updated**: Now uses JWT authentication by default
@@ -185,8 +184,8 @@ When updating existing tests to use JWT authentication:
    // Before
    const auth = await registerAndLoginUser();
    const agent = auth.agent;
-   
-   // After  
+
+   // After
    const { agent } = await getJwtAuthenticatedAgent(testUser);
    ```
 
@@ -196,7 +195,7 @@ When updating existing tests to use JWT authentication:
    const pooledUser = getPooledTestUser(1); // Users 1-3 are available
    const testUser = {
      email: pooledUser.email,
-     hname: pooledUser.name, 
+     hname: pooledUser.name,
      password: pooledUser.password,
    };
    ```
@@ -210,7 +209,6 @@ When updating existing tests to use JWT authentication:
 The test helpers are designed to handle various quirks of the legacy server:
 
 - **Consistent JSON Responses**: The server now sends proper JSON responses for all endpoints, eliminating content-type mismatches.
-  
 - **Error Response Format**: Error responses are now properly structured JSON objects with error codes.
 
 - **Gzip Compression**: Some responses are gzipped, either with or without proper `content-encoding: gzip` headers. The helpers automatically detect and decompress gzipped content.
@@ -232,8 +230,6 @@ These helpers are used in tests that verify email-based functionality like:
 - Password resets
 - Notifications
 
-To use the email testing capabilities, ensure MailDev is running (included in the docker-compose setup) and accessible at <http://localhost:1080>.
-
 ## Global Test Agent Pattern
 
 To simplify API testing and handle various response types properly, we've implemented a global test agent pattern:
@@ -244,27 +240,26 @@ A pre-configured test agent is available globally in all test files:
 
 - `global.__TEST_AGENT__`: A standard Supertest agent that maintains auth across requests
 
-
 ### Using the Global Agent
 
 Import the global agent in your test files:
 
 ```javascript
-describe('My API Test', () => {
+describe("My API Test", () => {
   // Access the global agent
   const agent = global.__TEST_AGENT__;
-  
-  test('Test with JSON responses', async () => {
+
+  test("Test with JSON responses", async () => {
     // All endpoints now return proper JSON
-    const response = await agent.get('/api/v3/conversations');
+    const response = await agent.get("/api/v3/conversations");
     expect(response.status).toBe(200);
   });
-  
-  test('Test with error responses', async () => {
+
+  test("Test with error responses", async () => {
     // Error responses are now JSON
-    const response = await agent.post('/api/v3/auth/login').send({});
+    const response = await agent.post("/api/v3/auth/login").send({});
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain('polis_err_param_missing_password');
+    expect(response.body.error).toContain("polis_err_param_missing_password");
   });
 });
 ```
@@ -274,7 +269,6 @@ describe('My API Test', () => {
 You can use these standalone helper functions:
 
 - `authenticateAgent(agent, token)`: Authenticates a single agent with a token
-
 
 And these agent-based versions of common test operations:
 
@@ -307,13 +301,14 @@ const agent = global.__TEST_AGENT__;
 
 ```javascript
 // Before:
-const response = await makeRequest('GET', '/conversations', null, authToken);
+const response = await makeRequest("GET", "/conversations", null, authToken);
 
 // After:
-const response = await agent.get('/api/v3/conversations');
+const response = await agent.get("/api/v3/conversations");
 ```
 
 5. Be careful with response handling:
+
    - All responses now return proper JSON
    - Access JSON data with `response.body`
    - Error responses are also JSON objects
@@ -376,12 +371,12 @@ To improve test reliability and performance, we use shared test agents across al
 Always use the getter functions to access agents:
 
 ```javascript
-import { getTestAgent } from '../setup/api-test-helpers.js';
+import { getTestAgent } from "../setup/api-test-helpers.js";
 
-describe('My Test Suite', () => {
-  test('My Test', async () => {
+describe("My Test Suite", () => {
+  test("My Test", async () => {
     const agent = await getTestAgent();
-    const response = await agent.get('/api/v3/endpoint');
+    const response = await agent.get("/api/v3/endpoint");
     expect(response.status).toBe(200);
   });
 });
@@ -390,12 +385,14 @@ describe('My Test Suite', () => {
 Or use the helper functions that utilize agents internally:
 
 ```javascript
-import { createComment, getTestAgent } from '../setup/api-test-helpers.js';
+import { createComment, getTestAgent } from "../setup/api-test-helpers.js";
 
-describe('My Test Suite', () => {
-  test('My Test', async () => {
+describe("My Test Suite", () => {
+  test("My Test", async () => {
     const agent = await getTestAgent();
-    const commentId = await createComment(agent, conversationId, { txt: 'Test comment' });
+    const commentId = await createComment(agent, conversationId, {
+      txt: "Test comment",
+    });
     expect(commentId).toBeDefined();
   });
 });
@@ -423,12 +420,12 @@ describe('My Test Suite', () => {
 5. **Domain whitelist errors (403 polis_err_domain)**: The `participationInit` endpoint requires a valid referrer domain. The test helpers now automatically set a default origin that matches the whitelisted domains. You can override this if needed:
 
    ```typescript
-       // Default behavior - uses dynamic test server URL automatically
-    const { agent } = await initializeParticipant(conversationId);
-   
+   // Default behavior - uses dynamic test server URL automatically
+   const { agent } = await initializeParticipant(conversationId);
+
    // Override with custom origin if needed
-   const { agent } = await initializeParticipant(conversationId, { 
-     origin: 'http://custom-domain.com' 
+   const { agent } = await initializeParticipant(conversationId, {
+     origin: "http://custom-domain.com",
    });
    ```
 

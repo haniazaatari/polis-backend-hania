@@ -65,13 +65,13 @@ jobs:
       run: |
         # Build all services except server (tests run on host)
         docker compose -f docker-compose.test.yml --env-file test.env build \
-          math postgres file-server maildev oidc-simulator dynamodb
+          math postgres file-server ses-local oidc-simulator dynamodb
 
     - name: Start services
       run: |
         # Start only required services in detached mode (exclude server)
         docker compose -f docker-compose.test.yml --env-file test.env up -d \
-          math postgres file-server maildev oidc-simulator dynamodb
+          math postgres file-server ses-local oidc-simulator dynamodb
         
         # Wait for services to be ready
         echo "Waiting for services to start..."
@@ -117,7 +117,6 @@ jobs:
         
         # Override service URLs to use localhost instead of Docker service names
         export DATABASE_URL=postgres://postgres:PdwPNS2mDN73Vfbc@localhost:5432/polis-test
-        export MAILDEV_HOST=localhost
         export STATIC_FILES_HOST=localhost
         export DYNAMODB_ENDPOINT=http://localhost:8000
         

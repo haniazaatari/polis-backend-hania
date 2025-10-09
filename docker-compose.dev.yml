@@ -1,5 +1,5 @@
 # This file is an override to the original docker-compose.yml file, and as such is meant to
-# extend that configuration with some additional concerns for developers, such as a maildev
+# extend that configuration with some additional concerns for developers, such as ses-local
 # server, and exposing most ports. DO NOT USE THIS IN PRODUCTION.
 
 # This configuration does not work on its own and must be run together with docker-compose.yml,
@@ -67,17 +67,19 @@ services:
     ports:
       - ${STATIC_FILES_PORT:-8080}:${STATIC_FILES_PORT:-8080}
 
-  maildev:
-    image: docker.io/maildev/maildev:1.1.1
-    labels:
-      polis_tag: ${TAG}
-    networks:
-      - polis-net
+  ses-local:
+    image: jdelibas/aws-ses-local:latest
+    container_name: polis-ses-local
     ports:
-      # User interface
-      - "1080:1080"
-      # SMTP port
-      - "1025:1025"
+      - "8005:8005"
+    networks:
+      - "polis-net"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-ses-local-key}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-ses-local-secret}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+    labels:
+      polis_tag: ${TAG:-dev}
 
   oidc-simulator:
     build:

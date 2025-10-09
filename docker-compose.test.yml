@@ -30,7 +30,6 @@ services:
     environment:
       - DATABASE_SSL=false
       - DATABASE_URL=${DATABASE_URL}
-      - MAILDEV_HOST=maildev
       - NODE_ENV=development
       - NODE_EXTRA_CA_CERTS=/root/.simulacrum/certs/rootCA.pem
     env_file:
@@ -73,17 +72,18 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  maildev:
-    image: docker.io/maildev/maildev:1.1.1
-    labels:
-      polis_tag: test
-    networks:
-      - polis-test
+  ses-local:
+    image: jdelibas/aws-ses-local:latest
     ports:
-      # User interface
-      - "1080:1080"
-      # SMTP port
-      - "1025:1025"
+      - "8005:8005"
+    networks:
+      - "polis-net"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-ses-local-key}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-ses-local-secret}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+    labels:
+      polis_tag: ${TAG:-test}
 
   oidc-simulator:
     build:

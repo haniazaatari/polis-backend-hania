@@ -39,7 +39,6 @@ module.exports = defineConfig({
       return config
     },
     env: {
-      maildevUrl: process.env.MAILDEV_URL || 'http://localhost:1080',
       // OIDC configuration from environment variables
       AUTH_AUDIENCE: process.env.AUTH_AUDIENCE || 'users',
       AUTH_CLIENT_ID: process.env.AUTH_CLIENT_ID || 'dev-client-id',
