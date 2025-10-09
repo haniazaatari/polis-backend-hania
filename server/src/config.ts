@@ -145,7 +145,7 @@ export default {
   AWS_S3_ENDPOINT: process.env.AWS_S3_ENDPOINT,
   AWS_S3_PUBLIC_ENDPOINT: process.env.AWS_S3_PUBLIC_ENDPOINT,
   AWS_S3_BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME,
-  SESEndpoing: process.env.SES_ENDPOINT,
+  SESEndpoint: process.env.SES_ENDPOINT,
 
   // JWT configuration
   jwtPrivateKeyPath:
