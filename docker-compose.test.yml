@@ -73,7 +73,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   ses-local:
-    image: jdelibas/aws-ses-local:latest
+    image: dasprid/aws-ses-v2-local:latest
     ports:
       - "8005:8005"
     networks:

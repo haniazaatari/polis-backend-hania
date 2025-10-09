@@ -256,7 +256,7 @@ services:
       - local-services
   
   ses-local:
-    image: jdelibas/aws-ses-local:latest
+    image: dasprid/aws-ses-v2-local:latest
     container_name: polis-ses-local
     ports:
       - "8005:8005"
