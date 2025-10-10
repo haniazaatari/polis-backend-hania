@@ -266,6 +266,7 @@ services:
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-ses-local-key}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-ses-local-secret}
       - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_SES_V2_LOCAL_DISABLE_AUTH=true
     labels:
       polis_tag: ${TAG:-dev}
     profiles:

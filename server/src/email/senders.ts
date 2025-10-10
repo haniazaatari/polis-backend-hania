@@ -7,19 +7,19 @@
 // If not, see < http://www.gnu.org/licenses/>.
 
 import {
-  SESClient,
+  SESv2Client,
   SendEmailCommand,
   SendEmailCommandOutput,
-} from "@aws-sdk/client-ses";
+} from "@aws-sdk/client-sesv2";
 import Config from "../config";
 import logger from "../utils/logger";
 
-const sesClient = new SESClient({
+const sesClient = new SESv2Client({
   region: Config.awsRegion,
   endpoint: Config.SESEndpoint,
   credentials: {
-    accessKeyId: Config.awsAccessKeyId || "ses-local-key",
-    secretAccessKey: Config.awsSecretAccessKey || "ses-local-secret",
+    accessKeyId: Config.awsAccessKeyId || "test",
+    secretAccessKey: Config.awsSecretAccessKey || "test",
   },
 });
 
@@ -28,32 +28,33 @@ async function sendTextEmail(
   recipient: string,
   subject: string,
   text: string
-): Promise<SendEmailCommandOutput | void> {
+): Promise<SendEmailCommandOutput> {
   const params = {
     Destination: {
       ToAddresses: [recipient],
     },
-    Message: {
-      Body: {
-        Html: {
+    Content: {
+      Simple: {
+        Subject: {
           Charset: "UTF-8",
-          Data: `${text} + <br><i>Polis is powered by donations from people like you. Donate at <a href="https://donorbox.org/geo-polis">https://donorbox.org/geo-polis</a>.</i><br>`,
+          Data: subject,
         },
-        Text: {
-          Charset: "UTF-8",
-          Data: `${text} - Polis is powered by donations from people like you. Donate at https://donorbox.org/geo-polis.`,
+        Body: {
+          Html: {
+            Charset: "UTF-8",
+            Data: `${text} + <br><i>Polis is powered by donations from people like you. Donate at <a href="https://donorbox.org/geo-polis">https://donorbox.org/geo-polis</a>.</i><br>`,
+          },
+          Text: {
+            Charset: "UTF-8",
+            Data: `${text} - Polis is powered by donations from people like you. Donate at https://donorbox.org/geo-polis.`,
+          },
         },
-      },
-      Subject: {
-        Charset: "UTF-8",
-        Data: subject,
       },
     },
-    Source: sender,
+    FromEmailAddress: sender,
   };
 
   const command = new SendEmailCommand(params);
-  // eslint-disable-next-line no-console
   return sesClient.send(command);
 }
 
