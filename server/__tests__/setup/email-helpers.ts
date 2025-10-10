@@ -1,6 +1,6 @@
 import http from "node:http";
 
-const SES_LOCAL_HOST = process.env.SES_LOCAL_HOST || "ses-local";
+const SES_LOCAL_HOST = process.env.SES_LOCAL_HOST || "localhost";
 const SES_LOCAL_PORT = parseInt(process.env.SES_LOCAL_PORT || "8005", 10);
 
 // --- Interfaces (No changes needed here) ---
