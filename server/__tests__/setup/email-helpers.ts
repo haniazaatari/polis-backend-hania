@@ -91,7 +91,7 @@ async function getEmails(): Promise<EmailObject[]> {
       res.on("end", () => {
         try {
           const response = JSON.parse(data);
-          const rawEmails = response.messages as SesEmailObjectRaw[];
+          const rawEmails = response.emails as SesEmailObjectRaw[];
           if (!Array.isArray(rawEmails)) {
             throw new Error(
               `Response from /emails is not an array. ${JSON.stringify(
