@@ -121,13 +121,6 @@ jobs:
         AWS_SECRET_ACCESS_KEY=ses-local-secret \
         AWS_REGION=us-east-1 \
         npm test -- --ci --coverage --maxWorkers=2
-        
-        echo "--- Verifying network connectivity to ses-local ---"
-        curl -v http://localhost:8005/emails
-        echo "--- End of diagnostic commands ---"
-        
-        # Run the tests on the host machine
-        npm test -- --ci --coverage --maxWorkers=2
 
     - name: Upload test coverage
       if: always()
@@ -152,9 +145,6 @@ jobs:
         
         echo "=== DynamoDB logs ==="
         docker compose -f docker-compose.test.yml logs dynamodb | tail -100
-
-        echo "=== SES Local logs ==="
-        docker compose -f docker-compose.test.yml logs ses-local | tail -100
 
     - name: Clean up
       if: always()
