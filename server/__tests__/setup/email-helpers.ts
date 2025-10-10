@@ -2,6 +2,8 @@ import http from "node:http";
 
 const SES_LOCAL_HOST = process.env.SES_LOCAL_HOST || "localhost";
 const SES_LOCAL_PORT = parseInt(process.env.SES_LOCAL_PORT || "8005", 10);
+
+// --- Interfaces (No changes needed here) ---
 interface EmailRecipient {
   address: string;
   name?: string;
@@ -30,7 +32,6 @@ interface PasswordResetResult {
   token: string | null;
 }
 
-// --- Interfaces for the raw JSON response from ses-local ---
 interface SesContent {
   Data: string;
   Charset: string;
@@ -58,11 +59,6 @@ interface SesEmailObjectRaw {
   Message: SesMessage;
 }
 
-/**
- * Maps the raw email format from ses-local to the consistent EmailObject format.
- * @param {SesEmailObjectRaw} sesEmail - The raw email object from ses-local.
- * @returns {EmailObject} The mapped email object.
- */
 function mapSesToEmailObject(sesEmail: SesEmailObjectRaw): EmailObject {
   return {
     id: sesEmail.MessageId,
@@ -94,7 +90,12 @@ async function getEmails(): Promise<EmailObject[]> {
       res.on("data", (chunk) => (data += chunk));
       res.on("end", () => {
         try {
-          const rawEmails = JSON.parse(data) as SesEmailObjectRaw[];
+          const response = JSON.parse(data);
+          const rawEmails = response.messages as SesEmailObjectRaw[];
+          if (!Array.isArray(rawEmails)) {
+            throw new Error("Response from /emails is not an array.");
+          }
+
           resolve(rawEmails.map(mapSesToEmailObject));
         } catch (e) {
           reject(
