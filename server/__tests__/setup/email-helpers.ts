@@ -93,7 +93,11 @@ async function getEmails(): Promise<EmailObject[]> {
           const response = JSON.parse(data);
           const rawEmails = response.messages as SesEmailObjectRaw[];
           if (!Array.isArray(rawEmails)) {
-            throw new Error("Response from /emails is not an array.");
+            throw new Error(
+              `Response from /emails is not an array. ${JSON.stringify(
+                rawEmails
+              )}, ${rawEmails}`
+            );
           }
 
           resolve(rawEmails.map(mapSesToEmailObject));
