@@ -1,47 +1,101 @@
 import http from "node:http";
 
+/**
+ * The hostname for the local SES server. Defaults to "localhost".
+ * @type {string}
+ */
 const SES_LOCAL_HOST = process.env.SES_LOCAL_HOST || "localhost";
+
+/**
+ * The port for the local SES server. Defaults to 8005.
+ * @type {number}
+ */
 const SES_LOCAL_PORT = parseInt(process.env.SES_LOCAL_PORT || "8005", 10);
 
+/**
+ * Represents an email recipient with an address and an optional name.
+ * @interface
+ */
 interface EmailRecipient {
+  /** The email address of the recipient. */
   address: string;
+  /** The optional display name of the recipient. */
   name?: string;
 }
 
+/**
+ * Represents a standardized email object.
+ * @interface
+ */
 interface EmailObject {
+  /** A unique identifier for the email. */
   id: string;
+  /** The subject line of the email. */
   subject: string;
+  /** The plain text content of the email. */
   text: string;
+  /** The HTML content of the email, if available. */
   html?: string;
+  /** An array of recipients in the 'To' field. */
   to: EmailRecipient[];
+  /** The sender of the email. */
   from: EmailRecipient;
+  /** The date of the email in ISO 8601 format. */
   date: string;
+  /** The date of the email as a Date object. */
   time?: Date;
+  /** Allows for any other properties. */
   [key: string]: any;
 }
 
+/**
+ * Options for polling when searching for an email.
+ * @interface
+ */
 interface FindEmailOptions {
+  /** Total time in milliseconds to wait for the email. Defaults to 10000. */
   timeout?: number;
+  /** Time in milliseconds between each fetch attempt. Defaults to 1000. */
   interval?: number;
+  /** The maximum number of attempts to make. Defaults to 10. */
   maxAttempts?: number;
 }
 
+/**
+ * The result of extracting a password reset URL and token from an email.
+ * @interface
+ */
 interface PasswordResetResult {
+  /** The full password reset URL, or null if not found. */
   url: string | null;
+  /** The password reset token, or null if not found. */
   token: string | null;
 }
 
+// Internal types for parsing the /store endpoint response.
+/**
+ * @internal
+ * The body of an email from the /store endpoint.
+ */
 interface StoreBody {
   html: string;
   text: string;
 }
 
+/**
+ * @internal
+ * The destination object for an email from the /store endpoint.
+ */
 interface StoreDestination {
   to: string[];
   cc: string[];
   bcc: string[];
 }
 
+/**
+ * @internal
+ * The raw email object structure from the /store endpoint.
+ */
 interface StoreEmailObject {
   messageId: string;
   from: string;
@@ -51,12 +105,18 @@ interface StoreEmailObject {
   at: number; // Unix timestamp
 }
 
+/**
+ * @internal
+ * The top-level response structure from the /store endpoint.
+ */
 interface StoreResponse {
   emails: StoreEmailObject[];
 }
 
 /**
  * Maps the raw email format from the /store endpoint to the consistent EmailObject format.
+ * @param {StoreEmailObject} storeEmail - The raw email object from the store.
+ * @returns {EmailObject} The mapped, standardized email object.
  */
 function mapStoreToEmailObject(storeEmail: StoreEmailObject): EmailObject {
   const timestamp = new Date(storeEmail.at * 1000); // Convert Unix timestamp to Date
@@ -73,7 +133,10 @@ function mapStoreToEmailObject(storeEmail: StoreEmailObject): EmailObject {
 }
 
 /**
- * Get all emails from the /store endpoint. This is now the primary fetch function.
+ * Fetches all emails from the local SES server's /store endpoint.
+ * @async
+ * @returns {Promise<EmailObject[]>} A promise that resolves to an array of email objects.
+ * @throws {Error} Throws an error if the request fails or the response cannot be parsed.
  */
 async function getEmails(): Promise<EmailObject[]> {
   return new Promise((resolve, reject) => {
@@ -117,8 +180,11 @@ async function getEmails(): Promise<EmailObject[]> {
 }
 
 /**
- * Get a specific email by its ID. Since there is no direct endpoint,
- * this fetches all emails and filters them in memory.
+ * Retrieves a specific email by its ID. It fetches all emails and filters them.
+ * @async
+ * @param {string} id - The unique identifier of the email to retrieve.
+ * @returns {Promise<EmailObject>} A promise that resolves to the found email object.
+ * @throws {Error} Throws an error if no email with the specified ID is found.
  */
 async function getEmail(id: string): Promise<EmailObject> {
   const emails = await getEmails();
@@ -130,7 +196,12 @@ async function getEmail(id: string): Promise<EmailObject> {
 }
 
 /**
- * Find the most recent email sent to a specific recipient.
+ * Polls the local SES server to find the most recent email sent to a specific recipient.
+ * @async
+ * @param {string} recipient - The email address of the recipient to search for.
+ * @param {FindEmailOptions} [options={}] - Polling options (timeout, interval, maxAttempts).
+ * @returns {Promise<EmailObject>} A promise that resolves to the most recent email found for the recipient.
+ * @throws {Error} Throws an error if no email is found for the recipient within the specified timeout and attempts.
  */
 async function findEmailByRecipient(
   recipient: string,
@@ -177,7 +248,10 @@ async function findEmailByRecipient(
 }
 
 /**
- * Extract the password reset URL and token from an email.
+ * Extracts a password reset URL and token from the text body of an email.
+ * It looks for a URL containing '/pwreset/'.
+ * @param {EmailObject} email - The email object to parse.
+ * @returns {PasswordResetResult} An object containing the extracted URL and token, or null if not found.
  */
 function extractPasswordResetUrl(email: EmailObject): PasswordResetResult {
   if (email?.text) {
@@ -196,7 +270,12 @@ function extractPasswordResetUrl(email: EmailObject): PasswordResetResult {
 }
 
 /**
- * Get the password reset URL for a specific recipient.
+ * Finds an email for a recipient and extracts the password reset URL from it.
+ * @async
+ * @param {string} recipient - The email address of the recipient.
+ * @param {FindEmailOptions} [options={}] - Polling options to find the email.
+ * @returns {Promise<PasswordResetResult>} A promise that resolves to the password reset URL and token.
+ * @throws {Error} Throws an error if the email is not found or if the URL cannot be extracted.
  */
 async function getPasswordResetUrl(
   recipient: string,
