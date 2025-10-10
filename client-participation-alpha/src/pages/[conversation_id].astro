@@ -8,6 +8,7 @@ import TreeviteLoginCodeModal from '../components/TreeviteLoginCodeModal.jsx';
 import TreeviteInvites from '../components/TreeviteInvites.jsx';
 import { getTranslations } from '../strings/strings.js';
 import PolisNet from '../lib/net';
+import { marked } from 'marked';
 
 const { conversation_id } = Astro.params;
 
@@ -115,7 +116,7 @@ const hideHeader = Astro.url.searchParams.get('hide_header');
           {surveyDetails?.title}
           {!isConversationActive && <span class="closed-badge">closed</span>}
         </h1>
-        <p class="description" set:html={surveyDetails?.description}></p>
+        <p class="description" set:html={marked.parse(surveyDetails?.description)}></p>
 
         {isConversationActive ? (
           <>
