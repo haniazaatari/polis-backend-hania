@@ -220,7 +220,6 @@ The test helpers are designed to handle various quirks of the legacy server:
 The `email-helpers.js` file provides utilities for testing email functionality:
 
 - **Finding Emails**: `findEmailByRecipient()` locates emails sent to specific recipients
-- **Email Cleanup**: `deleteAllEmails()` removes all emails before and after tests
 - **Content Extraction**: Functions to extract specific content like reset URLs from emails
 - **Polling Mechanism**: Retry and timeout functionality to allow for email delivery delays
 
