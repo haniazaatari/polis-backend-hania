@@ -17,6 +17,10 @@ import logger from "../utils/logger";
 const sesClient = new SESClient({
   region: Config.awsRegion,
   endpoint: Config.SESEndpoint,
+  credentials: {
+    accessKeyId: Config.awsAccessKeyId || "ses-local-key",
+    secretAccessKey: Config.awsSecretAccessKey || "ses-local-secret",
+  },
 });
 
 async function sendTextEmail(
@@ -50,7 +54,7 @@ async function sendTextEmail(
 
   const command = new SendEmailCommand(params);
   // eslint-disable-next-line no-console
-  return Config.isDevMode ? sesClient.send(command) : console.log(command);
+  return sesClient.send(command);
 }
 
 async function sendMultipleTextEmails(

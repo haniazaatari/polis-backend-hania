@@ -120,6 +120,16 @@ jobs:
         export STATIC_FILES_HOST=localhost
         export DYNAMODB_ENDPOINT=http://localhost:8000
         export SES_ENDPOINT=http://localhost:8005
+
+        # --- DIAGNOSTIC COMMANDS START ---
+        echo "--- Verifying environment variables ---"
+        echo "SES_ENDPOINT is set to: $SES_ENDPOINT"
+        
+        echo "--- Verifying network connectivity to ses-local ---"
+        # The -v flag provides verbose output for connection details
+        curl -v http://localhost:8005/emails
+        echo "--- End of diagnostic commands ---"
+        # --- DIAGNOSTIC COMMANDS END ---
         
         # Run the tests on the host machine
         npm test -- --ci --coverage --maxWorkers=2
