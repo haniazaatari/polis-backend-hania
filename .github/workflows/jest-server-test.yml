@@ -119,6 +119,7 @@ jobs:
         export DATABASE_URL=postgres://postgres:PdwPNS2mDN73Vfbc@localhost:5432/polis-test
         export STATIC_FILES_HOST=localhost
         export DYNAMODB_ENDPOINT=http://localhost:8000
+        export SES_ENDPOINT=http://localhost:8005
         
         # Run the tests on the host machine
         npm test -- --ci --coverage --maxWorkers=2
@@ -146,6 +147,9 @@ jobs:
         
         echo "=== DynamoDB logs ==="
         docker compose -f docker-compose.test.yml logs dynamodb | tail -100
+
+        echo "=== SES Local logs ==="
+        docker compose -f docker-compose.test.yml logs ses-local | tail -100
 
     - name: Clean up
       if: always()
