@@ -120,6 +120,9 @@ jobs:
         export STATIC_FILES_HOST=localhost
         export DYNAMODB_ENDPOINT=http://localhost:8000
         export SES_ENDPOINT=http://localhost:8005
+        export AWS_ACCESS_KEY_ID=ses-local-key
+        export AWS_SECRET_ACCESS_KEY=ses-local-secret
+        export AWS_REGION=us-east-1
 
         # --- DIAGNOSTIC COMMANDS START ---
         echo "--- Verifying environment variables ---"
