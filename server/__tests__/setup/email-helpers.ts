@@ -1,6 +1,6 @@
 import http from "node:http";
 
-const SES_LOCAL_HOST = process.env.SES_LOCAL_HOST || "localhost";
+const SES_LOCAL_HOST = process.env.SES_LOCAL_HOST || "ses-local";
 const SES_LOCAL_PORT = parseInt(process.env.SES_LOCAL_PORT || "8005", 10);
 
 // --- Interfaces (No changes needed here) ---
@@ -81,7 +81,7 @@ async function getEmails(): Promise<EmailObject[]> {
     const options = {
       hostname: SES_LOCAL_HOST,
       port: SES_LOCAL_PORT,
-      path: "/emails",
+      path: "/store",
       method: "GET",
     };
 
