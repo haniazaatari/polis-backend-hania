@@ -110,29 +110,21 @@ jobs:
       run: |
         cd server
         
-        # Set environment variables for tests
-        export NODE_EXTRA_CA_CERTS=$(pwd)/../.simulacrum/certs/rootCA.pem
-        export CI=true
-        export NODE_ENV=test
-        
-        # Override service URLs to use localhost instead of Docker service names
-        export DATABASE_URL=postgres://postgres:PdwPNS2mDN73Vfbc@localhost:5432/polis-test
-        export STATIC_FILES_HOST=localhost
-        export DYNAMODB_ENDPOINT=http://localhost:8000
-        export SES_ENDPOINT=http://localhost:8005
-        export AWS_ACCESS_KEY_ID=ses-local-key
-        export AWS_SECRET_ACCESS_KEY=ses-local-secret
-        export AWS_REGION=us-east-1
-
-        # --- DIAGNOSTIC COMMANDS START ---
-        echo "--- Verifying environment variables ---"
-        echo "SES_ENDPOINT is set to: $SES_ENDPOINT"
+        NODE_EXTRA_CA_CERTS=$(pwd)/../.simulacrum/certs/rootCA.pem \
+        CI=true \
+        NODE_ENV=test \
+        DATABASE_URL=postgres://postgres:PdwPNS2mDN73Vfbc@localhost:5432/polis-test \
+        STATIC_FILES_HOST=localhost \
+        DYNAMODB_ENDPOINT=http://localhost:8000 \
+        SES_ENDPOINT=http://localhost:8005 \
+        AWS_ACCESS_KEY_ID=ses-local-key \
+        AWS_SECRET_ACCESS_KEY=ses-local-secret \
+        AWS_REGION=us-east-1 \
+        npm test -- --ci --coverage --maxWorkers=2
         
         echo "--- Verifying network connectivity to ses-local ---"
-        # The -v flag provides verbose output for connection details
         curl -v http://localhost:8005/emails
         echo "--- End of diagnostic commands ---"
-        # --- DIAGNOSTIC COMMANDS END ---
         
         # Run the tests on the host machine
         npm test -- --ci --coverage --maxWorkers=2
