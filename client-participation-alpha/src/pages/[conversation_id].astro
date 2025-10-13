@@ -9,6 +9,7 @@ import TreeviteInvites from '../components/TreeviteInvites.jsx';
 import { getTranslations } from '../strings/strings.js';
 import PolisNet from '../lib/net';
 import { marked } from 'marked';
+import DonateMessage from '../components/DonateMessage';
 
 const { conversation_id } = Astro.params;
 
@@ -151,6 +152,7 @@ const hideHeader = Astro.url.searchParams.get('hide_header');
         <a href="/privacy" target="_blank" rel="noopener noreferrer">{s.privacy}</a>
         <a href="/tos" target="_blank" rel="noopener noreferrer">{s.TOS}</a>
       </div>
+      <DonateMessage client:load />
     </div>
   </div>
 </Layout>

@@ -123,7 +123,7 @@ function _getConversationIdFromDecodedJwt(token: string) {
   }
 }
 
-function _getOidcTokenFromStorage(storage: Storage) {
+export function _getOidcTokenFromStorage(storage: Storage) {
   if (!storage) return null;
 
   for (let i = 0; i < storage.length; i++) {
