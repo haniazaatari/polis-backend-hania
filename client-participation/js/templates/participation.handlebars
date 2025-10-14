@@ -8,6 +8,16 @@
 
 <span id="header_root"></span>
 
+<script>
+  if (window.POLIS_DELPHI_ENABLED) {
+    try {
+      document.querySelector('#polis-donate').style.display = "none";
+    } catch (e) {
+      console.error(e);
+    }
+  }
+</script>
+
 <div
   class="
   conversationViewRoot
@@ -354,6 +364,9 @@
       >
         {{> linkPrivacy}}
         {{> linkTos}}
+        <div id="polis-donate">
+          <i>Polis is powered by support from people like you. Contribute at <a href="https://donorbox.org/geo-polis">https://donorbox.org/geo-polis</a>.</i>
+        </div>
     </div>
   </div>
 

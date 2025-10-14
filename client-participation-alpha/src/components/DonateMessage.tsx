@@ -14,7 +14,7 @@ export default function DonateMessage({ }) {
         if (accessToken) {
           const decodedToken = jwtDecode(accessToken);
           // @ts-expect-error t
-          if (decodedToken && decodedToken['https://pol.is/delphi_enabled']) {
+          if (decodedToken && decodedToken[`${import.meta.env.PUBLIC_AUTH_NAMESPACE}delphi_enabled`]) {
             setIsDelphiEnabled(true);
           }
         }
@@ -36,7 +36,7 @@ export default function DonateMessage({ }) {
     <>
       <br />
       <div>
-        <i>Polis is powered by donations from people like you. Donate at <a href="https://donorbox.org/geo-polis">https://donorbox.org/geo-polis</a>.</i>
+        <i>Polis is powered by support from people like you. Contribute at <a href="https://donorbox.org/geo-polis">https://donorbox.org/geo-polis</a>.</i>
       </div>
     </>
   );
