@@ -977,6 +977,14 @@ module.exports = ConversationView.extend({
 
         that.updateVisMode();
 
+        if (window.POLIS_DELPHI_ENABLED) {
+          try {
+            $("#polis-donate").hide(); 
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
         // that.visModeModel.set("visMode", VIS_MODE_WAITING);
 
         $("#getDataButton").on("click", function () {
