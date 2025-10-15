@@ -29,6 +29,7 @@ type CommentRow = {
   agrees: number;
   disagrees: number;
   pass: number;
+  importance?: number;
 };
 
 type CommentGroupStats = {
@@ -188,6 +189,14 @@ export async function sendCommentSummary(zid: number, res: Response) {
   const comments = new Map<number, CommentRow>();
 
   try {
+    // Check if importance is enabled for this conversation
+    const convRows = (await pg.queryP_readOnly(
+      "SELECT importance_enabled FROM conversations WHERE zid = ($1)",
+      [zid]
+    )) as { importance_enabled: boolean }[];
+    const importanceEnabled =
+      convRows.length > 0 ? convRows[0].importance_enabled : false;
+
     // First query: Load comments metadata
     const commentRows = (await pg.queryP_readOnly(
       "SELECT tid, pid, created, txt, mod, velocity, active FROM comments WHERE zid = ($1)",
@@ -197,12 +206,15 @@ export async function sendCommentSummary(zid: number, res: Response) {
       comment.agrees = 0;
       comment.disagrees = 0;
       comment.pass = 0;
+      if (importanceEnabled) {
+        comment.importance = 0;
+      }
       comments.set(comment.tid, comment);
     }
 
     // Second query: Count votes in a single pass
     pg.stream_queryP_readOnly(
-      "SELECT tid, vote FROM votes WHERE zid = ($1) ORDER BY tid",
+      "SELECT tid, vote, high_priority FROM votes WHERE zid = ($1) ORDER BY tid",
       [zid],
       (row) => {
         const comment = comments.get(row.tid);
@@ -211,6 +223,11 @@ export async function sendCommentSummary(zid: number, res: Response) {
           if (row.vote === -1) comment.agrees += 1;
           else if (row.vote === 1) comment.disagrees += 1;
           else if (row.vote === 0) comment.pass += 1;
+
+          // Count high priority votes if enabled
+          if (importanceEnabled && row.high_priority) {
+            comment.importance = (comment.importance || 0) + 1;
+          }
         } else {
           logger.warn(`Comment row not found for [zid=${zid}, tid=${row.tid}]`);
         }
@@ -220,23 +237,27 @@ export async function sendCommentSummary(zid: number, res: Response) {
           return b.velocity - a.velocity;
         });
 
+        // Build formatters conditionally based on importance_enabled
+        const formatters: Formatters<CommentRow> = {
+          timestamp: (row) => String(Math.floor(parseInt(row.created) / 1000)),
+          datetime: (row) => formatDatetime(row.created),
+          "comment-id": (row) => String(row.tid),
+          "author-id": (row) => String(row.pid),
+          agrees: (row) => String(row.agrees),
+          disagrees: (row) => String(row.disagrees),
+          moderated: (row) => String(row.mod),
+        };
+
+        // Add importance column if enabled
+        if (importanceEnabled) {
+          formatters.importance = (row) => String(row.importance || 0);
+        }
+
+        // Add comment-body last
+        formatters["comment-body"] = (row) => formatEscapedText(row.txt);
+
         res.setHeader("content-type", "text/csv");
-        res.send(
-          formatCSV(
-            {
-              timestamp: (row) =>
-                String(Math.floor(parseInt(row.created) / 1000)),
-              datetime: (row) => formatDatetime(row.created),
-              "comment-id": (row) => String(row.tid),
-              "author-id": (row) => String(row.pid),
-              agrees: (row) => String(row.agrees),
-              disagrees: (row) => String(row.disagrees),
-              moderated: (row) => String(row.mod),
-              "comment-body": (row) => formatEscapedText(row.txt),
-            },
-            commentRows
-          )
-        );
+        res.send(formatCSV(formatters, commentRows));
       },
       (error) => {
         logger.error("polis_err_report_comments", error);
@@ -249,27 +270,52 @@ export async function sendCommentSummary(zid: number, res: Response) {
 }
 
 export async function sendVotesSummary(zid: number, res: Response) {
-  const formatters: Formatters<any> = {
-    timestamp: (row) => String(Math.floor(row.timestamp / 1000)),
-    datetime: (row) => formatDatetime(row.timestamp),
-    "comment-id": (row) => String(row.tid),
-    "voter-id": (row) => String(row.pid),
-    vote: (row) => String(-row.vote), // have to flip -1 to 1 and vice versa
-  };
-  res.setHeader("Content-Type", "text/csv");
-  res.write(formatCSVHeaders(formatters) + sep);
+  try {
+    // Check if importance is enabled for this conversation
+    const convRows = (await pg.queryP_readOnly(
+      "SELECT importance_enabled FROM conversations WHERE zid = ($1)",
+      [zid]
+    )) as { importance_enabled: boolean }[];
+    const importanceEnabled =
+      convRows.length > 0 ? convRows[0].importance_enabled : false;
 
-  pg.stream_queryP_readOnly(
-    "SELECT created as timestamp, tid, pid, vote FROM votes WHERE zid = $1 ORDER BY tid, pid",
-    [zid],
-    (row) => res.write(formatCSVRow(row, formatters) + sep),
-    () => res.end(),
-    (error) => {
-      // Handle any errors
-      logger.error("polis_err_report_votes_csv", error);
-      failJson(res, 500, "polis_err_data_export", error);
+    // Build formatters conditionally based on importance_enabled
+    const formatters: Formatters<any> = {
+      timestamp: (row) => String(Math.floor(row.timestamp / 1000)),
+      datetime: (row) => formatDatetime(row.timestamp),
+      "comment-id": (row) => String(row.tid),
+      "voter-id": (row) => String(row.pid),
+      vote: (row) => String(-row.vote), // have to flip -1 to 1 and vice versa
+    };
+
+    // Add important column if enabled
+    if (importanceEnabled) {
+      formatters.important = (row) => String(row.high_priority ? 1 : 0);
     }
-  );
+
+    res.setHeader("Content-Type", "text/csv");
+    res.write(formatCSVHeaders(formatters) + sep);
+
+    // Select high_priority field if importance is enabled
+    const selectClause = importanceEnabled
+      ? "SELECT created as timestamp, tid, pid, vote, high_priority FROM votes WHERE zid = $1 ORDER BY tid, pid"
+      : "SELECT created as timestamp, tid, pid, vote FROM votes WHERE zid = $1 ORDER BY tid, pid";
+
+    pg.stream_queryP_readOnly(
+      selectClause,
+      [zid],
+      (row) => res.write(formatCSVRow(row, formatters) + sep),
+      () => res.end(),
+      (error) => {
+        // Handle any errors
+        logger.error("polis_err_report_votes_csv", error);
+        failJson(res, 500, "polis_err_data_export", error);
+      }
+    );
+  } catch (err) {
+    logger.error("polis_err_report_votes", err);
+    failJson(res, 500, "polis_err_data_export", err);
+  }
 }
 
 export async function sendParticipantVotesSummary(zid: number, res: Response) {

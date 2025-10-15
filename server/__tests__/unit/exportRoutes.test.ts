@@ -297,6 +297,11 @@ describe("handle_GET_reportExport", () => {
         "Thu Jan 01 1970 00:00:00 GMT+0000 (Coordinated Universal Time)"
       );
 
+      // Mock the importance_enabled query (returns false by default)
+      (pg.queryP_readOnly as jest.Mock).mockResolvedValueOnce([
+        { importance_enabled: false },
+      ] as never);
+
       // Mock stream with a single vote row
       mockStreamWithRows([{ timestamp: 94668411, tid: 1, pid: 1, vote: -1 }]);
 
@@ -315,8 +320,53 @@ describe("handle_GET_reportExport", () => {
       expect(mockRes.end).toHaveBeenCalled();
     });
 
+    it("sendVotesSummary should include important column when importance is enabled", async () => {
+      // Use the original require approach since it's more compatible with jest.spyOn
+      const formatDatetimeSpy = jest.spyOn(
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        require("../../src/routes/export"),
+        "formatDatetime"
+      );
+      formatDatetimeSpy.mockReturnValue(
+        "Thu Jan 01 1970 00:00:00 GMT+0000 (Coordinated Universal Time)"
+      );
+
+      // Mock the importance_enabled query (returns true)
+      (pg.queryP_readOnly as jest.Mock).mockResolvedValueOnce([
+        { importance_enabled: true },
+      ] as never);
+
+      // Mock stream with vote rows including high_priority field
+      mockStreamWithRows([
+        { timestamp: 94668411, tid: 1, pid: 1, vote: -1, high_priority: true },
+        { timestamp: 94668412, tid: 2, pid: 1, vote: 1, high_priority: false },
+      ]);
+
+      await sendVotesSummary(zid, mockRes as any);
+
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        "Content-Type",
+        "text/csv"
+      );
+      expect(mockRes.write).toHaveBeenCalledWith(
+        "timestamp,datetime,comment-id,voter-id,vote,important\n"
+      );
+      expect(mockRes.write).toHaveBeenCalledWith(
+        "94668,Thu Jan 01 1970 00:00:00 GMT+0000 (Coordinated Universal Time),1,1,1,1\n"
+      );
+      expect(mockRes.write).toHaveBeenCalledWith(
+        "94668,Thu Jan 01 1970 00:00:00 GMT+0000 (Coordinated Universal Time),2,1,-1,0\n"
+      );
+      expect(mockRes.end).toHaveBeenCalled();
+    });
+
     it("sendVotesSummary should handle errors during vote summary export", async () => {
       const mockError = new Error("Test error");
+
+      // Mock the importance_enabled query
+      (pg.queryP_readOnly as jest.Mock).mockResolvedValueOnce([
+        { importance_enabled: false },
+      ] as never);
 
       // Mock stream with error
       mockStreamWithRows([], true, mockError);
