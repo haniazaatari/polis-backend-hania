@@ -33,6 +33,7 @@
       window.preload = "REPLACE_THIS_WITH_PRELOAD_DATA";
       window.version = "<%= versionString %>";
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/jwt-decode@latest/build/jwt-decode.min.js"></script>
 
     <style>
       .displaynone {
@@ -83,10 +84,11 @@
           return params.ui_lang;
         }
 
+        window.POLIS_DELPHI_ENABLED = null;
+
         function getOidcToken() {
           function _getOidcTokenFromStorage(storage) {
             if (!storage) return null;
-
             for (var i = 0; i < storage.length; i++) {
               var key = storage.key(i);
               if (
@@ -101,12 +103,12 @@
                     // Check for expiry and access_token
                     if (
                       parsed &&
-                      parsed.body &&
-                      parsed.body.access_token &&
-                      parsed.expiresAt &&
-                      parsed.expiresAt > Math.floor(Date.now() / 1000)
+                      parsed &&
+                      parsed.access_token &&
+                      parsed.expires_at &&
+                      parsed.expires_at > Math.floor(Date.now() / 1000)
                     ) {
-                      return parsed.body.access_token;
+                      return parsed.access_token;
                     }
                   }
                 } catch (e) {
@@ -123,6 +125,14 @@
           }
           return token;
         }
+
+        try {
+            let XPT__ = getOidcToken();
+            window.POLIS_DELPHI_ENABLED = jwt_decode(XPT__)['<%= authNamespace %>delphi_enabled'];
+          } catch (error) {
+            console.error(error);
+          }
+
 
         function getConversationIdFromPath() {
           var pathname = document.location.pathname;
@@ -374,7 +384,6 @@
       }());
     </script>
   </head>
-
   <body class="clickDeselectsHull" style="margin:0; background-color: white;">
 
     <p id="mainSpinner" style="text-align:center; margin: auto; width:100%; display: none">

@@ -88,6 +88,7 @@ module.exports = (env, options) => {
   const oidcCacheKeyPrefix = process.env.OIDC_CACHE_KEY_PREFIX || "oidc.user";
   const oidcCacheKeyIdTokenSuffix = process.env.OIDC_CACHE_KEY_ID_TOKEN_SUFFIX || "@@user@@";
   const port = process.env.PORT || 3001;
+  const authNamespace = process.env.AUTH_NAMESPACE || "https://pol.is/";
 
   // Log important configuration values
   console.log(`API URL: ${apiUrl}`);
@@ -230,9 +231,11 @@ module.exports = (env, options) => {
           gaTrackingId: gaTrackingId,
           oidcCacheKeyPrefix: oidcCacheKeyPrefix,
           oidcCacheKeyIdTokenSuffix: oidcCacheKeyIdTokenSuffix,
+          authNamespace,
           process: {
             env: {
-              NODE_ENV: options.mode
+              NODE_ENV: options.mode,
+              AUTH_NAMESPACE: authNamespace,
             }
           }
         },
@@ -254,7 +257,8 @@ module.exports = (env, options) => {
       new webpack.DefinePlugin({
         "process.env.GA_TRACKING_ID": JSON.stringify(gaTrackingId),
         "process.env.OIDC_CACHE_KEY_PREFIX": JSON.stringify(oidcCacheKeyPrefix),
-        "process.env.OIDC_CACHE_KEY_ID_TOKEN_SUFFIX": JSON.stringify(oidcCacheKeyIdTokenSuffix)
+        "process.env.OIDC_CACHE_KEY_ID_TOKEN_SUFFIX": JSON.stringify(oidcCacheKeyIdTokenSuffix),
+        "process.env.AUTH_NAMESPACE": JSON.stringify(authNamespace)
       }),
 
       // Add preload data in development mode if conversation ID exists
