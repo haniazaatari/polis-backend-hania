@@ -1031,7 +1031,20 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
       {loading ? (
         <div className="loading">Loading LLM topics data...</div>
-      ) : error ? (
+      ) : error ? visualizationJobs.find(job => job.status === "PROCESSING") ? (
+        <div className="info-message">
+          <p>
+            A job with ID {visualizationJobs.find(job => job.status === "PROCESSING").jobId} is currently in progress.
+          </p>
+          <div>
+            <pre>
+              <code>
+                LOGS GO HERE
+              </code>
+            </pre>
+          </div>
+        </div>
+      ) : (
         <div className="error-message">
           <h3>Not Available Yet</h3>
           <p>{error}</p>
