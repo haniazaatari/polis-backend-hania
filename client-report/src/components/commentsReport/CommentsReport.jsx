@@ -29,6 +29,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     include_moderation: reportModLevel !== -2,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [jobInProgress, setJobInProgress] = useState(false);
   const [jobCreationResult, setJobCreationResult] = useState(null);
   const [batchReportLoading, setBatchReportLoading] = useState(false);
   const [batchReportResult, setBatchReportResult] = useState(null);
@@ -187,6 +188,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             message: `Job created successfully with ID: ${response.job_id}`,
             job_id: response.job_id,
           });
+          setJobInProgress(true);
         } else {
           throw new Error(response?.error || "Unknown error creating job");
         }
@@ -1013,6 +1015,93 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     );
   };
 
+  if (loading) {
+    return (
+      <div className="comments-report">
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: "1px solid #ccc",
+            marginBottom: 20,
+            paddingBottom: 10,
+          }}
+        >
+          <h1>Comments Report</h1>
+          <div>Report ID: {report_id}</div>
+        </div>
+        <div className="loading">Loading LLM topics data...</div>
+      </div>
+    )
+  }
+
+  if (visualizationJobs.find(job => job.status === "PROCESSING") || jobInProgress) {
+    return (
+      <div className="comments-report">
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: "1px solid #ccc",
+            marginBottom: 20,
+            paddingBottom: 10,
+          }}
+        >
+          <h1>Comments Report</h1>
+          <div>Report ID: {report_id}</div>
+        </div>
+        <div className="info-message">
+          <p>
+            A job with ID {visualizationJobs.find(job => job.status === "PROCESSING").jobId} is currently in progress.
+          </p>
+          <div>
+            <pre>
+              <code>
+                LOGS GO HERE
+              </code>
+            </pre>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="comments-report">
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderBottom: "1px solid #ccc",
+          marginBottom: 20,
+          paddingBottom: 10,
+        }}
+      >
+        <h1>Comments Report</h1>
+        <div>Report ID: {report_id}</div>
+      </div>
+      <div className="error-message">
+        <h3>Not Available Yet</h3>
+        <p>{error}</p>
+        <p>
+          The Delphi system needs to process this conversation with LLM topic generation before
+          this report will be available.
+        </p>
+        <div className="section-header-actions" style={{ marginTop: "20px" }}>
+          <button className="create-job-button" onClick={toggleJobForm}>
+            {jobFormOpen ? "Cancel" : "Run New Delphi Analysis"}
+          </button>
+        </div>
+        {jobFormOpen && showControls && renderJobCreationForm()}
+      </div>
+    </div>
+    )
+  }
+
   return (
     <div className="comments-report">
       <div
@@ -1028,39 +1117,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         <h1>Comments Report</h1>
         <div>Report ID: {report_id}</div>
       </div>
-
-      {loading ? (
-        <div className="loading">Loading LLM topics data...</div>
-      ) : error ? visualizationJobs.find(job => job.status === "PROCESSING") ? (
-        <div className="info-message">
-          <p>
-            A job with ID {visualizationJobs.find(job => job.status === "PROCESSING").jobId} is currently in progress.
-          </p>
-          <div>
-            <pre>
-              <code>
-                LOGS GO HERE
-              </code>
-            </pre>
-          </div>
-        </div>
-      ) : (
-        <div className="error-message">
-          <h3>Not Available Yet</h3>
-          <p>{error}</p>
-          <p>
-            The Delphi system needs to process this conversation with LLM topic generation before
-            this report will be available.
-          </p>
-          <div className="section-header-actions" style={{ marginTop: "20px" }}>
-            <button className="create-job-button" onClick={toggleJobForm}>
-              {jobFormOpen ? "Cancel" : "Run New Delphi Analysis"}
-            </button>
-          </div>
-
-          {jobFormOpen && showControls && renderJobCreationForm()}
-        </div>
-      ) : (
         <div className="report-content">
           {/* Action buttons at the top */}
           {showControls && (
@@ -1144,7 +1200,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             </div>
           </div>
         </div>
-      )}
     </div>
   );
 };
