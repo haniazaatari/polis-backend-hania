@@ -358,11 +358,13 @@ export async function getNextComment(
   });
 
   let next: GetCommentsParams | null = null;
-  if (shouldUseTopical) {
-    next = await getNextTopicalComment(zid!, pid!, withoutTids);
-  } else {
-    next = await getNextPrioritizedComment(zid!, pid!, withoutTids);
-  }
+  // TEMP: disable topical comment routing while we improve performance
+  // if (shouldUseTopical) {
+  //   next = await getNextTopicalComment(zid!, pid!, withoutTids);
+  // } else {
+  //   next = await getNextPrioritizedComment(zid!, pid!, withoutTids);
+  // }
+  next = await getNextPrioritizedComment(zid!, pid!, withoutTids);
 
   // If topical path yielded nothing, try prioritized as a fallback
   if (!next && shouldUseTopical) {
