@@ -323,7 +323,7 @@ services:
   
   # datadog
   datadog-agent:
-    image: datadog/agent:7
+    image: datadog/agent:7.71.1
     container_name: dd-agent
     networks:
       - "polis-net"
