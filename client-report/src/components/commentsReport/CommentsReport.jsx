@@ -29,13 +29,14 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     include_moderation: reportModLevel !== -2,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [jobInProgress, setJobInProgress] = useState(false);
+  const [jobInProgress, setJobInProgress] = useState(undefined);
   const [jobCreationResult, setJobCreationResult] = useState(null);
   const [batchReportLoading, setBatchReportLoading] = useState(false);
   const [batchReportResult, setBatchReportResult] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState(0);
   const [selectedReportSection, setSelectedReportSection] = useState("");
   const [showGlobalSections, setShowGlobalSections] = useState(false);
+  const [processedLogs, setProcessedLogs] = useState(undefined);
 
   useEffect(() => {
     if (!report_id) return;
@@ -89,6 +90,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
         if (response && response.status === "success" && response.jobs) {
           setVisualizationJobs(response.jobs);
+          if (response.jobs.find(job => job.status === "PROCESSING")) {
+            setJobInProgress(response.jobs.find(job => job.status === "PROCESSING"));
+          }
         }
 
         setVisualizationsLoading(false);
@@ -158,6 +162,24 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
       });
   }, [report_id]);
 
+  useEffect(() => {
+    if (jobInProgress) {
+      setInterval(pollForLogs, 2500);
+    } else {
+      clearInterval(pollForLogs);
+    }
+  }, [jobInProgress]);
+
+  const pollForLogs = async => {
+    net.polisGet("/api/v3/delphi/logs", {
+      job_id: visualizationJobs.find(job => job.status === "PROCESSING")?.jobId || jobInProgress?.job_id
+    })
+    .then(response => {
+      setProcessedLogs(response);
+      console.log(response);
+    });
+  };
+
   // Handle job form input changes
   const handleJobFormChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -188,7 +210,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             message: `Job created successfully with ID: ${response.job_id}`,
             job_id: response.job_id,
           });
-          setJobInProgress(true);
+          setJobInProgress(response);
         } else {
           throw new Error(response?.error || "Unknown error creating job");
         }
@@ -203,6 +225,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             .then((response) => {
               if (response && response.status === "success" && response.jobs) {
                 setVisualizationJobs(response.jobs);
+                if (response.jobs.find(job => job.status === "PROCESSING")) {
+                  setJobInProgress(job);
+                }
               }
             })
             .catch((err) => {
@@ -1054,12 +1079,12 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         </div>
         <div className="info-message">
           <p>
-            A job with ID {visualizationJobs.find(job => job.status === "PROCESSING").jobId} is currently in progress.
+            A job with ID {visualizationJobs.find(job => job.status === "PROCESSING")?.jobId || jobInProgress.job_id} is currently in progress.
           </p>
           <div>
             <pre>
               <code>
-                LOGS GO HERE
+                {processedLogs?.map(l => l.message)}
               </code>
             </pre>
           </div>

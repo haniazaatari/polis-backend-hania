@@ -222,15 +222,21 @@ export async function handle_GET_delphi(req: Request, res: Response) {
   }
 }
 
-const getLogs = async (logGroupName, startTime, endTime, filterPattern) => {
+const getLogs = async (
+  logGroupName,
+  startTime,
+  endTime,
+  filterPattern,
+  job_id
+) => {
   if (Config.awsLogGroupName === "docker") {
-    const command = `docker compose logs --tail=10000 --no-log-prefix delphi`;
-    const { stdout, stderr } = await execPromise(command);
-    if (stderr) {
-      logger.warn(`Stderr while fetching Docker logs for delphi:`, stderr);
-    }
-
-    return stdout.trim().split("\n");
+    return [
+      {
+        message: `[DELPHI JOB ${job_id.slice(
+          -8
+        )}] INFO: view logs in console! - ${Date.now()}`,
+      },
+    ];
   } else {
     const command = new FilterLogEventsCommand({
       logGroupName: logGroupName,
@@ -257,6 +263,7 @@ export async function handle_GET_delphi_job_logs(req: Request, res: Response) {
       Config.awsLogGroupName,
       oneHourAgo * 3,
       Date.now(),
+      `[DELPHI JOB ${job_id.slice(-8)}] INFO`,
       job_id
     );
     return res.json(logs);
