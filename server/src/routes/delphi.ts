@@ -8,10 +8,6 @@ import {
 } from "@aws-sdk/client-cloudwatch-logs";
 import { getZidFromReport } from "../utils/parameter";
 import Config from "../config";
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execPromise = promisify(exec);
 
 const dynamoDBConfig: any = {
   region: Config.AWS_REGION || "us-east-1",
