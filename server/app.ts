@@ -32,7 +32,10 @@ import {
 
 import { handle_GET_conversationUuid } from "./src/routes/conversationUuid";
 import { handle_GET_xidReport } from "./src/routes/export";
-import { handle_GET_delphi } from "./src/routes/delphi";
+import {
+  handle_GET_delphi,
+  handle_GET_delphi_job_logs,
+} from "./src/routes/delphi";
 import { handle_GET_delphi_visualizations } from "./src/routes/delphi/visualizations";
 import { handle_POST_delphi_jobs } from "./src/routes/delphi/jobs";
 import { handle_GET_delphi_reports } from "./src/routes/delphi/reports";
@@ -809,6 +812,8 @@ helpersInitialized.then(
     app.get("/api/v3/testDatabase", moveToBody, handle_GET_testDatabase);
 
     app.get("/api/v3/delphi", moveToBody, handle_GET_delphi);
+
+    app.get("/api/v3/delphi/logs", moveToBody, handle_GET_delphi_job_logs);
 
     // Add POST endpoint for creating Delphi jobs
     app.post(

@@ -146,6 +146,7 @@ export default {
   AWS_S3_PUBLIC_ENDPOINT: process.env.AWS_S3_PUBLIC_ENDPOINT,
   AWS_S3_BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME,
   SESEndpoint: process.env.SES_ENDPOINT,
+  awsLogGroupName: process.env.AWS_LOG_GROUP_NAME || "docker",
 
   // JWT configuration
   jwtPrivateKeyPath:
