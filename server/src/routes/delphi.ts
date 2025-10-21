@@ -5,6 +5,7 @@ import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import {
   CloudWatchLogsClient,
   FilterLogEventsCommand,
+  FilteredLogEvent,
 } from "@aws-sdk/client-cloudwatch-logs";
 import { getZidFromReport } from "../utils/parameter";
 import Config from "../config";
@@ -219,12 +220,12 @@ export async function handle_GET_delphi(req: Request, res: Response) {
 }
 
 const getLogs = async (
-  logGroupName,
-  startTime,
-  endTime,
-  filterPattern,
-  job_id
-) => {
+  logGroupName: string,
+  startTime: number,
+  endTime: number,
+  filterPattern: string,
+  job_id: string
+): Promise<FilteredLogEvent[]> => {
   if (Config.awsLogGroupName === "docker") {
     return [
       {
@@ -234,19 +235,31 @@ const getLogs = async (
       },
     ];
   } else {
-    const command = new FilterLogEventsCommand({
-      logGroupName: logGroupName,
-      startTime: startTime,
-      endTime: endTime,
-      filterPattern,
-    });
+    let allEvents: FilteredLogEvent[] = [];
+    let nextToken: string | undefined = undefined;
 
     logger.info(`COMMAND TO SEND AWS FOR LOGS: ${JSON.stringify(command)}`);
 
     try {
-      const response = await logsClient.send(command);
-      logger.info(`RESPONSE FROM LOGS: ${JSON.stringify(response)}`);
-      return response.events;
+      do {
+        const command = new FilterLogEventsCommand({
+          logGroupName: logGroupName,
+          startTime: startTime,
+          endTime: endTime,
+          filterPattern: filterPattern,
+          nextToken: nextToken,
+        });
+
+        const response = await logsClient.send(command);
+
+        if (response.events) {
+          allEvents.push(...response.events);
+        }
+
+        nextToken = response.nextToken;
+      } while (nextToken);
+
+      return allEvents;
     } catch (err) {
       logger.error("Error fetching logs:", err);
       throw err;
