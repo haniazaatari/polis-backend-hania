@@ -256,11 +256,11 @@ const getLogs = async (
 
 export async function handle_GET_delphi_job_logs(req: Request, res: Response) {
   const job_id = req.query.job_id as string;
-  const oneHourAgo = Date.now() - 3600 * 1000;
+  const threeHoursAgo = Date.now() - 3 * 3600 * 1000;
   try {
     const logs = await getLogs(
       Config.awsLogGroupName,
-      oneHourAgo * 3,
+      threeHoursAgo,
       Date.now(),
       `"[DELPHI JOB ${job_id.slice(0, 8)}"`,
       job_id
