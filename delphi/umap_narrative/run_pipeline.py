@@ -6,26 +6,26 @@ This script fetches conversation data from PostgreSQL, processes it using
 EVōC for clustering, and generates interactive visualizations with topic labeling.
 """
 
-import os
 import json
-import uuid  # For generating job_id
-import time
 import logging
-import random
-import hashlib
-import numpy as np
+import os
+import time
+import traceback
+import uuid  # For generating job_id
 from datetime import datetime
+
+import datamapplot
 
 # Import from installed packages
 import evoc
-import datamapplot
-from sentence_transformers import SentenceTransformer
-from umap import UMAP
-from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+import numpy as np
+from polismath_commentgraph.utils.converter import DataConverter
 
 # Import from local modules
-from polismath_commentgraph.utils.storage import PostgresClient, DynamoDBStorage
-from polismath_commentgraph.utils.converter import DataConverter
+from polismath_commentgraph.utils.storage import DynamoDBStorage, PostgresClient
+from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from umap import UMAP
 
 # Configure logging
 logging.basicConfig(
@@ -157,8 +157,13 @@ def process_comments(comments, conversation_id):
     )
 
     # Extract comment texts and IDs
-    comment_texts = [c["txt"] for c in comments if c["txt"] and c["txt"].strip()]
-    comment_ids = [c["tid"] for c in comments if c["txt"] and c["txt"].strip()]
+    comment_texts, comment_ids = map(
+        list,
+        zip(
+            *[(c["txt"], c["tid"]) for c in comments if c["txt"] and c["txt"].strip()],
+            strict=True,
+        ),
+    )
 
     # Generate embeddings with SentenceTransformer
     logger.info("Generating embeddings with SentenceTransformer...")
@@ -189,6 +194,7 @@ def process_comments(comments, conversation_id):
 
     except Exception as e:
         logger.error(f"Error during EVōC clustering: {e}")
+        logger.error(traceback.format_exc())
         # Fallback to simple clustering
         from sklearn.cluster import KMeans
 
@@ -277,6 +283,7 @@ def generate_cluster_topic_labels(
     layer_idx=0,
     conversation_name=None,
     use_ollama=False,
+    document_map=None,
 ):
     """
     Generate topic labels for clusters based on their characteristics.
@@ -285,8 +292,10 @@ def generate_cluster_topic_labels(
         cluster_characteristics: Dictionary with cluster characterizations
         comment_texts: List of comment text strings (used for Ollama naming)
         layer: Cluster assignments for the current layer (used for Ollama naming)
+        layer_idx: Index of the current layer
         conversation_name: Name of the conversation (used for Ollama naming)
         use_ollama: Whether to use Ollama for topic naming
+        document_map: 2D UMAP coordinates for selecting representative comments
 
     Returns:
         cluster_labels: Dictionary mapping cluster IDs to topic labels
@@ -406,19 +415,30 @@ def generate_cluster_topic_labels(
 
                 # Get comments for this cluster
                 cluster_indices = np.where(layer == cluster_id)[0]
-                cluster_indices_list = [int(i) for i in cluster_indices.tolist()]
-                # Deterministic pseudo-random sample of up to 5 indices per (conversation, layer, cluster)
-                if len(cluster_indices_list) > 5:
-                    seed_material = (
-                        f"{conversation_name}|{layer_idx}|{cluster_id}".encode("utf-8")
+
+                # Select the 5 most representative comments (closest to centroid)
+                if len(cluster_indices) > 5 and document_map is not None:
+                    # Calculate centroid of the cluster in document_map space
+                    centroid = np.mean(document_map[cluster_indices], axis=0)
+
+                    # Calculate distance from each comment to the centroid
+                    distances = np.sqrt(
+                        np.sum((document_map[cluster_indices] - centroid) ** 2, axis=1)
                     )
-                    seed_int = int(hashlib.sha1(seed_material).hexdigest(), 16) % (
-                        2**32
+
+                    # Get indices of the 5 comments closest to centroid
+                    closest_indices = np.argsort(distances)[:5]
+                    selected_indices = cluster_indices[closest_indices].tolist()
+
+                    logger.info(
+                        f"Selected {len(selected_indices)} most representative comments "
+                        f"for layer {layer_idx}, cluster {cluster_id} "
+                        f"(distances: {distances[closest_indices]})"
                     )
-                    rng = random.Random(seed_int)
-                    selected_indices = rng.sample(cluster_indices_list, 5)
                 else:
-                    selected_indices = cluster_indices_list
+                    # If 5 or fewer comments, use all of them
+                    selected_indices = cluster_indices.tolist()
+
                 selected_comments = [comment_texts[i] for i in selected_indices]
 
                 # Get topic name
@@ -1090,6 +1110,7 @@ def process_layers_and_create_visualizations(
                 layer_idx=layer_idx,
                 conversation_name=conversation_name,
                 use_ollama=True,
+                document_map=document_map,
             )
 
             # Save LLM topic names
@@ -1352,9 +1373,7 @@ def process_conversation(
         logger.info(f"Using DynamoDB endpoint from environment: {endpoint_url}")
         region = os.environ.get("AWS_REGION", "us-east-1")
 
-        dynamo_storage = DynamoDBStorage(
-            region_name=region, endpoint_url=endpoint_url
-        )
+        dynamo_storage = DynamoDBStorage(region_name=region, endpoint_url=endpoint_url)
 
         # Store basic data in DynamoDB
         logger.info(
@@ -1371,7 +1390,7 @@ def process_conversation(
         # Store embeddings
         logger.info("Storing comment embeddings...")
         embedding_models = DataConverter.batch_convert_embeddings(
-            conversation_id, document_vectors
+            conversation_id, document_vectors, comment_ids
         )
         result = dynamo_storage.batch_create_comment_embeddings(embedding_models)
         logger.info(
@@ -1381,7 +1400,7 @@ def process_conversation(
         # Store UMAP graph edges
         logger.info("Storing UMAP graph edges...")
         edge_models = DataConverter.batch_convert_umap_edges(
-            conversation_id, document_map, cluster_layers
+            conversation_id, document_map, cluster_layers, comment_ids=comment_ids
         )
         result = dynamo_storage.batch_create_graph_edges(edge_models)
         logger.info(
@@ -1391,7 +1410,7 @@ def process_conversation(
         # Store cluster assignments
         logger.info("Storing comment cluster assignments...")
         cluster_models = DataConverter.batch_convert_clusters(
-            conversation_id, cluster_layers, document_map
+            conversation_id, cluster_layers, document_map, comment_ids
         )
         result = dynamo_storage.batch_create_comment_clusters(cluster_models)
         logger.info(
@@ -1404,9 +1423,9 @@ def process_conversation(
             conversation_id,
             cluster_layers,
             document_map,
+            comment_texts,
             topic_names={},  # No topic names yet
             characteristics={},  # No characteristics yet
-            comments=[{"body": comment["txt"]} for comment in comments],
         )
         result = dynamo_storage.batch_create_cluster_topics(topic_models)
         logger.info(
@@ -1525,17 +1544,6 @@ def main():
         document_map, document_vectors, cluster_layers, comment_texts, comment_ids = (
             process_comments(mock_comments, str(args.zid))
         )
-
-        # Store in DynamoDB if requested
-        if not args.no_dynamo:
-            store_in_dynamo(
-                str(args.zid),
-                document_vectors,
-                document_map,
-                cluster_layers,
-                mock_comments,
-                comment_ids,
-            )
 
         # Process each layer and create visualizations
         output_dir = os.path.join(
