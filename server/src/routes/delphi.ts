@@ -259,7 +259,7 @@ export async function handle_GET_delphi_job_logs(req: Request, res: Response) {
       Config.awsLogGroupName,
       oneHourAgo * 3,
       Date.now(),
-      `"[DELPHI JOB ${job_id.slice(-8)}] INFO"`,
+      `"[DELPHI JOB ${job_id.slice(0, 8)}"`,
       job_id
     );
     return res.json(logs);
