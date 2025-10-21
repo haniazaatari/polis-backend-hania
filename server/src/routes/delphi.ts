@@ -241,8 +241,11 @@ const getLogs = async (
       filterPattern,
     });
 
+    logger.info(`COMMAND TO SEND AWS FOR LOGS: ${JSON.stringify(command)}`);
+
     try {
       const response = await logsClient.send(command);
+      logger.info(`RESPONSE FROM LOGS: ${JSON.stringify(response)}`);
       return response.events;
     } catch (err) {
       logger.error("Error fetching logs:", err);
