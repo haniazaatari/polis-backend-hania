@@ -29,12 +29,14 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     include_moderation: reportModLevel !== -2,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [jobInProgress, setJobInProgress] = useState(undefined);
   const [jobCreationResult, setJobCreationResult] = useState(null);
   const [batchReportLoading, setBatchReportLoading] = useState(false);
   const [batchReportResult, setBatchReportResult] = useState(null);
   const [selectedLayer, setSelectedLayer] = useState(0);
   const [selectedReportSection, setSelectedReportSection] = useState("");
   const [showGlobalSections, setShowGlobalSections] = useState(false);
+  const [processedLogs, setProcessedLogs] = useState(undefined);
 
   useEffect(() => {
     if (!report_id) return;
@@ -88,6 +90,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
         if (response && response.status === "success" && response.jobs) {
           setVisualizationJobs(response.jobs);
+          if (response.jobs.find(job => job.status === "PROCESSING")) {
+            setJobInProgress(response.jobs.find(job => job.status === "PROCESSING"));
+          }
         }
 
         setVisualizationsLoading(false);
@@ -157,6 +162,24 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
       });
   }, [report_id]);
 
+  useEffect(() => {
+    if (jobInProgress) {
+      setInterval(pollForLogs, 2500);
+    } else {
+      clearInterval(pollForLogs);
+    }
+  }, [jobInProgress]);
+
+  const pollForLogs = async => {
+    net.polisGet("/api/v3/delphi/logs", {
+      job_id: visualizationJobs.find(job => job.status === "PROCESSING")?.jobId || jobInProgress?.job_id
+    })
+    .then(response => {
+      setProcessedLogs(response);
+      console.log(response);
+    });
+  };
+
   // Handle job form input changes
   const handleJobFormChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -187,6 +210,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             message: `Job created successfully with ID: ${response.job_id}`,
             job_id: response.job_id,
           });
+          setJobInProgress(response);
         } else {
           throw new Error(response?.error || "Unknown error creating job");
         }
@@ -201,6 +225,9 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             .then((response) => {
               if (response && response.status === "success" && response.jobs) {
                 setVisualizationJobs(response.jobs);
+                if (response.jobs.find(job => job.status === "PROCESSING")) {
+                  setJobInProgress(job);
+                }
               }
             })
             .catch((err) => {
@@ -1013,6 +1040,93 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     );
   };
 
+  if (loading) {
+    return (
+      <div className="comments-report">
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: "1px solid #ccc",
+            marginBottom: 20,
+            paddingBottom: 10,
+          }}
+        >
+          <h1>Comments Report</h1>
+          <div>Report ID: {report_id}</div>
+        </div>
+        <div className="loading">Loading LLM topics data...</div>
+      </div>
+    )
+  }
+
+  if (visualizationJobs.find(job => job.status === "PROCESSING") || jobInProgress) {
+    return (
+      <div className="comments-report">
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: "1px solid #ccc",
+            marginBottom: 20,
+            paddingBottom: 10,
+          }}
+        >
+          <h1>Comments Report</h1>
+          <div>Report ID: {report_id}</div>
+        </div>
+        <div className="info-message">
+          <p>
+            A job with ID {visualizationJobs.find(job => job.status === "PROCESSING")?.jobId || jobInProgress.job_id} is currently in progress.
+          </p>
+          <div>
+            <pre>
+              <code>
+                {processedLogs?.map(l => l.message)}
+              </code>
+            </pre>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="comments-report">
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          borderBottom: "1px solid #ccc",
+          marginBottom: 20,
+          paddingBottom: 10,
+        }}
+      >
+        <h1>Comments Report</h1>
+        <div>Report ID: {report_id}</div>
+      </div>
+      <div className="error-message">
+        <h3>Not Available Yet</h3>
+        <p>{error}</p>
+        <p>
+          The Delphi system needs to process this conversation with LLM topic generation before
+          this report will be available.
+        </p>
+        <div className="section-header-actions" style={{ marginTop: "20px" }}>
+          <button className="create-job-button" onClick={toggleJobForm}>
+            {jobFormOpen ? "Cancel" : "Run New Delphi Analysis"}
+          </button>
+        </div>
+        {jobFormOpen && showControls && renderJobCreationForm()}
+      </div>
+    </div>
+    )
+  }
+
   return (
     <div className="comments-report">
       <div
@@ -1028,26 +1142,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         <h1>Comments Report</h1>
         <div>Report ID: {report_id}</div>
       </div>
-
-      {loading ? (
-        <div className="loading">Loading LLM topics data...</div>
-      ) : error ? (
-        <div className="error-message">
-          <h3>Not Available Yet</h3>
-          <p>{error}</p>
-          <p>
-            The Delphi system needs to process this conversation with LLM topic generation before
-            this report will be available.
-          </p>
-          <div className="section-header-actions" style={{ marginTop: "20px" }}>
-            <button className="create-job-button" onClick={toggleJobForm}>
-              {jobFormOpen ? "Cancel" : "Run New Delphi Analysis"}
-            </button>
-          </div>
-
-          {jobFormOpen && showControls && renderJobCreationForm()}
-        </div>
-      ) : (
         <div className="report-content">
           {/* Action buttons at the top */}
           {showControls && (
@@ -1131,7 +1225,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             </div>
           </div>
         </div>
-      )}
     </div>
   );
 };

@@ -2,6 +2,10 @@ import { Request, Response } from "express";
 import logger from "../utils/logger";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import {
+  CloudWatchLogsClient,
+  FilterLogEventsCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
 import { getZidFromReport } from "../utils/parameter";
 import Config from "../config";
 
@@ -28,6 +32,10 @@ const docClient = DynamoDBDocumentClient.from(client, {
     convertEmptyValues: true,
     removeUndefinedValues: true,
   },
+});
+
+const logsClient = new CloudWatchLogsClient({
+  region: Config.AWS_REGION || "us-east-1",
 });
 
 /**
@@ -207,5 +215,56 @@ export async function handle_GET_delphi(req: Request, res: Response) {
       },
       report_id,
     });
+  }
+}
+
+const getLogs = async (
+  logGroupName,
+  startTime,
+  endTime,
+  filterPattern,
+  job_id
+) => {
+  if (Config.awsLogGroupName === "docker") {
+    return [
+      {
+        message: `[DELPHI JOB ${job_id.slice(
+          -8
+        )}] INFO: view logs in console! - ${Date.now()}`,
+      },
+    ];
+  } else {
+    const command = new FilterLogEventsCommand({
+      logGroupName: logGroupName,
+      startTime: startTime,
+      endTime: endTime,
+      filterPattern,
+    });
+
+    try {
+      const response = await logsClient.send(command);
+      return response.events;
+    } catch (err) {
+      logger.error("Error fetching logs:", err);
+      throw err;
+    }
+  }
+};
+
+export async function handle_GET_delphi_job_logs(req: Request, res: Response) {
+  const job_id = req.query.job_id as string;
+  const oneHourAgo = Date.now() - 3600 * 1000;
+  try {
+    const logs = await getLogs(
+      Config.awsLogGroupName,
+      oneHourAgo * 3,
+      Date.now(),
+      `[DELPHI JOB ${job_id.slice(-8)}] INFO`,
+      job_id
+    );
+    return res.json(logs);
+  } catch (error) {
+    logger.error(`Failed to retrieve logs for id ${job_id}`, error);
+    throw error;
   }
 }
