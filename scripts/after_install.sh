@@ -115,6 +115,12 @@ elif [ "$SERVICE_FROM_FILE" == "delphi" ]; then
   printf "\nOLLAMA_HOST=%s\n" "$OLLAMA_URL" | sudo tee -a .env > /dev/null
   echo "OLLAMA_HOST appended."
 
+  if [ -f "/etc/app-info/log_group_name.txt" ]; then
+    LOG_GROUP_NAME=$(cat "/etc/app-info/log_group_name.txt")
+    export AWS_LOG_GROUP_NAME=$LOG_GROUP_NAME
+    printf "\nAWS_LOG_GROUP_NAME=%s\n" "$LOG_GROUP_NAME" | sudo tee -a .env > /dev/null
+  fi
+
   if [ -f "/etc/app-info/instance_size.txt" ]; then
     INSTANCE_SIZE=$(cat /etc/app-info/instance_size.txt)
     echo "Instance size detected: $INSTANCE_SIZE"
