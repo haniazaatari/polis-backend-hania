@@ -259,12 +259,14 @@ export async function handle_GET_delphi_job_logs(req: Request, res: Response) {
       Config.awsLogGroupName,
       oneHourAgo * 3,
       Date.now(),
-      `[DELPHI JOB ${job_id.slice(-8)}] INFO`,
+      `"[DELPHI JOB ${job_id.slice(-8)}] INFO"`,
       job_id
     );
     return res.json(logs);
   } catch (error) {
     logger.error(`Failed to retrieve logs for id ${job_id}`, error);
-    throw error;
+    return res
+      .status(500)
+      .json({ status: "error", message: "Failed to retrieve logs" });
   }
 }
