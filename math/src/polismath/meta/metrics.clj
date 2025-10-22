@@ -45,11 +45,12 @@
 (defn- send-metric-values
   [metric-sender values]
   (let [{:keys [api-key hostname remote-port]} (get-config metric-sender)]
-    (log/info "sending metric data " values " to " hostname ":" remote-port)
-    (send-data metric-sender
-               (make-send-string (-> metric-sender :config :math-env)
-                                 api-key
-                                 values))))
+    (when (and api-key hostname)  ; Only send metrics if properly configured
+      (log/info "sending metric data " values " to " hostname ":" remote-port)
+      (send-data metric-sender
+                 (make-send-string (-> metric-sender :config :math-env)
+                                   api-key
+                                   values)))))
 
 ;; ## Public API
 
