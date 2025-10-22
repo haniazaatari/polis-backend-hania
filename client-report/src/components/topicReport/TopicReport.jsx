@@ -45,6 +45,8 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
             error: true,
             message: response.message || "No narrative report available for this topic"
           });
+        } else {
+          setTopicContent({ error: true, message: "No narrative report available for this topic" })
         }
         setContentLoading(false);
       })
@@ -91,7 +93,7 @@ const TopicReport = ({ report_id, math, comments, conversation, ptptCount, forma
         <div className="topic-content">
           <p style={{ color: '#666', fontStyle: 'italic' }}>{topicContent.message}</p>
           <p style={{ color: '#666', fontSize: '14px', marginTop: '10px' }}>
-            To generate narrative reports, use the "Generate Narrative Report" button in the Comments Report page.
+            To generate narrative reports, use the "Generate Narrative Report" button in the <a target="_blank" rel="noreferrer" href={`/commentsReport/${report_id}`}>Comments Report page.</a>
           </p>
         </div>
       );
