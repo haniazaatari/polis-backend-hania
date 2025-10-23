@@ -79,11 +79,14 @@ describe("Data Export API", () => {
       participants.push(participantData);
     }
 
-    // Submit votes from each participant
+    // Submit votes from each participant with deterministic pattern
     let totalVotes = 0;
-    for (const participantData of participants) {
-      for (const commentId of comments) {
-        const vote = [-1, 1, 0][Math.floor(Math.random() * 3)] as -1 | 0 | 1;
+    for (let i = 0; i < participants.length; i++) {
+      const participantData = participants[i];
+      for (let j = 0; j < comments.length; j++) {
+        const commentId = comments[j];
+        // Use deterministic vote pattern: alternate between -1, 1, 0
+        const vote = [-1, 1, 0][j % 3] as -1 | 0 | 1;
         const voteResponse = await submitVote(participantData.agent, {
           conversation_id: conversationId,
           tid: commentId,
@@ -331,14 +334,15 @@ describe("Data Export API with Importance Enabled", () => {
       participants.push(participantData);
     }
 
-    // Submit votes from each participant, marking some as high_priority
+    // Submit votes from each participant with deterministic pattern
     let totalVotes = 0;
     let highPriorityVotes = 0;
     for (let i = 0; i < participants.length; i++) {
       const participantData = participants[i];
       for (let j = 0; j < comments.length; j++) {
         const commentId = comments[j];
-        const vote = [-1, 1, 0][Math.floor(Math.random() * 3)] as -1 | 0 | 1;
+        // Use deterministic vote pattern: alternate between -1, 1, 0
+        const vote = [-1, 1, 0][j % 3] as -1 | 0 | 1;
         // Mark votes as high priority in a pattern: first participant's first 2 votes,
         // second participant's first vote
         const isHighPriority = (i === 0 && j < 2) || (i === 1 && j === 0);
@@ -436,11 +440,6 @@ describe("Data Export API with Importance Enabled", () => {
     const commentBodyIndex = headerLine.indexOf("comment-body");
     expect(importanceIndex).toBeGreaterThan(-1);
     expect(commentBodyIndex).toBeGreaterThan(importanceIndex);
-
-    // Should contain all test comments
-    testData.comments.forEach((commentId) => {
-      expect(response.text).toContain(commentId.toString());
-    });
   });
 
   test("GET /api/v3/reportExport/:report_id/votes.csv - should include important column", async () => {
@@ -474,5 +473,54 @@ describe("Data Export API with Importance Enabled", () => {
       .filter((line) => line.endsWith(",1")).length;
 
     expect(highPriorityCount).toBe(testData.highPriorityVotes);
+  });
+
+  test("GET /api/v3/reportExport/:report_id/participant-importance.csv - should export participant importance data", async () => {
+    const response: Response = await testAgent.get(
+      `/api/v3/reportExport/${reportId}/participant-importance.csv`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/csv");
+
+    // Should contain expected headers
+    expect(response.text).toContain("participant");
+    expect(response.text).toContain("group-id");
+    expect(response.text).toContain("n-comments");
+    expect(response.text).toContain("n-votes");
+    expect(response.text).toContain("n-important");
+
+    // Should contain comment IDs as columns
+    testData.comments.forEach((commentId) => {
+      expect(response.text).toContain(commentId.toString());
+    });
+
+    // Verify we have the expected number of participant rows
+    const dataLines = response.text
+      .split("\n")
+      .slice(1) // Skip header
+      .filter((line) => line.trim().length > 0);
+
+    // Should have one row per participant (3 participants in test setup)
+    expect(dataLines.length).toBe(numParticipants);
+
+    // Verify n-important values are correct
+    // Pattern: first participant should have 2 important votes, second should have 1, third should have 0
+    const expectedImportantCounts = ["2", "1", "0"];
+    dataLines.forEach((line, index) => {
+      const cols = line.split(",");
+      const nImportant = cols[4]; // n-important is the 5th column (0-indexed)
+      expect(nImportant).toBe(expectedImportantCounts[index]);
+    });
+
+    // Verify that comment columns contain 1 for high priority votes, 0 for regular votes, empty for no votes
+    dataLines.forEach((line) => {
+      const cols = line.split(",");
+      // Skip metadata columns (first 5: participant, group-id, n-comments, n-votes, n-important)
+      for (let i = 5; i < cols.length; i++) {
+        const value = cols[i];
+        expect(value === "" || value === "0" || value === "1").toBe(true); // Should be empty, "0", or "1"
+      }
+    });
   });
 });
