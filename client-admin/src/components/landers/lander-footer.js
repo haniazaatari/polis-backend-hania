@@ -18,6 +18,15 @@ class Header extends Component {
           © {new Date().getFullYear()} The Authors <Link href="tos">TOS</Link>{' '}
           <Link href="privacy">Privacy</Link>
         </Box>
+        <div id="polis-donate">
+          <i>
+            Polis is powered by support from people like you. Contribute at{' '}
+            <Link target="_blank" href="https://donorbox.org/geo-polis">
+              https://donorbox.org/geo-polis
+            </Link>
+            .
+          </i>
+        </div>
       </Box>
     )
   }
