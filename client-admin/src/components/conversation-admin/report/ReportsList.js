@@ -291,7 +291,7 @@ const ReportsList = () => {
                   ) : (
                     <ReportLink
                       title="Analysis & Insights"
-                      href={`${Url.reportUrlPrefix}topicReport/${report.report_id}`}
+                      href="https://pro.pol.is/"
                       urlPrefix="Discover more with Delphi - advanced data analysis and AI"
                     />
                   )}
