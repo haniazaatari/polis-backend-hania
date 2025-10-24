@@ -18,8 +18,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   const [narrativeRunInfo, setNarrativeRunInfo] = useState(null);
   const [topicData, setTopicData] = useState(null);
   const [topicDataLoading, setTopicDataLoading] = useState(true);
-  const [jobFormOpen, setJobFormOpen] = useState(false);
-  const [jobFormData, setJobFormData] = useState({
+  const jobFormData = {
     job_type: "FULL_PIPELINE",
     priority: 50,
     max_votes: "",
@@ -27,7 +26,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     model: "claude-opus-4-20250514",
     include_topics: true,
     include_moderation: reportModLevel !== -2,
-  });
+  };
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [jobInProgress, setJobInProgress] = useState(undefined);
   const [jobCreationResult, setJobCreationResult] = useState(null);
@@ -176,17 +175,12 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     })
     .then(response => {
       setProcessedLogs(response);
-      console.log(response);
+      const isFinished = response?.find(m => m.message.includes("Pipeline completed successfully!"));
+      if (isFinished) {
+        setJobInProgress(false);
+        window.location.reload();
+      }
     });
-  };
-
-  // Handle job form input changes
-  const handleJobFormChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setJobFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
   };
 
   // Handle job form submission
@@ -245,15 +239,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
       .finally(() => {
         setIsSubmitting(false);
       });
-  };
-
-  // Toggle job form visibility
-  const toggleJobForm = () => {
-    setJobFormOpen(!jobFormOpen);
-    // Reset result message when closing the form
-    if (jobFormOpen) {
-      setJobCreationResult(null);
-    }
   };
 
   // Handle generate narrative report button click
@@ -541,123 +526,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     );
   };
 
-  // Render job creation form
-  const renderJobCreationForm = () => {
-    return (
-      <div className="job-creation-form-container">
-        <div className="form-header">
-          <h3>Create New Delphi Job</h3>
-          <button className="close-button" onClick={toggleJobForm} aria-label="Close form">
-            &times;
-          </button>
-        </div>
-
-        {jobCreationResult && (
-          <div className={`result-message ${jobCreationResult.success ? "success" : "error"}`}>
-            {jobCreationResult.message}
-          </div>
-        )}
-
-        <form onSubmit={handleJobFormSubmit}>
-          <div className="form-group">
-            <label htmlFor="job_type">Job Type:</label>
-            <select
-              id="job_type"
-              name="job_type"
-              value={jobFormData.job_type}
-              onChange={handleJobFormChange}
-              disabled={isSubmitting}
-            >
-              <option value="FULL_PIPELINE">Full Pipeline (PCA + UMAP + Report)</option>
-              <option value="PCA">PCA Only</option>
-              <option value="UMAP">UMAP Only</option>
-              <option value="REPORT">Report Only</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="priority">Priority (0-100):</label>
-            <input
-              type="number"
-              id="priority"
-              name="priority"
-              min="0"
-              max="100"
-              value={jobFormData.priority}
-              onChange={handleJobFormChange}
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="max_votes">Max Votes (optional):</label>
-              <input
-                type="number"
-                id="max_votes"
-                name="max_votes"
-                min="0"
-                value={jobFormData.max_votes}
-                onChange={handleJobFormChange}
-                disabled={isSubmitting}
-                placeholder="Leave empty for all votes"
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="batch_size">Batch Size (optional):</label>
-              <input
-                type="number"
-                id="batch_size"
-                name="batch_size"
-                min="1"
-                value={jobFormData.batch_size}
-                onChange={handleJobFormChange}
-                disabled={isSubmitting}
-                placeholder="Default batch size"
-              />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="model">LLM Model:</label>
-            <select
-              id="model"
-              name="model"
-              value={jobFormData.model}
-              onChange={handleJobFormChange}
-              disabled={isSubmitting}
-            >
-              <option value="claude-opus-4-20250514">Claude Opus 4</option>
-              <option value="claude-3-7-sonnet-20250219">Claude 3.7 Sonnet</option>
-              <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
-            </select>
-          </div>
-
-          <div className="form-group checkbox">
-            <label htmlFor="include_topics">
-              <input
-                type="checkbox"
-                id="include_topics"
-                name="include_topics"
-                checked={jobFormData.include_topics}
-                onChange={handleJobFormChange}
-                disabled={isSubmitting}
-              />
-              Generate topic names
-            </label>
-          </div>
-
-          <div className="form-actions">
-            <button type="submit" className="submit-button" disabled={isSubmitting}>
-              {isSubmitting ? "Creating Job..." : "Create Job"}
-            </button>
-          </div>
-        </form>
-      </div>
-    );
-  };
-
   // Render visualization section
   const renderVisualizations = () => {
     if (visualizationsLoading) {
@@ -667,12 +535,10 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     return (
       <>
         <div className="section-header-actions">
-          <button className="create-job-button" onClick={toggleJobForm}>
-            {jobFormOpen ? "Cancel" : "Run New Delphi Analysis"}
+          <button className="create-job-button" onClick={handleJobFormSubmit}>
+            Run New Delphi Analysis
           </button>
         </div>
-
-        {jobFormOpen && renderJobCreationForm()}
 
         {!visualizationJobs ||
         !Array.isArray(visualizationJobs) ||
@@ -1064,6 +930,24 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   if (visualizationJobs.find(job => job.status === "PROCESSING") || jobInProgress) {
     return (
       <div className="comments-report">
+        <style jsx>{`
+        .log-output {
+          background-color: #1e1e1e;
+          color: #d4d4d4;
+          font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+          font-size: 0.85rem;
+          padding: 16px;
+          border-radius: 6px;
+          max-height: 600px;
+          overflow: auto;
+          white-space: pre-wrap; 
+          word-break: break-all;
+        }
+
+        .log-line {
+          display: block; 
+        }
+      `}</style>
         <div
           style={{
             display: "flex",
@@ -1082,9 +966,13 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             A job with ID {visualizationJobs.find(job => job.status === "PROCESSING")?.jobId || jobInProgress.job_id} is currently in progress.
           </p>
           <div>
-            <pre>
+            <pre className="log-output">
               <code>
-                {processedLogs?.map(l => l.message)}
+                {processedLogs?.map((l, index) => (
+                  <div key={l.timestamp || index} className="log-line">
+                    {l.message}
+                  </div>
+                ))}
               </code>
             </pre>
           </div>
@@ -1117,11 +1005,10 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           this report will be available.
         </p>
         <div className="section-header-actions" style={{ marginTop: "20px" }}>
-          <button className="create-job-button" onClick={toggleJobForm}>
-            {jobFormOpen ? "Cancel" : "Run New Delphi Analysis"}
+          <button className="create-job-button" onClick={handleJobFormSubmit}>
+            Run New Delphi Analysis
           </button>
         </div>
-        {jobFormOpen && showControls && renderJobCreationForm()}
       </div>
     </div>
     )
@@ -1151,11 +1038,10 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                 <div className="action-button-group">
                   <h3>Data Processing</h3>
                   <div className="section-header-actions">
-                    <button className="create-job-button" onClick={toggleJobForm}>
-                      {jobFormOpen ? "Cancel" : "Run New Delphi Analysis"}
+                    <button className="create-job-button" onClick={handleJobFormSubmit}>
+                      Run New Delphi Analysis
                     </button>
                   </div>
-                  {jobFormOpen && renderJobCreationForm()}
                 </div>
                 
                 <div className="action-button-group">

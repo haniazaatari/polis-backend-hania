@@ -51,8 +51,15 @@ const TopicDataProvider = ({ report_id, children }) => {
     return <div className="error">Error loading data: {error.message}</div>;
   }
 
-  if (!topicData) {
-    return <div className="no-data">No topic data available</div>;
+  if (!topicData || topicData.message?.includes('No LLM topics found for this conversation')) {
+    return (
+      <div className="topic-content">
+        <p style={{ color: '#666', fontStyle: 'italic' }}>{topicData.message}</p>
+        <p style={{ color: '#666', fontSize: '14px', marginTop: '10px' }}>
+          To generate narrative reports, use the "Generate Narrative Report" button in the <a target="_blank" rel="noreferrer" href={`/commentsReport/${report_id}`}>Comments Report page.</a>
+        </p>
+      </div>
+    )
   }
 
   // Pass data to children

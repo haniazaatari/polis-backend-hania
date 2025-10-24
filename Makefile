@@ -18,27 +18,30 @@ endef
 
 # Default environment and settings (dev)
 export ENV_FILE = .env
-export TAG = $(call parse_env_value,TAG)
-export GIT_HASH = $(shell git rev-parse --short HEAD)
-POSTGRES_DOCKER_RAW = $(shell echo $(call parse_env_value,POSTGRES_DOCKER) | tr '[:upper:]' '[:lower:]')
-export POSTGRES_DOCKER = $(call parse_env_bool,$(POSTGRES_DOCKER_RAW))
-LOCAL_SERVICES_DOCKER_RAW = $(shell echo $(call parse_env_value,LOCAL_SERVICES_DOCKER) | tr '[:upper:]' '[:lower:]')
-export LOCAL_SERVICES_DOCKER = $(call parse_env_bool,$(LOCAL_SERVICES_DOCKER_RAW))
 
-# Prodclone support: USE_PRODCLONE controls database initialization mode
-USE_PRODCLONE_RAW = $(shell echo $(call parse_env_value,USE_PRODCLONE) | tr '[:upper:]' '[:lower:]')
-USE_PRODCLONE = $(call parse_env_bool,$(USE_PRODCLONE_RAW))
-export DB_INIT_MODE = $(if $(filter true,$(USE_PRODCLONE)),pdb,db)
-export POSTGRES_VOLUME = $(if $(filter true,$(USE_PRODCLONE)),prodclone_data,postgres_data)
+# Lazy evaluation of expensive environment parsing - only when needed
+define get_env_vars
+	$(eval export TAG = $(call parse_env_value,TAG))
+	$(eval export GIT_HASH = $(shell git rev-parse --short HEAD))
+	$(eval POSTGRES_DOCKER_RAW = $(shell echo $(call parse_env_value,POSTGRES_DOCKER) | tr '[:upper:]' '[:lower:]'))
+	$(eval export POSTGRES_DOCKER = $(call parse_env_bool,$(POSTGRES_DOCKER_RAW)))
+	$(eval LOCAL_SERVICES_DOCKER_RAW = $(shell echo $(call parse_env_value,LOCAL_SERVICES_DOCKER) | tr '[:upper:]' '[:lower:]'))
+	$(eval export LOCAL_SERVICES_DOCKER = $(call parse_env_bool,$(LOCAL_SERVICES_DOCKER_RAW)))
+	$(eval USE_PRODCLONE_RAW = $(shell echo $(call parse_env_value,USE_PRODCLONE) | tr '[:upper:]' '[:lower:]'))
+	$(eval USE_PRODCLONE = $(call parse_env_bool,$(USE_PRODCLONE_RAW)))
+	$(eval export DB_INIT_MODE = $(if $(filter true,$(USE_PRODCLONE)),pdb,db))
+	$(eval export POSTGRES_VOLUME = $(if $(filter true,$(USE_PRODCLONE)),prodclone_data,postgres_data))
+	# Only set COMPOSE_FILE_ARGS if not already set by environment-specific targets
+	$(eval COMPOSE_FILE_ARGS ?= -f docker-compose.yml -f docker-compose.dev.yml)
+	$(eval COMPOSE_FILE_ARGS += $(if $(POSTGRES_DOCKER),--profile postgres,))
+	$(eval COMPOSE_FILE_ARGS += $(if $(LOCAL_SERVICES_DOCKER),--profile local-services,))
+endef
 
 # Support for detached mode
 DETACH ?= false
 DETACH_ARG = $(if $(filter true,$(DETACH)),-d,)
 
-# Default compose file args
-export COMPOSE_FILE_ARGS = -f docker-compose.yml -f docker-compose.dev.yml
-COMPOSE_FILE_ARGS += $(if $(POSTGRES_DOCKER),--profile postgres,)
-COMPOSE_FILE_ARGS += $(if $(LOCAL_SERVICES_DOCKER),--profile local-services,)
+# Default compose file args - will be set lazily when needed
 
 # Set up environment-specific values
 define setup_env
@@ -71,6 +74,7 @@ TEST:
 	$(call setup_env,test.env,-f docker-compose.test.yml)
 
 echo_vars:
+	$(call get_env_vars)
 	@echo ENV_FILE=${ENV_FILE}
 	@echo POSTGRES_DOCKER=${POSTGRES_DOCKER}
 	@echo LOCAL_SERVICES_DOCKER=${LOCAL_SERVICES_DOCKER}
@@ -186,12 +190,14 @@ rbs: start-rebuild
 	psql-shell start-prodclone rebuild-delphi
 
 
-help:
+help: ## Show this help message
 	@echo 'Usage: make <command>'
 	@echo
 	@echo 'where <command> can be one or more of the following:'
 	@echo
-	@grep -E '^[a-z0-9A-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) | \
+		sed 's/:.*##/|/' | \
+		awk -F'|' '{printf "\033[36m%-24s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo 'By default, runs against the configuration specified in `.env` file (see `example.env` for a template).'
 	@echo

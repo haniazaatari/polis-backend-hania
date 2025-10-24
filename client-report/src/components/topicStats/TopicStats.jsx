@@ -164,7 +164,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
       <div style={{ marginTop: 40 }}>
         <h2>Topic Statistics</h2>
         
-        {latestRun && (
+        {latestRun ? (
           <div style={{ marginTop: 20 }}>
             <p>Model: {latestRun.model_name}</p>
             <p>Generated: {new Date(latestRun.created_at).toLocaleString()}</p>
@@ -207,7 +207,7 @@ const TopicStats = ({ conversation, report_id: propsReportId, math, comments, pt
               }}
             />
           </div>
-        )}
+        ) : <p>No data available. To generate, run a delphi analysis on the <a target="_blank" rel="noreferrer" href={`/commentsReport/${report_id}`}>Comments Report page.</a></p>}
         
         <Footer />
       </div>

@@ -331,7 +331,7 @@ describe('Reports - Authentication & Access Control', () => {
       // Should load some content (not error page)
       cy.get('body').then(($body) => {
         // Wait for report content to appear instead of arbitrary wait
-        cy.contains('Narrative Summaries', { timeout: 10000 }).should('exist')
+        cy.contains('No LLM topics found for this conversation', { timeout: 10000 }).should('exist')
 
         // Should not show server errors
         expect($body.text()).to.not.include('Cannot GET')

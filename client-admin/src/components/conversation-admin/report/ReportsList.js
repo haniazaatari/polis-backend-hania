@@ -265,7 +265,7 @@ const ReportsList = () => {
                     href={`${Url.reportUrlPrefix}exportReport/${report.report_id}`}
                     urlPrefix={`${Url.reportUrlPrefix}exportReport/${report.report_id}`}
                   />
-                  {hasDelphiEnabled(authUser) && (
+                  {hasDelphiEnabled(authUser) ? (
                     <>
                       <ReportLink
                         title="Topic"
@@ -288,6 +288,12 @@ const ReportsList = () => {
                         urlPrefix={`${Url.reportUrlPrefix}topicMapNarrativeReport/${report.report_id}`}
                       />
                     </>
+                  ) : (
+                    <ReportLink
+                      title="Analysis & Insights"
+                      href="https://pro.pol.is/"
+                      urlPrefix="Discover more with Delphi - advanced data analysis and AI"
+                    />
                   )}
                 </Box>
               )}

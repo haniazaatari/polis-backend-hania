@@ -496,7 +496,7 @@ const TopicsVizReport = ({ report_id }) => {
         ) : (
           <div className="no-visualizations-message">
             <p>No visualization jobs found.</p>
-            <p>Run a Delphi analysis to generate topic visualizations.</p>
+            <p>Run a Delphi analysis to generate topic visualizations on the <a target="_blank" rel="noreferrer" href={`/commentsReport/${report_id}`}>Comments Report page.</a></p>
           </div>
         )}
       </div>
