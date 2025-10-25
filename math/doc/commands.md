@@ -30,7 +30,6 @@ The Polismath system provides several subcommands that run different components 
 | `poller` | poller-system | Runs the polling system to watch for new votes and moderation |
 | `tasks` | task-system | Runs the task system for auxiliary jobs |
 | `full` | full-system | Runs both poller and task systems together |
-| `simulator` | simulator-system | Runs a simulation system (for development/testing) |
 | `export` | export-system | Exports conversation data to files |
 
 These subcommands are defined in the `polismath.runner` namespace, with execution paths determined by the `-main` function.
@@ -58,7 +57,7 @@ The `export` command has many additional options:
 -f, --filename FILENAME       Name of output file (should be zip for csv out)
 -t, --at-time AT_TIME         A string of YYYY-MM-DD-HH-MM-SS (in UTC) or ms-timestamp since epoch
 -T, --at-times AT_TIMES       A vector of strings of --at-time format
--F, --format FORMAT           Either csv, excel or (soon) json
+-F, --format FORMAT           Either csv or json
 -M, --update-math             Update math
 -P, --update-postgres         Update postgres
 -h, --help                    Print help and exit
@@ -79,8 +78,7 @@ When working with the REPL, you can run and manage systems directly using functi
 (runner/run! system/full-system)
 
 ;; Run with configuration overrides
-(runner/run! system/full-system {:math-env :preprod
-                                 :poll-from-days-ago 0.1})
+(runner/run! system/full-system {:poll-from-days-ago 0.1})
 
 ;; Run just the poller system
 (runner/run! system/poller-system)

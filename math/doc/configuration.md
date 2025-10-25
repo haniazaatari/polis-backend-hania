@@ -62,7 +62,6 @@ Environment variables are the primary method for configuring the system. When us
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MATH_ENV` | Environment setting (`dev`, `prod`, `preprod`) | `dev` |
 | `LOGGING_LEVEL` | Logging level (`trace`, `debug`, `info`, `warn`, `error`, `fatal`, `report`) | `warn` |
 | `POLL_FROM_DAYS_AGO` | How far back to poll for conversation updates (in days) | 10 |
 
@@ -96,20 +95,6 @@ Environment variables are the primary method for configuring the system. When us
 | `EXPORT_SERVER_AUTH_USERNAME` | Username for export server authentication | None |
 | `EXPORT_SERVER_AUTH_PASS` | Password for export server authentication | None |
 
-### AWS Configuration (for exports)
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `AWS_ACCESS_KEY` | AWS access key ID | None |
-| `AWS_SECRET_KEY` | AWS secret access key | None |
-
-### API Authentication
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `WEBSERVER_USERNAME` | Username for webserver authentication | None |
-| `WEBSERVER_PASS` | Password for webserver authentication | None |
-
 ## Setting Environment Variables
 
 ### Docker Environment
@@ -118,7 +103,6 @@ With Docker Compose, you can use a `.env` file:
 
 ```sh
 DATABASE_URL=postgres://username:password@hostname:port/database
-MATH_ENV=dev
 MATH_LOG_LEVEL=info  # Docker Compose translates this to LOGGING_LEVEL
 ```
 
@@ -134,7 +118,6 @@ When running without Docker, set environment variables directly:
 
 ```bash
 export DATABASE_URL=postgres://username:password@hostname:port/database
-export MATH_ENV=dev
 export LOGGING_LEVEL=info  # Use LOGGING_LEVEL directly when not using Docker Compose
 clojure -M:dev
 ```
@@ -149,8 +132,7 @@ When using the REPL, you can override configuration when starting the system:
 
 ;; Run with custom configuration
 (runner/run! system/full-system 
-  {:math-env :preprod
-   :poll-from-days-ago 0.1})
+  {:poll-from-days-ago 0.1})
 ```
 
 ## Logging Configuration
@@ -197,7 +179,7 @@ To run a specific subsystem, use:
 
 ```clojure
 ;; In REPL
-(runner/run! system/poller-system {:math-env :dev})
+(runner/run! system/poller-system)
 
 ;; Or via command line
 clojure -M:run poller
