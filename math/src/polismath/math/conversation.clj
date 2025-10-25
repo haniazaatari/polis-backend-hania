@@ -611,7 +611,7 @@
                     extremities (into {} (map vector tids (:comment-extremity pca)))]
                 (plmb/map-from-keys
                  (fn [tid]
-                   (let [{:keys [A P]}
+                   (let [{:keys [A P S]}
                          ;; reduce over votes per group, already aggregated
                          (reduce
                           (fn [votes [_gid data]]
