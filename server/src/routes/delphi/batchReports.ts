@@ -144,7 +144,8 @@ export async function handle_POST_delphi_batch_reports(
 
     return res.json({
       status: "success",
-      message: "Batch report generation job submitted",
+      message:
+        "Batch report generation job submitted - this may take some time, refresh the page to check for results",
       report_id: report_id,
       job_id: job_id,
       batch_id: job_id, // Include batch_id field for frontend compatibility

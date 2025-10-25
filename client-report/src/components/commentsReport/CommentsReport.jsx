@@ -89,7 +89,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
         if (response && response.status === "success" && response.jobs) {
           setVisualizationJobs(response.jobs);
-          if (response.jobs.find(job => job.status === "PROCESSING")) {
+          if (response.jobs.find(job => job.status === "PROCESSING" && !job.jobId.includes('batch_report_'))) {
             setJobInProgress(response.jobs.find(job => job.status === "PROCESSING"));
           }
         }
@@ -163,7 +163,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
   useEffect(() => {
     if (jobInProgress) {
-      setInterval(pollForLogs, 2500);
+      setInterval(pollForLogs, 30000);
     } else {
       clearInterval(pollForLogs);
     }
@@ -171,7 +171,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
   const pollForLogs = async => {
     net.polisGet("/api/v3/delphi/logs", {
-      job_id: visualizationJobs.find(job => job.status === "PROCESSING")?.jobId || jobInProgress?.job_id
+      job_id: visualizationJobs.find(job => job.status === "PROCESSING" && !job.jobId.includes('batch_report_'))?.jobId || jobInProgress?.job_id
     })
     .then(response => {
       setProcessedLogs(response);
@@ -219,7 +219,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             .then((response) => {
               if (response && response.status === "success" && response.jobs) {
                 setVisualizationJobs(response.jobs);
-                if (response.jobs.find(job => job.status === "PROCESSING")) {
+                if (response.jobs.find(job => job.status === "PROCESSING" && !job.jobId.includes('batch_report_'))) {
                   setJobInProgress(job);
                 }
               }
@@ -927,7 +927,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     )
   }
 
-  if (visualizationJobs.find(job => job.status === "PROCESSING") || jobInProgress) {
+  if (visualizationJobs.find(job => job.status === "PROCESSING" && !job.jobId.includes('batch_report_')) || jobInProgress) {
     return (
       <div className="comments-report">
         <style jsx>{`
@@ -1050,7 +1050,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                     <button
                       className="batch-report-button"
                       onClick={handleGenerateNarrativeReport}
-                      disabled={batchReportLoading}
+                      disabled={batchReportLoading || visualizationJobs.find(job => job.status === "PROCESSING" && job.jobId.includes('batch_report_'))}
                     >
                       {batchReportLoading ? "Generating..." : "Generate Batch Topics"}
                     </button>
@@ -1060,6 +1060,13 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                       {batchReportResult.message}
                     </div>
                   )}
+                  {
+                    visualizationJobs.find(job => job.status === "PROCESSING" && job.jobId.includes('batch_report_')) && (
+                      <div className="result-message success">
+                        A batch job is currently in progress, please check back later
+                      </div>
+                    )
+                  }
                 </div>
               </div>
             </div>
