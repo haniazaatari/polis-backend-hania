@@ -8,7 +8,7 @@ Okay, I've reviewed the provided code, focusing on the `conv-update` functionali
 
 The conversation update process is primarily driven by these functions:
 
-* **`user.clj`:**  This seems to be a general utility and REPL interaction namespace. It includes functions for loading conversations (`load-conv`, `get-conv`), plotting, and some data analysis.  It's the entry point for many manual operations.
+* **`user.clj`:**  This seems to be a general utility and REPL interaction namespace. It includes functions for loading conversations (`load-conv`), plotting, and some data analysis.  It's the entry point for many manual operations.
 * **`polismath.runner/run!`:**  The main entry point for starting the system. It initializes and starts components.
 * **`polismath.conv_man/queue-message-batch!`:**  This function queues messages (votes, moderation actions, report generation requests) for processing by a conversation actor.  It's the main way the outside world interacts with a conversation.
 * **`polismath.conv_man/conv-actor`:**  Creates a core.async go-loop that processes messages for a _single_ conversation.  It maintains the conversation state in an atom (`:conv`).
@@ -133,7 +133,7 @@ The conversation update process is primarily driven by these functions:
 
     The use of `matrix/pow` here, even with a small exponent (2), might be more computationally expensive than simple multiplication. Consider replacing `(matrix/pow x 2)` with `(* x x)`.
 
-* **`take-all!` and `take-all!!`:** These macros/functions are generally fine, but be aware of the potential for blocking if the channel is constantly being filled.
+* **`take-all!`:** These macros/functions are generally fine, but be aware of the potential for blocking if the channel is constantly being filled.
 
 **Recommendations Summary**
 
