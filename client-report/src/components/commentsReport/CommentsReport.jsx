@@ -175,7 +175,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     })
     .then(response => {
       setProcessedLogs(response);
-      const isFinished = response?.find(m => m.message.includes("Pipeline completed successfully!"));
+      const isFinished = response?.find(m => m.message.includes("Results stored in DynamoDB for conversation"));
       if (isFinished) {
         setJobInProgress(false);
         window.location.reload();
