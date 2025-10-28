@@ -37,7 +37,8 @@ module.exports = {
     new webpack.DefinePlugin({
       'process.env': {
         NODE_ENV: JSON.stringify('production'),
-        SERVICE_URL: null
+        SERVICE_URL: null,
+        AUTH_NAMESPACE: JSON.stringify(process.env.AUTH_NAMESPACE)
       }
     })
   ],

@@ -1,9 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, SetStateAction } from "react";
 import { jsonrepair } from "jsonrepair";
 import net from "../../util/net";
 import { useReportId } from "../framework/useReportId";
 import CommentList from "../lists/commentList.jsx";
+import { jwtDecode } from "jwt-decode"
 import "./CommentsReport.css";
+
+const decodedJwt = (token) => {
+  if (token) {
+    return jwtDecode(token)
+  }
+  return null
+}
+
+const hasDelphiEnabled = (token) => {
+  const decoded = decodedJwt(token);
+  console.log(decoded, `${process.env.AUTH_NAMESPACE}delphi_enabled`, decoded?.[`${process.env.AUTH_NAMESPACE}delphi_enabled`])
+  return decoded && decoded[`${process.env.AUTH_NAMESPACE}delphi_enabled`]
+}
 
 const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, voteColors, showControls = true, authToken, reportModLevel }) => {
   const { report_id } = useReportId();
@@ -36,6 +50,43 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   const [selectedReportSection, setSelectedReportSection] = useState("");
   const [showGlobalSections, setShowGlobalSections] = useState(false);
   const [processedLogs, setProcessedLogs] = useState(undefined);
+  const [confirmDelphiRunModalVisible, setConfirmDelphiRunModalVisible] = useState(false);
+
+  const DelphiModal = () => {
+    console.log(process.env.AUTH_NAMESPACE)
+    return confirmDelphiRunModalVisible ? (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        zIndex: 1000,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        flexDirection: 'column'
+      }}>
+        <div style={{ backgroundColor: '#fff', padding: '1em', borderRadius: '8px', maxWidth: '400px', flexDirection: 'column', alignItems: 'center', }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            {hasDelphiEnabled(authToken) ? (
+              <>
+                <h4>Are you sure you want to run a new Delphi analysis? This will erase previous results, and may take several minutes.</h4>
+                <button onClick={() => setConfirmDelphiRunModalVisible(false)}>Cancel</button>
+                <button onClick={confirmDelphiRunModalVisible === "batch" ? handleGenerateNarrativeReport : handleJobFormSubmit}>Run Analysis</button>
+              </>
+              ) : (
+              <p>
+                Discover more with Delphi - advanced data analysis and AI - Upgrade at <a target="_blank" href="https://pro.pol.is">pro.pol.is</a> to run a new analysis.
+                <button onClick={() => setConfirmDelphiRunModalVisible(false)}>Close</button>
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+      ) : null;
+  };
 
   useEffect(() => {
     if (!report_id) return;
@@ -432,7 +483,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   const availableReportSections = getAvailableReportSections();
 
   // Auto-select cross-group consensus when available
-  React.useEffect(() => {
+  useEffect(() => {
     if (!selectedReportSection && availableReportSections.length > 0) {
       const crossGroupSection = availableReportSections.find(section => 
         section.title.includes('Cross-Group Consensus')
@@ -535,7 +586,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     return (
       <>
         <div className="section-header-actions">
-          <button className="create-job-button" onClick={handleJobFormSubmit}>
+          <button className="create-job-button" onClick={() => setConfirmDelphiRunModalVisible(true)}>
             Run New Delphi Analysis
           </button>
         </div>
@@ -984,38 +1035,40 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   if (error) {
     return (
       <div className="comments-report">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          borderBottom: "1px solid #ccc",
-          marginBottom: 20,
-          paddingBottom: 10,
-        }}
-      >
-        <h1>Comments Report</h1>
-        <div>Report ID: {report_id}</div>
-      </div>
-      <div className="error-message">
-        <h3>Not Available Yet</h3>
-        <p>{error}</p>
-        <p>
-          The Delphi system needs to process this conversation with LLM topic generation before
-          this report will be available.
-        </p>
-        <div className="section-header-actions" style={{ marginTop: "20px" }}>
-          <button className="create-job-button" onClick={handleJobFormSubmit}>
-            Run New Delphi Analysis
-          </button>
+        <DelphiModal />
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: "1px solid #ccc",
+            marginBottom: 20,
+            paddingBottom: 10,
+          }}
+        >
+          <h1>Comments Report</h1>
+          <div>Report ID: {report_id}</div>
+        </div>
+        <div className="error-message">
+          <h3>Not Available Yet</h3>
+          <p>{error}</p>
+          <p>
+            The Delphi system needs to process this conversation with LLM topic generation before
+            this report will be available.
+          </p>
+          <div className="section-header-actions" style={{ marginTop: "20px" }}>
+            <button className="create-job-button" onClick={() => setConfirmDelphiRunModalVisible(true)}>
+              Run New Delphi Analysis
+            </button>
+          </div>
         </div>
       </div>
-    </div>
     )
   }
 
   return (
     <div className="comments-report">
+      <DelphiModal />
       <div
         style={{
           display: "flex",
@@ -1038,7 +1091,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                 <div className="action-button-group">
                   <h3>Data Processing</h3>
                   <div className="section-header-actions">
-                    <button className="create-job-button" onClick={handleJobFormSubmit}>
+                    <button className="create-job-button" onClick={() => setConfirmDelphiRunModalVisible(true)}>
                       Run New Delphi Analysis
                     </button>
                   </div>
@@ -1049,7 +1102,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                   <div className="section-header-actions">
                     <button
                       className="batch-report-button"
-                      onClick={handleGenerateNarrativeReport}
+                      onClick={() => setConfirmDelphiRunModalVisible("batch")}
                       disabled={batchReportLoading || visualizationJobs.find(job => job.status === "PROCESSING" && job.jobId.includes('batch_report_'))}
                     >
                       {batchReportLoading ? "Generating..." : "Generate Batch Topics"}
