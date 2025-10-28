@@ -55,29 +55,29 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     console.log(process.env.AUTH_NAMESPACE)
     return confirmDelphiRunModalVisible ? (
       <div style={{
-        position: 'fixed',
+        position: "fixed",
         top: 0,
         left: 0,
-        width: '100%',
-        height: '100%',
+        width: "100%",
+        height: "100%",
         zIndex: 1000,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        flexDirection: 'column'
+        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        flexDirection: "column"
       }}>
-        <div style={{ backgroundColor: '#fff', padding: '1em', borderRadius: '8px', maxWidth: '400px', flexDirection: 'column', alignItems: 'center', }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column' }}>
+        <div style={{ backgroundColor: "#fff", padding: "1em", borderRadius: "8px", maxWidth: "400px", flexDirection: "column", alignItems: "center", }}>
+          <div style={{ display: "flex", justifyContent: "space-between", flexDirection: "column" }}>
             {hasDelphiEnabled(authToken) ? (
               <>
                 <h4>Are you sure you want to run a new Delphi analysis? This will erase previous results, and may take several minutes.</h4>
                 <button style={{ marginBottom: "1em", color: "#fff", backgroundColor: "#f44336", padding: "8px 16px", cursor: "pointer", border: "0", borderRadius: "4px", fontWeight: "bold" }} onClick={() => setConfirmDelphiRunModalVisible(false)}>Cancel</button>
-                <button className="batch-report-button" onClick={confirmDelphiRunModalVisible === "batch" ? handleGenerateNarrativeReport : handleJobFormSubmit}>Run Analysis</button>
+                <button className="batch-report-button" onClick={confirmDelphiRunModalVisible === "batch" ? handleGenerateNarrativeReport : handleJobFormSubmit}>Run Analysis</button> {/* eslint-disable-line quotes */}
               </>
               ) : (
               <p>
-                Discover more with Delphi - advanced data analysis and AI - Upgrade at <a target="_blank" href="https://pro.pol.is">pro.pol.is</a> to run a new analysis.
+                Discover more with Delphi - advanced data analysis and AI - Upgrade at <a target="_blank" rel="noreferrer" href="https://pro.pol.is">pro.pol.is</a> to run a new analysis.
                 <button style={{ marginTop: "1em", color: "#fff", backgroundColor: "#4caf50", padding: "8px 16px", cursor: "pointer", border: "0", borderRadius: "4px", fontWeight: "bold" }} onClick={() => setConfirmDelphiRunModalVisible(false)}>Close</button>
               </p>
             )}
@@ -139,8 +139,8 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
         if (response && response.status === "success" && response.jobs) {
           setVisualizationJobs(response.jobs);
-          if (response.jobs.find(job => job.status === "PROCESSING" && !job.jobId.includes('batch_report_'))) {
-            setJobInProgress(response.jobs.find(job => job.status === "PROCESSING"));
+          if (response.jobs.find(job => job.status === "PROCESSING" && !job.jobId.includes("batch_report_"))) {
+            setJobInProgress(response.jobs.find(job => job.status === "PROCESSING" && !job.jobId.includes("batch_report_")));
           }
         }
 
@@ -221,7 +221,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
   const pollForLogs = async => {
     net.polisGet("/api/v3/delphi/logs", {
-      job_id: visualizationJobs.find(job => job.status === "PROCESSING" && !job.jobId.includes('batch_report_'))?.jobId || jobInProgress?.job_id
+      job_id: visualizationJobs.find(job => job.status === "PROCESSING" && !job.jobId.includes("batch_report_"))?.jobId || jobInProgress?.job_id
     })
     .then(response => {
       setProcessedLogs(response);
@@ -269,7 +269,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             .then((response) => {
               if (response && response.status === "success" && response.jobs) {
                 setVisualizationJobs(response.jobs);
-                if (response.jobs.find(job => job.status === "PROCESSING" && !job.jobId.includes('batch_report_'))) {
+                if (response.jobs.find(job => job.status === "PROCESSING" && !job.jobId.includes("batch_report_"))) {
                   setJobInProgress(job);
                 }
               }
@@ -402,12 +402,12 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
 
       if (showGlobalSections) {
         // Show global sections - combine topic data with narrative report status
-        const globalSectionTypes = [
-          { key: 'batch_re_global_groups', title: 'Divisive Comments (Global)' },
-          { key: 'batch_re_global_group_informed_consensus', title: 'Cross-Group Consensus (Global)' },
-          { key: 'batch_re_global_uncertainty', title: 'High Uncertainty Comments (Global)' }
+        const globalSectionTypes = [ // eslint-disable-line quotes
+          { key: "batch_re_global_groups", title: "Divisive Comments (Global)" },
+          { key: "batch_re_global_group_informed_consensus", title: "Cross-Group Consensus (Global)" },
+          { key: "batch_re_global_uncertainty", title: "High Uncertainty Comments (Global)" }
         ];
-        
+
         globalSectionTypes.forEach(({ key, title }) => {
           // Check what keys actually exist in the narrative reports (same logic as TopicSectionsBuilder)
           const longFormatKey = narrativeRunInfo?.current_job_id ? `${narrativeRunInfo.current_job_id}_global_${key}` : null;
@@ -440,7 +440,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           
           sections.push({
             key: sectionKey,
-            title: title + (hasNarrative ? '' : ' (pending narrative)'),
+            title: title + (hasNarrative ? "" : " (pending narrative)"),
             hasNarrative: !!hasNarrative,
             hasTopicData: true // We know this exists from topic data
           });
@@ -453,8 +453,8 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           Object.entries(layerTopics).forEach(([clusterId, topic]) => {
             // Extract section key from topic_key, converting # to _ (same logic as TopicReport)
             let sectionKey;
-            if (topic.topic_key && topic.topic_key.includes('#')) {
-              // Versioned format: convert uuid#layer#cluster -> uuid_layer_cluster
+            if (topic.topic_key && topic.topic_key.includes("#")) {
+              // Versioned format: convert uuid#layer#cluster -> uuid_layer_cluster // eslint-disable-line quotes
               sectionKey = topic.topic_key.replace(/#/g, '_');
             } else {
               // Fallback: construct from jobUuid
@@ -466,7 +466,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             
             sections.push({
               key: sectionKey,
-              title: topic.topic_name + (hasNarrative ? '' : ' (pending narrative)'),
+              title: topic.topic_name + (hasNarrative ? "" : " (pending narrative)"),
               hasNarrative: !!hasNarrative,
               hasTopicData: true,
               topicMetadata: topic
@@ -486,7 +486,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   useEffect(() => {
     if (!selectedReportSection && availableReportSections.length > 0) {
       const crossGroupSection = availableReportSections.find(section => 
-        section.title.includes('Cross-Group Consensus')
+        section.title.includes("Cross-Group Consensus")
       );
       if (crossGroupSection) {
         setSelectedReportSection(crossGroupSection.key);
@@ -510,7 +510,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         <div className="layer-buttons">
           {/* Global sections button */}
           <button
-            className={`layer-button ${showGlobalSections ? 'active' : ''}`}
+            className={`layer-button ${showGlobalSections ? "active" : ""}`}
             onClick={() => {
               setShowGlobalSections(true);
               setSelectedReportSection(""); // Clear selected section when switching
@@ -524,7 +524,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
           {availableLayers.map((layer) => (
             <button
               key={layer.layerId}
-              className={`layer-button ${!showGlobalSections && selectedLayer === layer.layerId ? 'active' : ''}`}
+              className={`layer-button ${!showGlobalSections && selectedLayer === layer.layerId ? "active" : ""}`}
               onClick={() => {
                 setShowGlobalSections(false);
                 setSelectedLayer(layer.layerId);
@@ -532,10 +532,10 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
               }}
             >
               Layer {layer.layerId}: {layer.topicCount} Topic{layer.topicCount !== 1 ? 's' : ''}
-              <span className="layer-description">
-                {layer.layerId === 0 ? ' (Finest)' : 
-                 layer.layerId === availableLayers[availableLayers.length - 1].layerId ? ' (Coarsest)' : 
-                 ' (Medium)'}
+              <span className="layer-description"> {/* eslint-disable-line quotes */}
+                {layer.layerId === 0 ? " (Finest)" : 
+                 layer.layerId === availableLayers[availableLayers.length - 1].layerId ? " (Coarsest)" : 
+                 " (Medium)"}
               </span>
             </button>
           ))}
@@ -712,7 +712,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                     if (currentRunDetails && currentRunDetails.latest_timestamp) {
                       return ` (Generated: ${new Date(
                         currentRunDetails.latest_timestamp
-                      ).toLocaleString()})`;
+                      ).toLocaleString()})`; // eslint-disable-line quotes
                     }
                     return "";
                   })()}
@@ -728,7 +728,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             value={selectedReportSection} 
             onChange={handleReportSectionChange}
           >
-            <option value="">Select a report section...</option>
+            <option value="">Select a report section...</option> {/* eslint-disable-line quotes */}
             {availableSections.map(section => (
               <option key={section.key} value={section.key}>
                 {section.title}
@@ -771,14 +771,14 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         <div className="report-metadata">
           <div className="metadata-row">
             <span className="metadata-label">Topic Status:</span>
-            <span className={`status-badge ${selectedSection.hasTopicData ? 'available' : 'missing'}`}>
-              {selectedSection.hasTopicData ? 'Identified' : 'Not Available'}
+            <span className={`status-badge ${selectedSection.hasTopicData ? "available" : "missing"}`}>
+              {selectedSection.hasTopicData ? "Identified" : "Not Available"}
             </span>
           </div>
           <div className="metadata-row">
             <span className="metadata-label">Narrative Status:</span>
-            <span className={`status-badge ${selectedSection.hasNarrative ? 'available' : 'pending'}`}>
-              {selectedSection.hasNarrative ? 'Generated' : 'Pending'}
+            <span className={`status-badge ${selectedSection.hasNarrative ? "available" : "pending"}`}>
+              {selectedSection.hasNarrative ? "Generated" : "Pending"}
             </span>
           </div>
           {report && (
@@ -978,7 +978,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
     )
   }
 
-  if (visualizationJobs.find(job => job.status === "PROCESSING" && !job.jobId.includes('batch_report_')) || jobInProgress) {
+  if (visualizationJobs.find(job => job.status === "PROCESSING" && !job.jobId.includes("batch_report_")) || jobInProgress) {
     return (
       <div className="comments-report">
         <style jsx>{`
@@ -1103,18 +1103,18 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
                     <button
                       className="batch-report-button"
                       onClick={() => setConfirmDelphiRunModalVisible("batch")}
-                      disabled={batchReportLoading || visualizationJobs.find(job => job.status === "PROCESSING" && job.jobId.includes('batch_report_'))}
+                      disabled={batchReportLoading || visualizationJobs.find(job => job.status === "PROCESSING" && job.jobId.includes("batch_report_"))}
                     >
                       {batchReportLoading ? "Generating..." : "Generate Batch Topics"}
                     </button>
                   </div>
                   {batchReportResult && (
-                    <div className={`result-message ${batchReportResult.success ? "success" : "error"}`}>
+                    <div className={`result-message ${batchReportResult.success ? "success" : "error"}`}> {/* eslint-disable-line quotes */}
                       {batchReportResult.message}
                     </div>
                   )}
                   {
-                    visualizationJobs.find(job => job.status === "PROCESSING" && job.jobId.includes('batch_report_')) && (
+                    visualizationJobs.find(job => job.status === "PROCESSING" && job.jobId.includes("batch_report_")) && (
                       <div className="result-message success">
                         A batch job is currently in progress, please check back later
                       </div>
