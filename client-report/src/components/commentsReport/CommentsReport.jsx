@@ -15,7 +15,6 @@ const decodedJwt = (token) => {
 
 const hasDelphiEnabled = (token) => {
   const decoded = decodedJwt(token);
-  console.log(decoded, `${process.env.AUTH_NAMESPACE}delphi_enabled`, decoded?.[`${process.env.AUTH_NAMESPACE}delphi_enabled`])
   return decoded && decoded[`${process.env.AUTH_NAMESPACE}delphi_enabled`]
 }
 
@@ -69,17 +68,17 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         flexDirection: 'column'
       }}>
         <div style={{ backgroundColor: '#fff', padding: '1em', borderRadius: '8px', maxWidth: '400px', flexDirection: 'column', alignItems: 'center', }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexDirection: 'column' }}>
             {hasDelphiEnabled(authToken) ? (
               <>
                 <h4>Are you sure you want to run a new Delphi analysis? This will erase previous results, and may take several minutes.</h4>
-                <button onClick={() => setConfirmDelphiRunModalVisible(false)}>Cancel</button>
-                <button onClick={confirmDelphiRunModalVisible === "batch" ? handleGenerateNarrativeReport : handleJobFormSubmit}>Run Analysis</button>
+                <button style={{ marginBottom: "1em", color: "#fff", backgroundColor: "#f44336", padding: "8px 16px", cursor: "pointer", border: "0", borderRadius: "4px", fontWeight: "bold" }} onClick={() => setConfirmDelphiRunModalVisible(false)}>Cancel</button>
+                <button className="batch-report-button" onClick={confirmDelphiRunModalVisible === "batch" ? handleGenerateNarrativeReport : handleJobFormSubmit}>Run Analysis</button>
               </>
               ) : (
               <p>
                 Discover more with Delphi - advanced data analysis and AI - Upgrade at <a target="_blank" href="https://pro.pol.is">pro.pol.is</a> to run a new analysis.
-                <button onClick={() => setConfirmDelphiRunModalVisible(false)}>Close</button>
+                <button style={{ marginTop: "1em", color: "#fff", backgroundColor: "#4caf50", padding: "8px 16px", cursor: "pointer", border: "0", borderRadius: "4px", fontWeight: "bold" }} onClick={() => setConfirmDelphiRunModalVisible(false)}>Close</button>
               </p>
             )}
           </div>
@@ -327,6 +326,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
       })
       .finally(() => {
         setBatchReportLoading(false);
+        setConfirmDelphiRunModalVisible(false);
       });
   };
 
