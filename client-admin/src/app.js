@@ -20,6 +20,7 @@ import TOS from './components/landers/TOS'
 import Privacy from './components/landers/Privacy'
 import SignIn from './components/landers/SignIn'
 import SignOut from './components/landers/SignOut'
+import Donate from './components/landers/Donate'
 
 // /conversation-admin
 import ConversationAdminContainer from './components/conversation-admin/index'
@@ -140,6 +141,7 @@ const App = () => {
           <Route path="/signout" element={<SignOut />} />
           <Route path="/tos" element={<TOS />} />
           <Route path="/privacy" element={<Privacy />} />
+          <Route path="/donate" element={<Donate />} />
 
           {/* Protected routes */}
           <Route element={<ProtectedRoute isAuthed={isAuthed()} isLoading={isLoading} />}>

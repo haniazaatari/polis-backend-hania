@@ -20,9 +20,9 @@ class Header extends Component {
         </Box>
         <div id="polis-donate">
           <i>
-            Polis is powered by support from people like you. Contribute at{' '}
-            <Link target="_blank" href="https://donorbox.org/geo-polis">
-              https://donorbox.org/geo-polis
+            Polis is powered by support from people like you. Contribute{' '}
+            <Link target="_blank" href="/donate">
+              here
             </Link>
             .
           </i>

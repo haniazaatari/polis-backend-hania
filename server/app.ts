@@ -1939,6 +1939,7 @@ helpersInitialized.then(
     );
     app.get(/^\/privacy$/, fetchIndexForAdminPage);
     app.get(/^\/tos$/, fetchIndexForAdminPage);
+    app.get(/^\/donate$/, fetchIndexForAdminPage);
 
     // admin dash-based landers
     app.get(/^\/gov(\/.*)?/, fetchIndexForAdminPage);

@@ -36,7 +36,7 @@ export default function DonateMessage({ }) {
     <>
       <br />
       <div>
-        <i>Polis is powered by support from people like you. Contribute at <a href="https://donorbox.org/geo-polis">https://donorbox.org/geo-polis</a>.</i>
+        <i>Polis is powered by support from people like you. Contribute <a href="/donate">here</a>.</i>
       </div>
     </>
   );
