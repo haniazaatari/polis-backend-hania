@@ -8,7 +8,7 @@ Use this script to remove all data for a conversation by report_id:
 
 ```bash
 # Usage: ./reset_conversation.py <report_id>
-docker exec delphi-app python -c "
+docker exec polis-dev-delphi-1 python -c "
 import boto3
 import sys
 
@@ -161,10 +161,10 @@ reset_conversation_data(report_id)
 
 ```bash
 # Reset conversation by report ID
-docker exec delphi-app python -c "$(cat reset_conversation_script)" r3p4ryckema3wfitndk6m
+docker exec polis-dev-delphi-1 python -c "$(cat reset_conversation_script)" r3p4ryckema3wfitndk6m
 
 # Reset conversation by zid (if you have a zid, use it as report_id)
-docker exec delphi-app python -c "$(cat reset_conversation_script)" 12345
+docker exec polis-dev-delphi-1 python -c "$(cat reset_conversation_script)" 12345
 ```
 
 ## What Gets Deleted
@@ -220,7 +220,7 @@ If the script shows "No data found" but you know data exists:
 1. **Find the actual conversation_id**:
    ```bash
    # Search for report_id in metadata fields
-   docker exec delphi-app python -c "
+   docker exec polis-dev-delphi-1 python -c "
    import boto3
    dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb:8000', region_name='us-east-1')
 
@@ -236,7 +236,7 @@ If the script shows "No data found" but you know data exists:
 2. **Use the numeric conversation_id** instead:
    ```bash
    # Reset using the numeric ID you found
-   docker exec delphi-app python -c "$(cat reset_conversation_script)" 31342
+   docker exec polis-dev-delphi-1 python -c "$(cat reset_conversation_script)" 31342
    ```
 
 3. **TODO**: Update the script to automatically resolve report_id → conversation_id mappings by checking metadata fields.

@@ -208,7 +208,7 @@ known-first-party = ["polismath", "umap_narrative"]
 [tool.isort]
 profile = "black"
 known_first_party = ["polismath", "umap_narrative"]
-skip = ["delphi-dev-env", ".venv", "venv"]
+skip = ["delphi-env", ".venv", "venv"]
 
 # MyPy type checking
 [tool.mypy]

@@ -59,7 +59,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 Added exclusions for:
 - Test files and test data
-- Development tools and caches (`delphi-dev-env/`, `.mypy_cache/`, etc.)
+- Development tools and caches (`delphi-env/`, `.mypy_cache/`, etc.)
 - Documentation (except README)
 - CI/CD configurations
 - Notebooks and build artifacts

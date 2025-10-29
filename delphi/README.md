@@ -11,7 +11,7 @@ For the fastest development environment setup:
 ./setup_dev.sh
 ```
 
-This will create the canonical `delphi-dev-env` virtual environment, install all dependencies, and set up development tools.
+This will create the canonical `delphi-env` virtual environment, install all dependencies, and set up development tools.
 
 ## Manual Development Setup
 
@@ -19,8 +19,8 @@ If you prefer manual setup:
 
 ```bash
 # Create canonical virtual environment
-python3 -m venv delphi-dev-env
-source delphi-dev-env/bin/activate
+python3 -m venv delphi-env
+source delphi-env/bin/activate
 
 # Install with development dependencies
 pip install -e ".[dev,notebook]"

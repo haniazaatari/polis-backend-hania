@@ -26,8 +26,8 @@ echo -e "${GREEN}✓ Python ${PYTHON_VERSION} found${NC}"
 # Check if we're in a virtual environment
 if [[ "$VIRTUAL_ENV" == "" ]]; then
     echo -e "${YELLOW}Warning: Not in a virtual environment. Creating one...${NC}"
-    python3 -m venv delphi-dev-env
-    source delphi-dev-env/bin/activate
+    python3 -m venv delphi-env
+    source delphi-env/bin/activate
     echo -e "${GREEN}✓ Virtual environment created and activated${NC}"
 else
     echo -e "${GREEN}✓ Virtual environment detected: $VIRTUAL_ENV${NC}"
@@ -103,5 +103,5 @@ echo "- docs/ directory for specific topics"
 if [[ "$VIRTUAL_ENV" == "" ]]; then
     echo ""
     echo -e "${YELLOW}Remember to activate your virtual environment:${NC}"
-    echo "source delphi-dev-env/bin/activate"
+    echo "source delphi-env/bin/activate"
 fi

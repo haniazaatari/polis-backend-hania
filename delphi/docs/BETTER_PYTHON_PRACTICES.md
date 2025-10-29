@@ -370,9 +370,9 @@ The GitHub Actions workflow automatically:
 
 ## Virtual Environment Management
 
-### Canonical Approach: `venv` + "delphi-dev-env"
+### Canonical Approach: `venv` + "delphi-env"
 
-This project uses **Python's built-in `venv` module** with the canonical environment name **`delphi-dev-env`**. This approach was chosen for several reasons:
+This project uses **Python's built-in `venv` module** with the canonical environment name **`delphi-env`**. This approach was chosen for several reasons:
 
 #### Why `venv` Over Pipenv/Poetry for Environment Management?
 
@@ -385,12 +385,12 @@ This project uses **Python's built-in `venv` module** with the canonical environ
 
 ```bash
 # Create the canonical development environment
-python3 -m venv delphi-dev-env
+python3 -m venv delphi-env
 
 # Activate it
-source delphi-dev-env/bin/activate  # Linux/macOS
+source delphi-env/bin/activate  # Linux/macOS
 # or
-delphi-dev-env\Scripts\activate     # Windows
+delphi-env\Scripts\activate     # Windows
 
 # Install with modern dependency management
 pip install -e ".[dev,notebook]"
@@ -406,7 +406,7 @@ For the fastest setup, use the provided script:
 
 This script:
 
-- Creates `delphi-dev-env` if it doesn't exist
+- Creates `delphi-env` if it doesn't exist
 - Activates the environment automatically
 - Installs all dependencies from `pyproject.toml`
 - Sets up pre-commit hooks
@@ -422,14 +422,14 @@ This script:
 
 **Current canonical name:**
 
-- ✅ `delphi-dev-env` - Clear project association and purpose
+- ✅ `delphi-env` - Clear project association and purpose
 
 #### Working with the Virtual Environment
 
 ```bash
 # Check if you're in the right environment
 which python
-# Should show: /path/to/delphi-dev-env/bin/python
+# Should show: /path/to/delphi-env/bin/python
 
 # Verify package installation
 pip list | grep delphi
@@ -441,7 +441,7 @@ deactivate
 
 #### Environment in Different Contexts
 
-1. **Development**: Use `delphi-dev-env` (persistent, full feature set)
+1. **Development**: Use `delphi-env` (persistent, full feature set)
 2. **CI/CD**: Uses temporary environments with exact dependency versions
 3. **Docker**: Uses container-level isolation instead of venv
 4. **Scripts**: May create temporary environments (e.g., `/tmp/delphi-temp-env`) that are cleaned up

@@ -92,7 +92,7 @@ Always use the commands above to determine the most substantial conversation whe
 1. Check job results in DynamoDB to see detailed logs that don't appear in container stdout:
 
    ```bash
-   docker exec delphi-app python -c "
+   docker exec polis-dev-delphi-1 python -c "
    import boto3, json
    dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb:8000', region_name='us-east-1')
    table = dynamodb.Table('Delphi_JobQueue')
@@ -107,7 +107,7 @@ Always use the commands above to determine the most substantial conversation whe
 2. For even more detailed logs, check the job's log entries:
 
    ```bash
-   docker exec delphi-app python -c "
+   docker exec polis-dev-delphi-1 python -c "
    import boto3, json
    dynamodb = boto3.resource('dynamodb', endpoint_url='http://dynamodb:8000', region_name='us-east-1')
    table = dynamodb.Table('Delphi_JobQueue')
