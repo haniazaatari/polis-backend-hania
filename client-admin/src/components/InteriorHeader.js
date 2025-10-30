@@ -2,6 +2,7 @@ import PropTypes from 'prop-types'
 import { Box } from 'theme-ui'
 import { Link } from 'react-router'
 import Logomark from './framework/Logomark'
+import DonationBanner from './conversation-admin/DonationBanner'
 
 const InteriorHeader = ({ children }) => {
   return (
@@ -44,6 +45,7 @@ const InteriorHeader = ({ children }) => {
           sign out
         </Link>
       </Box>
+      <DonationBanner />
       <Box sx={{ width: '100%', overflowX: 'auto' }}>{children}</Box>
     </Box>
   )
