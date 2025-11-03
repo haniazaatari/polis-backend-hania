@@ -81,7 +81,9 @@ describe("User Management Endpoints", () => {
         `/api/v3/comments?conversation_id=${conversationId}&modIn=true`
       );
       expect(commentsResponse.status).toBe(200);
-      const comments = commentsResponse.body;
+      const comments = Array.isArray(commentsResponse.body)
+        ? commentsResponse.body
+        : commentsResponse.body.comments;
       expect(comments.length).toBeGreaterThan(0);
 
       // Have the XID participant vote on the comment

@@ -65,7 +65,10 @@ describe("Extended Comment Endpoints", () => {
     );
 
     expect(commentsResponse.status).toBe(200);
-    const comments: Comment[] = JSON.parse(commentsResponse.text);
+    const responseBody = JSON.parse(commentsResponse.text);
+    const comments: Comment[] = Array.isArray(responseBody)
+      ? responseBody
+      : responseBody.comments;
 
     // Validate response
     expect(Array.isArray(comments)).toBe(true);
@@ -85,7 +88,10 @@ describe("Extended Comment Endpoints", () => {
     );
 
     expect(commentsResponse.status).toBe(200);
-    const comments: Comment[] = JSON.parse(commentsResponse.text);
+    const responseBody2 = JSON.parse(commentsResponse.text);
+    const comments: Comment[] = Array.isArray(responseBody2)
+      ? responseBody2
+      : responseBody2.comments;
 
     // Validate response - should be an empty array
     expect(Array.isArray(comments)).toBe(true);
@@ -126,7 +132,10 @@ describe("Extended Comment Endpoints", () => {
     );
 
     expect(commentsResponse.status).toBe(200);
-    const comments: Comment[] = JSON.parse(commentsResponse.text);
+    const responseBody3 = JSON.parse(commentsResponse.text);
+    const comments: Comment[] = Array.isArray(responseBody3)
+      ? responseBody3
+      : responseBody3.comments;
 
     // Validate get response
     expect(Array.isArray(comments)).toBe(true);
@@ -217,7 +226,10 @@ describe("Extended Comment Endpoints", () => {
     );
 
     expect(filteredByTidsResponse.status).toBe(200);
-    const filteredByTids: Comment[] = JSON.parse(filteredByTidsResponse.text);
+    const responseBody4 = JSON.parse(filteredByTidsResponse.text);
+    const filteredByTids: Comment[] = Array.isArray(responseBody4)
+      ? responseBody4
+      : responseBody4.comments;
 
     expect(Array.isArray(filteredByTids)).toBe(true);
     expect(filteredByTids.length).toBe(2);
@@ -233,7 +245,10 @@ describe("Extended Comment Endpoints", () => {
     );
 
     expect(filteredByModResponse.status).toBe(200);
-    const filteredByMod: Comment[] = JSON.parse(filteredByModResponse.text);
+    const responseBody5 = JSON.parse(filteredByModResponse.text);
+    const filteredByMod: Comment[] = Array.isArray(responseBody5)
+      ? responseBody5
+      : responseBody5.comments;
 
     expect(Array.isArray(filteredByMod)).toBe(true);
     expect(filteredByMod.length).toBe(2);

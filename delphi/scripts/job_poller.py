@@ -673,18 +673,19 @@ class JobProcessor:
             # 1. Build the command
             job_config = json.loads(job.get('job_config', '{}'))
             include_moderation = job_config.get('include_moderation', False)
+            app_path = os.environ.get('DELPHI_APP_PATH', '/app')
             if job_type == 'CREATE_NARRATIVE_BATCH':
                 model = os.environ.get("ANTHROPIC_MODEL")
                 if not model: raise ValueError("ANTHROPIC_MODEL must be set")
                 max_batch_size = job_config.get('max_batch_size', 20)
-                cmd = ['python', '/app/umap_narrative/801_narrative_report_batch.py', f'--conversation_id={conversation_id}', f'--model={model}', f'--include_moderation={include_moderation}', f'--max-batch-size={str(max_batch_size)}']
+                cmd = ['python', f'{app_path}/umap_narrative/801_narrative_report_batch.py', f'--conversation_id={conversation_id}', f'--model={model}', f'--include_moderation={include_moderation}', f'--max-batch-size={str(max_batch_size)}']
                 if job_config.get('no_cache'): cmd.append('--no-cache')
             elif job_type == 'AWAITING_NARRATIVE_BATCH':
                 cmd_job_id = job.get('batch_job_id', job_id)
-                cmd = ['python', '/app/umap_narrative/803_check_batch_status.py', f'--job-id={cmd_job_id}']
+                cmd = ['python', f'{app_path}/umap_narrative/803_check_batch_status.py', f'--job-id={cmd_job_id}']
             else: # FULL_PIPELINE
                 # Base command
-                cmd = ['python', '/app/run_delphi.py', f'--zid={conversation_id}', f'--include_moderation={include_moderation}',]
+                cmd = ['python', f'{app_path}/run_delphi.py', f'--zid={conversation_id}', f'--include_moderation={include_moderation}',]
                 # Check for report_id and append if it exists
                 report_id = job.get('report_id')
                 if report_id:
@@ -763,6 +764,10 @@ def poll_and_process(processor, interval=10):
                 else: # This covers 'small' and the 'default' type.
                     # Small/default instances ONLY process normal-sized jobs.
                     can_process = (job_actual_size == "normal")
+
+                if instance_type == "dev":
+                    # Dev instances can process any job size.
+                    can_process = True
 
                 if not can_process:
                     logger.info(f"Worker instance type '{instance_type}' cannot process job '{job_to_process['job_id']}' of size '{job_actual_size}'. Skipping for now.")

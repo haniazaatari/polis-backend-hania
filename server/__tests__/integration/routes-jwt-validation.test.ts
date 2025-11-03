@@ -90,7 +90,10 @@ describe("JWT Route Validation Matrix", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      const comments = Array.isArray(response.body)
+        ? response.body
+        : response.body.comments;
+      expect(Array.isArray(comments)).toBe(true);
     });
 
     test("POST /api/v3/comments - Create comment", async () => {

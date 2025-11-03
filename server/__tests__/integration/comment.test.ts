@@ -61,10 +61,13 @@ describe("Comment Endpoints", () => {
       `/api/v3/comments?conversation_id=${conversationId}`
     );
     expect(listResponse.status).toBe(200);
-    const responseBody: Comment[] = JSON.parse(listResponse.text);
-    expect(Array.isArray(responseBody)).toBe(true);
-    const foundComment = responseBody.find(
-      (comment) => comment.tid === commentId
+    const responseBody = JSON.parse(listResponse.text);
+    const comments: Comment[] = Array.isArray(responseBody)
+      ? responseBody
+      : responseBody.comments;
+    expect(Array.isArray(comments)).toBe(true);
+    const foundComment = comments.find(
+      (comment: Comment) => comment.tid === commentId
     );
     expect(foundComment).toBeDefined();
     expect(foundComment!.txt).toBe(commentText);
@@ -134,10 +137,13 @@ describe("Comment Endpoints", () => {
     );
 
     expect(listResponse.status).toBe(200);
-    const responseBody: Comment[] = JSON.parse(listResponse.text);
-    expect(Array.isArray(responseBody)).toBe(true);
-    const foundComment = responseBody.find(
-      (comment) => comment.tid === commentId
+    const responseBody = JSON.parse(listResponse.text);
+    const comments: Comment[] = Array.isArray(responseBody)
+      ? responseBody
+      : responseBody.comments;
+    expect(Array.isArray(comments)).toBe(true);
+    const foundComment = comments.find(
+      (comment: Comment) => comment.tid === commentId
     );
     expect(foundComment).toBeDefined();
     expect(foundComment!.txt).toBe(commentText);
@@ -180,10 +186,13 @@ describe("Comment Endpoints", () => {
     );
 
     expect(listResponse.status).toBe(200);
-    const responseBody: Comment[] = JSON.parse(listResponse.text);
-    expect(Array.isArray(responseBody)).toBe(true);
-    const foundComment = responseBody.find(
-      (comment) => comment.tid === commentId
+    const responseBody = JSON.parse(listResponse.text);
+    const comments: Comment[] = Array.isArray(responseBody)
+      ? responseBody
+      : responseBody.comments;
+    expect(Array.isArray(comments)).toBe(true);
+    const foundComment = comments.find(
+      (comment: Comment) => comment.tid === commentId
     );
     expect(foundComment).toBeDefined();
     expect(foundComment!.txt).toBe(commentText);
@@ -234,16 +243,19 @@ describe("Comment Endpoints", () => {
     );
 
     expect(allCommentsResponse.status).toBe(200);
-    const allComments: Comment[] = JSON.parse(allCommentsResponse.text);
+    const allCommentsBody = JSON.parse(allCommentsResponse.text);
+    const allComments: Comment[] = Array.isArray(allCommentsBody)
+      ? allCommentsBody
+      : allCommentsBody.comments;
     expect(Array.isArray(allComments)).toBe(true);
     expect(allComments.length).toBeGreaterThanOrEqual(2);
 
     // Verify both comments are present
     const foundAdminComment = allComments.find(
-      (comment) => comment.tid === adminCommentId
+      (comment: Comment) => comment.tid === adminCommentId
     );
     const foundParticipantComment = allComments.find(
-      (comment) => comment.tid === participantCommentId
+      (comment: Comment) => comment.tid === participantCommentId
     );
 
     expect(foundAdminComment).toBeDefined();
@@ -257,19 +269,80 @@ describe("Comment Endpoints", () => {
     );
 
     expect(adminViewResponse.status).toBe(200);
-    const adminViewComments: Comment[] = JSON.parse(adminViewResponse.text);
-    expect(Array.isArray(adminViewComments)).toBe(true);
-    expect(adminViewComments.length).toBeGreaterThanOrEqual(2);
+    const adminViewBody = JSON.parse(adminViewResponse.text);
+    const adminComments: Comment[] = Array.isArray(adminViewBody)
+      ? adminViewBody
+      : adminViewBody.comments;
+    expect(Array.isArray(adminComments)).toBe(true);
+    expect(adminComments.length).toBeGreaterThanOrEqual(2);
 
     // Verify admin sees both comments too
-    const adminFoundAdminComment = adminViewComments.find(
-      (comment) => comment.tid === adminCommentId
+    const adminFoundAdminComment = adminComments.find(
+      (comment: Comment) => comment.tid === adminCommentId
     );
-    const adminFoundParticipantComment = adminViewComments.find(
-      (comment) => comment.tid === participantCommentId
+    const adminFoundParticipantComment = adminComments.find(
+      (comment: Comment) => comment.tid === participantCommentId
     );
 
     expect(adminFoundAdminComment).toBeDefined();
     expect(adminFoundParticipantComment).toBeDefined();
+  });
+
+  test("Comment pagination works correctly", async () => {
+    // Create multiple comments for pagination testing
+    const commentCount = 10;
+    const createdCommentIds: number[] = [];
+
+    for (let i = 0; i < commentCount; i++) {
+      const commentId = await createComment(agent, conversationId, {
+        txt: `Pagination test comment ${i}`,
+      });
+      createdCommentIds.push(commentId);
+    }
+
+    // Test 1: Get first page with limit 3
+    const page1Response: Response = await agent.get(
+      `/api/v3/comments?conversation_id=${conversationId}&limit=3&offset=0`
+    );
+    expect(page1Response.status).toBe(200);
+    const page1Body = JSON.parse(page1Response.text);
+    expect(page1Body).toHaveProperty("comments");
+    expect(page1Body).toHaveProperty("pagination");
+    expect(page1Body.comments.length).toBe(3);
+    expect(page1Body.pagination.limit).toBe(3);
+    expect(page1Body.pagination.offset).toBe(0);
+    expect(page1Body.pagination.total).toBeGreaterThanOrEqual(commentCount);
+    expect(page1Body.pagination.hasMore).toBe(true);
+
+    // Test 2: Get second page with limit 3, offset 3
+    const page2Response: Response = await agent.get(
+      `/api/v3/comments?conversation_id=${conversationId}&limit=3&offset=3`
+    );
+    expect(page2Response.status).toBe(200);
+    const page2Body = JSON.parse(page2Response.text);
+    expect(page2Body.comments.length).toBe(3);
+    expect(page2Body.pagination.limit).toBe(3);
+    expect(page2Body.pagination.offset).toBe(3);
+    expect(page2Body.pagination.hasMore).toBe(true);
+
+    // Test 3: Verify no duplicate comments between pages
+    const page1Tids = page1Body.comments.map((c: Comment) => c.tid);
+    const page2Tids = page2Body.comments.map((c: Comment) => c.tid);
+    const intersection = page1Tids.filter((tid: number) =>
+      page2Tids.includes(tid)
+    );
+    expect(intersection.length).toBe(0);
+
+    // Test 4: Request with no limit/offset should use defaults
+    const defaultResponse: Response = await agent.get(
+      `/api/v3/comments?conversation_id=${conversationId}`
+    );
+    expect(defaultResponse.status).toBe(200);
+    const defaultBody = JSON.parse(defaultResponse.text);
+    const defaultComments: Comment[] = Array.isArray(defaultBody)
+      ? defaultBody
+      : defaultBody.comments;
+    expect(Array.isArray(defaultComments)).toBe(true);
+    expect(defaultComments.length).toBeGreaterThan(0);
   });
 });
