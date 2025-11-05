@@ -173,54 +173,37 @@ def query_and_delete(dynamodb, table_name, key_config):
     return _fetch_and_delete_items(dynamodb, table_name, key_config, 'query', operation_kwargs)
 
 
-def scan_and_delete_with_prefix(dynamodb, table_name, key_config):
+def gsi_query_and_delete(dynamodb, table_name, key_config):
     """
-    Scan a DynamoDB table for items matching a prefix and delete them.
+    Query a DynamoDB GSI using a partition key and delete matching items.
 
     Args:
         dynamodb: DynamoDB resource object
-        table_name: Name of the table to scan
-        key_config: Dict with 'keys' (list of key names) and 'prefix' (prefix to match)
+        table_name: Name of the table to query
+        key_config: Dict with 'keys' (list of primary key names), 
+                    'gsi_name' (str), 'gsi_pk' (str), and 'gsi_value' (str)
 
     Returns:
         Number of items deleted
     """
     operation_kwargs = {
-        'FilterExpression': Key(key_config['keys'][0]).begins_with(key_config['prefix'])
+        'IndexName': key_config['gsi_name'],
+        'KeyConditionExpression': Key(key_config['gsi_pk']).eq(key_config['gsi_value'])
     }
-    return _fetch_and_delete_items(dynamodb, table_name, key_config, 'scan', operation_kwargs)
-
-
-def scan_and_delete_with_attribute(dynamodb, table_name, key_config):
-    """
-    Scan a DynamoDB table for items where an attribute contains a value and delete them.
-
-    Args:
-        dynamodb: DynamoDB resource object
-        table_name: Name of the table to scan
-        key_config: Dict with 'keys' (list of key names), 'attribute' name, and 'contains_value'
-
-    Returns:
-        Number of items deleted
-    """
-    operation_kwargs = {
-        'FilterExpression': Attr(key_config['attribute']).contains(key_config['contains_value'])
-    }
-    return _fetch_and_delete_items(dynamodb, table_name, key_config, 'scan', operation_kwargs)
-
+    return _fetch_and_delete_items(dynamodb, table_name, key_config, 'query', operation_kwargs)
 
 
 def delete_dynamodb_data(conversation_id: str, report_id: str = None):
     """
     Deletes all data from DynamoDB tables for a given conversation_id.
-    This function handles multiple key structures and uses efficient batch deletion.
+    This function uses efficient Query operations and batch deletion, avoiding Scans.
     """
     dynamodb = get_boto_resource('dynamodb')
     total_deleted_count = 0
 
     logger.info(f"\nDeleting DynamoDB data for conversation {conversation_id}...")
 
-    # Single-item tables (direct delete by primary key)
+    # --- 1. Single-item tables (direct delete by primary key) ---
     single_key_tables = {
         'Delphi_PCAConversationConfig': {
             'key_name': 'zid',
@@ -232,12 +215,11 @@ def delete_dynamodb_data(conversation_id: str, report_id: str = None):
         },
     }
 
-    # Process single-item deletions
     for table_name, config in single_key_tables.items():
         deleted_count = delete_single_item(dynamodb, table_name, config)
         total_deleted_count += deleted_count
 
-    # Query-based tables (efficient query by partition key)
+    # --- 2. Query-based tables (efficient query by partition key) ---
     query_tables = {
         'Delphi_CommentEmbeddings': {
             'keys': ['conversation_id', 'comment_id'],
@@ -267,69 +249,69 @@ def delete_dynamodb_data(conversation_id: str, report_id: str = None):
             'keys': ['conversation_id', 'comment_id'],
             'partition_value': conversation_id
         },
+        # This table's PK is 'zid', so it's queried directly.
+        'Delphi_PCAResults': {
+            'keys': ['zid', 'math_tick'],
+            'partition_value': conversation_id
+        },
     }
-
-    # Process query-based deletions
+    
     for table_name, config in query_tables.items():
-        logger.info(f"Processing table {table_name}...")
         deleted_count = query_and_delete(dynamodb, table_name, config)
         total_deleted_count += deleted_count
 
-    # Prefix-scan tables (scan with prefix filter)
-    prefix_scan_tables = {
+    # --- 3. GSI Query-based tables (efficient query by GSI) ---
+    gsi_query_tables = {
         'Delphi_CommentRouting': {
             'keys': ['zid_tick', 'comment_id'],
-            'prefix': f'{conversation_id}:'
-        },
-        'Delphi_PCAResults': {
-            'keys': ['zid', 'math_tick'],
-            'prefix': conversation_id
-        },
-        'Delphi_KMeansClusters': {
-            'keys': ['zid_tick', 'group_id'],
-            'prefix': f'{conversation_id}:'
-        },
-        'Delphi_RepresentativeComments': {
-            'keys': ['zid_tick_gid', 'comment_id'],
-            'prefix': f'{conversation_id}:'
-        },
-        'Delphi_PCAParticipantProjections': {
-            'keys': ['zid_tick', 'participant_id'],
-            'prefix': f'{conversation_id}:'
+            'gsi_name': 'zid-index',
+            'gsi_pk': 'zid',
+            'gsi_value': conversation_id
         },
         'Delphi_CollectiveStatement': {
             'keys': ['zid_topic_jobid'],
-            'prefix': f'{conversation_id}#'
+            'gsi_name': 'zid-created_at-index',
+            'gsi_pk': 'zid',
+            'gsi_value': conversation_id
+        },
+        'Delphi_KMeansClusters': {
+            'keys': ['zid_tick', 'group_id'],
+            'gsi_name': 'zid-index',
+            'gsi_pk': 'zid',
+            'gsi_value': conversation_id
+        },
+        'Delphi_RepresentativeComments': {
+            'keys': ['zid_tick_gid', 'comment_id'],
+            'gsi_name': 'zid-index',
+            'gsi_pk': 'zid',
+            'gsi_value': conversation_id
+        },
+        'Delphi_PCAParticipantProjections': {
+            'keys': ['zid_tick', 'participant_id'],
+            'gsi_name': 'zid-index',
+            'gsi_pk': 'zid',
+            'gsi_value': conversation_id
         },
     }
 
+    for table_name, config in gsi_query_tables.items():
+        deleted_count = gsi_query_and_delete(dynamodb, table_name, config)
+        total_deleted_count += deleted_count
+        
+    # Special case GSI query for reports (if rid is provided)
     if report_id:
-        prefix_scan_tables['Delphi_NarrativeReports'] = {
+        logger.info(f"Deleting data for report_id {report_id}...")
+        report_config = {
             'keys': ['rid_section_model', 'timestamp'],
-            'prefix': report_id
+            'gsi_name': 'ReportIdTimestampIndex',
+            'gsi_pk': 'report_id',
+            'gsi_value': report_id
         }
-
-    # Process prefix-scan deletions
-    for table_name, config in prefix_scan_tables.items():
-        deleted_count = scan_and_delete_with_prefix(dynamodb, table_name, config)
+        deleted_count = gsi_query_and_delete(dynamodb, 'Delphi_NarrativeReports', report_config)
         total_deleted_count += deleted_count
-
-
-    # Attribute-contains tables (scan with attribute filter)
-    attribute_scan_tables = {
-        'Delphi_JobQueue': {
-            'keys': ['job_id'],
-            'attribute': 'job_params',
-            'contains_value': conversation_id
-        },
-    }
-
-    # Process attribute-contains scan deletions
-    for table_name, config in attribute_scan_tables.items():
-        deleted_count = scan_and_delete_with_attribute(dynamodb, table_name, config)
-        total_deleted_count += deleted_count
-
+            
     return total_deleted_count
+
 
 def delete_s3_data(bucket_name: str, report_id: str):
     """

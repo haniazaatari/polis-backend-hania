@@ -52,7 +52,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   const [confirmDelphiRunModalVisible, setConfirmDelphiRunModalVisible] = useState(false);
 
   const DelphiModal = () => {
-    console.log(process.env.AUTH_NAMESPACE)
     return confirmDelphiRunModalVisible ? (
       <div style={{
         position: "fixed",
@@ -97,7 +96,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         report_id: report_id,
       })
       .then((response) => {
-        console.log("Delphi response:", response);
 
         if (response && response.status === "success") {
           if (response.runs && Object.keys(response.runs).length > 0) {
@@ -135,7 +133,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         report_id: report_id,
       })
       .then((response) => {
-        console.log("Visualizations response:", response);
 
         if (response && response.status === "success" && response.jobs) {
           setVisualizationJobs(response.jobs);
@@ -158,7 +155,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         report_id: report_id,
       })
       .then((response) => {
-        console.log("Topic data response:", response);
 
         if (response && response.status === "success") {
           setTopicData(response);
@@ -178,7 +174,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         report_id: report_id,
       })
       .then((response) => {
-        console.log("Narrative reports response:", response);
 
         if (response && response.status === "success" && response.reports) {
           setNarrativeReports(response.reports);
@@ -189,17 +184,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
               current_job_id: response.current_job_id, // Changed from current_run
               available: response.available_runs,
             });
-
-            // Log available runs info
-            if (response.available_runs.length > 1) {
-              console.log(
-                `Found ${response.available_runs.length} narrative report runs:`,
-                response.available_runs
-              );
-              console.log(
-                `Currently showing run for job_id: ${response.current_job_id}`
-              );
-            }
           }
         }
 
@@ -246,7 +230,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         ...jobFormData,
       }, authToken)
       .then((response) => {
-        console.log("Job creation response:", response);
 
         if (response && response.status === "success") {
           setJobCreationResult({
@@ -305,7 +288,6 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
         include_moderation: reportModLevel !== -2,
       }, authToken)
       .then((response) => {
-        console.log("Batch report response:", response);
 
         if (response && response.status === "success") {
           setBatchReportResult({
@@ -418,21 +400,16 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
             // Check which format exists in the data
             if (longFormatKey && narrativeReports[longFormatKey]) {
               sectionKey = longFormatKey;
-              console.log(`CommentsReport global section ${key}: found long format - ${sectionKey}`);
             } else if (narrativeReports[shortFormatKey]) {
               sectionKey = shortFormatKey;
-              console.log(`CommentsReport global section ${key}: found short format - ${sectionKey}`);
             } else if (narrativeReports[key]) {
               sectionKey = key;
-              console.log(`CommentsReport global section ${key}: found bare format - ${sectionKey}`);
             } else {
               // Default to short format if no data found
               sectionKey = shortFormatKey;
-              console.log(`CommentsReport global section ${key}: no data found, using default - ${sectionKey}`);
             }
           } else {
             sectionKey = shortFormatKey;
-            console.log(`CommentsReport global section ${key}: no reports data, using fallback - ${sectionKey}`);
           }
           
           // Check if narrative report exists
@@ -1033,6 +1010,7 @@ const CommentsReport = ({ math, comments, conversation, ptptCount, formatTid, vo
   }
 
   if (error) {
+    console.log(error)
     return (
       <div className="comments-report">
         <DelphiModal />

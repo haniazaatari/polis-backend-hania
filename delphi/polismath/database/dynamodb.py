@@ -359,6 +359,7 @@ class DynamoDBClient:
                                 'center': group.get('center', []),
                                 'member_count': len(members),
                                 'members': members,
+                                'zid': zid,
                             })
                 elif hasattr(conv, 'group_clusters'):
                     # Legacy format
@@ -401,7 +402,8 @@ class DynamoDBClient:
                                 'comment_id': str(comment_id),
                                 'priority': priorities.get(comment_id, 0),
                                 'stats': vote_stats,
-                                'consensus_score': consensus_scores.get(comment_id, decimal.Decimal('0'))
+                                'consensus_score': consensus_scores.get(comment_id, decimal.Decimal('0')),
+                                'zid': zid,
                             })
                 else:
                     # Legacy format
@@ -433,7 +435,8 @@ class DynamoDBClient:
                                 'comment_id': str(comment_id),
                                 'priority': comment_priorities.get(comment_id, 0),
                                 'stats': stats,
-                                'consensus_score': consensus_score
+                                'consensus_score': consensus_score,
+                                'zid': zid,
                             })
                 logger.info(f"[{time.time() - start_time:.2f}s] Step 4 completed: Written comment data for {zid} in {time.time() - step4_start:.2f}s")
             else:
@@ -460,7 +463,8 @@ class DynamoDBClient:
                                 'zid_tick_gid': zid_tick_gid,
                                 'comment_id': str(comment_id),
                                 'repness': item.get('repness', decimal.Decimal('0')),
-                                'group_id': group_id
+                                'group_id': group_id,
+                                'zid': zid,
                             })
                 elif hasattr(conv, 'repness') and 'comment_repness' in conv.repness:
                     # Legacy format
@@ -527,7 +531,8 @@ class DynamoDBClient:
                         'zid_tick': zid_tick,
                         'participant_id': str(participant_id),
                         'coordinates': coordinates,
-                        'group_id': participant_groups.get(participant_id, -1)
+                        'group_id': participant_groups.get(participant_id, -1),
+                        'zid': zid
                     })
                     
                     processed_count += 1
