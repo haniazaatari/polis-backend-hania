@@ -122,8 +122,9 @@ class Conversation:
         null_count = 0
         
         # Progress tracking
-        progress_interval = 10000  # Report every N votes
+        progress_interval = 200000  # Report every N votes
         
+        # TODO: we could probably vectorize this further for speed...
         for i, vote in enumerate(vote_data):
             # Report progress for large datasets
             if i > 0 and i % progress_interval == 0:
@@ -206,6 +207,8 @@ class Conversation:
             batch_start = time.time()
             result.raw_rating_mat = result.raw_rating_mat.batch_update(vote_updates)
             logger.info(f"[{time.time() - start_time:.2f}s] Batch update completed in {time.time() - batch_start:.2f}s")
+        else:
+            logger.info(f"[{time.time() - start_time:.2f}s] No new votes to apply.")
         
         # Update last updated timestamp
         result.last_updated = max(
