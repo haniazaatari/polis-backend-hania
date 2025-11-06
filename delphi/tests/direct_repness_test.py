@@ -17,7 +17,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 from polismath.pca_kmeans_rep.repness import conv_repness, participant_stats
 from polismath.conversation.conversation import Conversation
-from direct_conversation_test import create_test_conversation
+from common_utils import create_test_conversation
 
 def test_repness_calculation(dataset_name: str) -> None:
     """
