@@ -85,6 +85,10 @@ export function createTestConversation(options = {}) {
     .contains(/create new conversation/i)
     .click()
 
+  cy.get('button')
+    .contains(/create conversation/i)
+    .click()
+
   // Should navigate to conversation config page
   cy.url().should('match', /\/m\/[a-zA-Z0-9]+$/)
 

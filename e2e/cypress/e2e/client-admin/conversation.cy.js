@@ -58,6 +58,10 @@ describe('Client Admin: Conversation Management', () => {
         .contains(/create new conversation/i)
         .click()
 
+      cy.get('button')
+        .contains(/create conversation/i)
+        .click()
+
       // Should navigate to conversation creation/config page
       cy.url().should('match', /\/m\/[a-zA-Z0-9]+$/)
 
@@ -83,6 +87,10 @@ describe('Client Admin: Conversation Management', () => {
       cy.visit('/')
       cy.get('button')
         .contains(/create new conversation/i)
+        .click()
+
+      cy.get('button')
+        .contains(/create conversation/i)
         .click()
 
       // Wait for navigation and get conversation ID
@@ -339,6 +347,10 @@ describe('Client Admin: Conversation Management', () => {
       cy.visit('/')
       cy.get('button')
         .contains(/create new conversation/i)
+        .click()
+
+      cy.get('button')
+        .contains(/create conversation/i)
         .click()
 
       cy.url().should('match', /\/m\/[a-zA-Z0-9]+$/)
