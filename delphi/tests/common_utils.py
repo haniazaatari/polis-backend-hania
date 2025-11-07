@@ -14,6 +14,7 @@ sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 from polismath.conversation.conversation import Conversation
+from tests.dataset_config import get_dataset_files
 
 
 def create_test_conversation(dataset_name: str) -> Conversation:
@@ -26,13 +27,9 @@ def create_test_conversation(dataset_name: str) -> Conversation:
     Returns:
         Conversation with the dataset loaded
     """
-    # Set paths based on dataset
-    if dataset_name == 'biodiversity':
-        votes_path = os.path.join('real_data/biodiversity', '2025-03-18-2000-3atycmhmer-votes.csv')
-    elif dataset_name == 'vw':
-        votes_path = os.path.join('real_data/vw', '2025-03-18-1954-4anfsauat2-votes.csv')
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files(dataset_name)
+    votes_path = dataset_files['votes']
 
     # Read votes from CSV
     df = pd.read_csv(votes_path)

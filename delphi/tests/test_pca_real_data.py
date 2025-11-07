@@ -15,6 +15,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
+from tests.dataset_config import get_dataset_files
 
 def load_votes_from_csv(votes_path: str, limit: Optional[int] = None) -> np.ndarray:
     """Load votes from a CSV file."""
@@ -72,16 +73,10 @@ def load_votes_from_csv(votes_path: str, limit: Optional[int] = None) -> np.ndar
 def test_pca_projection(dataset_name: str) -> None:
     """Test PCA projection on a real dataset."""
     print(f"Testing PCA on {dataset_name} dataset")
-    
-    # Set paths based on dataset name
-    if dataset_name == 'biodiversity':
-        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/biodiversity'))
-        votes_path = os.path.join(data_dir, '2025-03-18-2000-3atycmhmer-votes.csv')
-    elif dataset_name == 'vw':
-        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/vw'))
-        votes_path = os.path.join(data_dir, '2025-03-18-1954-4anfsauat2-votes.csv')
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files(dataset_name)
+    votes_path = dataset_files['votes']
     
     # Load votes
     vote_matrix = load_votes_from_csv(votes_path)

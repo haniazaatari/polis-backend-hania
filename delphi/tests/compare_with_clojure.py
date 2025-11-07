@@ -17,6 +17,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
 from polismath.pca_kmeans_rep.clusters import cluster_named_matrix, determine_k
+from dataset_config import get_dataset_files
 
 
 def load_votes_from_csv(votes_path: str) -> NamedMatrix:
@@ -261,17 +262,10 @@ def compare_projections(python_projections, clojure_projections) -> Dict[str, An
 
 def run_direct_comparison(dataset_name: str) -> Dict[str, Any]:
     """Run direct comparison between Python and Clojure results."""
-    # Set paths based on dataset name
-    if dataset_name == 'biodiversity':
-        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'real_data/biodiversity'))
-        votes_path = os.path.join(data_dir, '2025-03-18-2000-3atycmhmer-votes.csv')
-        clojure_output_path = os.path.join(data_dir, 'biodiveristy_clojure_output.json')
-    elif dataset_name == 'vw':
-        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'real_data/vw'))
-        votes_path = os.path.join(data_dir, '2025-03-18-1954-4anfsauat2-votes.csv')
-        clojure_output_path = os.path.join(data_dir, 'vw_clojure_output.json')
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files(dataset_name)
+    votes_path = dataset_files['votes']
+    clojure_output_path = dataset_files['math_blob']
     
     print(f"Running direct comparison for {dataset_name} dataset")
     

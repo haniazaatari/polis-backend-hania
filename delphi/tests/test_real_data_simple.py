@@ -14,6 +14,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from polismath.conversation.conversation import Conversation
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from tests.dataset_config import get_dataset_files
 
 def load_votes(votes_path):
     """Load votes from a CSV file into a format suitable for conversion."""
@@ -60,9 +61,9 @@ def load_votes(votes_path):
 
 def test_biodiversity_conversation_simple():
     """Test conversation processing with the biodiversity dataset."""
-    # Paths to dataset files
-    data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/biodiversity'))
-    votes_path = os.path.join(data_dir, '2025-03-18-2000-3atycmhmer-votes.csv')
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files('biodiversity')
+    votes_path = dataset_files['votes']
     
     # Create a new conversation
     conv_id = 'biodiversity'

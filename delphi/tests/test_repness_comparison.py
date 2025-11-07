@@ -15,25 +15,23 @@ sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 from polismath.pca_kmeans_rep.repness import conv_repness, participant_stats
 from polismath.conversation.conversation import Conversation
 from common_utils import create_test_conversation
+from dataset_config import get_dataset_files
 
 
 def load_clojure_results(dataset_name: str) -> Dict[str, Any]:
     """
     Load Clojure results from file.
-    
+
     Args:
         dataset_name: 'biodiversity' or 'vw'
-        
+
     Returns:
         Dictionary with Clojure results
     """
-    if dataset_name == 'biodiversity':
-        json_path = os.path.join('real_data/biodiversity', 'biodiveristy_clojure_output.json')
-    elif dataset_name == 'vw':
-        json_path = os.path.join('real_data/vw', 'vw_clojure_output.json')
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
-    
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files(dataset_name)
+    json_path = dataset_files['math_blob']
+
     if not os.path.exists(json_path):
         print(f"Warning: Clojure output file {json_path} not found!")
         return {}

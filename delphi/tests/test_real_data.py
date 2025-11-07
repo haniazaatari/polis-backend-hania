@@ -15,6 +15,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from polismath.conversation.conversation import Conversation
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from tests.dataset_config import get_dataset_files
 
 
 def load_votes(votes_path):
@@ -86,11 +87,12 @@ def load_comments(comments_path):
 
 def test_biodiversity_conversation():
     """Test conversation processing with the biodiversity dataset."""
-    # Paths to dataset files
-    data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/biodiversity'))
-    votes_path = os.path.join(data_dir, '2025-03-18-2000-3atycmhmer-votes.csv')
-    comments_path = os.path.join(data_dir, '2025-03-18-2000-3atycmhmer-comments.csv')
-    clojure_output_path = os.path.join(data_dir, 'biodiveristy_clojure_output.json')
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files('biodiversity')
+    votes_path = dataset_files['votes']
+    comments_path = dataset_files['comments']
+    clojure_output_path = dataset_files['math_blob']
+    data_dir = dataset_files['data_dir']
     
     # Load the Clojure output for comparison
     with open(clojure_output_path, 'r') as f:
@@ -186,11 +188,12 @@ def test_biodiversity_conversation():
 
 def test_vw_conversation():
     """Test conversation processing with the VW dataset."""
-    # Paths to dataset files
-    data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/vw'))
-    votes_path = os.path.join(data_dir, '2025-03-18-1954-4anfsauat2-votes.csv')
-    comments_path = os.path.join(data_dir, '2025-03-18-1954-4anfsauat2-comments.csv')
-    clojure_output_path = os.path.join(data_dir, 'vw_clojure_output.json')
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files('vw')
+    votes_path = dataset_files['votes']
+    comments_path = dataset_files['comments']
+    clojure_output_path = dataset_files['math_blob']
+    data_dir = dataset_files['data_dir']
     
     # Load the Clojure output for comparison
     with open(clojure_output_path, 'r') as f:

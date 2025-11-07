@@ -11,6 +11,11 @@ import pandas as pd
 from typing import Dict, List, Any
 import traceback
 
+# Add the parent directory to the path to import the module
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+
+from dataset_config import get_dataset_files
+
 # Define simplified versions of the core math functions
 
 def normalize_vector(v: np.ndarray) -> np.ndarray:
@@ -107,14 +112,10 @@ def kmeans_clustering(projections: np.ndarray, n_clusters: int = 3) -> List[Dict
 
 def load_votes(dataset_name: str) -> tuple:
     """Load votes from a dataset."""
-    # Set paths based on dataset
-    if dataset_name == 'biodiversity':
-        votes_path = os.path.join('real_data/biodiversity', '2025-03-18-2000-3atycmhmer-votes.csv')
-    elif dataset_name == 'vw':
-        votes_path = os.path.join('real_data/vw', '2025-03-18-1954-4anfsauat2-votes.csv')
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
-    
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files(dataset_name)
+    votes_path = dataset_files['votes']
+
     # Read votes from CSV
     df = pd.read_csv(votes_path)
     

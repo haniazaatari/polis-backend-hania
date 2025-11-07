@@ -17,6 +17,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from polismath.conversation.conversation import Conversation
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
+from tests.dataset_config import get_dataset_files
 
 # Tolerance for numerical comparisons
 TOLERANCE = 0.2  # 20% tolerance for numerical differences
@@ -356,12 +357,11 @@ def run_manual_pipeline(conv: Conversation) -> Conversation:
         
         # Import the Clojure output
         try:
-            data_dir = os.path.dirname(os.path.abspath(result.conversation_id))
-            if result.conversation_id == 'biodiversity':
-                clojure_output_path = os.path.join(data_dir, '..', 'real_data/biodiversity/biodiveristy_clojure_output.json')
-            elif result.conversation_id == 'vw':
-                clojure_output_path = os.path.join(data_dir, '..', 'real_data/vw/vw_clojure_output.json')
-            else:
+            # Try to get the math blob for this conversation
+            try:
+                dataset_files = get_dataset_files(result.conversation_id)
+                clojure_output_path = dataset_files['math_blob']
+            except (ValueError, FileNotFoundError):
                 clojure_output_path = None
                 
             if clojure_output_path and os.path.exists(clojure_output_path):
@@ -427,19 +427,12 @@ def run_manual_pipeline(conv: Conversation) -> Conversation:
 
 def run_real_data_comparison(dataset_name: str, votes_limit: Optional[int] = None) -> Dict[str, Any]:
     """Run the comparison between Python and Clojure outputs for a dataset."""
-    # Set paths based on dataset name
-    if dataset_name == 'biodiversity':
-        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/biodiversity'))
-        votes_path = os.path.join(data_dir, '2025-03-18-2000-3atycmhmer-votes.csv')
-        comments_path = os.path.join(data_dir, '2025-03-18-2000-3atycmhmer-comments.csv')
-        clojure_output_path = os.path.join(data_dir, 'biodiveristy_clojure_output.json')
-    elif dataset_name == 'vw':
-        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/vw'))
-        votes_path = os.path.join(data_dir, '2025-03-18-1954-4anfsauat2-votes.csv')
-        comments_path = os.path.join(data_dir, '2025-03-18-1954-4anfsauat2-comments.csv')
-        clojure_output_path = os.path.join(data_dir, 'vw_clojure_output.json')
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files(dataset_name)
+    votes_path = dataset_files['votes']
+    comments_path = dataset_files['comments']
+    clojure_output_path = dataset_files['math_blob']
+    data_dir = dataset_files['data_dir']
 
     print(f"Running comparison for {dataset_name} dataset")
     
@@ -580,6 +573,8 @@ def run_real_data_comparison(dataset_name: str, votes_limit: Optional[int] = Non
             conv.comment_priorities, 
             clojure_output['comment-priorities']
         )
+    else:
+        print("⚠️ No comment priorities to compare, skipping")
     
     # Compare group clusters if available
     if hasattr(conv, 'group_clusters') and computation_success:
@@ -588,6 +583,8 @@ def run_real_data_comparison(dataset_name: str, votes_limit: Optional[int] = Non
             conv.group_clusters,
             clojure_output.get('group-clusters', [])
         )
+    else:
+        print("⚠️ No group clusters to compare, skipping")
     
     # Combine results
     results = {
@@ -618,7 +615,7 @@ def run_real_data_comparison(dataset_name: str, votes_limit: Optional[int] = Non
     
     if 'comment_priorities' in comparisons:
         cp = comparisons['comment_priorities']
-        print(f"Comment Priorities:")
+        print(f"ℹ️ Comment Priorities:")
         print(f"  - Strict matches (10% tolerance): {cp['matches_strict']}/{cp['total']} ({cp['match_rate_strict']*100:.1f}%)")
         print(f"  - Medium matches (20% tolerance): {cp['matches_medium']}/{cp['total']} ({cp['match_rate_medium']*100:.1f}%)")
         print(f"  - Loose matches (50% tolerance): {cp['matches_loose']}/{cp['total']} ({cp['match_rate_loose']*100:.1f}%)")
@@ -626,7 +623,7 @@ def run_real_data_comparison(dataset_name: str, votes_limit: Optional[int] = Non
     
     if 'group_clusters' in comparisons:
         gc = comparisons['group_clusters']
-        print(f"Group Clusters: Python: {gc['python_clusters']}, Clojure: {gc['clojure_clusters']}")
+        print(f"ℹ️ Group Clusters: Python: {gc['python_clusters']}, Clojure: {gc['clojure_clusters']}")
         print(f"Cluster Sizes: {gc['python_cluster_sizes']}")
     
     return results

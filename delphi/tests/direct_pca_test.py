@@ -16,25 +16,22 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 from polismath.pca_kmeans_rep.pca import pca_project_named_matrix
+from dataset_config import get_dataset_files
 
 def load_votes(dataset_name: str) -> NamedMatrix:
     """
     Load votes from a dataset and create a NamedMatrix.
-    
+
     Args:
         dataset_name: 'biodiversity' or 'vw'
-        
+
     Returns:
         NamedMatrix with vote data
     """
-    # Set paths based on dataset
-    if dataset_name == 'biodiversity':
-        votes_path = os.path.join('real_data/biodiversity', '2025-03-18-2000-3atycmhmer-votes.csv')
-    elif dataset_name == 'vw':
-        votes_path = os.path.join('real_data/vw', '2025-03-18-1954-4anfsauat2-votes.csv')
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
-    
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files(dataset_name)
+    votes_path = dataset_files['votes']
+
     # Read votes from CSV
     df = pd.read_csv(votes_path)
     

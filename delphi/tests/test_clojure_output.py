@@ -10,19 +10,18 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any, List
 
+# Add parent to path
+sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
+from tests.dataset_config import get_dataset_files, list_available_datasets
+
 # Datasets to analyze
-DATASETS = ['biodiversity', 'vw']
+DATASETS = list(list_available_datasets().keys())
 
 def analyze_clojure_output(dataset_name: str) -> Dict[str, Any]:
     """Analyze a Clojure output file."""
-    if dataset_name == 'biodiversity':
-        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/biodiversity'))
-        output_path = os.path.join(data_dir, 'biodiveristy_clojure_output.json')
-    elif dataset_name == 'vw':
-        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/vw'))
-        output_path = os.path.join(data_dir, 'vw_clojure_output.json')
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files(dataset_name)
+    output_path = dataset_files['math_blob']
     
     # Load the Clojure output
     with open(output_path, 'r') as f:
@@ -78,13 +77,10 @@ def analyze_clojure_output(dataset_name: str) -> Dict[str, Any]:
 
 def load_python_output(dataset_name: str) -> Dict[str, Any]:
     """Load the Python output for comparison."""
-    if dataset_name == 'biodiversity':
-        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/biodiversity'))
-    elif dataset_name == 'vw':
-        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/vw'))
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
-    
+    # Get dataset files using central configuration
+    dataset_files = get_dataset_files(dataset_name)
+    data_dir = dataset_files['data_dir']
+
     output_path = os.path.join(data_dir, 'python_output', 'python_output.json')
     
     # Check if the file exists
@@ -157,11 +153,11 @@ def main():
     
     # Save analysis results
     for dataset, result in results.items():
-        if dataset == 'biodiversity':
-            output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/biodiversity/python_output'))
-        else:
-            output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'real_data/vw/python_output'))
-        
+        # Get dataset files using central configuration
+        dataset_files = get_dataset_files(dataset)
+        data_dir = dataset_files['data_dir']
+        output_dir = os.path.join(data_dir, 'python_output')
+
         os.makedirs(output_dir, exist_ok=True)
         
         with open(os.path.join(output_dir, 'clojure_analysis.json'), 'w') as f:
