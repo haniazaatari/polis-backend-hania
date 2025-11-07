@@ -174,6 +174,33 @@ class NamedMatrix:
         # Ensure numeric data if requested
         if enforce_numeric:
             self._convert_to_numeric()
+
+    @staticmethod
+    def _normalize_vote_value(v: Any, convert_na_to_0: bool = True) -> float:
+        """ Normalize a vote value to -1.0, 0.0, or 1.0
+        
+        Args:
+            v: The value to normalize
+            convert_na_to_0: Whether to keep NaN values as NaN (and NA converts to NaN), or convert them to 0.0. Default True.
+        """
+        # Process value into normalized form
+        if v is None:
+            return np.nan
+        
+        if pd.isna(v) and not convert_na_to_0:
+            return np.nan 
+
+        try:
+            numeric_value = float(v)
+            if numeric_value > 0:
+                return 1.0
+            elif numeric_value < 0:
+                return -1.0
+            else:
+                # Note: np.nan is captured here if it has not been captured in (not convert_na_to_0)
+                return 0.0
+        except (ValueError, TypeError):
+            return np.nan
     
     def _convert_to_numeric(self) -> None:
         """
@@ -203,31 +230,10 @@ class NamedMatrix:
         # If matrix has object or non-numeric type, convert manually
         numeric_matrix = np.zeros(self._matrix.shape, dtype=float)
         
+        # TODO: vectorize this operation for speed
         for i in range(self._matrix.shape[0]):
             for j in range(self._matrix.shape[1]):
-                try:
-                    val = self._matrix.iloc[i, j]
-                    
-                    if pd.isna(val) or val is None:
-                        numeric_matrix[i, j] = np.nan
-                    else:
-                        try:
-                            # Try to convert to float
-                            numeric_value = float(val)
-                            
-                            # For vote values, normalize to -1.0, 0.0, or 1.0
-                            if numeric_value > 0:
-                                numeric_matrix[i, j] = 1.0
-                            elif numeric_value < 0:
-                                numeric_matrix[i, j] = -1.0
-                            else:
-                                numeric_matrix[i, j] = 0.0
-                        except (ValueError, TypeError):
-                            # If conversion fails, use NaN
-                            numeric_matrix[i, j] = np.nan
-                except IndexError:
-                    # Handle out of bounds access
-                    continue
+                numeric_matrix[i, j] = self._normalize_vote_value(self._matrix.iloc[i, j], convert_na_to_0=True)
         
         # Create a new DataFrame with the numeric values
         self._matrix = pd.DataFrame(
@@ -278,7 +284,8 @@ class NamedMatrix:
     def update(self, 
                row: Any, 
                col: Any, 
-               value: Any) -> 'NamedMatrix':
+               value: Any,
+               normalize_value:bool = False) -> 'NamedMatrix':
         """
         Update a single value in the matrix, adding new rows/columns as needed.
         
@@ -286,18 +293,39 @@ class NamedMatrix:
             row: Row name
             col: Column name
             value: New value
+            normalize_value: Whether to normalize the value (convert positive values to 1.0, negative values to -1.0, and zero to 0.0). Default False.
+
+        Note: Unlike batch_update, this method does *NOT* normalize values by default.
+
+        Using the legacy behaviour here:
+            update with strings:
+                normalize_value = True ->  NaN
+                normalize_value = False (default) ->  NaN
+
+            update with NaN:
+                normalize_values = True ->  0.0
+                normalize_values = False (default) ->  NaN
+
             
         Returns:
             A new NamedMatrix with the updated value
         """
         # Convert value to numeric if needed
-        # Only normalize vote values when a flag is set or special handling is needed
-        # For regular numeric updates, preserve the value
+        # Like in batch update mode, we normalize to -1, 0, 1 for vote values
+        if pd.isna(value):
+            if normalize_value:
+                value = 0.0
+
+        if type(value) == str:
+            value = np.nan
+
         if value is not None:
             try:
                 # Try to convert to float
                 numeric_value = float(value)
                 value = numeric_value
+                if normalize_value:
+                    value = self._normalize_vote_value(value, convert_na_to_0=False)
             except (ValueError, TypeError):
                 # If conversion fails, use NaN
                 value = np.nan
@@ -336,12 +364,26 @@ class NamedMatrix:
         return result
     
     def batch_update(self, 
-                    updates: List[Tuple[Any, Any, Any]]) -> 'NamedMatrix':
+                    updates: List[Tuple[Any, Any, Any]],
+                    normalize_values: bool = True) -> 'NamedMatrix':
         """
         Apply multiple updates to the matrix in a single efficient operation.
         
         Args:
             updates: List of (row, col, val) tuples
+            normalize_values: Whether to normalize the values (convert positive values to 1.0, negative values to -1.0, and zero/NaN to 0.0). Default True.
+
+        Note: unlike the single update method, this method *DOES* normalize values by default.
+        
+        Using legacy behaviour:
+         
+            batch_update  with strings:
+                normalize_values = True (default) -> NaN
+                normalize_values = False -> NaN
+
+            batch_update with NaN:
+                normalize_values = True (default) -> return 0.0 (as per legacy behavior)
+                normalize_values = False -> NaN
             
         Returns:
             Updated NamedMatrix with all changes applied at once
@@ -363,141 +405,84 @@ class NamedMatrix:
         
         if should_report:
             logger.info(f"[{time.time() - start_time:.2f}s] Found {len(existing_rows)} existing rows and {len(existing_cols)} existing columns")
-            logger.info(f"[{time.time() - start_time:.2f}s] First pass: identifying new rows/columns and processing values")
-        
-        # First pass: identify new rows/columns and process values
-        new_rows = set()
-        new_cols = set()
-        processed_updates = {}  # (row, col) -> processed_value
-        
-        for i, (row, col, value) in enumerate(updates):
-            # Progress reporting
-            if should_report and i > 0 and i % PROGRESS_INTERVAL == 0:
-                progress_pct = (i / total_updates) * 100
-                elapsed = time.time() - start_time
-                remaining = (elapsed / i) * (total_updates - i) if i > 0 else 0
-                logger.info(f"[{elapsed:.2f}s] Processed {i}/{total_updates} updates ({progress_pct:.1f}%) - Est. remaining: {remaining:.2f}s")
-            
-            # Track new rows and columns
-            if row not in existing_rows and row not in new_rows:
-                new_rows.add(row)
-            if col not in existing_cols and col not in new_cols:
-                new_cols.add(col)
-            
-            # Process value into normalized form
-            if value is not None:
-                try:
-                    numeric_value = float(value)
-                    # For vote values, normalize to -1.0, 0.0, or 1.0
-                    if numeric_value > 0:
-                        processed_value = 1.0
-                    elif numeric_value < 0:
-                        processed_value = -1.0
-                    else:
-                        processed_value = 0.0
-                except (ValueError, TypeError):
-                    processed_value = np.nan
-            else:
-                processed_value = np.nan
-                
-            # Store processed value
-            processed_updates[(row, col)] = processed_value
-        
+
+        # Vectorized batch processing of updates
+
+        # Step 1: Convert the list to a DataFrame with columns "row", "col", "value"
+        if should_report:
+            logger.info(f"[{time.time() - start_time:.2f}s] Converting updates to DataFrame...")
+
+        updates_df = pd.DataFrame(updates, columns=['row', 'col', 'value'])
+
+        # Step 2: Keep only the last update for each (row, col) pair
+        original_count = len(updates_df)
+        updates_df = updates_df.drop_duplicates(subset=['row', 'col'], keep='last')
+        unique_count = len(updates_df)
+        duplicates_removed = original_count - unique_count
+
+        # Spot all strings in updates_df by 0.0
+        are_strings = updates_df['value'].apply(lambda v: isinstance(v, str))
+        updates_df.loc[are_strings,'value'] = np.nan
+
+        if should_report:
+            logger.info(f"[{time.time() - start_time:.2f}s] Removed {duplicates_removed} duplicate updates "
+                       f"({duplicates_removed/original_count*100:.1f}%), kept {unique_count} unique updates")
+
+        # Step 3: Normalize values if requested using vectorized operations
+        if normalize_values:
+            if should_report:
+                logger.info(f"[{time.time() - start_time:.2f}s] Normalizing values...")
+
+
+            # Vectorized normalization: convert to numeric, then apply sign function
+            values = pd.to_numeric(updates_df['value'], errors='coerce')
+
+            # Apply normalization: positive -> 1.0, negative -> -1.0, zero -> 0.0, nan -> nan
+            normalized = np.sign(values)
+            normalized.fillna(0.0, inplace=True)  # Convert NaN to 0.0 as per legacy behavior
+
+            updates_df['value'] = normalized
+
+
+        # Revert all strings to NaN
+        updates_df.loc[are_strings,'value'] = np.nan
+
+        # Step 4: Get new rows and columns by set difference
+        if should_report:
+            logger.info(f"[{time.time() - start_time:.2f}s] Identifying new rows and columns...")
+
+        all_update_rows = set(updates_df['row'].unique())
+        all_update_cols = set(updates_df['col'].unique())
+
+        new_rows = all_update_rows - existing_rows
+        new_cols = all_update_cols - existing_cols
+
         if should_report:
             logger.info(f"[{time.time() - start_time:.2f}s] Found {len(new_rows)} new rows and {len(new_cols)} new columns")
-            logger.info(f"[{time.time() - start_time:.2f}s] Creating new matrix with {len(existing_rows) + len(new_rows)} rows and {len(existing_cols) + len(new_cols)} columns")
-        
-        # Create complete row and column lists (existing + new)
+
+        # Step 5: Create complete row and column lists and reindex
         all_rows = sorted(list(existing_rows) + list(new_rows))
         all_cols = sorted(list(existing_cols) + list(new_cols))
-        
-        # Create a new DataFrame with all rows and columns at once
-        # This creates a clean DataFrame without fragmentation
-        matrix_creation_start = time.time()
-        if new_rows or new_cols or self._matrix.empty:
-            # Create new DataFrame with all rows and columns
-            matrix_copy = pd.DataFrame(
-                index=all_rows,
-                columns=all_cols,
-                dtype=float
-            )
-            
-            # Fill with NaN
-            matrix_copy.values[:] = np.nan
-            
-            if should_report:
-                logger.info(f"[{time.time() - start_time:.2f}s] New DataFrame created in {time.time() - matrix_creation_start:.2f}s")
-                logger.info(f"[{time.time() - start_time:.2f}s] Copying existing values...")
-            
-            # Copy existing values from original matrix
-            if not self._matrix.empty:
-                copy_start = time.time()
-                total_values = len(self._matrix.index) * len(self._matrix.columns)
-                
-                # Use vectorized operations if possible to copy faster
-                try:
-                    # Extract existing data as a numpy array
-                    existing_data = self._matrix.values
-                    
-                    # Convert to row/column indices in the new matrix
-                    row_indices = [all_rows.index(row) for row in self._matrix.index]
-                    col_indices = [all_cols.index(col) for col in self._matrix.columns]
-                    
-                    # Use advanced indexing to copy values
-                    for i, row_idx in enumerate(row_indices):
-                        for j, col_idx in enumerate(col_indices):
-                            matrix_copy.values[row_idx, col_idx] = existing_data[i, j]
-                    
-                    if should_report:
-                        logger.info(f"[{time.time() - start_time:.2f}s] Copied {total_values} values in {time.time() - copy_start:.2f}s")
-                
-                except Exception as e:
-                    # Fallback to slower method if vectorized approach fails
-                    if should_report:
-                        logger.warning(f"[{time.time() - start_time:.2f}s] Vectorized copy failed: {e}, falling back to element-wise copy")
-                    
-                    # Element-wise copy
-                    for i, row in enumerate(self._matrix.index):
-                        for j, col in enumerate(self._matrix.columns):
-                            matrix_copy.at[row, col] = self._matrix.iloc[i, j]
-                            
-                            # Report progress for large matrices
-                            if should_report and total_values > REPORT_THRESHOLD and (i * len(self._matrix.columns) + j + 1) % PROGRESS_INTERVAL == 0:
-                                copied = i * len(self._matrix.columns) + j + 1
-                                pct = (copied / total_values) * 100
-                                logger.info(f"[{time.time() - start_time:.2f}s] Copied {copied}/{total_values} values ({pct:.1f}%)")
-                    
-                    if should_report:
-                        logger.info(f"[{time.time() - start_time:.2f}s] Completed element-wise copy in {time.time() - copy_start:.2f}s")
-        else:
-            # No new rows or columns needed, just make a copy
-            matrix_copy = self._matrix.copy()
-            if should_report:
-                logger.info(f"[{time.time() - start_time:.2f}s] No resizing needed, created copy in {time.time() - matrix_creation_start:.2f}s")
-        
-        # Apply all updates at once
+
         if should_report:
-            logger.info(f"[{time.time() - start_time:.2f}s] Applying {len(processed_updates)} updates...")
-        
+            logger.info(f"[{time.time() - start_time:.2f}s] Creating new matrix with {len(all_rows)} rows and {len(all_cols)} columns")
+            logger.info(f"[{time.time() - start_time:.2f}s] Reindexing existing matrix...")
+
+        matrix_copy = self._matrix.reindex(index=all_rows, columns=all_cols, fill_value=np.nan, copy=True)
+
+        # Step 6: Apply all updates at once
+        if should_report:
+            logger.info(f"[{time.time() - start_time:.2f}s] Applying {unique_count} updates...")
+
         update_start = time.time()
-        update_count = 0
-        
-        for (row, col), value in processed_updates.items():
-            matrix_copy.at[row, col] = value
-            update_count += 1
-            
-            # Report progress for large update sets
-            if should_report and update_count % PROGRESS_INTERVAL == 0:
-                progress_pct = (update_count / len(processed_updates)) * 100
-                elapsed = time.time() - update_start
-                estimated_total = (elapsed / update_count) * len(processed_updates)
-                remaining = estimated_total - elapsed
-                logger.info(f"[{time.time() - start_time:.2f}s] Applied {update_count}/{len(processed_updates)} updates ({progress_pct:.1f}%) - Est. remaining: {remaining:.2f}s")
-        
+
+        # Use .at for efficient individual cell updates
+        for idx, row_data in updates_df.iterrows():
+            matrix_copy.at[row_data['row'], row_data['col']] = row_data['value']
+
         if should_report:
             logger.info(f"[{time.time() - start_time:.2f}s] Updates applied in {time.time() - update_start:.2f}s")
-            logger.info(f"[{time.time() - start_time:.2f}s] Creating result NamedMatrix...")
-        
+
         # Create a new NamedMatrix with the updated data
         result = NamedMatrix.__new__(NamedMatrix)
         result._matrix = matrix_copy
@@ -510,20 +495,6 @@ class NamedMatrix:
         
         return result
         
-    def update_many(self, 
-                   updates: List[Tuple[Any, Any, Any]]) -> 'NamedMatrix':
-        """
-        Update multiple values in the matrix.
-        
-        Args:
-            updates: List of (row, col, value) tuples
-            
-        Returns:
-            A new NamedMatrix with the updated values
-        """
-        # Use the more efficient batch_update method
-        return self.batch_update(updates)
-    
     def rowname_subset(self, rownames: List[Any]) -> 'NamedMatrix':
         """
         Create a subset of the matrix with only the specified rows.
@@ -665,6 +636,15 @@ class NamedMatrix:
         """
         return (f"NamedMatrix with {len(self.rownames())} rows and "
                 f"{len(self.colnames())} columns\n{self._matrix}")
+
+    def memory_usage_mb(self) -> float:
+        """
+        Estimate the memory usage of the matrix in megabytes.
+        
+        Returns:
+            Estimated memory usage in MB
+        """
+        return self._matrix.memory_usage(deep=True).sum() / (1024 * 1024)
 
 
 # Utility functions
