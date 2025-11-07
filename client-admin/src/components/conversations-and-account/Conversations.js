@@ -122,7 +122,7 @@ const Conversations = () => {
               borderRadius: '8px',
               boxShadow: '0 0 20px rgba(0,0,0,0.3)',
               width: ['90%', '70%', '60%'],
-              maxWidth: '800px',
+              maxWidth: '1200px',
               maxHeight: '90vh',
               overflowY: 'auto',
               position: 'relative'
@@ -141,11 +141,11 @@ const Conversations = () => {
               }}
             />
             <Heading as="h2" sx={{ mb: 3, fontSize: 5, color: 'primary' }}>
-              Introducing Delphi: AI-Powered Insights
+              Introducing Polis 2: AI-Powered Insights
             </Heading>
-            <Text sx={{ mb: 4, fontSize: 2 }}>
-              Unlock deeper understanding from your conversations with Delphi, our advanced
-              analytics and AI reporting suite.
+            <Text sx={{ mb: 4, fontSize: 2, mt: 4 }}>
+              Unlock deeper understanding from your conversations with Polis 2, our advanced
+              analytics, moderation, and AI reporting suite.
             </Text>
 
             <Box sx={{ display: 'grid', gridTemplateColumns: ['1fr', '1fr 1fr'], gap: 4, mb: 4 }}>
@@ -153,10 +153,7 @@ const Conversations = () => {
                 <Heading as="h4" sx={{ mb: 2 }}>
                   Advanced Statistical Analysis
                 </Heading>
-                <Image
-                  src="https://via.placeholder.com/400x250.png?text=Interactive+Topic+Map"
-                  sx={{ width: '100%', borderRadius: '4px', mb: 2 }}
-                />
+                <Image src="/bg_map.png" sx={{ width: '100%', borderRadius: '4px', mb: 2 }} />
                 <Text>
                   Go beyond opinion groups with interactive topic maps and advanced data
                   visualizations. See how ideas connect and identify key areas of contention and
@@ -168,19 +165,19 @@ const Conversations = () => {
                   AI-Generated Reports
                 </Heading>
                 <Image
-                  src="https://via.placeholder.com/400x250.png?text=AI+Narrative+Summary"
+                  src="/bg_collective.png"
                   sx={{ width: '100%', borderRadius: '4px', mb: 2 }}
                 />
                 <Text>
-                  Let Delphi do the heavy lifting. Get AI-generated summaries, consensus statements,
-                  and detailed reports on conversation dynamics and key topics.
+                  Let Polis 2 do the heavy lifting. Get AI-generated summaries, consensus
+                  statements, and detailed reports on conversation dynamics and key topics.
                 </Text>
               </Box>
             </Box>
 
             <Box sx={{ bg: 'muted', p: 3, borderRadius: '4px', mb: 4 }}>
               <Heading as="h4" sx={{ mb: 2 }}>
-                Key Delphi Features:
+                Key Polis 2 Features:
               </Heading>
               <ul sx={{ pl: 3, m: 0 }}>
                 <li>Conversation Summaries</li>
@@ -198,7 +195,7 @@ const Conversations = () => {
                 target="_blank"
                 rel="noopener noreferrer"
                 sx={{ fontWeight: 'bold' }}>
-                Upgrade to a Pro plan to access Delphi.
+                Upgrade to a Pro plan to access Polis 2.
               </Link>
             </Text>
 
