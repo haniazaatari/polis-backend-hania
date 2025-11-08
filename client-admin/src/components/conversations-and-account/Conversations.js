@@ -7,7 +7,7 @@ import { isAuthReady } from '../../util/net'
 
 import Url from '../../util/url'
 import { useAuth } from 'react-oidc-context'
-import { Box, Heading, Button, Text } from 'theme-ui'
+import { Box, Heading, Button, Text, Link, Image, Close } from 'theme-ui'
 import Conversation from './Conversation'
 import { useLocation, useNavigate } from 'react-router'
 
@@ -17,6 +17,7 @@ const Conversations = () => {
   const navigate = useNavigate()
   const { isAuthenticated, isLoading } = useAuth()
   const { conversations, loading, error } = useSelector((state) => state.conversations)
+  const [interstitialVisible, setInterstitialVisible] = useState(false)
 
   const [filterState] = useState({
     filterMinParticipantCount: 0,
@@ -100,8 +101,136 @@ const Conversations = () => {
         }}>
         All Conversations
       </Heading>
+      {interstitialVisible && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            bg: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+          <Box
+            sx={{
+              bg: 'background',
+              p: 4,
+              borderRadius: '8px',
+              boxShadow: '0 0 20px rgba(0,0,0,0.3)',
+              width: ['90%', '70%', '60%'],
+              maxWidth: '1200px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              position: 'relative'
+            }}>
+            <Close
+              onClick={() => {
+                onNewClicked()
+                setInterstitialVisible(false)
+              }}
+              sx={{
+                position: 'absolute',
+                top: '15px',
+                right: '15px',
+                cursor: 'pointer',
+                color: 'textSecondary'
+              }}
+            />
+            <Heading as="h2" sx={{ mb: 3, fontSize: 5, color: 'primary' }}>
+              Introducing Polis 2: AI-Powered Insights
+            </Heading>
+            <Text sx={{ mb: 4, fontSize: 2, mt: 4 }}>
+              Unlock deeper understanding from your conversations with Polis 2, our advanced
+              analytics, moderation, and AI reporting suite.
+            </Text>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: ['1fr', '1fr 1fr'], gap: 4, mb: 4 }}>
+              <Box>
+                <Heading as="h4" sx={{ mb: 2 }}>
+                  Advanced Statistical Analysis
+                </Heading>
+                <Image src="/bg_map.png" sx={{ width: '100%', borderRadius: '4px', mb: 2 }} />
+                <Text>
+                  Go beyond opinion groups with interactive topic maps and advanced data
+                  visualizations. See how ideas connect and identify key areas of contention and
+                  consensus.
+                </Text>
+              </Box>
+              <Box>
+                <Heading as="h4" sx={{ mb: 2 }}>
+                  AI-Generated Reports
+                </Heading>
+                <Image
+                  src="/bg_collective.png"
+                  sx={{ width: '100%', borderRadius: '4px', mb: 2 }}
+                />
+                <Text>
+                  Let Polis 2 do the heavy lifting. Get AI-generated summaries, consensus
+                  statements, and detailed reports on conversation dynamics and key topics.
+                </Text>
+              </Box>
+            </Box>
+
+            <Box sx={{ bg: 'muted', p: 3, borderRadius: '4px', mb: 4 }}>
+              <Heading as="h4" sx={{ mb: 2 }}>
+                Key Polis 2 Features:
+              </Heading>
+              <ul sx={{ pl: 3, m: 0 }}>
+                <li>Conversation Summaries</li>
+                <li>Automated Topic Reporting</li>
+                <li>Identification of Consensus Statements</li>
+                <li>Divisive Comment Analysis</li>
+              </ul>
+            </Box>
+
+            <Text sx={{ mb: 4, textAlign: 'center', fontSize: 2 }}>
+              Ready to supercharge your analysis?
+              <br />
+              <Link
+                href="https://pro.pol.is/"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ fontWeight: 'bold' }}>
+                Upgrade to a Pro plan to access Polis 2.
+              </Link>
+            </Text>
+
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 3 }}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  onNewClicked()
+                  setInterstitialVisible(false)
+                }}
+                sx={{
+                  cursor: 'pointer'
+                }}>
+                Maybe Later
+              </Button>
+              <Button
+                onClick={() => {
+                  onNewClicked()
+                  setInterstitialVisible(false)
+                }}
+                sx={{
+                  cursor: 'pointer',
+                  bg: 'primary',
+                  '&:hover': {
+                    bg: 'text'
+                  }
+                }}>
+                Create Conversation
+              </Button>
+            </Box>
+          </Box>
+        </Box>
+      )}
       <Box sx={{ mb: [3, null, 4] }}>
-        <Button onClick={onNewClicked}>Create new conversation</Button>
+        <Button onClick={() => setInterstitialVisible(true)}>Create new conversation</Button>
       </Box>
       <Box>
         <Box sx={{ mb: [3] }}>{loading ? 'Loading conversations...' : null}</Box>

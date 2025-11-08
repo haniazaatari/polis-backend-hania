@@ -61,12 +61,18 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
             ],
             'AttributeDefinitions': [
                 {'AttributeName': 'zid', 'AttributeType': 'S'},
-                {'AttributeName': 'math_tick', 'AttributeType': 'N'}
+                {'AttributeName': 'math_tick', 'AttributeType': 'N'},
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'GlobalSecondaryIndexes': [
+                {
+                    'IndexName': 'zid-index',
+                    'KeySchema': [
+                        {'AttributeName': 'zid', 'KeyType': 'HASH'}
+                    ],
+                    'Projection': { 'ProjectionType': 'KEYS_ONLY' },
+                }
+            ],
+            'BillingMode': 'PAY_PER_REQUEST',
         },
         # Group data
         'Delphi_KMeansClusters': {
@@ -76,12 +82,19 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
             ],
             'AttributeDefinitions': [
                 {'AttributeName': 'zid_tick', 'AttributeType': 'S'},
-                {'AttributeName': 'group_id', 'AttributeType': 'N'}
+                {'AttributeName': 'group_id', 'AttributeType': 'N'},
+                {'AttributeName': 'zid', 'AttributeType': 'S'}
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST',
+            'GlobalSecondaryIndexes': [
+                {
+                    'IndexName': 'zid-index',
+                    'KeySchema': [
+                        {'AttributeName': 'zid', 'KeyType': 'HASH'}
+                    ],
+                    'Projection': { 'ProjectionType': 'KEYS_ONLY' },
+                }
+            ]
         },
         # Comment data with priorities
         'Delphi_CommentRouting': {
@@ -94,10 +107,7 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
                 {'AttributeName': 'comment_id', 'AttributeType': 'S'},
                 {'AttributeName': 'zid', 'AttributeType': 'S'}
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            },
+            'BillingMode': 'PAY_PER_REQUEST',
             'GlobalSecondaryIndexes': [
                 {
                     'IndexName': 'zid-index',
@@ -105,10 +115,6 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
                         {'AttributeName': 'zid', 'KeyType': 'HASH'}
                     ],
                     'Projection': { 'ProjectionType': 'ALL' },
-                    'ProvisionedThroughput': {
-                        'ReadCapacityUnits': 5,
-                        'WriteCapacityUnits': 5
-                    }
                 }
             ]
         },
@@ -120,12 +126,19 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
             ],
             'AttributeDefinitions': [
                 {'AttributeName': 'zid_tick_gid', 'AttributeType': 'S'},
-                {'AttributeName': 'comment_id', 'AttributeType': 'S'}
+                {'AttributeName': 'comment_id', 'AttributeType': 'S'},
+                {'AttributeName': 'zid', 'AttributeType': 'S'}
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST',
+            'GlobalSecondaryIndexes': [
+                {
+                    'IndexName': 'zid-index',
+                    'KeySchema': [
+                        {'AttributeName': 'zid', 'KeyType': 'HASH'}
+                    ],
+                    'Projection': { 'ProjectionType': 'KEYS_ONLY' },
+                }
+            ]
         },
         # Participant projection data
         'Delphi_PCAParticipantProjections': {
@@ -135,12 +148,19 @@ def create_polis_math_tables(dynamodb, delete_existing=False):
             ],
             'AttributeDefinitions': [
                 {'AttributeName': 'zid_tick', 'AttributeType': 'S'},
-                {'AttributeName': 'participant_id', 'AttributeType': 'S'}
+                {'AttributeName': 'participant_id', 'AttributeType': 'S'},
+                {'AttributeName': 'zid', 'AttributeType': 'S'}
             ],
-            'ProvisionedThroughput': {
-                'ReadCapacityUnits': 5,
-                'WriteCapacityUnits': 5
-            }
+            'BillingMode': 'PAY_PER_REQUEST',
+            'GlobalSecondaryIndexes': [
+                {
+                    'IndexName': 'zid-index',
+                    'KeySchema': [
+                        {'AttributeName': 'zid', 'KeyType': 'HASH'}
+                    ],
+                    'Projection': { 'ProjectionType': 'KEYS_ONLY' },
+                }
+            ]
         }
     }
     
