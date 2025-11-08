@@ -371,6 +371,7 @@ def run_manual_pipeline(conv: Conversation) -> Conversation:
                 if 'comment-priorities' in clojure_output:
                     # Use the Clojure priorities for common comment IDs
                     clojure_priorities = clojure_output['comment-priorities']
+                    print("Comment priorities found in Clojure output, using them")
                     
                     # First, convert all to float
                     clojure_priorities = {k: float(v) for k, v in clojure_priorities.items()}
@@ -387,6 +388,7 @@ def run_manual_pipeline(conv: Conversation) -> Conversation:
                             comment_priorities[cid] = votes / max(1, matrix.values.shape[0])
                 else:
                     # Fall back to vote count method
+                    print("Comment priorities not found in Clojure output, using vote count method")
                     comment_priorities = {}
                     for cid in matrix.colnames():
                         # Get the column values
@@ -574,7 +576,10 @@ def run_real_data_comparison(dataset_name: str, votes_limit: Optional[int] = Non
             clojure_output['comment-priorities']
         )
     else:
-        print("⚠️ No comment priorities to compare, skipping")
+        if hasattr(conv, 'comment_priorities'):
+            print("⚠️ Clojure output missing comment priorities, skipping comparison")
+        elif not hasattr(conv, 'comment_priorities'):
+            print("⚠️ Python output missing comment priorities, skipping comparison")
     
     # Compare group clusters if available
     if hasattr(conv, 'group_clusters') and computation_success:
