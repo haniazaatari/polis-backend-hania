@@ -329,6 +329,9 @@ class NamedMatrix:
             except (ValueError, TypeError):
                 # If conversion fails, use NaN
                 value = np.nan
+
+        if normalize_value:
+            value = self._normalize_vote_value(value, convert_na_to_0=True)
         
         # Make a copy of the current matrix
         new_matrix = self._matrix.copy()
