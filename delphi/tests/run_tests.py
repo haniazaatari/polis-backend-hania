@@ -21,7 +21,8 @@ def run_unit_tests():
     print("=====================\n")
     
     # Run pytest on the tests directory
-    test_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tests')
+    # The script is already in the tests directory...
+    test_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)))
     
     # Skip real data tests, comparison tests, and fixture-dependent tests
     result = pytest.main([
