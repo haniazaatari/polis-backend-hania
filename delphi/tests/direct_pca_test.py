@@ -2,6 +2,8 @@
 """
 Direct test of PCA implementation with real data.
 This script processes the real data files and runs the PCA implementation directly.
+By directly we mean: not through the Conversation class, but by calling the PCA fuinctions.
+To that effect, this test does duplicate the `load_votes()` logic from Conversation.
 """
 
 import os
@@ -137,7 +139,9 @@ def test_pca_implementation(dataset_name: str) -> None:
             count = np.sum(labels == i)
             print(f"Cluster {i+1}: {count} participants")
         
-        print("PCA implementation is WORKING CORRECTLY with real data")
+        # By "working correclty" we mean: the code runs without error. 
+        # However there is no check on the actual correctness of the PCA results here.
+        print("PCA implementation RUNS WITHOUT RAISING ANY ERROR with real data")
         
     except Exception as e:
         print(f"Error during PCA: {e}")
