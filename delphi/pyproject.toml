@@ -114,3 +114,10 @@ include = [
     "*.toml",
     "*.txt",
 ]
+
+# Pytest configuration
+[tool.pytest.ini_options]
+filterwarnings = [
+    # Ignore python_multipart deprecation warning from ddtrace (third-party)
+    "ignore:Please use `import python_multipart`:PendingDeprecationWarning:ddtrace.internal.module",
+]
