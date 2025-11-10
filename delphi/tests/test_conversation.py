@@ -238,7 +238,7 @@ class TestConversation:
         data = conv.to_dict()
         
         # Check dictionary structure
-        assert 'conversation_id' in data
+        assert 'zid' in data, 'zid missing in dict'
         assert 'last_updated' in data
         assert 'participant_count' in data
         assert 'comment_count' in data
@@ -416,13 +416,13 @@ class TestConversationManager:
             conv_id = manager2.import_conversation(filepath)
             
             # Check import
-            assert conv_id == 'test_conv'
-            assert 'test_conv' in manager2.conversations
+            assert conv_id == 'test_conv', 'Imported conversation ID mismatch'
+            assert 'test_conv' in manager2.conversations, 'Conversation not found after import'
             
             # Check conversation data
             conv = manager2.get_conversation('test_conv')
-            assert conv.participant_count == 2
-            assert conv.comment_count == 1
+            assert conv.participant_count == 2, 'Participant count mismatch after import'
+            assert conv.comment_count == 1, 'Comment count mismatch after import'
         finally:
             # Clean up
             if os.path.exists(filepath):
