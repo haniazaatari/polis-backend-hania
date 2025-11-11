@@ -2,7 +2,7 @@ name: Delphi Python Tests
 
 on:
   push:
-    branches: [ edge, stable ] # Matches your e2e config
+    branches: [ edge, stable ]
   pull_request:
     branches: [ edge, stable ]
 
@@ -27,8 +27,6 @@ jobs:
 
     - name: 2. Create .env file for CI
       run: |
-        # Use test.env as the .env file for this job
-        # This ensures docker-compose reads the correct test credentials
         if [ -f "test.env" ]; then
           cp test.env .env
           echo "Using test.env for CI."
@@ -39,37 +37,35 @@ jobs:
 
     - name: 3. Build Docker images
       run: |
-        # Build all services defined in the test compose file
-        # This is where the "No space left" error was happening
-        # We must use docker-compose.test.yml and the .env file
+        # Build all images, including delphi
         docker compose \
           -f docker-compose.test.yml \
           --env-file .env \
           build
 
-    - name: 4. Start all services
+    - name: 4. Start Dependency Services
       run: |
-        # Start all services in detached mode
-        # This will include postgres, dynamodb, and delphi
+        # Start ONLY the database services in the background
+        # We use the profiles, which do NOT include 'delphi'
         docker compose \
           -f docker-compose.test.yml \
-          --env-file .env \
+          --profile postgres \
+          --profile local-services \
           up -d
         
-        # Wait for services to be ready
-        echo "Waiting for services to start..."
-        sleep 30
-        
-        # Show running containers
+        echo "Waiting for services to be healthy..."
+        sleep 15 
         docker compose -f docker-compose.test.yml ps
 
     - name: 5. Run Delphi Pytest
       run: |
-        # Now, we execute our test command *inside* the
-        # already-running 'delphi' container
+        # Use 'docker compose run' which creates a NEW container
+        # and ALLOWS the -v flag. This container will connect
+        # to the services started in the previous step.
         docker compose \
           -f docker-compose.test.yml \
-          exec -T \
+          run \
+          --rm \
           -v "${{ github.workspace }}/delphi/tests:/app/tests" \
           delphi \
           bash -c "pip install pytest && pytest /app/tests"
@@ -87,6 +83,5 @@ jobs:
     - name: 7. Clean up services
       if: always()
       run: |
-        # Shut down all services and remove volumes
         echo "Cleaning up services..."
         docker compose -f docker-compose.test.yml down -v
