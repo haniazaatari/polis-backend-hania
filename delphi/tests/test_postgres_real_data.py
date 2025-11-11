@@ -35,11 +35,11 @@ def init_dynamodb():
     # Import the DynamoDB client
     from polismath.database.dynamodb import DynamoDBClient
     
-    print("Initializing DynamoDBClient with localhost:8000 endpoint")
+    print("Initializing DynamoDBClient")
     
     # Create and initialize the client
     client = DynamoDBClient(
-        endpoint_url='http://localhost:8000',
+        endpoint_url= os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000'),
         region_name='us-east-1',
         aws_access_key_id='dummy',
         aws_secret_access_key='dummy'
@@ -106,10 +106,11 @@ def connect_to_db():
     """Connect to PostgreSQL database."""
     try:
         conn = psycopg2.connect(
-            dbname="polisDB_prod_local_mar14",
-            user="colinmegill",
-            password="",
-            host="localhost"
+            database=os.environ.get('POSTGRES_DB', 'polismath'),
+            user=os.environ.get('POSTGRES_USER', 'postgres'),
+            password=os.environ.get('POSTGRES_PASSWORD', 'postgres'),
+            host=os.environ.get('POSTGRES_HOST', 'localhost'),
+            port=os.environ.get('POSTGRES_PORT', '5432')
         )
         print("Connected to database successfully")
         return conn
@@ -1058,10 +1059,11 @@ def test_conversation_client_api():
     """
     # Create PostgreSQL client
     config = PostgresConfig(
-        database="polisDB_prod_local_mar14",
-        user="colinmegill",
-        password="",
-        host="localhost"
+        database=os.environ.get('POSTGRES_DB', 'polismath'),
+        user=os.environ.get('POSTGRES_USER', 'postgres'),
+        password=os.environ.get('POSTGRES_PASSWORD', 'postgres'),
+        host=os.environ.get('POSTGRES_HOST', 'localhost'),
+        port=os.environ.get('POSTGRES_PORT', '5432')
     )
     
     client = PostgresClient(config)

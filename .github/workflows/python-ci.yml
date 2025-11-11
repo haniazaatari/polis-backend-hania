@@ -1,0 +1,58 @@
+name: Delphi Python Tests
+
+on:
+  push:
+    branches: [ main, edge, stable ] # Matches your e2e config
+  pull_request:
+    branches: [ main, edge, stable ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Copy test.env for Docker Compose
+      run: |
+        # Use test.env as the .env file for this job
+        # This ensures docker-compose reads the correct test credentials
+        if [ -f "test.env" ]; then
+          cp test.env .env
+          echo "Using test.env for CI."
+        else
+          echo "::error::test.env file not found!"
+          exit 1
+        fi
+
+    - name: Start Database Services
+      run: |
+        # Use --profile to start only the services we need
+        # This will read the .env file for credentials
+        docker compose \
+          --profile postgres \
+          --profile local-services \
+          up -d --build
+        
+        echo "Waiting for services to be healthy..."
+        sleep 15 # Give services time to initialize
+        docker compose ps
+
+    - name: Run Delphi Pytest
+      run: |
+        # Now, run the delphi container. It will automatically
+        # join the network with the services started above.
+        # The test code inside will read the env vars
+        # (POSTGRES_HOST=postgres, etc.) from the .env file.
+        docker compose run --rm \
+          -v "${{ github.workspace }}/delphi/tests:/app/tests" \
+          delphi \
+          bash -c "pip install pytest && pytest /app/tests"
+
+    - name: Clean up services
+      if: always()
+      run: |
+        # Shut down the services started by --profile
+        echo "Cleaning up services..."
+        docker compose --profile postgres --profile local-services down -v

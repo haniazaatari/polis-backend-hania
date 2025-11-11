@@ -14,6 +14,7 @@ import uuid
 import json
 import time
 import logging
+import os
 from datetime import datetime
 from typing import Dict, Any
 
@@ -29,8 +30,8 @@ class TestBatchIdStorage:
         logger.debug("Setting up DynamoDB resource connection")
         return boto3.resource(
             'dynamodb',
-            endpoint_url='http://localhost:8000',
-            region_name='us-west-2',
+            endpoint_url= os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000'),
+            region_name='us-east-1',
             aws_access_key_id='fakeMyKeyId',
             aws_secret_access_key='fakeSecretAccessKey'
         )
