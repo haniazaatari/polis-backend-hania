@@ -2,9 +2,9 @@ name: Delphi Python Tests
 
 on:
   push:
-    branches: [ main, edge, stable ] # Matches your e2e config
+    branches: [ edge, stable ] # Matches your e2e config
   pull_request:
-    branches: [ main, edge, stable ]
+    branches: [ edge, stable ]
 
 jobs:
   test:
@@ -14,7 +14,18 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Copy test.env for Docker Compose
+    - name: 1. Free up disk space on runner
+      run: |
+        echo "Starting disk cleanup..."
+        df -h
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /usr/local/share/powershell
+        echo "Disk space after cleanup:"
+        df -h
+
+    - name: 2. Create .env file for CI
       run: |
         # Use test.env as the .env file for this job
         # This ensures docker-compose reads the correct test credentials
@@ -26,33 +37,56 @@ jobs:
           exit 1
         fi
 
-    - name: Start Database Services
+    - name: 3. Build Docker images
       run: |
-        # Use --profile to start only the services we need
-        # This will read the .env file for credentials
+        # Build all services defined in the test compose file
+        # This is where the "No space left" error was happening
+        # We must use docker-compose.test.yml and the .env file
         docker compose \
-          --profile postgres \
-          --profile local-services \
-          up -d --build
-        
-        echo "Waiting for services to be healthy..."
-        sleep 15 # Give services time to initialize
-        docker compose ps
+          -f docker-compose.test.yml \
+          --env-file .env \
+          build
 
-    - name: Run Delphi Pytest
+    - name: 4. Start all services
       run: |
-        # Now, run the delphi container. It will automatically
-        # join the network with the services started above.
-        # The test code inside will read the env vars
-        # (POSTGRES_HOST=postgres, etc.) from the .env file.
-        docker compose run --rm \
+        # Start all services in detached mode
+        # This will include postgres, dynamodb, and delphi
+        docker compose \
+          -f docker-compose.test.yml \
+          --env-file .env \
+          up -d
+        
+        # Wait for services to be ready
+        echo "Waiting for services to start..."
+        sleep 30
+        
+        # Show running containers
+        docker compose -f docker-compose.test.yml ps
+
+    - name: 5. Run Delphi Pytest
+      run: |
+        # Now, we execute our test command *inside* the
+        # already-running 'delphi' container
+        docker compose \
+          -f docker-compose.test.yml \
+          exec -T \
           -v "${{ github.workspace }}/delphi/tests:/app/tests" \
           delphi \
           bash -c "pip install pytest && pytest /app/tests"
 
-    - name: Clean up services
+    - name: 6. Show service logs on failure
+      if: failure()
+      run: |
+        echo "=== Delphi service logs ==="
+        docker compose -f docker-compose.test.yml logs delphi || true
+        echo "=== Postgres service logs ==="
+        docker compose -f docker-compose.test.yml logs postgres || true
+        echo "=== DynamoDB service logs ==="
+        docker compose -f docker-compose.test.yml logs dynamodb || true
+
+    - name: 7. Clean up services
       if: always()
       run: |
-        # Shut down the services started by --profile
+        # Shut down all services and remove volumes
         echo "Cleaning up services..."
-        docker compose --profile postgres --profile local-services down -v
+        docker compose -f docker-compose.test.yml down -v
