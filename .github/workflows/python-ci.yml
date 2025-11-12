@@ -82,7 +82,7 @@ jobs:
         echo "POSTGRES_HOST=localhost" >> .env
         
         cd delphi/tests
-        python download_real_data.py r4tykwac8thvzv35jrn53 r6vbnhffkxbd7ifmfbdrd
+        python download_real_data.py r4tykwac8thvzv35jrn53 r6vbnhffkxbd7ifmfbdrd --base-url https://pol.is
         cd ../..
         
         echo "Data downloaded. Listing real_data contents:"
