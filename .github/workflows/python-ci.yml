@@ -34,7 +34,6 @@ jobs:
         fi
         
         # Add hostnames for container-to-container networking
-        # This ensures all services can find each other by name
         echo "POSTGRES_HOST=postgres" >> .env
         echo "DYNAMODB_ENDPOINT=http://dynamodb:8000" >> .env
         echo "AWS_S3_ENDPOINT=http://minio:9000" >> .env
@@ -42,28 +41,42 @@ jobs:
     - name: 3. Build Docker images
       run: |
         # Build all images using the default docker-compose.yml
-        # This will build 'delphi', 'postgres', 'nginx-proxy', etc.
         docker compose --env-file .env build
 
     - name: 4. Start Dependency Services
       run: |
-        # Start all services needed for the tests in the background
-        # This includes postgres, dynamodb, and nginx-proxy
+        # Start all services needed for tests
         docker compose \
           --env-file .env \
           --profile postgres \
           --profile local-services \
-          up -d nginx-proxy
+          up -d server
         
         echo "Waiting for services to be healthy..."
         sleep 30 
         docker compose --env-file .env ps
 
-    - name: 5. Download Data and Run Delphi Pytest
+    - name: 5. Check service health
       run: |
-        # Use 'docker compose run' to start a NEW 'delphi' container
-        # This container will have the tests and data mounted
-        # and will connect to the services from Step 4.
+        echo "Checking postgres..."
+        # Wait for postgres to be ready
+        docker compose --env-file .env exec -T postgres \
+          bash -c 'until pg_isready -U $POSTGRES_USER -d $POSTGRES_DB; do sleep 5; done'
+
+        echo "Checking server API..."
+        # Wait for the server to be ready by curling its API
+        docker compose --env-file .env exec -T server \
+          bash -c 'apt-get update > /dev/null && apt-get install -y curl > /dev/null && \
+          echo "Waiting for server..." && \
+          curl -f --retry 12 --retry-delay 10 --retry-connrefused http://server:5000/api/v3/participationInit'
+        
+        echo "All services are ready!"
+
+    - name: 6. Download Data and Run Delphi Pytest
+      run: |
+        # Use 'docker compose run' which finds the 'delphi' service
+        # in the default docker-compose.yml and mounts our tests/data.
+        # We MUST pass the -e flags here to fix the 'localhost' error.
         docker compose \
           --env-file .env \
           run \
@@ -79,7 +92,7 @@ jobs:
           bash -c " \
             echo '--- Starting Data Download ---'; \
             python /app/delphi/tests/download_real_data.py \
-              --base-url http://nginx-proxy \
+              --base-url http://server:5000 \
               r4tykwac8thvzv35jrn53 r6vbnhffkxbd7ifmfbdrd; \
             echo '--- Data Download Finished. Listing data: ---'; \
             ls -lR /app/delphi/real_data; \
@@ -89,17 +102,19 @@ jobs:
             pytest /app/delphi/tests \
           "
 
-    - name: 6. Show service logs on failure
+    - name: 7. Show service logs on failure
       if: failure()
       run: |
+        echo "=== Delphi service logs ==="
+        docker compose --env-file .env logs delphi || true
         echo "=== Postgres service logs ==="
         docker compose --env-file .env logs postgres || true
         echo "=== DynamoDB service logs ==="
         docker compose --env-file .env logs dynamodb || true
-        echo "=== Nginx service logs ==="
-        docker compose --env-file .env logs nginx-proxy || true
+        echo "=== Server service logs ==="
+        docker compose --env-file .env logs server || true
 
-    - name: 7. Clean up services
+    - name: 8. Clean up services
       if: always()
       run: |
         echo "Cleaning up services..."
