@@ -24,8 +24,6 @@ jobs:
 
     - name: 2. Create .env file for CI
       run: |
-        # Use test.env as the base for our .env file
-        # This is the exact strategy your Cypress test uses.
         if [ -f "test.env" ]; then
           cp test.env .env
           echo "Using test.env for CI."
@@ -34,46 +32,38 @@ jobs:
           exit 1
         fi
         
-        # Override hosts to use service names for container networking
-        # This ensures all containers can find each other.
+        # Add hostnames for container-to-container networking
         echo "POSTGRES_HOST=postgres" >> .env
         echo "DYNAMODB_ENDPOINT=http://dynamodb:8000" >> .env
         echo "AWS_S3_ENDPOINT=http://minio:9000" >> .env
 
     - name: 3. Build Docker images
       run: |
-        # Build all services defined in the test compose file
+        # Build all services in the test file (now including delphi)
         docker compose -f docker-compose.test.yml --env-file .env build
 
     - name: 4. Start all services
       run: |
-        # Start all services in detached mode
-        # This will include postgres, dynamodb, and delphi
+        # Start all services (including delphi) in detached mode
         docker compose -f docker-compose.test.yml --env-file .env up -d
         
         echo "Waiting for services to be healthy..."
         sleep 30 
         docker compose -f docker-compose.test.yml ps
 
-    - name: 5. Check service health
+    - name: 5. Run Health Checks
       run: |
-        echo "Checking service health..."
-        # Check postgres (just like your Cypress test)
+        echo "Checking postgres..."
         docker compose -f docker-compose.test.yml exec -T postgres pg_isready -U postgres
-        
-        # Check server via nginx (just like your Cypress test)
-        # We must install curl in the nginx-proxy container
+
+        echo "Checking server API..."
         docker compose -f docker-compose.test.yml exec -T nginx-proxy \
           bash -c 'apt-get update > /dev/null && apt-get install -y curl > /dev/null && \
-          echo "Waiting for server..." && \
           curl -f --retry 12 --retry-delay 10 --retry-connrefused http://server/api/v3/participationInit'
-        
-        echo "All services are ready!"
 
     - name: 6. Download Data and Run Delphi Pytest
       run: |
-        # Use 'docker compose exec' to run commands INSIDE the
-        # already-running 'delphi' container.
+        # Now we EXEC into the running 'delphi' container
         docker compose \
           -f docker-compose.test.yml \
           --env-file .env \
