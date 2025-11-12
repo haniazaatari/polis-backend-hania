@@ -24,6 +24,7 @@ jobs:
 
     - name: 2. Create .env file for CI
       run: |
+        # Use test.env as the base for our .env file
         if [ -f "test.env" ]; then
           cp test.env .env
           echo "Using test.env for CI."
@@ -33,77 +34,73 @@ jobs:
         fi
         
         # Add hostnames for container-to-container networking
+        # This ensures all services can find each other by name
         echo "POSTGRES_HOST=postgres" >> .env
         echo "DYNAMODB_ENDPOINT=http://dynamodb:8000" >> .env
         echo "AWS_S3_ENDPOINT=http://minio:9000" >> .env
 
     - name: 3. Build Docker images
       run: |
-        # Build all services in the test file (now including delphi)
-        docker compose -f docker-compose.test.yml --env-file .env build
+        # Build all images using the default docker-compose.yml
+        # This will build 'delphi', 'postgres', 'nginx-proxy', etc.
+        docker compose --env-file .env build
 
-    - name: 4. Start all services
+    - name: 4. Start Dependency Services
       run: |
-        # Start all services (including delphi) in detached mode
-        docker compose -f docker-compose.test.yml --env-file .env up -d
+        # Start all services needed for the tests in the background
+        # This includes postgres, dynamodb, and nginx-proxy
+        docker compose \
+          --env-file .env \
+          --profile postgres \
+          --profile local-services \
+          up -d nginx-proxy
         
         echo "Waiting for services to be healthy..."
         sleep 30 
-        docker compose -f docker-compose.test.yml ps
+        docker compose --env-file .env ps
 
-    - name: 5. Check service health
+    - name: 5. Download Data and Run Delphi Pytest
       run: |
-        echo "Checking postgres..."
-        # This command is correct
-        docker compose -f docker-compose.test.yml exec -T postgres pg_isready -U postgres
-
-        echo "Checking server API..."
-        # This command is fixed:
-        # 1. Changed 'bash' to 'sh'
-        # 2. Changed 'apt-get update/install' to 'apk add'
-        docker compose -f docker-compose.test.yml exec -T nginx-proxy \
-          sh -c 'apk add --no-cache curl && \
-          echo "Waiting for server..." && \
-          curl -f --retry 12 --retry-delay 10 --retry-connrefused http://server:5000/api/v3/participationInit'
-        
-        echo "All services are ready!"
-
-    - name: 6. Download Data and Run Delphi Pytest
-      run: |
-        # Use 'docker compose exec' to run commands INSIDE the
-        # already-running 'delphi' container.
+        # Use 'docker compose run' to start a NEW 'delphi' container
+        # This container will have the tests and data mounted
+        # and will connect to the services from Step 4.
         docker compose \
-          -f docker-compose.test.yml \
           --env-file .env \
-          exec -T \
+          run \
+          --rm \
+          -v "${{ github.workspace }}/delphi/tests:/app/delphi/tests" \
+          -v "${{ github.workspace }}/delphi/real_data:/app/delphi/real_data" \
+          -e POSTGRES_HOST=postgres \
+          -e POSTGRES_DB=${POSTGRES_DB} \
+          -e POSTGRES_USER=${POSTGRES_USER} \
+          -e POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+          -e DYNAMODB_ENDPOINT=http://dynamodb:8000 \
           delphi \
           bash -c " \
             echo '--- Starting Data Download ---'; \
-            python /app/tests/download_real_data.py \
+            python /app/delphi/tests/download_real_data.py \
               --base-url http://nginx-proxy \
               r4tykwac8thvzv35jrn53 r6vbnhffkxbd7ifmfbdrd; \
             echo '--- Data Download Finished. Listing data: ---'; \
-            ls -lR /app/real_data; \
+            ls -lR /app/delphi/real_data; \
             echo '--- Installing Pytest ---'; \
             pip install pytest; \
             echo '--- Running Pytest ---'; \
-            pytest /app/tests \
+            pytest /app/delphi/tests \
           "
 
-    - name: 7. Show service logs on failure
+    - name: 6. Show service logs on failure
       if: failure()
       run: |
-        echo "=== Delphi service logs ==="
-        docker compose -f docker-compose.test.yml logs delphi || true
         echo "=== Postgres service logs ==="
-        docker compose -f docker-compose.test.yml logs postgres || true
+        docker compose --env-file .env logs postgres || true
         echo "=== DynamoDB service logs ==="
-        docker compose -f docker-compose.test.yml logs dynamodb || true
+        docker compose --env-file .env logs dynamodb || true
         echo "=== Nginx service logs ==="
-        docker compose -f docker-compose.test.yml logs nginx-proxy || true
+        docker compose --env-file .env logs nginx-proxy || true
 
-    - name: 8. Clean up services
+    - name: 7. Clean up services
       if: always()
       run: |
         echo "Cleaning up services..."
-        docker compose -f docker-compose.test.yml down -v
+        docker compose --env-file .env down -v
