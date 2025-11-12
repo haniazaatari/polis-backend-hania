@@ -63,8 +63,6 @@ jobs:
 
     - name: 6. Run Delphi Pytest
       run: |
-        # Use 'docker compose exec' to run commands inside the container.
-        
         echo "Copying test files into container..."
         docker compose -f docker-compose.test.yml cp delphi/tests delphi:/app/tests
         docker compose -f docker-compose.test.yml cp delphi/real_data delphi:/app/real_data
@@ -74,6 +72,8 @@ jobs:
           -f docker-compose.test.yml \
           --env-file .env \
           exec -T \
+          -e AWS_DEFAULT_REGION=us-east-1 \
+          -e AWS_REGION=us-east-1 \
           delphi \
           bash -c " \
             echo '--- Setting up DynamoDB Tables ---'; \
