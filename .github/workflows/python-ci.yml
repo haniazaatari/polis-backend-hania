@@ -33,79 +33,59 @@ jobs:
         fi
         
         # Add hostnames for container-to-container networking
+        # The 'delphi' service in 'docker-compose.test.yml' reads these
         echo "POSTGRES_HOST=postgres" >> .env
         echo "DYNAMODB_ENDPOINT=http://dynamodb:8000" >> .env
         echo "AWS_S3_ENDPOINT=http://minio:9000" >> .env
 
     - name: 3. Build Docker images
       run: |
-        # Use the test-specific compose file
+        # Build all services in the test file (including delphi)
         docker compose -f docker-compose.test.yml --env-file .env build
 
     - name: 4. Start all services
       run: |
         # Start all services (including delphi) in detached mode
+        # The 'delphi' container will start and run 'tail -f /dev/null'
         docker compose -f docker-compose.test.yml --env-file .env up -d
         
         echo "Waiting for services to be healthy..."
-        sleep 30 # Initial wait
+        sleep 20 # Wait for containers to start
         docker compose -f docker-compose.test.yml ps
 
     - name: 5. Check service health
       run: |
-        # Run health checks from the runner, hitting localhost
-        # This mimics the cypress-run workflow exactly
-        
+        # Wait for postgres to be ready
         echo "Checking postgres..."
-        docker compose -f docker-compose.test.yml exec -T postgres pg_isready -U postgres
+        docker compose -f docker-compose.test.yml exec -T postgres \
+          bash -c 'until pg_isready -U $POSTGRES_USER; do sleep 5; done'
+        echo "Postgres is ready."
 
-        echo "Checking server API (via nginx-proxy on localhost)..."
-        curl -f --retry 12 --retry-delay 10 --retry-connrefused http://localhost/api/v3/participationInit
-        
-        echo "All services are ready!"
-
-    - name: 6. Set up Python for Download Script
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.12' 
-        
-    - name: 7. Install Download Script Dependencies
+    - name: 6. Run Delphi Pytest
       run: |
-        # Install script dependencies into the *runner's* environment
-        pip install psycopg2-binary requests python-dotenv
-
-    - name: 8. Run Data Download Script
-      run: |
-        # Run the script on the RUNNER, not in a container
-        # It will connect to localhost:80 (nginx) and localhost:5432 (postgres)
-        # This requires .env to have POSTGRES_HOST=localhost
-        echo "POSTGRES_HOST=localhost" >> .env
+        # Use 'docker compose exec' to run a command inside the
+        # *already-running* 'delphi' container.
+        # We must 'docker cp' the test/data files into it first,
+        # since 'exec' does not support volume mounts.
         
-        cd delphi/tests
-        python download_real_data.py r4tykwac8thvzv35jrn53 r6vbnhffkxbd7ifmfbdrd --base-url https://pol.is
-        cd ../..
-        
-        echo "Data downloaded. Listing real_data contents:"
-        ls -lR delphi/real_data
+        echo "Copying test files into container..."
+        docker compose -f docker-compose.test.yml cp delphi/tests delphi:/app/tests
+        docker compose -f docker-compose.test.yml cp delphi/real_data delphi:/app/real_data
 
-    - name: 9. Run Delphi Pytest
-      run: |
-        # Now we EXEC into the running 'delphi' container
-        # We also mount the data we just downloaded
+        echo "Running tests..."
         docker compose \
           -f docker-compose.test.yml \
           --env-file .env \
           exec -T \
-          -v "${{ github.workspace }}/delphi/real_data:/app/delphi/real_data" \
           delphi \
           bash -c " \
             echo '--- Installing Pytest ---'; \
             pip install pytest; \
             echo '--- Running Pytest ---'; \
-            pytest /app/delphi/tests \
+            pytest /app/tests \
           "
 
-    - name: 10. Show service logs on failure
+    - name: 7. Show service logs on failure
       if: failure()
       run: |
         echo "=== Delphi service logs ==="
@@ -114,10 +94,8 @@ jobs:
         docker compose -f docker-compose.test.yml logs postgres || true
         echo "=== DynamoDB service logs ==="
         docker compose -f docker-compose.test.yml logs dynamodb || true
-        echo "=== Nginx service logs ==="
-        docker compose -f docker-compose.test.yml logs nginx-proxy || true
 
-    - name: 11. Clean up services
+    - name: 8. Clean up services
       if: always()
       run: |
         echo "Cleaning up services..."
