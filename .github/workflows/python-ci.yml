@@ -58,11 +58,6 @@ jobs:
 
     - name: 5. Check service health
       run: |
-        echo "Checking postgres..."
-        # Wait for postgres to be ready
-        docker compose --env-file .env exec -T postgres \
-          bash -c 'until pg_isready -U $POSTGRES_USER -d $POSTGRES_DB; do sleep 5; done'
-
         echo "Checking server API..."
         docker compose --env-file .env exec -T server \
           sh -c 'apk add --no-cache curl && \
