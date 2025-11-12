@@ -27,7 +27,6 @@ jobs:
 
     - name: 2. Create .env file for CI
       run: |
-        # Use test.env to populate the .env file
         if [ -f "test.env" ]; then
           cp test.env .env
           echo "Using test.env for CI."
@@ -43,29 +42,29 @@ jobs:
 
     - name: 3. Build Docker images
       run: |
-        # Build all images using the default docker-compose.yml
-        docker compose build
+        # Explicitly pass --env-file
+        docker compose --env-file .env build
 
     - name: 4. Start Dependency Services
       run: |
-        # Start ALL services needed for tests:
-        # - postgres (for database)
-        # - local-services (for dynamodb, minio)
-        # - server (for CSV download via web server)
+        # Start all services needed for download AND tests
+        # This includes postgres, dynamodb, and nginx-proxy
         docker compose \
+          --env-file .env \
           --profile postgres \
           --profile local-services \
-          up -d server
+          up -d nginx-proxy
         
         echo "Waiting for services to be healthy..."
-        sleep 30 # Increased wait time for server to start
-        docker compose ps
+        sleep 30 
+        docker compose --env-file .env ps
 
     - name: 5. Download Data and Run Delphi Pytest
       run: |
-        # Use 'docker compose run' to execute both the download and test commands
-        # inside the same container.
+        # Use 'docker compose run' and pass --env-file
+        # This ensures env vars are set for both download and test
         docker compose \
+          --env-file .env \
           run \
           --rm \
           -v "${{ github.workspace }}/delphi/tests:/app/delphi/tests" \
@@ -73,7 +72,7 @@ jobs:
           bash -c " \
             echo '--- Starting Data Download ---'; \
             python /app/delphi/tests/download_real_data.py \
-              --base-url http://server \
+              --base-url http://nginx-proxy \
               r4tykwac8thvzv35jrn53 r6vbnhffkxbd7ifmfbdrd; \
             echo '--- Data Download Finished ---'; \
             echo '--- Installing Pytest ---'; \
@@ -86,17 +85,16 @@ jobs:
       if: failure()
       run: |
         echo "=== Delphi service logs ==="
-        docker compose logs delphi || true
+        docker compose --env-file .env logs delphi || true
         echo "=== Postgres service logs ==="
-        docker compose logs postgres || true
+        docker compose --env-file .env logs postgres || true
         echo "=== DynamoDB service logs ==="
-        docker compose logs dynamodb || true
-        echo "=== Server service logs ==="
-        docker compose logs server || true
+        docker compose --env-file .env logs dynamodb || true
+        echo "=== Nginx service logs ==="
+        docker compose --env-file .env logs nginx-proxy || true
 
     - name: 7. Clean up services
       if: always()
       run: |
         echo "Cleaning up services..."
-        docker compose --profile postgres --profile local-services down -v
-        docker compose down -v # Ensure server is also down
+        docker compose --env-file .env down -v
