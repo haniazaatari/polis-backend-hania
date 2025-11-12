@@ -64,7 +64,7 @@ jobs:
         docker compose -f docker-compose.test.yml exec -T nginx-proxy \
           sh -c 'apk add --no-cache curl && \
           echo "Waiting for server..." && \
-          curl -f --retry 12 --retry-delay 10 --retry-connrefused http://server/api/v3/participationInit'
+          curl -f --retry 12 --retry-delay 10 --retry-connrefused http://server:5000/api/v3/participationInit'
         
         echo "All services are ready!"
 
