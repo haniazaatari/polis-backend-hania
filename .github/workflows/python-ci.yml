@@ -51,15 +51,22 @@ jobs:
         sleep 30 
         docker compose -f docker-compose.test.yml ps
 
-    - name: 5. Run Health Checks
+    - name: 5. Check service health
       run: |
         echo "Checking postgres..."
+        # This command is correct
         docker compose -f docker-compose.test.yml exec -T postgres pg_isready -U postgres
 
         echo "Checking server API..."
+        # This command is fixed:
+        # 1. Changed 'bash' to 'sh'
+        # 2. Changed 'apt-get update/install' to 'apk add'
         docker compose -f docker-compose.test.yml exec -T nginx-proxy \
-          bash -c 'apt-get update > /dev/null && apt-get install -y curl > /dev/null && \
+          sh -c 'apk add --no-cache curl && \
+          echo "Waiting for server..." && \
           curl -f --retry 12 --retry-delay 10 --retry-connrefused http://server/api/v3/participationInit'
+        
+        echo "All services are ready!"
 
     - name: 6. Download Data and Run Delphi Pytest
       run: |
