@@ -74,6 +74,8 @@ jobs:
           exec -T \
           -e AWS_DEFAULT_REGION=us-east-1 \
           -e AWS_REGION=us-east-1 \
+          -e AWS_ACCESS_KEY_ID=dummy \
+          -e AWS_SECRET_ACCESS_KEY=dummy \
           delphi \
           bash -c " \
             echo '--- Setting up DynamoDB Tables ---'; \
