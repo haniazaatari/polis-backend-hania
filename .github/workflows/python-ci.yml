@@ -70,7 +70,8 @@ jobs:
 
     - name: 6. Download Data and Run Delphi Pytest
       run: |
-        # Now we EXEC into the running 'delphi' container
+        # Use 'docker compose exec' to run commands INSIDE the
+        # already-running 'delphi' container.
         docker compose \
           -f docker-compose.test.yml \
           --env-file .env \
@@ -78,15 +79,15 @@ jobs:
           delphi \
           bash -c " \
             echo '--- Starting Data Download ---'; \
-            python /app/delphi/tests/download_real_data.py \
+            python /app/tests/download_real_data.py \
               --base-url http://nginx-proxy \
               r4tykwac8thvzv35jrn53 r6vbnhffkxbd7ifmfbdrd; \
             echo '--- Data Download Finished. Listing data: ---'; \
-            ls -lR /app/delphi/real_data; \
+            ls -lR /app/real_data; \
             echo '--- Installing Pytest ---'; \
             pip install pytest; \
             echo '--- Running Pytest ---'; \
-            pytest /app/delphi/tests \
+            pytest /app/tests \
           "
 
     - name: 7. Show service logs on failure
