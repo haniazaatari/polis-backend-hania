@@ -96,7 +96,7 @@ jobs:
       if: success() && github.event_name == 'pull_request'
       uses: orgoro/coverage@v3.2
       with:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GITHUB_TOKEN }}
         coverageFile: delphi/.coverage
 
     - name: 9. Show service logs on failure
