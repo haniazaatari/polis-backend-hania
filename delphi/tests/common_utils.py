@@ -10,7 +10,7 @@ from typing import Any
 
 # Add the parent directory to the path to import the module
 import sys
-sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 from polismath.conversation.conversation import Conversation
