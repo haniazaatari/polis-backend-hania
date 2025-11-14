@@ -83,7 +83,7 @@ jobs:
             echo '--- Installing Pytest & Coverage ---'; \
             pip install pytest pytest-cov; \
             echo '--- Running Pytest ---'; \
-            pytest --cov=delphi --cov-report=xml /app/tests \
+            pytest --cov=polismath --cov-report=xml /app/tests \
           "
 
     - name: 7. Copy coverage report from container
@@ -94,9 +94,10 @@ jobs:
 
     - name: 8. Python Coverage Comment
       if: success() && github.event_name == 'pull_request'
-      uses: py-cov-action/python-coverage-comment@v4
+      uses: orgoro/coverage@v3.2
       with:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        coverageFile: delphi/.coverage
 
     - name: 9. Show service logs on failure
       if: failure()
