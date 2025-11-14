@@ -5,11 +5,11 @@ import os
 import sys
 
 # Add the parent directory to the path to import the module
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from polismath.conversation.conversation import Conversation
 from common_utils import create_test_conversation
-from dataset_config import get_dataset_files
+from tests.dataset_config import get_dataset_files
 
 @pytest.mark.xfail(reason="Discrepancies between Python and Clojure implementations")
 @pytest.mark.parametrize("dataset_name", ["biodiversity", "vw"])

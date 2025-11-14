@@ -3,8 +3,8 @@ import pytest
 import os
 import sys
 
-# Add the parent directory to the path to import the module
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+# Add parent to path
+sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 
 from polismath.conversation.conversation import Conversation
 

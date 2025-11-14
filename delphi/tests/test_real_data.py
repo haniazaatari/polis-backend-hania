@@ -15,7 +15,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from polismath.conversation.conversation import Conversation
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
-from .dataset_config import get_dataset_files
+from tests.dataset_config import get_dataset_files
 
 
 def load_votes(votes_path):

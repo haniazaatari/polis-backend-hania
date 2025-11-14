@@ -17,7 +17,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from polismath.conversation.conversation import Conversation
 from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
-from .dataset_config import get_dataset_files
+from tests.dataset_config import get_dataset_files
 
 # Tolerance for numerical comparisons
 TOLERANCE = 0.2  # 20% tolerance for numerical differences

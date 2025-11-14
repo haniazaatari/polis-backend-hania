@@ -12,7 +12,7 @@ from typing import Dict, Any, List
 
 # Add parent to path
 sys.path.append(os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
-from .dataset_config import get_dataset_files, list_available_datasets
+from tests.dataset_config import get_dataset_files, list_available_datasets
 
 # Datasets to analyze
 DATASETS = list(list_available_datasets().keys())

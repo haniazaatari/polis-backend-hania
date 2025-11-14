@@ -71,7 +71,7 @@ logger = logging.getLogger(__name__)
 
 # Import required modules
 from polismath.conversation.conversation import Conversation
-from .test_postgres_real_data import (
+from tests.test_postgres_real_data import (
     connect_to_db, 
     fetch_votes, 
     fetch_comments, 

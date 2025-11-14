@@ -21,7 +21,7 @@ from io import StringIO
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import the profiler before any other polismath imports
-from .conversation_profiler import instrument_conversation_class, restore_original_methods, print_profiling_summary
+from tests.conversation_profiler import instrument_conversation_class, restore_original_methods, print_profiling_summary
 
 # Apply instrumentation to the Conversation class
 instrument_conversation_class()
