@@ -70,8 +70,6 @@ clean: ## Clean build artifacts
 	rm -rf build/
 	rm -rf dist/
 	rm -rf htmlcov/
-	rm -f coverage.xml
-	rm -f .coverage
 	rm -f bandit-report.json
 
 # Build
