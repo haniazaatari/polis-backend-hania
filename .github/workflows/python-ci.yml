@@ -95,9 +95,9 @@ jobs:
 
     - name: 8. Python Coverage Comment
       if: success() && github.event_name == 'pull_request'
-      uses: py-cov-action/python-coverage-comment@v4
+      uses: py-cov-action/python-coverage-comment-action@v3
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ github.token }}
 
     - name: 9. Show service logs on failure
       if: failure()
