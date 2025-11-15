@@ -86,22 +86,22 @@ jobs:
             pip install pytest pytest-cov; \
             echo '--- Running Pytest ---'; \
             export PYTHONPATH=\$PYTHONPATH:/app; \
-            pytest --cov=polismath --cov-config=/app/.coveragerc /app/tests; \
-            echo '--- Generating coverage.xml ---'; \
-            coverage xml -o /app/coverage.xml \
+            pytest --cov=polismath --cov-config=/app/.coveragerc /app/tests \
           "
 
     - name: 7. Copy coverage report from container
       if: success()
       run: |
-        echo "Copying coverage.xml file from delphi container..."
-        docker compose -f docker-compose.test.yml cp delphi:/app/coverage.xml .
+        # Copy the .coverage file, not coverage.xml
+        echo "Copying .coverage file from delphi container..."
+        docker compose -f docker-compose.test.yml cp delphi:/app/.coverage .
 
     - name: 8. Python Coverage Comment
       if: success() && github.event_name == 'pull_request'
       uses: py-cov-action/python-coverage-comment-action@v3
       with:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        COVERAGE_PATH: delphi
 
     - name: 9. Show service logs on failure
       if: failure()
