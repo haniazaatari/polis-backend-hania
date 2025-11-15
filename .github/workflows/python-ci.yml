@@ -83,6 +83,7 @@ jobs:
             echo '--- Installing Pytest & Coverage ---'; \
             pip install pytest pytest-cov; \
             echo '--- Running Pytest ---'; \
+            export PYTHONPATH=\$PYTHONPATH:/app; \
             pytest --cov=polismath --cov-report=xml /app/tests \
           "
 
@@ -94,11 +95,9 @@ jobs:
 
     - name: 8. Python Coverage Comment
       if: success() && github.event_name == 'pull_request'
-      uses: orgoro/coverage@v3.2
+      uses: py-cov-action/python-coverage-comment@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        coverageFile: coverage.xml
-        sourceDir: delphi
 
     - name: 9. Show service logs on failure
       if: failure()
