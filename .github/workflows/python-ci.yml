@@ -84,7 +84,7 @@ jobs:
             pip install pytest pytest-cov; \
             echo '--- Running Pytest ---'; \
             export PYTHONPATH=\$PYTHONPATH:/app; \
-            pytest --cov=polismath /app/tests \
+            pytest --cov=polismath --cov-config=/app/pyproject.toml /app/tests \
           "
 
     - name: 7. Copy coverage report from container
