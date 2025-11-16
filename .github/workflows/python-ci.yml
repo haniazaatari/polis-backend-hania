@@ -66,8 +66,6 @@ jobs:
         echo "Copying test files into container..."
         docker compose -f docker-compose.test.yml cp delphi/tests delphi:/app/tests
         docker compose -f docker-compose.test.yml cp delphi/real_data delphi:/app/real_data
-        echo "Copying .coveragerc into container..."
-        docker compose -f docker-compose.test.yml cp .coveragerc delphi:/app/.coveragerc
 
         echo "Running tests..."
         docker compose \
