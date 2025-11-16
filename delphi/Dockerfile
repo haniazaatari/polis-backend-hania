@@ -94,6 +94,7 @@
   COPY --from=builder /app/scripts/ ./scripts/
   COPY --from=builder /app/umap_narrative/ ./umap_narrative/
   COPY --from=builder /app/*.py ./
+  COPY --from=builder /app/pyproject.toml ./pyproject.toml
 
   RUN mkdir -p data
   EXPOSE 8080
