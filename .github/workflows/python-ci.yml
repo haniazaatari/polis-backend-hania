@@ -82,9 +82,10 @@ jobs:
             python create_dynamodb_tables.py --region us-east-1; \
             echo '--- Installing Pytest & Coverage ---'; \
             pip install pytest pytest-cov; \
+            echo -e \"[run]\nrelative_files = true\" > /app/.coveragerc; \
             echo '--- Running Pytest ---'; \
             export PYTHONPATH=\$PYTHONPATH:/app; \
-            pytest --cov=polismath --cov-config=/app/pyproject.toml /app/tests \
+            pytest --cov=polismath --cov-config=/app/.coveragerc /app/tests \
           "
 
     - name: 7. Copy coverage report from container
@@ -99,6 +100,11 @@ jobs:
       run: |
         echo "[run]" > .coveragerc
         echo "source = delphi" >> .coveragerc
+        echo "" >> .coveragerc
+        echo "[paths]" >> .coveragerc
+        echo "source =" >> .coveragerc
+        echo "    /app" >> .coveragerc
+        echo "    delphi" >> .coveragerc
 
     - name: 8. Python Coverage Comment
       if: success() && github.event_name == 'pull_request'
