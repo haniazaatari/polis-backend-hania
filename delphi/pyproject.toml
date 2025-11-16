@@ -121,3 +121,6 @@ filterwarnings = [
     # Ignore python_multipart deprecation warning from ddtrace (third-party)
     "ignore:Please use `import python_multipart`:PendingDeprecationWarning:ddtrace.internal.module",
 ]
+
+[tool.coverage.run]
+relative_files = true
