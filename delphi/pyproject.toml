@@ -124,3 +124,9 @@ filterwarnings = [
 
 [tool.coverage.run]
 relative_files = true
+
+[tool.coverage.paths]
+source = [
+  "polismath",
+  "/app/polismath"
+]
