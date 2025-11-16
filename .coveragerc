@@ -1,8 +1,2 @@
 [run]
-# This is the fix suggested by the error log.
-# It forces coverage to store relative paths (e.g., "polismath/system.py")
-# instead of absolute paths (e.g., "/app/polismath/system.py").
 relative_files = true
-
-# We also explicitly tell it what source folder to measure.
-source = .
