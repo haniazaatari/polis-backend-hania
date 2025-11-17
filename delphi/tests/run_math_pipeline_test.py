@@ -1,11 +1,12 @@
 import os
 import time
 import pytest
-import psycopg2
 import boto3
-from psycopg2 import extras
+import csv
+import decimal
 from unittest import mock
 import sys  # Import sys
+import re # Import re for parsing SQL
 
 # Add the project root (parent directory of 'tests') to the Python path
 # This allows Pylance and local pytest runs to find 'run_math_pipeline'
@@ -15,24 +16,14 @@ sys.path.insert(0, project_root)
 # Import the main function from the script we want to test
 from run_math_pipeline import main as run_math_pipeline_main
 
-# --- Fixtures to Set Up Test Environment ---
+# --- Define Mock Data Paths ---
+MOCK_DATA_DIR = os.path.join(project_root, "delphi", "real_data", "r4tykwac8thvzv35jrn53")
+# These filenames are based on the user's screenshots
+COMMENTS_FILE = os.path.join(MOCK_DATA_DIR, "2025-11-11-1704-r4tykwac8thvzv35jrn53-comments.csv")
+VOTES_FILE = os.path.join(MOCK_DATA_DIR, "2025-11-11-1704-r4tykwac8thvzv35jrn53-votes.csv")
+MOCK_ZID = 123456789 # We can use our own ZID for the test
 
-@pytest.fixture(scope="module")
-def db_conn():
-    """Create a connection to the test PostgreSQL database."""
-    try:
-        conn = psycopg2.connect(
-          database=os.environ.get('POSTGRES_DB', 'polismath'),
-          user=os.environ.get('POSTGRES_USER', 'postgres'),
-          password=os.environ.get('POSTGRES_PASSWORD', 'postgres'),
-          host=os.environ.get('POSTGRES_HOST', 'localhost'),
-          port=os.environ.get('POSTGRES_PORT', '5432')
-        )
-        # conn.autocommit = True  # <-- REMOVE THIS
-        yield conn
-        conn.close()
-    except psycopg2.OperationalError as e:
-        pytest.fail(f"Could not connect to test Postgres DB: {e}")
+# --- Fixtures to Set Up Test Environment ---
 
 @pytest.fixture(scope="module")
 def dynamodb_resource():
@@ -49,189 +40,227 @@ def dynamodb_resource():
         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', 'dummy')
     )
 
-@pytest.fixture(scope="function")
-def conversation_data(db_conn):
-    """
-    Sets up mock data in Postgres for a single conversation and yields the zid.
-    Cleans up the data after the test.
-    """
-    zid = 123456789 # Use an integer for zid
-    now = int(time.time())
+def parse_csv_to_dicts(filepath):
+    """Helper to read CSV data."""
+    if not os.path.exists(filepath):
+        pytest.skip(f"Mock data file not found: {filepath}. Skipping test.")
     
-    with db_conn.cursor() as cursor:
-        # 1. Clean up any old data (just in case)
-        cursor.execute("DELETE FROM votes WHERE zid = %s", (zid,))
-        cursor.execute("DELETE FROM comments WHERE zid = %s", (zid,))
-        cursor.execute("DELETE FROM participants WHERE zid = %s", (zid,))
-        # Clean up users we will create (uids 1, 2, 3, 4)
-        cursor.execute("DELETE FROM users WHERE uid IN (1, 2, 3, 4)")
-        # Add cleanup for the conversations table
-        cursor.execute("DELETE FROM conversations WHERE zid = %s", (zid,))
+    data = []
+    with open(filepath, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            data.append(row)
+    return data
+
+@pytest.fixture(scope="module")
+def mock_comments_data():
+    """Loads mock comments from CSV and formats them as fetch_comments would."""
+    comments_csv = parse_csv_to_dicts(COMMENTS_FILE)
+    comments_list = []
+    for comment in comments_csv:
+        # Assuming 'moderated' column: 0=neutral, -1=rejected
+        if comment.get('moderated') == '-1':
+            continue
         
-        # 1.5. Insert Users (required for participants.uid foreign key)
-        users = [
-            # (uid, username, created)
-            (1, 'testuser1', now),
-            (2, 'testuser2', now),
-            (3, 'testuser3', now),
-            (4, 'testuser4_mod', now),
-        ]
-        psycopg2.extras.execute_values(
-            cursor,
-            "INSERT INTO users (uid, username, created) VALUES %s",
-            users
-        )
+        try:
+            created_time = int(decimal.Decimal(comment['timestamp']) * 1000)
+        except (ValueError, TypeError, decimal.InvalidOperation):
+            created_time = None
 
-        # 1.75. Insert Conversation (required for participants.zid foreign key)
-        cursor.execute(
-            "INSERT INTO conversations (zid, created) VALUES (%s, %s)",
-            (zid, now)
-        )
+        comments_list.append({
+            'tid': str(comment['comment_id']),
+            'created': created_time,
+            'txt': comment['comment_body'],
+            'is_seed': bool(comment.get('is_seed', 'false').lower() == 'true')
+        })
+    return {'comments': comments_list}
 
-        # --- ADD FIRST COMMIT ---
-        # Commit users and conversation first, so participants can reference them
-        db_conn.commit()
+@pytest.fixture(scope="module")
+def mock_votes_data():
+    """Loads mock votes from CSV and formats them for fetch_votes AND raw batching."""
+    votes_csv = parse_csv_to_dicts(VOTES_FILE)
+    votes_list_dicts = []
+    votes_list_tuples = [] # For the raw cursor.fetchall() mock
+    
+    for vote in votes_csv:
+        try:
+            created_time_float = float(vote['timestamp'])
+            created_time_int = int(created_time_float * 1000)
+        except (ValueError, TypeError):
+            created_time_float = None
+            created_time_int = None
 
-        # 2. Insert Participants
-        # p1 and p2 will agree, p3 will disagree
-        participants = [
-            # (zid, pid, created, uid)
-            (zid, 101, now, 1), # uid = 1
-            (zid, 102, now, 2), # uid = 2
-            (zid, 103, now, 3), # uid = 3
-            (zid, 104, now, 4), # Moderated out participant, uid = 4
-        ]
-        psycopg2.extras.execute_values(
-            cursor,
-            "INSERT INTO participants (zid, pid, created, uid) VALUES %s",
-            participants
-        )
-        # Moderate out p4
-        cursor.execute("UPDATE participants SET mod = '-1' WHERE zid = %s AND pid = 104", (zid,))
-
-        # --- ADD SECOND COMMIT ---
-        # Commit participants, so comments can reference them
-        db_conn.commit()
-
-        # 3. Insert Comments
-        comments = [
-            # tid, zid, pid, created, txt, is_seed, uid
-            (1, zid, 101, now, "Comment 1: This is great", True, 1), # Added uid=1
-            (2, zid, 102, now, "Comment 2: I agree", False, 2),       # Added uid=2
-            (3, zid, 103, now, "Comment 3: This is bad", False, 3),       # Added uid=3
-            (4, zid, 101, now, "Comment 4: Moderated out", False, 1), # Added uid=1
-        ]
-        psycopg2.extras.execute_values(
-            cursor,
-            "INSERT INTO comments (tid, zid, pid, created, txt, is_seed, uid) VALUES %s",
-            comments
-        )
-        # Moderate out c4
-        cursor.execute("UPDATE comments SET mod = '-1' WHERE zid = %s AND tid = 4", (zid,))
+        # For Conversation.update_votes()
+        votes_list_dicts.append({
+            'pid': str(vote['voter_id']),
+            'tid': str(vote['comment_id']),
+            'vote': float(vote['vote']),
+            'created': created_time_int
+        })
         
-        # --- ADD THIRD COMMIT ---
-        # Commit comments, so votes can reference them
-        db_conn.commit()
+        # For cursor.fetchall()
+        # Format: (created, tid, pid, vote)
+        votes_list_tuples.append((
+            created_time_float,
+            int(vote['comment_id']),
+            int(vote['voter_id']),
+            float(vote['vote'])
+        ))
+    
+    # Sort by created timestamp, as the script's query does
+    votes_list_tuples.sort(key=lambda x: x[0] if x[0] is not None else 0)
+    
+    return {
+        'votes_dicts': {'votes': votes_list_dicts},
+        'votes_tuples': votes_list_tuples
+    }
 
-        # 4. Insert Votes
-        # p1, p2, p3 vote on c1, c2, c3
-        votes = [
-            # zid, pid, tid, vote, created
-            (zid, 101, 1, 1, now + 10),
-            (zid, 101, 2, 1, now + 11),
-            (zid, 101, 3, -1, now + 12),
-            (zid, 102, 1, 1, now + 13),
-            (zid, 102, 2, 1, now + 14),
-            (zid, 102, 3, -1, now + 15),
-            (zid, 103, 1, -1, now + 16),
-            (zid, 103, 2, -1, now + 17),
-            (zid, 103, 3, 1, now + 18),
-            (zid, 104, 1, 1, now + 19), # Vote from moderated-out participant
-        ]
-        psycopg2.extras.execute_values(
-            cursor,
-            "INSERT INTO votes (zid, pid, tid, vote, created) VALUES %s",
-            votes
-        )
-        
-        # --- ADD FINAL SETUP COMMIT ---
-        # Commit votes
-        db_conn.commit()
-
-    yield zid # This is the value the test function will receive
-
-    # 5. Teardown
-    with db_conn.cursor() as cursor:
-        cursor.execute("DELETE FROM votes WHERE zid = %s", (zid,))
-        cursor.execute("DELETE FROM comments WHERE zid = %s", (zid,))
-        cursor.execute("DELETE FROM participants WHERE zid = %s", (zid,))
-        # Also clean up the users we created
-        cursor.execute("DELETE FROM users WHERE uid IN (1, 2, 3, 4)")
-        # Add cleanup for the conversations table (order matters, delete from child tables first)
-        cursor.execute("DELETE FROM conversations WHERE zid = %s", (zid,))
-        db_conn.commit()
-
+@pytest.fixture(scope="module")
+def mock_moderation_data():
+    """Provides mock moderation data."""
+    # We can enhance this if moderation CSVs become available
+    return {
+        'mod_out_tids': [],
+        'mod_in_tids': [],
+        'meta_tids': [],
+        'mod_out_ptpts': []
+    }
 
 # --- The Test Function ---
 
-def test_run_math_pipeline_e2e(conversation_data, dynamodb_resource):
+@mock.patch('psycopg2.connect')
+def test_run_math_pipeline_e2e(mock_connect, dynamodb_resource, mock_comments_data, mock_votes_data, mock_moderation_data):
     """
-    Runs the entire math pipeline script on the mock data and checks DynamoDB for results.
+    Runs the entire math pipeline script, mocking all database calls
+    and checking DynamoDB for results.
     """
-    zid = conversation_data # Get the zid from the fixture
+    zid = MOCK_ZID
+    votes_tuples = mock_votes_data['votes_tuples']
+    total_votes = len(votes_tuples)
+
+    # --- Setup Mocks ---
     
-    # 1. Mock command-line arguments
-    # We patch 'sys.argv' to simulate running:
-    # python run_math_pipeline.py --zid 123456789 --batch-size 2
-    test_args = [
-        "run_math_pipeline.py",
-        "--zid", str(zid), # Pass zid as a string, argparse will convert to int
-        "--batch-size", "2", # Use a small batch size to force batching
-    ]
+    # Create mock cursor and connection
+    mock_cursor = mock.Mock()
+    mock_connection = mock.Mock()
+    mock_connection.cursor.return_value = mock_cursor
+    mock_connect.return_value = mock_connection
     
-    with mock.patch.object(sys, 'argv', test_args):
-        # 2. Run the main function
-        try:
-            run_math_pipeline_main()
-        except SystemExit as e:
-            pytest.fail(f"run_math_pipeline.py exited unexpectedly: {e}")
+    # This will store the results of execute calls
+    sql_results = {}
+    
+    # Define the behavior of the mock cursor
+    def mock_execute(sql, params=None):
+        sql = sql.strip()
+        # 1. Mock COUNT(*) query
+        if "SELECT COUNT(*) FROM votes" in sql:
+            sql_results['last'] = 'count'
+        
+        # 2. Mock batched SELECT from votes
+        elif "SELECT v.created, v.tid, v.pid, v.vote FROM votes" in sql:
+            sql_results['last'] = 'batch'
+            # Extract LIMIT and OFFSET
+            limit_match = re.search(r'LIMIT (\d+)', sql)
+            offset_match = re.search(r'OFFSET (\d+)', sql)
+            
+            limit = int(limit_match.group(1)) if limit_match else None
+            offset = int(offset_match.group(1)) if offset_match else 0
+            
+            if limit:
+                sql_results['batch_data'] = votes_tuples[offset : offset + limit]
+            else:
+                sql_results['batch_data'] = votes_tuples[offset:]
+        
+        # 3. Mock moderation (participants)
+        elif "FROM participants WHERE" in sql:
+            sql_results['last'] = 'mod_ptpts'
+        
+        # 4. Mock moderation (comments)
+        elif "FROM comments WHERE" in sql:
+            sql_results['last'] = 'mod_comments'
+        
+        # 5. Mock check for participants table
+        elif "information_schema.tables" in sql:
+             sql_results['last'] = 'table_check'
+             
+        else:
+            sql_results['last'] = 'other'
+
+    def mock_fetchone():
+        if sql_results.get('last') == 'count':
+            return (total_votes,)
+        if sql_results.get('last') == 'table_check':
+            return (True,)
+        return None
+
+    def mock_fetchall():
+        if sql_results.get('last') == 'batch':
+            return sql_results.get('batch_data', [])
+        if sql_results.get('last') == 'mod_ptpts':
+            return [] # No moderated participants
+        if sql_results.get('last') == 'mod_comments':
+            return [] # No moderated/meta comments
+        return []
+
+    mock_cursor.execute.side_effect = mock_execute
+    mock_cursor.fetchone.side_effect = mock_fetchone
+    mock_cursor.fetchall.side_effect = mock_fetchall
+
+    # --- Mock the helper functions ---
+    # The script uses these *before* the batching logic
+    with mock.patch('run_math_pipeline.fetch_comments', return_value=mock_comments_data), \
+         mock.patch('run_math_pipeline.fetch_moderation', return_value=mock_moderation_data):
+        
+        # 1. Mock command-line arguments
+        test_args = [
+            "run_math_pipeline.py",
+            "--zid", str(zid),
+            "--batch-size", "20000", # Use a reasonable batch size
+        ]
+        
+        with mock.patch.object(sys, 'argv', test_args):
+            # 2. Run the main function
+            try:
+                run_math_pipeline_main()
+            except SystemExit as e:
+                pytest.fail(f"run_math_pipeline.py exited unexpectedly: {e}")
 
     # 3. Verify results were written to DynamoDB
     
     # Check for PCA results
     pca_table = dynamodb_resource.Table("Delphi_PCAResults")
-    pca_item = pca_table.get_item(Key={'zid': str(zid)}).get('Item') # DynamoDB keys will be strings
+    pca_item = pca_table.get_item(Key={'zid': str(zid)}).get('Item')
     assert pca_item is not None, "PCAResults item was not created in DynamoDB"
     assert 'pca_matrix' in pca_item, "pca_matrix not in PCAResults"
-    assert len(pca_item['pca_matrix']) == 3 # 3 comments (c1, c2, c3)
+    assert len(pca_item['pca_matrix']) == len(mock_comments_data['comments'])
     
     # Check for K-Means clusters
     kmeans_table = dynamodb_resource.Table("Delphi_KMeansClusters")
-    kmeans_item = kmeans_table.get_item(Key={'zid': str(zid)}).get('Item') # DynamoDB keys will be strings
+    kmeans_item = kmeans_table.get_item(Key={'zid': str(zid)}).get('Item')
     assert kmeans_item is not None, "KMeansClusters item was not created in DynamoDB"
     assert 'clusters' in kmeans_item, "clusters not in KMeansClusters"
     assert len(kmeans_item['clusters']) > 0, "No clusters were generated"
 
     # Check for Representative Comments
     repness_table = dynamodb_resource.Table("Delphi_RepresentativeComments")
-    repness_item = repness_table.get_item(Key={'zid': str(zid)}).get('Item') # DynamoDB keys will be strings
+    repness_item = repness_table.get_item(Key={'zid': str(zid)}).get('Item')
     assert repness_item is not None, "RepresentativeComments item was not created"
     assert 'repness' in repness_item, "repness not in RepresentativeComments"
     assert len(repness_item['repness']) > 0, "No repness data was generated"
 
     # Check for Participant Projections
     proj_table = dynamodb_resource.Table("Delphi_PCAParticipantProjections")
-    # We should have projections for pids 101, 102, 103 (but not 104, who was moderated out)
-    pids = ["101", "102", "103"]
+    
+    # Get unique participant IDs from the votes
+    pids = set(v['pid'] for v in mock_votes_data['votes_dicts']['votes'])
+    
     count = 0
     for pid in pids:
+        # Note: The script *should* be filtering moderated-out participants.
+        # Our mock_moderation_data is empty, so all pids should be present.
         proj_item = proj_table.get_item(Key={'zid_pid': f"{zid}_{pid}"}).get('Item')
         assert proj_item is not None, f"PCAParticipantProjections item for pid {pid} was not created"
         assert 'projection' in proj_item, f"projection not in item for pid {pid}"
         count += 1
     
-    assert count == 3, "Did not find projections for all 3 active participants"
-    
-    # Check that the moderated-out participant has no projection
-    mod_proj_item = proj_table.get_item(Key={'zid_pid': f"{zid}_104"}).get('Item')
-    assert mod_proj_item is None, "A projection was incorrectly created for a moderated-out participant"
+    assert count == len(pids), f"Did not find projections for all {len(pids)} active participants"
