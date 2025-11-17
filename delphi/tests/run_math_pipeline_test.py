@@ -28,7 +28,7 @@ def db_conn():
           host=os.environ.get('POSTGRES_HOST', 'localhost'),
           port=os.environ.get('POSTGRES_PORT', '5432')
         )
-        conn.autocommit = True  # <-- ADD THIS to enable autocommit
+        # conn.autocommit = True  # <-- REMOVE THIS
         yield conn
         conn.close()
     except psycopg2.OperationalError as e:
@@ -88,8 +88,9 @@ def conversation_data(db_conn):
             (zid, now)
         )
 
-        # --- REMOVE FIRST COMMIT ---
-        # db_conn.commit()
+        # --- ADD FIRST COMMIT ---
+        # Commit users and conversation first, so participants can reference them
+        db_conn.commit()
 
         # 2. Insert Participants
         # p1 and p2 will agree, p3 will disagree
@@ -108,8 +109,9 @@ def conversation_data(db_conn):
         # Moderate out p4
         cursor.execute("UPDATE participants SET mod = '-1' WHERE zid = %s AND pid = 104", (zid,))
 
-        # --- REMOVE SECOND COMMIT ---
-        # db_conn.commit()
+        # --- ADD SECOND COMMIT ---
+        # Commit participants, so comments can reference them
+        db_conn.commit()
 
         # 3. Insert Comments
         comments = [
@@ -127,6 +129,10 @@ def conversation_data(db_conn):
         # Moderate out c4
         cursor.execute("UPDATE comments SET mod = '-1' WHERE zid = %s AND tid = 4", (zid,))
         
+        # --- ADD THIRD COMMIT ---
+        # Commit comments, so votes can reference them
+        db_conn.commit()
+
         # 4. Insert Votes
         # p1, p2, p3 vote on c1, c2, c3
         votes = [
@@ -148,8 +154,9 @@ def conversation_data(db_conn):
             votes
         )
         
-        # --- REMOVE THIRD COMMIT ---
-        # db_conn.commit()
+        # --- ADD FINAL SETUP COMMIT ---
+        # Commit votes
+        db_conn.commit()
 
     yield zid # This is the value the test function will receive
 
