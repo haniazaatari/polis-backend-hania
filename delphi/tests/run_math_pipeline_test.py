@@ -104,6 +104,10 @@ def conversation_data(db_conn):
         # Moderate out p4
         cursor.execute("UPDATE participants SET mod = '-1' WHERE zid = %s AND pid = 104", (zid,))
 
+        # --- ADDED COMMIT ---
+        # Commit participants before inserting comments to satisfy foreign key constraints
+        db_conn.commit()
+
         # 3. Insert Comments
         comments = [
             # tid, zid, pid, created, txt, is_seed, uid
