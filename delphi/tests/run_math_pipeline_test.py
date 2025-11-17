@@ -1,12 +1,14 @@
 import os
-import sys
 import time
 import pytest
 import psycopg2
 import boto3
 from psycopg2 import extras
 from unittest import mock
+import sys  # Import sys
 
+# Add the project root (parent directory of 'tests') to the Python path
+# This allows Pylance and local pytest runs to find 'run_math_pipeline'
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
@@ -20,11 +22,11 @@ def db_conn():
     """Create a connection to the test PostgreSQL database."""
     try:
         conn = psycopg2.connect(
-            database=os.environ.get('POSTGRES_DB', 'polismath'),
-            user=os.environ.get('POSTGRES_USER', 'postgres'),
-            password=os.environ.get('POSTGRES_PASSWORD', 'postgres'),
-            host=os.environ.get('POSTGRES_HOST', 'localhost'),
-            port=os.environ.get('POSTGRES_PORT', '5432')
+          database=os.environ.get('POSTGRES_DB', 'polismath'),
+          user=os.environ.get('POSTGRES_USER', 'postgres'),
+          password=os.environ.get('POSTGRES_PASSWORD', 'postgres'),
+          host=os.environ.get('POSTGRES_HOST', 'localhost'),
+          port=os.environ.get('POSTGRES_PORT', '5432')
         )
         yield conn
         conn.close()
@@ -52,7 +54,7 @@ def conversation_data(db_conn):
     Sets up mock data in Postgres for a single conversation and yields the zid.
     Cleans up the data after the test.
     """
-    zid = "test-pipeline-123"
+    zid = 123456789 # Use an integer for zid
     now = int(time.time())
     
     with db_conn.cursor() as cursor:
@@ -136,10 +138,10 @@ def test_run_math_pipeline_e2e(conversation_data, dynamodb_resource):
     
     # 1. Mock command-line arguments
     # We patch 'sys.argv' to simulate running:
-    # python run_math_pipeline.py --zid test-pipeline-123 --batch-size 2
+    # python run_math_pipeline.py --zid 123456789 --batch-size 2
     test_args = [
         "run_math_pipeline.py",
-        "--zid", zid,
+        "--zid", str(zid), # Pass zid as a string, argparse will convert to int
         "--batch-size", "2", # Use a small batch size to force batching
     ]
     
@@ -154,21 +156,21 @@ def test_run_math_pipeline_e2e(conversation_data, dynamodb_resource):
     
     # Check for PCA results
     pca_table = dynamodb_resource.Table("Delphi_PCAResults")
-    pca_item = pca_table.get_item(Key={'zid': zid}).get('Item')
+    pca_item = pca_table.get_item(Key={'zid': str(zid)}).get('Item') # DynamoDB keys will be strings
     assert pca_item is not None, "PCAResults item was not created in DynamoDB"
     assert 'pca_matrix' in pca_item, "pca_matrix not in PCAResults"
     assert len(pca_item['pca_matrix']) == 3 # 3 comments (c1, c2, c3)
     
     # Check for K-Means clusters
     kmeans_table = dynamodb_resource.Table("Delphi_KMeansClusters")
-    kmeans_item = kmeans_table.get_item(Key={'zid': zid}).get('Item')
+    kmeans_item = kmeans_table.get_item(Key={'zid': str(zid)}).get('Item') # DynamoDB keys will be strings
     assert kmeans_item is not None, "KMeansClusters item was not created in DynamoDB"
     assert 'clusters' in kmeans_item, "clusters not in KMeansClusters"
     assert len(kmeans_item['clusters']) > 0, "No clusters were generated"
 
     # Check for Representative Comments
     repness_table = dynamodb_resource.Table("Delphi_RepresentativeComments")
-    repness_item = repness_table.get_item(Key={'zid': zid}).get('Item')
+    repness_item = repness_table.get_item(Key={'zid': str(zid)}).get('Item') # DynamoDB keys will be strings
     assert repness_item is not None, "RepresentativeComments item was not created"
     assert 'repness' in repness_item, "repness not in RepresentativeComments"
     assert len(repness_item['repness']) > 0, "No repness data was generated"
