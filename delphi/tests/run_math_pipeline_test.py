@@ -239,24 +239,39 @@ def test_run_math_pipeline_e2e(mock_connect, dynamodb_resource, mock_comments_da
 
     # 3. Verify results were written to DynamoDB
     
+    # Define the static keys used for conversation-wide data
+    # We must assume a default math_tick of 0, as the script doesn't set one
+    MOCK_MATH_TICK = 0
+    ZID_TICK = f"{zid}_{MOCK_MATH_TICK}"
+
     # Check for PCA results
     pca_table = dynamodb_resource.Table("Delphi_PCAResults")
-    pca_item = pca_table.get_item(Key={'zid': str(zid)}).get('Item')
-    assert pca_item is not None, "PCAResults item was not created in DynamoDB"
+    # FIX: Use composite key (zid, math_tick) from schema
+    pca_item = pca_table.get_item(Key={'zid': str(zid), 'math_tick': MOCK_MATH_TICK}).get('Item')
+    assert pca_item is not None, f"PCAResults item was not created in DynamoDB (Key: {zid}, {MOCK_MATH_TICK})"
     assert 'pca_matrix' in pca_item, "pca_matrix not in PCAResults"
     assert len(pca_item['pca_matrix']) == len(mock_comments_data['comments'])
     
     # Check for K-Means clusters
     kmeans_table = dynamodb_resource.Table("Delphi_KMeansClusters")
-    kmeans_item = kmeans_table.get_item(Key={'zid': str(zid)}).get('Item')
-    assert kmeans_item is not None, "KMeansClusters item was not created in DynamoDB"
+    # FIX: Use composite key (zid_tick, group_id). We must query, not get_item.
+    response = kmeans_table.query(
+        KeyConditionExpression=boto3.dynamodb.conditions.Key('zid_tick').eq(ZID_TICK)
+    )
+    assert response['Count'] > 0, f"KMeansClusters items were not created in DynamoDB (Key: {ZID_TICK})"
+    kmeans_item = response['Items'][0] # Just check the first item
     assert 'clusters' in kmeans_item, "clusters not in KMeansClusters"
     assert len(kmeans_item['clusters']) > 0, "No clusters were generated"
 
     # Check for Representative Comments
     repness_table = dynamodb_resource.Table("Delphi_RepresentativeComments")
-    repness_item = repness_table.get_item(Key={'zid': str(zid)}).get('Item')
-    assert repness_item is not None, "RepresentativeComments item was not created"
+    # FIX: Use GSI 'zid-index' to query. The primary key (zid_tick_gid) is too complex.
+    response = repness_table.query(
+        IndexName='zid-index',
+        KeyConditionExpression=boto3.dynamodb.conditions.Key('zid').eq(str(zid))
+    )
+    assert response['Count'] > 0, f"RepresentativeComments items were not found via 'zid-index' (Key: {zid})"
+    repness_item = response['Items'][0] # Just check one
     assert 'repness' in repness_item, "repness not in RepresentativeComments"
     assert len(repness_item['repness']) > 0, "No repness data was generated"
 
@@ -270,8 +285,9 @@ def test_run_math_pipeline_e2e(mock_connect, dynamodb_resource, mock_comments_da
     for pid in pids:
         # Note: The script *should* be filtering moderated-out participants.
         # Our mock_moderation_data is empty, so all pids should be present.
-        proj_item = proj_table.get_item(Key={'zid_pid': f"{zid}_{pid}"}).get('Item')
-        assert proj_item is not None, f"PCAParticipantProjections item for pid {pid} was not created"
+        # FIX: Use composite key (zid_tick, participant_id) from schema
+        proj_item = proj_table.get_item(Key={'zid_tick': ZID_TICK, 'participant_id': str(pid)}).get('Item')
+        assert proj_item is not None, f"PCAParticipantProjections item for pid {pid} was not created (Key: {ZID_TICK}, {pid})"
         assert 'projection' in proj_item, f"projection not in item for pid {pid}"
         count += 1
     
