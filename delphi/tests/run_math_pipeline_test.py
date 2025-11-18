@@ -11,13 +11,16 @@ import re # Import re for parsing SQL
 # Add the project root (parent directory of 'tests') to the Python path
 # This allows Pylance and local pytest runs to find 'run_math_pipeline'
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, project_root)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # Import the main function from the script we want to test
 from run_math_pipeline import main as run_math_pipeline_main
 
 # --- Define Mock Data Paths ---
-MOCK_DATA_DIR = os.path.join(project_root, "delphi", "real_data", "r4tykwac8thvzv35jrn53")
+# FIX: Corrected path inside the container. The 'delphi' part is removed
+# because docker cp maps 'delphi/real_data' to '/app/real_data'.
+MOCK_DATA_DIR = os.path.join(project_root, "real_data", "r4tykwac8thvzv35jrn53")
 # These filenames are based on the user's screenshots
 COMMENTS_FILE = os.path.join(MOCK_DATA_DIR, "2025-11-11-1704-r4tykwac8thvzv35jrn53-comments.csv")
 VOTES_FILE = os.path.join(MOCK_DATA_DIR, "2025-11-11-1704-r4tykwac8thvzv35jrn53-votes.csv")
@@ -43,6 +46,7 @@ def dynamodb_resource():
 def parse_csv_to_dicts(filepath):
     """Helper to read CSV data."""
     if not os.path.exists(filepath):
+        # Use pytest.skip to signal that the test should be skipped if data is missing
         pytest.skip(f"Mock data file not found: {filepath}. Skipping test.")
     
     data = []
