@@ -252,7 +252,7 @@ def test_run_math_pipeline_e2e(mock_connect, dynamodb_resource, mock_comments_da
     pca_item = response['Items'][0]
     
     # FIX: Relaxed assertion. The 'pca_matrix' might be optional or stored differently
-    # in some pipeline configurations. We verify 'group_count' to ensure the 
+    # in some pipeline configurations. We verify 'group_count' to ensure the
     # calculation ran and wrote metadata successfully.
     assert 'group_count' in pca_item, f"group_count not in PCAResults. Keys found: {pca_item.keys()}"
     
@@ -263,7 +263,11 @@ def test_run_math_pipeline_e2e(mock_connect, dynamodb_resource, mock_comments_da
     )
     assert len(response['Items']) > 0, f"KMeansClusters items not found for zid {zid}"
     kmeans_item = response['Items'][0]
-    assert 'clusters' in kmeans_item, "clusters not in KMeansClusters"
+    
+    # FIX: The table stores flattened cluster items (one per group), not a list under 'clusters'.
+    # We check for 'group_id' which indicates a valid cluster record.
+    # assert 'clusters' in kmeans_item, "clusters not in KMeansClusters"
+    assert 'group_id' in kmeans_item, f"group_id not in KMeansClusters item. Keys found: {kmeans_item.keys()}"
 
     # Check for Representative Comments
     repness_table = dynamodb_resource.Table("Delphi_RepresentativeComments")
