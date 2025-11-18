@@ -72,7 +72,8 @@ def mock_comments_data():
             created_time = None
 
         comments_list.append({
-            'tid': str(comment['comment_id']),
+            # FIX: Changed 'comment_id' to 'tid' to match the CSV column
+            'tid': str(comment['tid']),
             'created': created_time,
             'txt': comment['comment_body'],
             'is_seed': bool(comment.get('is_seed', 'false').lower() == 'true')
@@ -97,7 +98,8 @@ def mock_votes_data():
         # For Conversation.update_votes()
         votes_list_dicts.append({
             'pid': str(vote['voter_id']),
-            'tid': str(vote['comment_id']),
+            # FIX: Changed 'comment_id' to 'tid' to match the CSV column
+            'tid': str(vote['tid']),
             'vote': float(vote['vote']),
             'created': created_time_int
         })
@@ -106,7 +108,8 @@ def mock_votes_data():
         # Format: (created, tid, pid, vote)
         votes_list_tuples.append((
             created_time_float,
-            int(vote['comment_id']),
+            # FIX: Changed 'comment_id' to 'tid' to match the CSV column
+            int(vote['tid']),
             int(vote['voter_id']),
             float(vote['vote'])
         ))
