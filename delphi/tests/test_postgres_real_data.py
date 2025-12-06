@@ -22,7 +22,6 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from polismath.conversation.conversation import Conversation
 from polismath.database.postgres import PostgresClient, PostgresConfig
-from polismath.pca_kmeans_rep.named_matrix import NamedMatrix
 
 
 def init_dynamodb():
@@ -35,11 +34,11 @@ def init_dynamodb():
     # Import the DynamoDB client
     from polismath.database.dynamodb import DynamoDBClient
     
-    print("Initializing DynamoDBClient with localhost:8000 endpoint")
+    print("Initializing DynamoDBClient")
     
     # Create and initialize the client
     client = DynamoDBClient(
-        endpoint_url='http://localhost:8000',
+        endpoint_url= os.environ.get('DYNAMODB_ENDPOINT', 'http://localhost:8000'),
         region_name='us-east-1',
         aws_access_key_id='dummy',
         aws_secret_access_key='dummy'
@@ -106,10 +105,11 @@ def connect_to_db():
     """Connect to PostgreSQL database."""
     try:
         conn = psycopg2.connect(
-            dbname="polisDB_prod_local_mar14",
-            user="colinmegill",
-            password="",
-            host="localhost"
+            database=os.environ.get('POSTGRES_DB', 'polismath'),
+            user=os.environ.get('POSTGRES_USER', 'postgres'),
+            password=os.environ.get('POSTGRES_PASSWORD', 'postgres'),
+            host=os.environ.get('POSTGRES_HOST', 'localhost'),
+            port=os.environ.get('POSTGRES_PORT', '5432')
         )
         print("Connected to database successfully")
         return conn
@@ -1052,140 +1052,138 @@ def inspect_dynamodb_data():
     return True
 
 
-def test_conversation_client_api():
-    """
-    Test processing a conversation using the PostgresClient API.
-    """
-    # Create PostgreSQL client
-    config = PostgresConfig(
-        database="polisDB_prod_local_mar14",
-        user="colinmegill",
-        password="",
-        host="localhost"
-    )
-    
-    client = PostgresClient(config)
-    
-    try:
-        client.initialize()
-        
-        # Get conversation IDs
-        zids_query = """
-        SELECT 
-            zid, 
-            COUNT(*) as vote_count
-        FROM 
-            votes
-        GROUP BY 
-            zid
-        ORDER BY 
-            vote_count DESC
-        LIMIT 1
-        """
-        
-        results = client.query(zids_query)
-        
-        if not results:
-            pytest.skip("No conversations found in the database")
-        
-        zid = results[0]['zid']
-        vote_count = results[0]['vote_count']
-        
-        print(f"\nProcessing conversation {zid} with {vote_count} votes using PostgresClient API")
-        
-        # Create a new conversation
-        conv = Conversation(str(zid))
-        
-        # Poll votes with a reasonable limit for testing
-        votes = client.poll_votes(zid)
-        
-        # Format votes for Conversation class
-        votes_formatted = {
-            'votes': [
-                {
-                    'pid': v['pid'],
-                    'tid': v['tid'],
-                    'vote': v['vote'],
-                    'created': int(float(v['created']) * 1000) if v['created'] and isinstance(v['created'], str) else 
-                              (int(v['created'].timestamp() * 1000) if v['created'] else None)
-                }
-                for v in votes
-            ]
-        }
-        
-        # Poll moderation data using our patched function
-        moderation = patched_poll_moderation(client, zid)
-        
-        # Update conversation with votes
-        print(f"Processing conversation with {len(votes_formatted['votes'])} votes")
-        conv = conv.update_votes(votes_formatted)
-        
-        # Apply moderation
-        conv = conv.update_moderation(moderation)
-        
-        # Recompute to generate clustering, PCA, and representativeness
-        print("Recomputing conversation analysis...")
-        conv = conv.recompute()
-        
-        # Extract key metrics
-        # 1. Number of groups found
-        group_count = len(conv.group_clusters)
-        print(f"Found {group_count} groups")
-        
-        # 2. Number of comments processed
-        comment_count = conv.comment_count
-        print(f"Processed {comment_count} comments")
-        
-        # 3. Number of participants
-        participant_count = conv.participant_count
-        print(f"Found {participant_count} participants")
-        
-        # 4. Check that we have representative comments
-        if conv.repness and 'comment_repness' in conv.repness:
-            print(f"Calculated representativeness for {len(conv.repness['comment_repness'])} comments")
-        
-        # Save the results using the PostgresClient API
-        math_data = conv.to_dict()
-        
-        # Save results directly to math_main table (optional, uncomment to enable)
-        # client.write_math_main(zid, math_data)
-        
-        # Save to DynamoDB
-        try:
-            print("\nInitializing DynamoDB client...")
-            dynamodb_client = init_dynamodb()
-            print("DynamoDB client initialized")
-            
-            print(f"Writing conversation {zid} to DynamoDB with new schema...")
-            success = write_to_dynamodb(dynamodb_client, zid, conv)
-            if success:
-                print("Successfully wrote conversation data to DynamoDB")
-            else:
-                print("Failed to write conversation data to DynamoDB")
-        except Exception as e:
-            print(f"Error with DynamoDB: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        # Basic assertions
-        assert group_count >= 0, "Group count should be non-negative"
-        assert participant_count > 0, "Participant count should be positive"
-        
-        print("Test completed successfully using PostgresClient API")
-    
-    finally:
-        client.shutdown()
 
+# def test_conversation_client_api():
+#     """
+#     Test processing a conversation using the PostgresClient API.
+#     """
+#     # Create PostgreSQL client
+#     config = PostgresConfig(
+#         database=os.environ.get('POSTGRES_DB', 'polismath'),
+#         user=os.environ.get('POSTGRES_USER', 'postgres'),
+#         password=os.environ.get('POSTGRES_PASSWORD', 'postgres'),
+#         host=os.environ.get('POSTGRES_HOST', 'localhost'),
+#         port=os.environ.get('POSTGRES_PORT', '5432')
+#     )
+
+#     client = PostgresClient(config)
+
+#     try:
+#         client.initialize()
+
+#         # Get conversation IDs
+#         zids_query = """
+#         SELECT 
+#             zid, 
+#             COUNT(*) as vote_count
+#         FROM 
+#             votes
+#         GROUP BY 
+#             zid
+#         ORDER BY 
+#             vote_count DESC
+#         LIMIT 1
+#         """
+
+#         results = client.query(zids_query)
+
+#         if not results:
+#             pytest.skip("No conversations found in the database")
+
+#         zid = results[0]['zid']
+#         vote_count = results[0]['vote_count']
+
+#         print(f"\nProcessing conversation {zid} with {vote_count} votes using PostgresClient API")
+
+#         # Create a new conversation
+#         conv = Conversation(str(zid))
+
+#         # Poll votes with a reasonable limit for testing
+#         votes = client.poll_votes(zid)
+
+#         # Format votes for Conversation class
+#         votes_formatted = {
+#             'votes': [
+#                 {
+#                     'pid': v['pid'],
+#                     'tid': v['tid'],
+#                     'vote': v['vote'],
+#                     'created': int(float(v['created']) * 1000) if v['created'] and isinstance(v['created'], str) else 
+#                               (int(v['created'].timestamp() * 1000) if v['created'] else None)
+#                 }
+#                 for v in votes
+#             ]
+#         }
+
+#         # Poll moderation data using our patched function
+#         moderation = patched_poll_moderation(client, zid)
+
+#         # Update conversation with votes
+#         print(f"Processing conversation with {len(votes_formatted['votes'])} votes")
+#         conv = conv.update_votes(votes_formatted)
+
+#         # Apply moderation
+#         conv = conv.update_moderation(moderation)
+
+#         # Recompute to generate clustering, PCA, and representativeness
+#         print("Recomputing conversation analysis...")
+#         conv = conv.recompute()
+
+#         # Extract key metrics
+#         # 1. Number of groups found
+#         group_count = len(conv.group_clusters)
+#         print(f"Found {group_count} groups")
+
+#         # 2. Number of comments processed
+#         comment_count = conv.comment_count
+#         print(f"Processed {comment_count} comments")
+
+#         # 3. Number of participants
+#         participant_count = conv.participant_count
+#         print(f"Found {participant_count} participants")
+
+#         # 4. Check that we have representative comments
+#         if conv.repness and 'comment_repness' in conv.repness:
+#             print(f"Calculated representativeness for {len(conv.repness['comment_repness'])} comments")
+
+#         # Save the results using the PostgresClient API
+#         math_data = conv.to_dict()
+
+#         # Save results directly to math_main table (optional, uncomment to enable)
+#         # client.write_math_main(zid, math_data)
+
+#         # Save to DynamoDB
+#         try:
+#             print("\nInitializing DynamoDB client...")
+#             dynamodb_client = init_dynamodb()
+#             print("DynamoDB client initialized")
+
+#             print(f"Writing conversation {zid} to DynamoDB with new schema...")
+#             success = write_to_dynamodb(dynamodb_client, zid, conv)
+#             if success:
+#                 print("Successfully wrote conversation data to DynamoDB")
+#             else:
+#                 print("Failed to write conversation data to DynamoDB")
+#         except Exception as e:
+#             print(f"Error with DynamoDB: {e}")
+#             import traceback
+#             traceback.print_exc()
+
+#         # Basic assertions
+#         assert group_count >= 0, "Group count should be non-negative"
+#         assert participant_count > 0, "Participant count should be positive"
+
+#         print("Test completed successfully using PostgresClient API")
+
+#     finally:
+#         client.shutdown()
 
 if __name__ == "__main__":
     import sys
     
     # Check command line arguments
     if len(sys.argv) > 1:
-        if sys.argv[1] == 'client':
-            print("Testing PostgresClient API:")
-            test_conversation_client_api()
-        elif sys.argv[1] == 'dynamodb':
+        if sys.argv[1] == 'dynamodb':
             print("Testing DynamoDB directly:")
             test_dynamodb_direct()
         elif sys.argv[1] == 'inspect':

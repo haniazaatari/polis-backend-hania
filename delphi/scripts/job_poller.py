@@ -461,7 +461,7 @@ class JobProcessor:
             logger.error(f"Error finding pending job: {e}", exc_info=True)
             return None
 
-    def claim_job(self, job):
+    def claim_job(self, job: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Atomically claims a job by setting its status to PROCESSING
         and applying a lock timeout, using optimistic locking.
@@ -660,7 +660,7 @@ class JobProcessor:
         except Exception as e:
             logger.error(f"Error completing job {job_id}: {e}")
 
-    def process_job(self, job):
+    def process_job(self, job: Dict[str, Any]) -> None:
         """Processes a claimed job by executing the correct script with real-time log handling."""
         job_id = job['job_id']
         job_type = job.get('job_type')
@@ -738,7 +738,7 @@ class JobProcessor:
             self.complete_job(job, False, error=f"Critical poller error: {str(e)}")
 
 
-def poll_and_process(processor, interval=10):
+def poll_and_process(processor: JobProcessor, interval: int = 10):
     """The main loop for a worker thread."""
     logger.info(f"Worker {processor.worker_id} starting job polling...")
     while running:

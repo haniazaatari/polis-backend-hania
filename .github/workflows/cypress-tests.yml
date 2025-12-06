@@ -11,6 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+    
+    - name: 1. Free up disk space on runner
+      run: |
+        echo "Starting disk cleanup..."
+        df -h
+        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /usr/local/share/powershell
+        echo "Disk space after cleanup:"
+        df -h
     - name: Checkout code
       uses: actions/checkout@v4
 

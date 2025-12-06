@@ -20,6 +20,26 @@ const Conversations = () => {
   const navigate = useNavigate()
   const { isAuthenticated, isLoading } = useAuth()
   const { conversations, loading, error } = useSelector((state) => state.conversations)
+  
+  const userState = useSelector((state) => state.user)
+  const superAdmin = isSuperAdmin(userState)
+  
+  const [interstitialVisible, setInterstitialVisible] = useState(false)
+  const [activeView, setActiveView] = useState('my') // 'my' | 'all'
+  const [allConversations, setAllConversations] = useState(null)
+  const [allLoading, setAllLoading] = useState(false)
+  const [allError, setAllError] = useState(null)
+  const [allPagination, setAllPagination] = useState(null)
+
+  const [filters, setFilters] = useState({
+    owner_email: '',
+    is_active: '', // '', true, false
+    recently_updated_days: '',
+    recently_created_days: '',
+    min_comment_count: '',
+    min_participant_count: ''
+  })
+  const [sort, setSort] = useState({ sort_by: 'updated', sort_dir: 'desc' })
 
   const userState = useSelector((state) => state.user)
   const superAdmin = isSuperAdmin(userState)
