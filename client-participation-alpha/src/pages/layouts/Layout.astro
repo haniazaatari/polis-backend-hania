@@ -1,5 +1,10 @@
 ---
 import '../../styles/global.css';
+
+interface Props {
+  title?: string;
+}
+
 const { title = 'Polis Conversation' } = Astro.props;
 ---
 <!DOCTYPE html>
