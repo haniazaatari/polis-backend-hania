@@ -36,6 +36,12 @@ const s = await getTranslations(
   Astro.request.headers.get('accept-language')
 );
 
+// Determine page language once for SSR (used for HTML lang and API requests)
+const pageLang = uiLanguageSSR(
+  Astro.url.searchParams.get('ui_lang'),
+  Astro.request.headers.get('accept-language')
+);
+
 let initialData: ParticipationInitData | undefined;
 let fetchError = null;
 
@@ -43,14 +49,10 @@ try {
   const xid = Astro.url.searchParams.get('xid');
   const x_name = Astro.url.searchParams.get('x_name');
   const x_profile_image_url = Astro.url.searchParams.get('x_profile_image_url');
-  const lang = uiLanguageSSR(
-    Astro.url.searchParams.get('ui_lang'),
-    Astro.request.headers.get('accept-language')
-  );
 
   initialData = await fetchParticipationInit(conversation_id, {
     includePCA: false,
-    lang: lang || undefined,
+    lang: pageLang || undefined,
     xid: xid || undefined,
     x_name: x_name || undefined,
     x_profile_image_url: x_profile_image_url || undefined
@@ -92,6 +94,7 @@ if (initialData) {
     title: initialData.conversation.topic,
     description: initialData.conversation.description,
     requiresInviteCode: initialData.conversation.treevite_enabled,
+    importanceEnabled: initialData.conversation.importance_enabled === true,
   };
   
   if (initialData.nextComment) {
@@ -109,7 +112,11 @@ if (initialData) {
 
 const hideHeader = Astro.url.searchParams.get('hide_header');
 ---
-<Layout title={surveyDetails?.title ?? 'Loading Conversation...'}>
+<Layout
+  title={surveyDetails?.title ?? 'Loading Conversation...'}
+  lang={pageLang || 'en'}
+  dir={s.direction}
+>
   {/* Handle JWT token from initial data on client side - MUST be synchronous to avoid race conditions */}
   <script define:vars={{ initialData }} is:inline>
     if (initialData && initialData.auth && initialData.auth.token) {
@@ -175,6 +182,7 @@ const hideHeader = Astro.url.searchParams.get('hide_header');
               conversation_id={initialData.conversation.conversation_id}
               s={s}
               requiresInviteCode={surveyDetails?.requiresInviteCode}
+              importanceEnabled={surveyDetails?.importanceEnabled}
             />
             <SurveyForm client:load s={s} conversation_id={conversation_id} requiresInviteCode={surveyDetails?.requiresInviteCode} />
             {surveyDetails?.requiresInviteCode && (<TreeviteInvites client:only="react" conversation_id={conversation_id} s={s} />)}

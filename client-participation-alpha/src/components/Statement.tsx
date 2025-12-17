@@ -12,6 +12,7 @@ interface StatementProps {
   isStatementImportant: boolean
   setIsStatmentImportant: React.Dispatch<React.SetStateAction<boolean>>
   voteError: string | null
+  importanceEnabled?: boolean
 }
 
 export function Statement({
@@ -21,7 +22,8 @@ export function Statement({
   s,
   isStatementImportant,
   setIsStatmentImportant,
-  voteError
+  voteError,
+  importanceEnabled = false
 }: StatementProps) {
   const [showImportanceDesc, setShowImportanceDesc] = useState<boolean>(false)
   const [translationsEnabled, setTranslationsEnabled] = useState<boolean>(false)
@@ -58,26 +60,6 @@ export function Statement({
   const shouldShowHideButton =
     translationsEnabled && (hasNonOfficialTranslation || !statement.translations)
 
-  // Debug logging
-  if (
-    typeof window !== 'undefined' &&
-    statement.translations &&
-    statement.translations.length > 0
-  ) {
-    console.log('[Translation Debug]', {
-      currentLang,
-      statementLang,
-      langMismatch,
-      matchingTranslation,
-      hasOfficialTranslation,
-      hasNonOfficialTranslation,
-      shouldShowTranslationButton,
-      shouldShowHideButton,
-      translationsEnabled,
-      translations: statement.translations
-    })
-  }
-
   const handleVoteClick = (voteType: number) => {
     if (isVoting) return
     onVote(voteType, statement.tid)
@@ -98,13 +80,14 @@ export function Statement({
     <div className="statement-card">
       <div className="statement-header">
         <div className="anonymous-user">
-          <img src="/anonProfile.svg" alt="" className="avatar" />
+          {/* Use a relative URL so it works when app is mounted at /alpha/ behind nginx */}
+          <img src="anonProfile.svg" alt="" className="avatar" />
           <span>
             {s.anonPerson} {s.x_wrote}
           </span>
         </div>
         {remainingText && (
-          <span style={{ fontSize: '0.875rem', fontStyle: 'italic', marginLeft: 'auto' }}>
+          <span className="statement-remaining">
             {remainingText}
           </span>
         )}
@@ -112,9 +95,13 @@ export function Statement({
 
       {/* Show official translation (replaces original) or original text */}
       {hasOfficialTranslation ? (
-        <p className="statement-text">{matchingTranslation.txt}</p>
+        <p className="statement-text" dir="auto">
+          <bdi>{matchingTranslation.txt}</bdi>
+        </p>
       ) : (
-        <p className="statement-text">{statement.txt}</p>
+        <p className="statement-text" dir="auto">
+          <bdi>{statement.txt}</bdi>
+        </p>
       )}
 
       {/* Show translation buttons only if not using official translation */}
@@ -176,23 +163,27 @@ export function Statement({
         </p>
       )}
 
-      <div className="importance-container">
-        <label htmlFor="important">{s.importantCheckbox}</label>
-        <input
-          id="important"
-          type="checkbox"
-          onChange={() => setIsStatmentImportant((prev) => !prev)}
-          checked={isStatementImportant}
-        />
-        <InfoIcon
-          size={17}
-          className="info-icon"
-          onClick={() => setShowImportanceDesc((prev) => !prev)}
-          aria-label={s.infoIconAriaLabel}
-        />
-      </div>
+      {importanceEnabled ? (
+        <>
+          <div className="importance-container">
+            <label htmlFor="important">{s.importantCheckbox}</label>
+            <input
+              id="important"
+              type="checkbox"
+              onChange={() => setIsStatmentImportant((prev) => !prev)}
+              checked={isStatementImportant}
+            />
+            <InfoIcon
+              size={17}
+              className="info-icon"
+              onClick={() => setShowImportanceDesc((prev) => !prev)}
+              aria-label={s.infoIconAriaLabel}
+            />
+          </div>
 
-      {showImportanceDesc && <p className="importance-desc">{s.importantCheckboxDesc}</p>}
+          {showImportanceDesc && <p className="importance-desc">{s.importantCheckboxDesc}</p>}
+        </>
+      ) : null}
 
       <div className="vote-buttons">
         <button
@@ -200,6 +191,7 @@ export function Statement({
           onClick={() => handleVoteClick(-1)}
           disabled={isVoting}
           aria-label={s.agree}
+          data-testid="vote-agree"
         >
           {isVoting ? '' : `✔ ${s.agree}`}
         </button>
@@ -208,6 +200,7 @@ export function Statement({
           onClick={() => handleVoteClick(1)}
           disabled={isVoting}
           aria-label={s.disagree}
+          data-testid="vote-disagree"
         >
           {isVoting ? '' : `✘ ${s.disagree}`}
         </button>
@@ -216,6 +209,7 @@ export function Statement({
           onClick={() => handleVoteClick(0)}
           disabled={isVoting}
           aria-label={passUnsureText}
+          data-testid="vote-pass"
         >
           {isVoting ? '' : passUnsureText}
         </button>

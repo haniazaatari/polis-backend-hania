@@ -59,6 +59,7 @@ cd client-participation-alpha && npm run verify  # format + lint + build
 ```bash
 cd e2e
 npm run test:admin            # Admin interface tests
+npm run test:alpha            # Alpha client tests
 npm run test:auth             # Authentication tests
 npm run test:participation    # Participation & embed tests
 npm run test:conversation     # Conversation workflow tests

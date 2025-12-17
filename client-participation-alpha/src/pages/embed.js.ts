@@ -75,7 +75,7 @@ const embedScriptTemplate = `
     iframe.style.borderRadius = config.border_radius || "4px";
     iframe.style.padding = config.padding || "4px";
     iframe.style.backgroundColor = "white";
-    iframe.setAttribute("data-test-id", "polis-iframe");
+    iframe.setAttribute("data-testid", "polis-iframe");
 
     parentElement.appendChild(iframe);
   }

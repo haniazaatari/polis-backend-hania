@@ -2,6 +2,7 @@
 import Header from '../components/Header.astro';
 import PolisLogo from '../components/icons/PolisLogo';
 import { getTranslations } from '../strings/strings';
+import { uiLanguageSSR } from '../lib/lang'
 import Layout from './layouts/Layout.astro';
 
 // Pass SSR context for proper language detection
@@ -9,9 +10,14 @@ const s = await getTranslations(
   Astro.url.searchParams.get('ui_lang'),
   Astro.request.headers.get('accept-language')
 );
+
+const lang = uiLanguageSSR(
+  Astro.url.searchParams.get('ui_lang'),
+  Astro.request.headers.get('accept-language')
+);
 ---
 
-<Layout title="Page Not Found">
+<Layout title="Page Not Found" lang={lang || 'en'} dir={s.direction}>
   <div class="container">
     <Header />
     

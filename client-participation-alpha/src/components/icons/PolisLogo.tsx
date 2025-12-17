@@ -15,6 +15,9 @@ export default function PolisLogo({ size = 50, className }: PolisLogoProps) {
       xmlns="http://www.w3.org/2000/svg"
       className={className}
       aria-label="Polis logo"
+      // When the page is `dir=rtl`, some browsers can inherit RTL direction into SVG text layout,
+      // which can shift/clamp the "p." glyphs. Force LTR + isolate bidi for consistent rendering.
+      style={{ direction: 'ltr', unicodeBidi: 'isolate' }}
     >
       {/* Blue hexagon background */}
       <polygon

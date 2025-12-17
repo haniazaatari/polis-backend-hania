@@ -197,6 +197,28 @@ export function participateAnonymously(conversationId) {
 }
 
 /**
+ * Helper to participate anonymously in an alpha conversation
+ * Note: Anonymous participants don't "log in" - they receive JWTs when they take actions like voting
+ * @param {string} conversationId - The conversation ID to participate in
+ */
+export function participateAnonymouslyAlpha(conversationId) {
+  cy.log(`👤 Participating anonymously in conversation: ${conversationId}`)
+
+  // Clear any existing authentication state
+  logout()
+
+  // Visit the specific conversation as an anonymous user
+  cy.visit(`/alpha/${conversationId}`)
+
+  // Wait for the conversation to load
+  cy.get('body').should('be.visible')
+
+  // Note: JWT tokens are only issued when participants take actions (like voting)
+  // The participant_token will not exist until the user votes
+  cy.log('✅ Anonymous participant ready to participate (JWT will be issued on first action)')
+}
+
+/**
  * Helper to participate with an External ID (XID)
  * Note: XID participants receive JWTs when they take actions like voting
  * @param {string} conversationId - The conversation ID to participate in

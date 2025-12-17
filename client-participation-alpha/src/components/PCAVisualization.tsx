@@ -502,7 +502,8 @@ export default function PCAVisualization({
                     y="0"
                     width="1"
                     height="1"
-                    xlinkHref="/anonProfile.svg"
+                    // Use a relative URL so it works when app is mounted at /alpha/ behind nginx
+                    xlinkHref="anonProfile.svg"
                     preserveAspectRatio="xMidYMid slice"
                   />
                 </pattern>

@@ -95,6 +95,12 @@ export default function InviteCodeSubmissionForm({
         <div className="invite-code-submission-form-container">
           <input
             type="text"
+            dir="ltr"
+            inputMode="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            autoComplete="one-time-code"
             value={inviteCode}
             onChange={(e) => setInviteCode(e.target.value)}
             placeholder={s.invite_code_prompt}
@@ -109,6 +115,12 @@ export default function InviteCodeSubmissionForm({
         <div className="invite-code-submission-form-container">
           <input
             type="text"
+            dir="ltr"
+            inputMode="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            autoComplete="one-time-code"
             value={loginCode}
             onChange={(e) => setLoginCode(e.target.value)}
             placeholder={s.login_code_prompt}

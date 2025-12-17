@@ -13,6 +13,7 @@ interface SurveyProps {
   s: Translations
   conversation_id: string
   requiresInviteCode?: boolean
+  importanceEnabled?: boolean
 }
 
 const submitVoteAndGetNextCommentAPI = async (
@@ -46,7 +47,8 @@ export default function Survey({
   initialStatement,
   s,
   conversation_id,
-  requiresInviteCode = false
+  requiresInviteCode = false,
+  importanceEnabled = false
 }: SurveyProps) {
   const [statement, setStatement] = useState<StatementData | undefined>(initialStatement)
   const [isFetchingNext, setIsFetchingNext] = useState<boolean>(false)
@@ -137,7 +139,7 @@ export default function Survey({
       const result = await submitVoteAndGetNextCommentAPI(
         vote,
         conversation_id,
-        isStatementImportant
+        importanceEnabled ? isStatementImportant : false
       )
 
       setVoteError(null)
@@ -186,6 +188,7 @@ export default function Survey({
           isStatementImportant={isStatementImportant}
           setIsStatmentImportant={setIsStatmentImportant}
           voteError={voteError}
+          importanceEnabled={importanceEnabled}
         />
       ) : (
         <EmailSubscribeForm s={s as Translations} conversation_id={conversation_id} />
