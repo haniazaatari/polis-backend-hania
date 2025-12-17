@@ -7,7 +7,7 @@
 - [x] anonymous jwt flow
 - [x] xid participant
 - [x] i18n
-- [ ] voting
+- [x] voting
 - [ ] commenting
 - [ ] visualization
 - [ ] invite codes
