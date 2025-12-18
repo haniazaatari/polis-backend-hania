@@ -5,30 +5,40 @@ Script to download real test data from Polis exports for delphi tests.
 This script downloads data from a running Polis instance:
 1. Downloads CSV exports (comments, votes, summary) from the report endpoint
    - Requires: Polis web server running (default: http://localhost)
+   - Use --base-url to specify a different instance (e.g., --base-url https://pol.is for production)
 2. Extracts the math blob JSON from the Postgres database
+   - Requires: DATABASE_URL environment variable set to a valid Postgres connection string
    - Requires: Postgres database with the reports and math_main table populated
    - Note: Math blobs may not be available if the database is not accessible or
      if the Clojure math computation hasn't run for the given report
-3. Saves all files to the real_data/<report_id>/ folder
+3. Saves all files to real_data/.local/<report_id>-<name>/ by default
+   (use --commit to save to real_data/ for committed datasets)
+
+Requirements:
+    - DATABASE_URL environment variable must be set (e.g., postgres://user:pass@host:port/dbname)
+    - Polis web server accessible (default: http://localhost, use --base-url for other instances)
 
 Usage:
-    # Download all datasets from config (skip existing)
-    # From environment variable (if TEST_REPORT_IDS set .env)
-    python download_real_data.py
+    # Download a new dataset (saves to .local/ by default)
+    python regression_download.py rexample1234 myconvo
 
-    # Force re-download all datasets
-    python download_real_data.py --force
+    # Download to committed location (for public datasets)
+    python regression_download.py rexample1234 myconvo --commit
 
-    # Download specific datasets by name
-    python download_real_data.py --datasets biodiversity vw
+    # Download from production (https://pol.is)
+    python regression_download.py rexample1234 myconvo --base-url https://pol.is
 
-    # Download specific report IDs
-    python download_real_data.py rabc123xyz456 rdef789uvw012
+    # Force re-download all configured datasets
+    python regression_download.py --force
+
+    # Download specific datasets by name (from config)
+    python regression_download.py --datasets biodiversity vw
 
 Examples:
-    python download_real_data.py
-    python download_real_data.py --force
-    python download_real_data.py --datasets vw bg2018
+    python regression_download.py rexample1234 myconvo          # Downloads to .local/
+    python regression_download.py rexample1234 myconvo --commit # Downloads to real_data/
+    python regression_download.py --datasets vw                 # Downloads configured dataset
+    python regression_download.py rexample1234 myconvo --base-url https://pol.is  # From production
 """
 
 import json
@@ -36,10 +46,8 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent.parent.parent / '.env')
 
 import click
 import psycopg2
@@ -48,12 +56,21 @@ from tqdm import tqdm
 
 from polismath.regression import list_available_datasets, get_dataset_report_id
 
+# Load .env from polis/ parent directory (script is at polis/delphi/scripts/regression_download.py)
+# Need to go up 3 levels: scripts/ -> delphi/ -> polis/
+load_dotenv(Path(__file__).parent.parent.parent / '.env')
+
 
 def get_db_connection():
     """Create a connection to the Postgres database using environment variables."""
     # These will be automatically loaded from .env by pyauto-dotenv when running from delphi directory
     # Try to use DATABASE_URL first (connection string), fall back to individual parameters
     database_url = os.environ.get('DATABASE_URL')
+    if not database_url:
+        raise ValueError(
+            "DATABASE_URL environment variable is not set. "
+            "Please set it to a valid Postgres connection string (e.g., postgres://user:pass@host:port/dbname)"
+        )
     return psycopg2.connect(database_url)
 
     # TODO: Uncomment once sorted the difference between env var names between delphi and rest of polis
@@ -308,7 +325,8 @@ def save_test_data(report_id: str, output_dir: Path, base_url: str = "http://loc
 
 
 @click.command()
-@click.argument('report_ids', nargs=-1)
+@click.argument('report_id', required=False)
+@click.argument('dataset_name', required=False)
 @click.option(
     '--datasets',
     multiple=True,
@@ -323,99 +341,138 @@ def save_test_data(report_id: str, output_dir: Path, base_url: str = "http://loc
     '--output-dir',
     type=click.Path(path_type=Path),
     default=None,
-    help='Output directory (default: real_data/<report_id>)'
+    help='Output directory (overrides default location)'
+)
+@click.option(
+    '--commit',
+    is_flag=True,
+    help='Save to real_data/ instead of real_data/.local/ (for public datasets to commit)'
 )
 @click.option(
     '--force',
     is_flag=True,
     help='Force re-download even if files already exist'
 )
-def main(report_ids: tuple, datasets: tuple, base_url: str, output_dir: Optional[Path], force: bool):
+def main(report_id: Optional[str], dataset_name: Optional[str], datasets: tuple,
+         base_url: str, output_dir: Optional[Path], commit: bool, force: bool):
     """
     Download real test data from Polis exports.
 
-    If no arguments are provided, downloads all datasets from config.
-    Otherwise, downloads specified datasets or report IDs.
+    By default, downloads to real_data/.local/ (git-ignored).
+    Use --commit to download to real_data/ for datasets intended to be committed.
 
     Examples:
 
         \b
-        # Download all datasets from config (skip existing)
-        python download_real_data.py
+        # Download a new dataset to .local/ (git-ignored)
+        python regression_download.py rexample1234 myconvo
 
         \b
-        # Force re-download all datasets from config
-        python download_real_data.py --force
+        # Download a dataset for committing to the repo
+        python regression_download.py rexample1234 myconvo --commit
 
         \b
-        # Download specific datasets by name
-        python download_real_data.py --datasets biodiversity --datasets vw
+        # Download configured datasets by name
+        python regression_download.py --datasets biodiversity --datasets vw
 
         \b
-        # Download specific datasets by report ID
-        python download_real_data.py rabc123xyz456 rdef789uvw012
+        # Force re-download all configured datasets
+        python regression_download.py --force
 
         \b
-        # Specify custom base URL
-        python download_real_data.py --base-url http://localhost:5000
+        # Download from production Polis instance
+        python regression_download.py rexample1234 myconvo --base-url https://pol.is
 
         \b
-        # Specify custom output directory
-        python download_real_data.py --output-dir /path/to/output
+        # Specify custom base URL (e.g., local dev server on different port)
+        python regression_download.py rexample1234 myconvo --base-url http://localhost:5000
     """
-    # Determine which datasets to download
-    download_report_ids = []
-    env_report_ids = os.getenv('TEST_REPORT_IDS', '').strip()
+    # Check for required DATABASE_URL environment variable
+    database_url = os.environ.get('DATABASE_URL')
+    if not database_url:
+        click.echo("Error: DATABASE_URL environment variable is required", err=True)
+        click.echo("\nThe DATABASE_URL must be set to a valid Postgres connection string.", err=True)
+        click.echo("Example: postgres://user:password@localhost:5432/dbname", err=True)
+        click.echo("\nYou can set it in your .env file or export it before running:", err=True)
+        click.echo("  export DATABASE_URL='postgres://user:pass@host:port/dbname'", err=True)
+        click.echo("  python scripts/regression_download.py ...", err=True)
+        raise click.Abort()
 
-    # Option 1: Specific dataset names from --datasets flag
-    if datasets:
-        available_datasets = list_available_datasets()
-        for dataset_name in datasets:
-            if dataset_name not in available_datasets:
-                available = ', '.join(available_datasets.keys())
-                click.echo(f"Error: Unknown dataset: {dataset_name}", err=True)
-                click.echo(f"Available datasets: {available}", err=True)
-                raise click.Abort()
-            report_id = get_dataset_report_id(dataset_name)
-            download_report_ids.append(report_id)
-        click.echo(f"Downloading {len(download_report_ids)} dataset(s) from config: {', '.join(datasets)}")
-    # Option 2: Specific report IDs from command line
-    elif report_ids:
-        download_report_ids = list(report_ids)
-        click.echo(f"Downloading {len(download_report_ids)} report ID(s) from command line")
-    # Option 3: environment variable
-    elif env_report_ids:
-        download_report_ids = [rid.strip() for rid in env_report_ids.replace(',', ' ').split() if rid.strip()]
-        click.echo(f"Downloading {len(report_ids)} report IDs from TEST_REPORT_IDS environment variable")
-    # Option 4: Default - all datasets from config
-    else:
-        available_datasets = list_available_datasets()
-        download_report_ids = [dataset['report_id'] for dataset in available_datasets.values()]
-        click.echo(f"No datasets specified. Downloading all {len(download_report_ids)} dataset(s) from config:")
-        for name, info in available_datasets.items():
-            click.echo(f"  - {name}: {info['report_id']} ({info['description']})")
-        click.echo()
-
-    # Get the delphi directory (parent of tests directory where this script lives)
+    # Get the delphi directory (script is at delphi/scripts/regression_download.py)
     delphi_dir = Path(__file__).parent.parent
 
-    # Process each report ID
+    # Determine base directory: .local/ by default, real_data/ with --commit
+    if commit:
+        base_data_dir = delphi_dir / 'real_data'
+        location_msg = "real_data/ (will be committed)"
+    else:
+        base_data_dir = delphi_dir / 'real_data' / '.local'
+        location_msg = "real_data/.local/ (git-ignored)"
+
+    # Ensure .local directory exists
+    if not commit:
+        base_data_dir.mkdir(parents=True, exist_ok=True)
+
+    # Determine which datasets to download
+    download_items = []  # List of (report_id, name) tuples
+    env_report_ids = os.getenv('TEST_REPORT_IDS', '').strip()
+
+    # Option 1: Positional arguments (report_id and dataset_name)
+    if report_id:
+        if not dataset_name:
+            click.echo("Error: Both report_id and dataset_name are required when downloading a single dataset", err=True)
+            click.echo("Usage: python scripts/regression_download.py <report_id> <dataset_name>", err=True)
+            raise click.Abort()
+        download_items.append((report_id, dataset_name))
+        click.echo(f"Downloading dataset '{dataset_name}' ({report_id}) to {location_msg}")
+
+    # Option 2: Specific dataset names from --datasets flag
+    elif datasets:
+        available_datasets = list_available_datasets(include_local=True)
+        for ds_name in datasets:
+            if ds_name not in available_datasets:
+                available = ', '.join(available_datasets.keys())
+                click.echo(f"Error: Unknown dataset: {ds_name}", err=True)
+                click.echo(f"Available datasets: {available}", err=True)
+                raise click.Abort()
+            ds_report_id = get_dataset_report_id(ds_name)
+            download_items.append((ds_report_id, ds_name))
+        click.echo(f"Downloading {len(download_items)} dataset(s) from config: {', '.join(datasets)}")
+        click.echo(f"Saving to: {location_msg}")
+
+    # Option 3: Environment variable
+    elif env_report_ids:
+        for rid in env_report_ids.replace(',', ' ').split():
+            rid = rid.strip()
+            if rid:
+                ds_name = get_dataset_name_from_report_id(rid)
+                download_items.append((rid, ds_name or rid))
+        click.echo(f"Downloading {len(download_items)} report IDs from TEST_REPORT_IDS")
+        click.echo(f"Saving to: {location_msg}")
+
+    # Option 4: Default - all configured datasets
+    else:
+        available_datasets = list_available_datasets(include_local=True)
+        for ds_name, info in available_datasets.items():
+            download_items.append((info['report_id'], ds_name))
+        click.echo(f"No datasets specified. Downloading all {len(download_items)} dataset(s) from config:")
+        for ds_name, info in available_datasets.items():
+            click.echo(f"  - {ds_name}: {info['report_id']} ({info['description']})")
+        click.echo(f"Saving to: {location_msg}")
+        click.echo()
+
+    # Process each dataset
     results = {}
-    for report_id in download_report_ids:
+    for rid, ds_name in download_items:
         # Determine output directory
-        # Use format "reportID-name" if name is available from config
-        dataset_name = get_dataset_name_from_report_id(report_id)
-        if dataset_name:
-            dir_name = f"{report_id}-{dataset_name}"
-        else:
-            dir_name = report_id
+        dir_name = f"{rid}-{ds_name}"
 
         if output_dir:
             out_dir = output_dir / dir_name
         else:
-            out_dir = delphi_dir / 'real_data' / dir_name
+            out_dir = base_data_dir / dir_name
 
-        results[report_id] = save_test_data(report_id, out_dir, base_url, force=force)
+        results[rid] = save_test_data(rid, out_dir, base_url, force=force)
 
     # Print summary
     click.echo(f"\n{'='*60}")
@@ -430,27 +487,93 @@ def main(report_ids: tuple, datasets: tuple, base_url: str, output_dir: Optional
     if failed:
         click.echo(f"Failed: {len(failed)}")
 
+    # Build a map of report_id -> dataset_name for display
+    rid_to_name = {rid: ds_name for rid, ds_name in download_items}
+
     if successful:
         click.echo(f"\n✓ Successful:")
         for rid in successful:
-            dataset_name = get_dataset_name_from_report_id(rid)
-            if dataset_name:
-                click.echo(f"  {rid} ({dataset_name})")
+            ds_name = rid_to_name.get(rid) or get_dataset_name_from_report_id(rid)
+            if ds_name:
+                click.echo(f"  {rid} ({ds_name})")
             else:
                 click.echo(f"  {rid}")
 
     if failed:
         click.echo(f"\n✗ Failed:")
         for rid in failed:
-            dataset_name = get_dataset_name_from_report_id(rid)
-            if dataset_name:
-                click.echo(f"  {rid} ({dataset_name})")
+            ds_name = rid_to_name.get(rid) or get_dataset_name_from_report_id(rid)
+            if ds_name:
+                click.echo(f"  {rid} ({ds_name})")
             else:
                 click.echo(f"  {rid}")
         click.echo("\nSome datasets failed to download!", err=True)
         sys.exit(1)
     else:
         click.echo("\n✓ All datasets processed successfully!")
+
+    # Check for missing golden snapshots and offer to create them
+    if successful:
+        _offer_golden_snapshot_creation(download_items, rid_to_name, base_data_dir, output_dir)
+
+
+def _offer_golden_snapshot_creation(download_items: list, rid_to_name: dict,
+                                     base_data_dir: Path, output_dir: Optional[Path]):
+    """Check for missing golden snapshots and offer to create them."""
+    # Find datasets missing golden snapshots
+    missing_golden = []
+    for rid, ds_name in download_items:
+        dir_name = f"{rid}-{ds_name}"
+        if output_dir:
+            ds_dir = output_dir / dir_name
+        else:
+            ds_dir = base_data_dir / dir_name
+
+        golden_path = ds_dir / "golden_snapshot.json"
+        if not golden_path.exists():
+            missing_golden.append(ds_name)
+
+    if not missing_golden:
+        return
+
+    click.echo(f"\n{'='*60}")
+    click.echo("GOLDEN SNAPSHOTS")
+    click.echo(f"{'='*60}\n")
+    click.echo("The following datasets are missing golden snapshots:")
+    for name in missing_golden:
+        click.echo(f"  - {name}")
+
+    click.echo("\n⚠️  Without golden snapshots, these datasets cannot be used for regression testing.")
+    click.echo("   Golden snapshots capture the expected output at a known-good commit.")
+    click.echo("\n   To create golden snapshots later, run:")
+    click.echo(f"     python scripts/regression_recorder.py {' '.join(missing_golden)}")
+
+    if click.confirm("\nWould you like to create golden snapshots now?", default=True):
+        click.echo()
+        # Import here to avoid circular imports and speed up script loading
+        from polismath.regression import ConversationRecorder
+        recorder = ConversationRecorder()
+
+        successful = []
+        failed = []
+        for ds_name in missing_golden:
+            click.echo(f"\n{'='*60}")
+            click.echo(f"Recording golden snapshot for: {ds_name}")
+            click.echo(f"{'='*60}")
+            try:
+                recorder.record_golden(ds_name, force=False, benchmark=True)
+                click.echo(f"✓ Created golden snapshot for {ds_name}")
+                successful.append(ds_name)
+            except Exception as e:
+                click.echo(f"✗ Failed to create golden snapshot for {ds_name}: {e}", err=True)
+                failed.append(ds_name)
+
+        if successful and not failed:
+            click.echo("\n✓ Golden snapshot creation complete!")
+        elif successful:
+            click.echo(f"\n⚠️  Golden snapshot creation partially complete: {len(successful)} succeeded, {len(failed)} failed")
+        else:
+            click.echo("\n✗ Golden snapshot creation failed for all datasets", err=True)
 
 
 if __name__ == '__main__':
